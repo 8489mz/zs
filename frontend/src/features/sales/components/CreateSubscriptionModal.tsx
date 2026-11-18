@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { CustomSelect } from '@/shared/ui/custom-select';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { toast } from '@/shared/components/system-alert';
@@ -26,7 +26,7 @@ export const CreateSubscriptionModal: React.FC<CreateSubscriptionModalProps> = (
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [contractNumber, setContractNumber] = useState('');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'quarterly' | 'semi_annual' | 'annual'>('monthly');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(todayLocalDateKey());
   const [endDate, setEndDate] = useState('');
   const [autoRenew, setAutoRenew] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState('bank_transfer');

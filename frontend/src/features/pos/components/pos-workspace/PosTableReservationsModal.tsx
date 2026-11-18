@@ -20,6 +20,7 @@ import {
 } from '@/shared/components/icons/AppIcons';
 import { toast } from '@/shared/components/system-alert';
 import { systemConfirm } from '@/shared/components/system-alert';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface PosTableReservationsModalProps {
   open: boolean;
@@ -39,7 +40,7 @@ export function PosTableReservationsModal({
   const { t: __t } = useTranslation();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'reservations' | 'waitlist'>('reservations');
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(() => todayLocalDateKey());
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [seatTableSelections, setSeatTableSelections] = useState<Record<number, string>>({});
 
@@ -51,7 +52,7 @@ export function PosTableReservationsModal({
   const [reservationTime, setReservationTime] = useState(() => {
     const d = new Date();
     d.setHours(d.getHours() + 1, 0, 0, 0);
-    return `${d.toISOString().slice(0, 10)}T${String(d.getHours()).padStart(2, '0')}:00`;
+    return `${todayLocalDateKey(d)}T${String(d.getHours()).padStart(2, '0')}:00`;
   });
   const [specialRequests, setSpecialRequests] = useState('');
 

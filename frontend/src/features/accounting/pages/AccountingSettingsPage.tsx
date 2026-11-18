@@ -32,6 +32,7 @@ function parseMoneyInput(value: string): number {
 }
 
 import { translateUiText } from '@/lib/auto-translator';
+import { todayLocalDateKey } from '@/lib/format';
 
 function renderAccountRef(value: AccountRef, isEn?: boolean) {
   if (!value) return '—';
@@ -47,7 +48,7 @@ function renderAccountRef(value: AccountRef, isEn?: boolean) {
 }
 
 function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalDateKey();
 }
 
 export function AccountingSettingsPage() {

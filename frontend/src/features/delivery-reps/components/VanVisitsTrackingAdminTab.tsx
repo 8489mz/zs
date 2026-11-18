@@ -13,11 +13,12 @@ import {
 } from '@/shared/components/icons/AppIcons';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { Button } from '@/shared/ui/button';
+import { todayLocalDateKey } from '@/lib/format';
 
 export const VanVisitsTrackingAdminTab: React.FC = () => {
   const { t: __t } = useTranslation();
   const [selectedSubTab, setSelectedSubTab] = useState<'visits' | 'surveys' | 'breadcrumbs'>('visits');
-  const [filterDate, setFilterDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [filterDate, setFilterDate] = useState(() => todayLocalDateKey());
   const [filterNoSaleOnly, setFilterNoSaleOnly] = useState(false);
   const [selectedTripIdForTrail, setSelectedTripIdForTrail] = useState<number | null>(null);
   const [focusedPointIndex, setFocusedPointIndex] = useState<number | null>(null);

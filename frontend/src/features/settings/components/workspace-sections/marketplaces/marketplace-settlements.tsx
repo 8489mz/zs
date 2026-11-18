@@ -13,7 +13,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button } from '@/shared/ui/button';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { toast } from '@/shared/components/system-alert';
-import { formatDateTimeArabic } from '@/lib/format';
+import { formatDateTimeArabic, addDaysLocalDateKey, todayLocalDateKey } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import {
@@ -35,8 +35,8 @@ export function useMarketplaceSettlements() {
   const [settlementForm, setSettlementForm] = useState<MarketplaceSettlementInput>({
     marketplace: 'amazon',
     settlementId: '',
-    periodStart: new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0],
-    periodEnd: new Date().toISOString().split('T')[0],
+    periodStart: addDaysLocalDateKey(-14),
+    periodEnd: todayLocalDateKey(),
     // INV-FE3-FRONTEND-BOOK-DIGITS: was hardcoded 'EGP' with no selector
     // anywhere; the backend requires the tenant's base currency, so the
     // form now defaults to it (see settlementBookDigits below).

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/shared/components/page-header';
 import { Card } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { DownloadIcon, PrinterIcon, SearchIcon, ClockIcon } from '@/shared/components/icons/AppIcons';
 import {
   financialReportsApi,
@@ -15,7 +15,7 @@ import {
 export function AgedDebtsPage() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'receivables' | 'payables'>('receivables');
-  const [asOfDate, setAsOfDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(() => todayLocalDateKey());
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');

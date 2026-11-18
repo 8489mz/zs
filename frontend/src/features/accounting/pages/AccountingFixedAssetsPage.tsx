@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/shared/ui/button';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { accountingApi, type FixedAsset } from '@/features/accounting/api/accounting.api';
 import { StatsGrid } from '@/shared/components/stats-grid';
 import { AddFixedAssetModal } from '../components/fixed-assets/AddFixedAssetModal';
@@ -35,7 +35,7 @@ export function AccountingFixedAssetsPage() {
     salvageValue: '0',
     usefulLifeMonths: '60',
     depreciationMethod: 'straight_line' as 'straight_line' | 'declining_balance',
-    purchaseDate: new Date().toISOString().split('T')[0],
+    purchaseDate: todayLocalDateKey(),
   });
 
   const assetsQuery = useQuery({
@@ -78,7 +78,7 @@ export function AccountingFixedAssetsPage() {
         salvageValue: '0',
         usefulLifeMonths: '60',
         depreciationMethod: 'straight_line',
-        purchaseDate: new Date().toISOString().split('T')[0],
+        purchaseDate: todayLocalDateKey(),
       });
     },
   });

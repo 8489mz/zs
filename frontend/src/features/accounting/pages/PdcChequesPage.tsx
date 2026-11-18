@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/shared/ui/button';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, addDaysTenantDateKey, todayTenantDateKey } from '@/lib/format';
 import {
   PlusIcon,
   RefreshCwIcon,
@@ -108,8 +108,8 @@ export function PdcChequesPage() {
   const stats: PdcChequesStats | undefined = statsQuery.data;
   const cheques: PdcCheque[] = chequesQuery.data?.data || [];
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const in7DaysStr = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const todayStr = todayTenantDateKey(chequesQuery.data?.serverTimezone || 'Africa/Cairo');
+  const in7DaysStr = addDaysTenantDateKey(chequesQuery.data?.serverTimezone || 'Africa/Cairo', 7);
 
   // Filter for alerts tab
   const displayedCheques = activeTab === 'alerts'

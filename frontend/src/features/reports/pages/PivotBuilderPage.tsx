@@ -19,6 +19,7 @@ import {
 } from '../api/dynamic-pivot.api';
 import { PivotGridTable } from '../components/pivot/PivotGridTable';
 import { SavePivotTemplateModal } from '../components/pivot/SavePivotTemplateModal';
+import { todayLocalDateKey } from '@/lib/format';
 
 export const PivotBuilderPage: React.FC = () => {
   const { t } = useTranslation();
@@ -30,9 +31,9 @@ export const PivotBuilderPage: React.FC = () => {
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 3);
-    return d.toISOString().slice(0, 10);
+    return todayLocalDateKey(d);
   });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dateTo, setDateTo] = useState(() => todayLocalDateKey());
 
   // Execution State
   const [pivotResult, setPivotResult] = useState<PivotResult | null>(null);

@@ -7,6 +7,7 @@ import { Button } from '@/shared/ui/button';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { FileTextIcon, DollarSignIcon } from '@/shared/components/icons/AppIcons';
 import { pdcChequesApi, type ChequeType, type CreatePdcChequePayload } from '../api/accounting.api';
+import { todayLocalDateKey } from '@/lib/format';
 
 export interface PdcChequeCreateModalProps {
   open: boolean;
@@ -24,7 +25,7 @@ const getInitialState = (type: ChequeType, currency: string): CreatePdcChequePay
   partnerName: '',
   amount: 0,
   currency,
-  issueDate: new Date().toISOString().slice(0, 10),
+  issueDate: todayLocalDateKey(),
   dueDate: '',
   notes: '',
 });

@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useMemo } from 'react';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { CustomSelect } from '@/shared/ui/custom-select';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
@@ -41,7 +41,7 @@ export const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProp
     downPayment: '0',
     interestRatePercent: '0',
     installmentCount: '6',
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: todayLocalDateKey(),
     notes: '',
   });
 

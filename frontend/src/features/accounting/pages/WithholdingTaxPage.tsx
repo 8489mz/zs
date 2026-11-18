@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/shared/ui/button';
-import { formatCurrencyWithSymbol } from '@/lib/format';
+import { formatCurrencyWithSymbol, todayLocalDateKey } from '@/lib/format';
 import {
   PlusIcon,
   RefreshCwIcon,
@@ -47,7 +47,7 @@ export function WithholdingTaxPage() {
   const [newTx, setNewTx] = useState<CreateWhtTransactionPayload>({
     direction: 'payable',
     invoice_number: '',
-    invoice_date: new Date().toISOString().slice(0, 10),
+    invoice_date: todayLocalDateKey(),
     partner_name: '',
     tax_id_number: '',
     file_number: '',
@@ -67,7 +67,7 @@ export function WithholdingTaxPage() {
     defaultWhtRate: number;
   }>({
     fromDate: `${currentYear}-01-01`,
-    toDate: new Date().toISOString().slice(0, 10),
+    toDate: todayLocalDateKey(),
     defaultWhtType: 'goods',
     defaultWhtRate: 1,
   });
@@ -121,7 +121,7 @@ export function WithholdingTaxPage() {
     setNewTx({
       direction: selectedDirection,
       invoice_number: '',
-      invoice_date: new Date().toISOString().slice(0, 10),
+      invoice_date: todayLocalDateKey(),
       partner_name: '',
       tax_id_number: '',
       file_number: '',

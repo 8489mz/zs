@@ -6,7 +6,7 @@ import { StandardDialog, StandardDialogFooter } from '@/shared/components/Standa
 import { Button } from '@/shared/ui/button';
 import { Field } from '@/shared/ui/field';
 import { CustomSelect } from '@/shared/ui/custom-select';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { accountingApi, type AccountingAccount } from '../api/accounting.api';
@@ -64,7 +64,7 @@ function createEmptyRow(): JournalLineRow {
 export function ManualJournalEntryDialog({ open, onClose, onSuccess, serverTime, serverTimezone }: ManualJournalEntryDialogProps) {
   const { t } = useTranslation();
   const serverClock = useServerClock(serverTime, serverTimezone);
-  const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [entryDate, setEntryDate] = useState(() => todayLocalDateKey());
   const [description, setDescription] = useState('');
   const [reference, setReference] = useState('');
   const [cashFlowCategory, setCashFlowCategory] = useState<'' | 'operating' | 'investing' | 'financing'>('');
@@ -177,7 +177,7 @@ export function ManualJournalEntryDialog({ open, onClose, onSuccess, serverTime,
   }, [open]);
 
   function handleReset() {
-    setEntryDate(serverClock.todayKey() || new Date().toISOString().slice(0, 10));
+    setEntryDate(serverClock.todayKey() || todayLocalDateKey());
     setDescription('');
     setReference('');
     setCashFlowCategory('');

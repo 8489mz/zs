@@ -12,6 +12,7 @@ import { navigationItems } from '@/app/router/registry';
 import { Button } from '@/shared/ui/button';
 import { SmartphoneIcon, BellIcon } from '@/shared/components/icons/AppIcons';
 import type { DashboardTopItem } from '../api/dashboard.types';
+import { todayLocalDateKey } from '@/lib/format';
 
 export function OwnerCompanionPage() {
   const { t } = useTranslation();
@@ -49,7 +50,7 @@ export function OwnerCompanionPage() {
     }
   };
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = todayLocalDateKey();
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['owner-companion-overview', todayStr],
     queryFn: () => dashboardApi.overview(todayStr, todayStr),

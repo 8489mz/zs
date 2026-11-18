@@ -4,7 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { dashboardApi } from '@/features/dashboard/api/dashboard.api';
 import { cashDrawerApi } from '@/lib/api/cash-drawer';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { Link } from 'react-router-dom';
 import { SmartphoneIcon, ShoppingCartIcon, BarChartIcon, FileTextIcon, RefreshCwIcon, AlertTriangleIcon } from '@/shared/components/icons/AppIcons';
 import { useHasAnyPermission, useHasFeature } from '@/shared/hooks/use-permission';
@@ -16,16 +16,16 @@ type TimeRange = 'today' | 'yesterday' | 'week' | 'month';
 
 function getRangeDates(range: TimeRange) {
   const now = new Date();
-  const to = now.toISOString().split('T')[0];
+  const to = todayLocalDateKey(now);
   let from = to;
 
   if (range === 'yesterday') {
     const y = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    from = y.toISOString().split('T')[0];
+    from = todayLocalDateKey(y);
     return { from, to: from };
   } else if (range === 'week') {
     const w = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    from = w.toISOString().split('T')[0];
+    from = todayLocalDateKey(w);
   } else if (range === 'month') {
     from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   }

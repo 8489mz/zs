@@ -37,6 +37,7 @@ import type {
   QuickCreateResult,
 } from './newPurchaseOrder.types';
 import { PURCHASE_DRAFT_STORAGE_KEY } from './newPurchaseOrder.types';
+import { addDaysLocalDateKey, todayLocalDateKey } from '@/lib/format';
 
 export function useNewPurchaseOrderController() {
   const queryClient = useQueryClient();
@@ -51,8 +52,8 @@ export function useNewPurchaseOrderController() {
   const [lines, setLines] = useState<PrototypeLine[]>([{ id: Date.now(), productId: null, itemName: '', qty: 1, unitPrice: 0, warehouse: '' }]);
   const [supplier, setSupplier] = useState('');
   const [paymentType, setPaymentType] = useState<'cash' | 'credit'>('credit');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [requiredDate, setRequiredDate] = useState(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  const [date, setDate] = useState(todayLocalDateKey());
+  const [requiredDate, setRequiredDate] = useState(addDaysLocalDateKey(5));
   const [currency, setCurrency] = useState('');
   const [company, setCompany] = useState('');
   const [contact, setContact] = useState('');
@@ -85,8 +86,8 @@ export function useNewPurchaseOrderController() {
     setLines([{ id: Date.now(), productId: null, itemName: '', qty: 1, unitPrice: 0, warehouse: '' }]);
     setSupplier('');
     setPaymentType('credit');
-    setDate(new Date().toISOString().split('T')[0]);
-    setRequiredDate(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    setDate(todayLocalDateKey());
+    setRequiredDate(addDaysLocalDateKey(5));
     setCurrency('EGP');
     setCompany('');
     setContact('');
@@ -1080,8 +1081,8 @@ export function useNewPurchaseOrderController() {
     window.localStorage.removeItem(PURCHASE_DRAFT_STORAGE_KEY);
     hasLoadedDraftRef.current = false;
     setSupplier('');
-    setDate(new Date().toISOString().split('T')[0]);
-    setRequiredDate(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    setDate(todayLocalDateKey());
+    setRequiredDate(addDaysLocalDateKey(5));
     setCurrency('EGP');
     setCompany('');
     setContact('');

@@ -14,7 +14,7 @@ import { toast, systemConfirm } from '@/shared/components/system-alert';
 import { useFormDraft } from '@/shared/hooks/use-form-draft';
 import { DraftRestoredBanner } from '@/shared/components/DraftRestoredBanner';
 import { matchesArabic } from '@/lib/arabic-normalization';
-import { formatCurrency, formatCurrencyWithSymbol } from '@/lib/format';
+import { formatCurrency, formatCurrencyWithSymbol, addDaysLocalDateKey, todayLocalDateKey } from '@/lib/format';
 import {
   PlusIcon,
   Trash2Icon,
@@ -51,9 +51,9 @@ export function CreateQuotationPage() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
-  const [quotationDate, setQuotationDate] = useState(new Date().toISOString().split('T')[0]);
+  const [quotationDate, setQuotationDate] = useState(todayLocalDateKey());
   const [validUntil, setValidUntil] = useState(
-    new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    addDaysLocalDateKey(15)
   );
   const [currency, setCurrency] = useState('EGP');
 

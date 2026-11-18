@@ -5,6 +5,7 @@ import { Button } from '@/shared/ui/button';
 import { toast } from '@/shared/components/system-alert';
 import { arCollectionsApi, type ArCollectionCaseItem } from '../../api/ar-collections.api';
 import { CalendarIcon, ClockIcon } from '@/shared/components/icons/AppIcons';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface ArPromiseToPayModalProps {
   open: boolean;
@@ -32,7 +33,7 @@ export const ArPromiseToPayModal: React.FC<ArPromiseToPayModalProps> = ({
       // Default date to 7 days from now
       const d = new Date();
       d.setDate(d.getDate() + 7);
-      setPromisedDate(d.toISOString().slice(0, 10));
+      setPromisedDate(todayLocalDateKey(d));
       setNotes('');
     }
   }, [caseItem]);

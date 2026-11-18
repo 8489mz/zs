@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/shared/components/page-header';
 import { Card } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { CheckIcon, XIcon, DownloadIcon, PrinterIcon } from '@/shared/components/icons/AppIcons';
 import {
@@ -18,7 +18,7 @@ export function CashFlowStatementPage() {
   const { t } = useTranslation();
   const currentYear = new Date().getFullYear();
   const defaultDateFrom = `${currentYear}-01-01`;
-  const defaultDateTo = new Date().toISOString().slice(0, 10);
+  const defaultDateTo = todayLocalDateKey();
 
   const [dateFrom, setDateFrom] = useState(defaultDateFrom);
   const [dateTo, setDateTo] = useState(defaultDateTo);
@@ -36,14 +36,14 @@ export function CashFlowStatementPage() {
     const m = now.getMonth();
 
     if (preset === 'this_month') {
-      const start = new Date(y, m, 1).toISOString().slice(0, 10);
-      const end = new Date(y, m + 1, 0).toISOString().slice(0, 10);
+      const start = todayLocalDateKey(new Date(y, m, 1));
+      const end = todayLocalDateKey(new Date(y, m + 1, 0));
       setDateFrom(start);
       setDateTo(end);
     } else if (preset === 'this_quarter') {
       const qStartMonth = Math.floor(m / 3) * 3;
-      const start = new Date(y, qStartMonth, 1).toISOString().slice(0, 10);
-      const end = new Date(y, qStartMonth + 3, 0).toISOString().slice(0, 10);
+      const start = todayLocalDateKey(new Date(y, qStartMonth, 1));
+      const end = todayLocalDateKey(new Date(y, qStartMonth + 3, 0));
       setDateFrom(start);
       setDateTo(end);
     } else if (preset === 'this_year') {

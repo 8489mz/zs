@@ -28,7 +28,7 @@ import { toast } from '@/shared/components/system-alert';
 import { useFormDraft } from '@/shared/hooks/use-form-draft';
 import { DraftRestoredBanner } from '@/shared/components/DraftRestoredBanner';
 import { matchesArabic } from '@/lib/arabic-normalization';
-import { formatCurrency, formatCurrencyWithSymbol } from '@/lib/format';
+import { formatCurrency, formatCurrencyWithSymbol, addDaysLocalDateKey, todayLocalDateKey } from '@/lib/format';
 
 export interface TemplateLineItem {
   id: number;
@@ -49,8 +49,8 @@ export function UniversalDocumentFormTemplate() {
   const [partnerName, setPartnerName] = useState('');
   const [partnerPhone, setPartnerPhone] = useState('');
   const [paymentType, setPaymentType] = useState<'cash' | 'credit'>('credit');
-  const [documentDate, setDocumentDate] = useState(new Date().toISOString().split('T')[0]);
-  const [dueDate, setDueDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  const [documentDate, setDocumentDate] = useState(todayLocalDateKey());
+  const [dueDate, setDueDate] = useState(addDaysLocalDateKey(7));
   const [currency, setCurrency] = useState('EGP');
   const [warehouseName, setWarehouseName] = useState('المستودع الرئيسي');
 

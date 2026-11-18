@@ -5,6 +5,7 @@ import { productsApi } from '@/features/products/api/products.api';
 import { purchasesApi } from '@/features/purchases/api/purchases.api';
 import { reportsApi } from '@/features/reports/api/reports.api';
 import { accountsApi } from '@/features/accounts/api/accounts.api';
+import { todayLocalDateKey } from '@/lib/format';
 
 const prefetchedPaths = new Set<string>();
 
@@ -88,7 +89,7 @@ export function prefetchRouteData(to: string) {
           break;
         case 'reports': {
           void import('@/features/reports/pages/ReportsPage');
-          const today = new Date().toISOString().slice(0, 10);
+          const today = todayLocalDateKey();
           void queryClient.prefetchQuery({
             queryKey: ['reports-summary', today, today],
             queryFn: () => reportsApi.summary(today, today),

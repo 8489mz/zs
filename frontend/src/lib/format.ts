@@ -96,6 +96,84 @@ export function todayLocalDateKey(referenceDate?: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function tenantZoneParts(instant: Date, timeZone: string): { year: string; month: string; day: string } | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(instant);
+    const map: Record<string, string> = {};
+    for (const p of parts) map[p.type] = p.value;
+    if (!map.year || !map.month || !map.day) return null;
+    return { year: map.year, month: map.month, day: map.day };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Today's date key (YYYY-MM-DD) in the TENANT's timezone
+ * (INV-TOISO-DATE-SWEEP-CORE). Mirrors the backend's todayTenantDate
+ * (tenant-timezone.util.ts): the zone is a REQUIRED parameter — never a
+ * silent default — so a call site must pass the tenant's zone explicitly
+ * (settings.timezone / serverTimezone) and the reader can see which zone
+ * the key is in. An unknown/invalid zone falls back to the browser-local
+ * calendar day (todayLocalDateKey), the same fallback
+ * formatTenantDateKey uses — never silently to Africa/Cairo.
+ *
+ * The UTC-midnight edge it closes: 01:00 in Cairo is still the previous
+ * UTC day, so the UTC ISO slice keys a business
+ * date to yesterday for the first two hours after midnight (UTC+2;
+ * three hours for UTC+3 zones). This helper keys the instant in the
+ * tenant zone instead.
+ */
+export function todayTenantDateKey(timeZone: string, referenceDate?: Date): string {
+  const instant = referenceDate ? new Date(referenceDate) : new Date();
+  if (Number.isNaN(instant.getTime())) return todayLocalDateKey(new Date());
+  const parts = tenantZoneParts(instant, timeZone);
+  if (!parts) return todayLocalDateKey(instant);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+/**
+ * The calendar day N days from today (or from the reference instant) in
+ * the TENANT's timezone (INV-TOISO-DATE-SWEEP-CORE). Whole-calendar-day
+ * arithmetic: the zone's calendar day is read first, N days are added to
+ * it, and the result is keyed — adding raw milliseconds to the instant
+ * would drift across a DST transition inside the window. Negative N
+ * counts backwards (e.g. -14 for a "last 14 days" range start). Same
+ * required-zone contract and invalid-zone fallback as todayTenantDateKey.
+ */
+export function addDaysTenantDateKey(timeZone: string, days: number, referenceDate?: Date): string {
+  const instant = referenceDate ? new Date(referenceDate) : new Date();
+  if (Number.isNaN(instant.getTime())) return addDaysLocalDateKey(days, new Date());
+  const parts = tenantZoneParts(instant, timeZone);
+  if (!parts) return addDaysLocalDateKey(days, instant);
+  const shifted = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day) + days));
+  const year = shifted.getUTCFullYear();
+  const month = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(shifted.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * The calendar day N days from today (or from the reference instant) in
+ * the browser-local calendar (INV-TOISO-DATE-SWEEP-CORE). The local twin
+ * of addDaysTenantDateKey, for the call sites where the tenant zone is
+ * not in scope: local `setDate` arithmetic keeps the wall time, so the
+ * key is the local calendar day N days on. Replaces the
+ * `Date.now() + N * 86400000` + UTC-slice idiom, whose UTC slice keys
+ * yesterday in the 00:00–02:00 window and whose raw millisecond step
+ * drifts across DST.
+ */
+export function addDaysLocalDateKey(days: number, referenceDate?: Date): string {
+  const d = referenceDate ? new Date(referenceDate) : new Date();
+  d.setDate(d.getDate() + days);
+  return todayLocalDateKey(d);
+}
+
 /**
  * Business-day key (YYYY-MM-DD) of an entry instant in the TENANT's
  * timezone (INV-IMPORT-JE-LIST-TENANT-TIMEZONE-DATE, proposed). Mirrors

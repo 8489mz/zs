@@ -1,6 +1,6 @@
 import { buildCode128Svg, normalizeCode128Value, productUnitsWithFallback } from '@/lib/barcode';
 import { escapeHtml, printHtmlDocument, resolvePrintSettings } from '@/lib/browser';
-import { formatCurrency, formatCurrencyWithCode, formatCurrencyWithSymbol } from '@/lib/format';
+import { formatCurrency, formatCurrencyWithCode, formatCurrencyWithSymbol, todayLocalDateKey } from '@/lib/format';
 import type { AppSettings, Product, ProductUnit } from '@/types/domain';
 import {
   BARCODE_PRINT_PRESETS,
@@ -148,7 +148,7 @@ export function buildSingleLabelHtml(
   // Food statement & dates (بطاقة بيان السلع الغذائية والمعبأة وفق القرارات التموينية)
   const showProductionDate = customization?.showProductionDate ?? false;
   const productionDate = (customization?.productionDate || '').trim();
-  const packagingDate = (customization?.packagingDate || '').trim() || new Date().toISOString().slice(0, 10);
+  const packagingDate = (customization?.packagingDate || '').trim() || todayLocalDateKey();
   const expiryText = customization?.expiryType === 'date' && customization?.expiryDate
     ? `انتهاء: ${customization.expiryDate}`
     : `صلاحية: ${customization?.expiryPeriodMonths || 6} شهر`;

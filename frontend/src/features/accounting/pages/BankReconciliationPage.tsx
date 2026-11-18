@@ -15,6 +15,7 @@ import { ReconciliationDualLedger } from '../components/bank-reconciliation/Reco
 import { CreateBankStatementModal } from '../components/bank-reconciliation/CreateBankStatementModal';
 import { BankFeeAdjustmentModal } from '../components/bank-reconciliation/BankFeeAdjustmentModal';
 import { TreasuryNavTabs } from '@/features/treasury';
+import { todayLocalDateKey } from '@/lib/format';
 
 export function BankReconciliationPage() {
   const { t } = useTranslation();
@@ -107,7 +108,7 @@ export function BankReconciliationPage() {
   // Form state for creating a statement
   const [newStmtAccountId, setNewStmtAccountId] = useState<number>(0);
   const [newStmtNo, setNewStmtNo] = useState('');
-  const [newStmtDate, setNewStmtDate] = useState(new Date().toISOString().slice(0, 10));
+  const [newStmtDate, setNewStmtDate] = useState(todayLocalDateKey());
   const [newStmtStartBal, setNewStmtStartBal] = useState<number>(0);
   const [newStmtEndBal, setNewStmtEndBal] = useState<number>(0);
   const [newStmtNotes, setNewStmtNotes] = useState('');

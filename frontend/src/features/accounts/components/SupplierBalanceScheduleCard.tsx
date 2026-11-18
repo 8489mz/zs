@@ -15,7 +15,7 @@ import { accountsApi } from '@/features/accounts/api/accounts.api';
 import { purchasesApi } from '@/features/purchases/api/purchases.api';
 import { supplierBalanceScheduleApi, buildSettleSupplierPaymentSchedulePayload, type SupplierPaymentScheduleItem } from '@/features/accounts/api/supplier-balance-schedule.api';
 import { readSupplierInstapayAddress } from '@/features/accounts/contracts';
-import { formatCurrency, formatDateOnly, formatDateTimeArabic, formatWhatsAppNumber } from '@/lib/format';
+import { formatCurrency, formatDateOnly, formatDateTimeArabic, formatWhatsAppNumber, todayLocalDateKey } from '@/lib/format';
 import { openWhatsApp } from '@/lib/whatsapp';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import type { Purchase, Supplier, SupplierLedgerEntry } from '@/types/domain';
@@ -63,7 +63,7 @@ function EyeIcon({ size = 14, style }: { size?: number; style?: React.CSSPropert
 }
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalDateKey();
 }
 
 function statusLabel(status: string) {

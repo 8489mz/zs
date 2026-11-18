@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo, type FC } from 'react';
 import { commercialSubscriptionsApi, type CommercialSubscription } from '../api/commercial-subscriptions.api';
 import { CreateSubscriptionModal } from '../components/CreateSubscriptionModal';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
 import {
   PlusIcon,
@@ -92,7 +92,7 @@ export const SubscriptionsListPage: FC = () => {
       }
     }, 0);
     const totalInvoices = subscriptions.reduce((acc, s) => acc + Number(s.invoices_count || 0), 0);
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = todayLocalDateKey();
     const dueCount = active.filter((s) => s.next_billing_date <= todayStr).length;
 
     return {
@@ -293,7 +293,7 @@ export const SubscriptionsListPage: FC = () => {
                       {formatCurrency(sub.recurring_amount)}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <span style={{ fontWeight: 600, color: sub.next_billing_date <= new Date().toISOString().slice(0, 10) ? '#ea580c' : '#334155' }}>
+                      <span style={{ fontWeight: 600, color: sub.next_billing_date <= todayLocalDateKey() ? '#ea580c' : '#334155' }}>
                         {sub.next_billing_date}
                       </span>
                     </td>

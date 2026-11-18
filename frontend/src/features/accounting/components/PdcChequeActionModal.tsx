@@ -6,7 +6,7 @@ import { StandardDialog, StandardDialogFooter } from '@/shared/components/Standa
 import { Button } from '@/shared/ui/button';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { FileTextIcon, CalendarIcon, AlertTriangleIcon } from '@/shared/components/icons/AppIcons';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { pdcChequesApi, type PdcCheque } from '../api/accounting.api';
 
 export type PdcActionType = 'deposit' | 'collect' | 'clear' | 'bounce' | 'endorse' | 'return' | null;
@@ -44,7 +44,7 @@ export function PdcChequeActionModal({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const serverClock = useServerClock(serverTime, serverTimezone);
-  const [actionDate, setActionDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [actionDate, setActionDate] = useState(() => todayLocalDateKey());
   const [bouncedReason, setBouncedReason] = useState('عدم كفاية الرصيد');
   const [bouncedFee, setBouncedFee] = useState('0');
   const [endorsedSupplier, setEndorsedSupplier] = useState('');
@@ -56,7 +56,7 @@ export function PdcChequeActionModal({
       // P8 (RC-7): default the action date from the server day in the
       // tenant zone — the old default was a UTC slice, yesterday for the
       // first two hours after midnight (UTC+2). The input stays editable.
-      setActionDate(serverClock.todayKey() || new Date().toISOString().slice(0, 10));
+      setActionDate(serverClock.todayKey() || todayLocalDateKey());
       setBouncedReason('عدم كفاية الرصيد');
       setBouncedFee('0');
       setEndorsedSupplier('');

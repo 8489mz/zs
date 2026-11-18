@@ -9,7 +9,7 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { purchasePaymentScheduleApi, type SupplierPaymentScheduleItem } from '@/features/purchases/api/purchase-payment-schedule.api';
-import { formatCurrency, formatDateOnly } from '@/lib/format';
+import { formatCurrency, formatDateOnly, todayLocalDateKey } from '@/lib/format';
 import type { Purchase } from '@/types/domain';
 
 const SCHEDULE_MODE_OPTIONS = [
@@ -18,7 +18,7 @@ const SCHEDULE_MODE_OPTIONS = [
 ];
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalDateKey();
 }
 
 function statusLabel(status: string) {

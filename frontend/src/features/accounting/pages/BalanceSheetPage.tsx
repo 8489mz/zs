@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { CheckIcon, XIcon, DownloadIcon, PrinterIcon } from '@/shared/components/icons/AppIcons';
 import { PageHeader } from '@/shared/components/page-header';
 import {
@@ -18,8 +18,8 @@ export function BalanceSheetPage() {
   const { t, i18n } = useTranslation();
   const isEn = i18n.language === 'en';
   const navigate = useNavigate();
-  const today = new Date().toISOString().slice(0, 10);
-  const oneYearAgo = new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().slice(0, 10);
+  const today = todayLocalDateKey();
+  const oneYearAgo = todayLocalDateKey(new Date(new Date().setFullYear(new Date().getFullYear() - 1)));
 
   const [asOfDate, setAsOfDate] = useState(today);
   const [compareMode, setCompareMode] = useState<'none' | 'last_year' | 'custom'>('last_year');
@@ -30,7 +30,7 @@ export function BalanceSheetPage() {
     if (compareMode === 'last_year') {
       const d = new Date(asOfDate);
       d.setFullYear(d.getFullYear() - 1);
-      return d.toISOString().slice(0, 10);
+      return todayLocalDateKey(d);
     }
     return customCompareDate || undefined;
   }, [compareMode, asOfDate, customCompareDate]);

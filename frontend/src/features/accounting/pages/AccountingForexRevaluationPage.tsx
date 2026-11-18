@@ -14,6 +14,7 @@ import {
   ForexRevaluationRun,
 } from '../api/forex.api';
 import { CheckIcon, ShieldAlertIcon, ClockIcon } from '@/shared/components/icons/AppIcons';
+import { todayLocalDateKey } from '@/lib/format';
 
 export const AccountingForexRevaluationPage: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -23,7 +24,7 @@ export const AccountingForexRevaluationPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'wizard' | 'history'>('wizard');
 
   // Wizard state
-  const [periodDate, setPeriodDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [periodDate, setPeriodDate] = useState<string>(todayLocalDateKey());
   const [selectedCurrency, setSelectedCurrency] = useState<string>('USD');
   const [closingRate, setClosingRate] = useState<string>('50.00');
   const [previewData, setPreviewData] = useState<ForexRevaluationPreview | null>(null);

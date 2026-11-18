@@ -15,7 +15,7 @@ import { toast } from '@/shared/components/system-alert';
 import { useFormDraft } from '@/shared/hooks/use-form-draft';
 import { DraftRestoredBanner } from '@/shared/components/DraftRestoredBanner';
 import { matchesArabic } from '@/lib/arabic-normalization';
-import { formatCurrency, formatCurrencyWithSymbol } from '@/lib/format';
+import { formatCurrency, formatCurrencyWithSymbol, addDaysLocalDateKey, todayLocalDateKey } from '@/lib/format';
 import { LockIcon, PackageIcon } from '@/shared/components/icons/AppIcons';
 import type { Product } from '@/types/domain';
 
@@ -42,12 +42,12 @@ export function CreateSalesOrderPage() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [paymentType, setPaymentType] = useState<'cash' | 'credit'>('credit');
-  const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
+  const [orderDate, setOrderDate] = useState(todayLocalDateKey());
   const [deliveryDate, setDeliveryDate] = useState(
-    new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    addDaysLocalDateKey(3)
   );
   const [reservationExpiresAt, setReservationExpiresAt] = useState(
-    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    addDaysLocalDateKey(7)
   );
   const [autoReserve, setAutoReserve] = useState(true);
   const [currency, setCurrency] = useState('EGP');
@@ -259,9 +259,9 @@ export function CreateSalesOrderPage() {
     setCustomerPhone('');
     setCustomerAddress('');
     setPaymentType('credit');
-    setOrderDate(new Date().toISOString().split('T')[0]);
-    setDeliveryDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-    setReservationExpiresAt(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    setOrderDate(todayLocalDateKey());
+    setDeliveryDate(addDaysLocalDateKey(3));
+    setReservationExpiresAt(addDaysLocalDateKey(7));
     setAutoReserve(true);
     setTaxRate(0);
     setDiscountMode('value');

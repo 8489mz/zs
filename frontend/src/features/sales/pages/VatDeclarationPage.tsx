@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/shared/ui/button';
 import { PageHeader } from '@/shared/components/page-header';
 import { StatsGrid } from '@/shared/components/stats-grid';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { ApiError } from '@/lib/http';
 import { vatDeclarationApi, type VatDeclarationData } from '@/features/sales/api/vat-declaration.api';
 import { PrinterIcon } from '@/shared/components/icons/AppIcons';
@@ -32,8 +32,8 @@ export function VatDeclarationPage() {
   const { t } = useTranslation();
   const [country, setCountry] = useState<'EG' | 'SA'>('EG');
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('current_month');
-  const [customFrom, setCustomFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
-  const [customTo, setCustomTo] = useState(new Date().toISOString().split('T')[0]);
+  const [customFrom, setCustomFrom] = useState(todayLocalDateKey(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
+  const [customTo, setCustomTo] = useState(todayLocalDateKey());
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const dateRange = useMemo(() => {
@@ -41,13 +41,13 @@ export function VatDeclarationPage() {
     const year = now.getFullYear();
 
     if (periodPreset === 'current_month') {
-      const from = new Date(year, now.getMonth(), 1).toISOString().split('T')[0];
-      const to = new Date(year, now.getMonth() + 1, 0).toISOString().split('T')[0];
+      const from = todayLocalDateKey(new Date(year, now.getMonth(), 1));
+      const to = todayLocalDateKey(new Date(year, now.getMonth() + 1, 0));
       return { from, to };
     }
     if (periodPreset === 'last_month') {
-      const from = new Date(year, now.getMonth() - 1, 1).toISOString().split('T')[0];
-      const to = new Date(year, now.getMonth(), 0).toISOString().split('T')[0];
+      const from = todayLocalDateKey(new Date(year, now.getMonth() - 1, 1));
+      const to = todayLocalDateKey(new Date(year, now.getMonth(), 0));
       return { from, to };
     }
     if (periodPreset === 'q1') {

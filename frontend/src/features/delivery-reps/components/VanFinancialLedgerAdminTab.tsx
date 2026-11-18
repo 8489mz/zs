@@ -24,6 +24,7 @@ import {
   CheckIcon,
   XIcon,
 } from '@/shared/components/icons/AppIcons';
+import { todayLocalDateKey } from '@/lib/format';
 
 export function VanFinancialLedgerAdminTab() {
   const { t, i18n } = useTranslation();
@@ -61,7 +62,7 @@ export function VanFinancialLedgerAdminTab() {
 
   const [isPushPayrollOpen, setIsPushPayrollOpen] = useState(false);
   const [payrollTargetMonth, setPayrollTargetMonth] = useState(
-    () => new Date().toISOString().slice(0, 7)
+    () => todayLocalDateKey().slice(0, 7)
   );
 
   const [linkingRep, setLinkingRep] = useState<{

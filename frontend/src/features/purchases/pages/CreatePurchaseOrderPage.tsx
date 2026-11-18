@@ -12,7 +12,7 @@ import { toast } from '@/shared/components/system-alert';
 import { useFormDraft } from '@/shared/hooks/use-form-draft';
 import { DraftRestoredBanner } from '@/shared/components/DraftRestoredBanner';
 import { matchesArabic } from '@/lib/arabic-normalization';
-import { formatCurrency, formatCurrencyWithSymbol } from '@/lib/format';
+import { formatCurrency, formatCurrencyWithSymbol, addDaysLocalDateKey, todayLocalDateKey } from '@/lib/format';
 
 interface FormLineItem extends PurchaseOrderItem {
   id: number;
@@ -35,9 +35,9 @@ export function CreatePurchaseOrderPage() {
   const [supplierName, setSupplierName] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
   const [paymentType, setPaymentType] = useState<'cash' | 'credit'>('credit');
-  const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
+  const [orderDate, setOrderDate] = useState(todayLocalDateKey());
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState(
-    new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    addDaysLocalDateKey(5)
   );
   const [currency, setCurrency] = useState('EGP');
   const [warehouseName, setWarehouseName] = useState('المستودع الرئيسي');
@@ -204,8 +204,8 @@ export function CreatePurchaseOrderPage() {
     setSupplierName('');
     setSupplierPhone('');
     setPaymentType('credit');
-    setOrderDate(new Date().toISOString().split('T')[0]);
-    setExpectedDeliveryDate(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    setOrderDate(todayLocalDateKey());
+    setExpectedDeliveryDate(addDaysLocalDateKey(5));
     setCurrency('EGP');
     setWarehouseName('المستودع الرئيسي');
     setTaxRate(0);
