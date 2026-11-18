@@ -16,7 +16,7 @@ export function PosPhoneOrderCustomerStrip({
   setIsForceNewCustomer,
   searchInputRef,
 }: {
-  currentCustomer: PosCustomerDeliveryProfile['customer'] | null | undefined;
+  currentCustomer: NonNullable<PosCustomerDeliveryProfile['customer']>;
   setSelectedCustomerId: Dispatch<SetStateAction<string | null>>;
   setSelectedAddress: Dispatch<SetStateAction<string>>;
   setIsForceNewCustomer: Dispatch<SetStateAction<boolean>>;
