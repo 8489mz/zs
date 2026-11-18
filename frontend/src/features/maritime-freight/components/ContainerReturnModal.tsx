@@ -4,6 +4,7 @@ import { StandardDialog, StandardDialogFooter } from '@/shared/components/Standa
 import { Field } from '@/shared/ui/field';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { maritimeApi, MaritimeContainer } from '../api/maritime-freight.api';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface ContainerReturnModalProps {
   open: boolean;
@@ -14,7 +15,7 @@ interface ContainerReturnModalProps {
 
 export function ContainerReturnModal({ open, container, onClose, onUpdated }: ContainerReturnModalProps) {
   const { t } = useTranslation();
-  const [emptyReturnedAt, setEmptyReturnedAt] = useState(new Date().toISOString().split('T')[0]);
+  const [emptyReturnedAt, setEmptyReturnedAt] = useState(todayLocalDateKey());
   const [depositStatus, setDepositStatus] = useState<'held_by_line' | 'pending_return_proof' | 'refunded_to_treasury'>('pending_return_proof');
   const [emptyReturnProofUrl, setEmptyReturnProofUrl] = useState('');
   const [notes, setNotes] = useState('');

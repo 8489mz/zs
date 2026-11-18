@@ -5,6 +5,7 @@ import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { contractingApi } from '../api/contracting.api';
 import { ContractingSupplierReturn } from '../contracting.types';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface SupplierReturnsModalProps {
   isOpen: boolean;
@@ -82,7 +83,7 @@ export function SupplierReturnsModal({
         unitCost: Number(unitCost || 0),
         reason: reason.trim(),
         creditNoteNumber: creditNoteNumber.trim() || undefined,
-        returnDate: new Date().toISOString().split('T')[0],
+        returnDate: todayLocalDateKey(),
       });
       setIsAdding(false);
       setSupplierName('');

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { http } from '@/lib/http';
+import { todayLocalDateKey } from '@/lib/format';
 
 export interface Shipment {
   id: string;
@@ -1120,7 +1121,7 @@ export const useDisburseBrokerAdvanceMutation = () => {
         shipmentId: dto.shipmentId || dto.shipment_id || undefined,
         advanceNo: dto.advanceNo || dto.advance_no || `ADV-${Date.now().toString().slice(-6)}`,
         amountEgp: Number(dto.amountEgp ?? dto.amount_egp ?? dto.amount ?? 0),
-        disbursementDate: dto.disbursementDate || dto.disbursement_date || new Date().toISOString().slice(0, 10),
+        disbursementDate: dto.disbursementDate || dto.disbursement_date || todayLocalDateKey(),
         paymentMethod: dto.paymentMethod || dto.payment_method || 'bank_transfer',
         treasuryAccountId: dto.treasuryAccountId || dto.treasury_account_id || undefined,
         notes: dto.notes || undefined,
@@ -1147,7 +1148,7 @@ export const useLiquidateBrokerExpenseMutation = () => {
         projectId: dto.projectId || dto.project_id || undefined,
         shipmentId: dto.shipmentId || dto.shipment_id || undefined,
         receiptNo: dto.receiptNo || dto.receiptNumber || dto.receipt_no || `REC-${Date.now().toString().slice(-6)}`,
-        expenseDate: dto.expenseDate || dto.expense_date || new Date().toISOString().slice(0, 10),
+        expenseDate: dto.expenseDate || dto.expense_date || todayLocalDateKey(),
         category: dto.category || dto.expenseCategory || 'clearance_fees',
         amountEgp: Number(dto.amountEgp ?? dto.amount_egp ?? dto.amount ?? 0),
         isCapitalized: dto.isCapitalized ?? dto.is_capitalized ?? true,
@@ -1213,7 +1214,7 @@ export const useRecordContainerDepositMutation = () => {
         containerNo: dto.containerNo || dto.containerNumber || dto.container_no,
         shippingLine: dto.shippingLine || dto.shipping_line,
         depositAmountEgp: Number(dto.depositAmountEgp ?? dto.deposit_amount_egp ?? 0),
-        paymentDate: dto.paymentDate || dto.payment_date || new Date().toISOString().slice(0, 10),
+        paymentDate: dto.paymentDate || dto.payment_date || todayLocalDateKey(),
         expectedReturnDate: dto.expectedReturnDate || dto.freeDaysDeadline || dto.expected_return_date || undefined,
         treasuryAccountId: dto.treasuryAccountId || dto.treasury_account_id || undefined,
         notes: dto.notes || undefined,
@@ -1241,7 +1242,7 @@ export const useRefundContainerDepositMutation = (defaultDepositId?: string) => 
       const depositId = args?.depositId || defaultDepositId;
       const raw = args?.dto !== undefined ? args.dto : args;
       const payload = {
-        actualReturnDate: raw.actualReturnDate || raw.actual_return_date || new Date().toISOString().slice(0, 10),
+        actualReturnDate: raw.actualReturnDate || raw.actual_return_date || todayLocalDateKey(),
         refundedAmountEgp: Number(raw.refundedAmountEgp ?? raw.refunded_amount_egp ?? 0),
         deductionsAmountEgp:
           raw.deductionsAmountEgp !== undefined
@@ -1368,7 +1369,7 @@ export const useCreateSampleOrderMutation = () => {
               ? Number(dto.courierCostUsd)
               : 0,
         currency: dto.currency || 'USD',
-        requestDate: dto.requestDate || dto.request_date || new Date().toISOString().slice(0, 10),
+        requestDate: dto.requestDate || dto.request_date || todayLocalDateKey(),
         courierTrackingNo: dto.courierTrackingNo || dto.trackingNumber || dto.courier_tracking_no || undefined,
         notes: dto.notes || undefined,
       };
@@ -1404,7 +1405,7 @@ export const useUpdateSampleInspectionMutation = (defaultSampleId?: string) => {
               ? Boolean(raw.isGoldenSample)
               : undefined,
         defectAnalysis: raw.defectAnalysis ?? raw.inspectionNotes ?? raw.defect_analysis,
-        receivedDate: raw.receivedDate || new Date().toISOString().slice(0, 10),
+        receivedDate: raw.receivedDate || todayLocalDateKey(),
       };
       return await http<any>(`/api/import-sales/samples/${sampleId}/inspection`, {
         method: 'PATCH',
@@ -1503,7 +1504,7 @@ export const useCreateProformaInvoiceMutation = () => {
         projectId: payload.projectId || undefined,
         supplierId: Number(payload.supplierId),
         piNumber: payload.piNumber,
-        piDate: payload.piDate || payload.issueDate || new Date().toISOString().slice(0, 10),
+        piDate: payload.piDate || payload.issueDate || todayLocalDateKey(),
         currency: payload.currency || 'USD',
         totalAmountForeign: Number(payload.totalAmountForeign),
         incoterm: payload.incoterm || 'FOB',
@@ -1573,7 +1574,7 @@ export const useCreateQuotationMutation = () => {
         projectId: dto.projectId || dto.project_id || undefined,
         supplierId: Number(dto.supplierId ?? dto.supplier_id),
         quotationNo: dto.quotationNo || dto.quotation_no || `RFQ-${Date.now().toString().slice(-6)}`,
-        inquiryDate: dto.inquiryDate || new Date().toISOString().slice(0, 10),
+        inquiryDate: dto.inquiryDate || todayLocalDateKey(),
         expiryDate: dto.expiryDate || dto.validUntil || undefined,
         incoterm: dto.incoterm || 'FOB',
         currency: dto.currency || 'USD',
@@ -1773,7 +1774,7 @@ export function buildFxAcquisitionPayload(dto: any): Record<string, unknown> {
     foreignAmount,
     egpCost,
     exchangeRate: dto.exchangeRate ?? dto.exchange_rate ?? undefined,
-    acquisitionDate: dto.acquisitionDate || dto.acquisition_date || new Date().toISOString().slice(0, 10),
+    acquisitionDate: dto.acquisitionDate || dto.acquisition_date || todayLocalDateKey(),
     source: dto.source || dto.sourceType || 'bank',
     bankAccountId: dto.bankAccountId || (dto.treasuryAccountId ? String(dto.treasuryAccountId) : undefined),
     sourceAccountId: dto.sourceAccountId || (dto.sourceTreasuryAccountId ? String(dto.sourceTreasuryAccountId) : undefined),
@@ -1861,7 +1862,7 @@ export const useCreateSourcingTripMutation = () => {
         projectId: dto.projectId || dto.project_id || undefined,
         tripTitle: dto.tripTitle || dto.trip_title || dto.trip_name || dto.title,
         destinationCity: dto.destinationCity || dto.destination_city || dto.cities_visited || dto.destination || 'Guangzhou / Yiwu',
-        startDate: dto.startDate || dto.start_date || new Date().toISOString().slice(0, 10),
+        startDate: dto.startDate || dto.start_date || todayLocalDateKey(),
         endDate: dto.endDate || dto.end_date || undefined,
         budgetEgp: Number(dto.budgetEgp ?? dto.budget_egp ?? (dto.travel_cost_usd ? Number(dto.travel_cost_usd) * 50 : 0)),
         actualCostEgp: Number(dto.actualCostEgp ?? dto.actual_cost_egp ?? (dto.travel_cost_usd ? Number(dto.travel_cost_usd) * 50 : 0)),

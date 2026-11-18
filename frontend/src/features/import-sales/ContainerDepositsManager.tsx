@@ -8,7 +8,7 @@ import {
   useShipmentsQuery,
 } from './api/shipments.api';
 import { StandardDialog } from '@/shared/components/StandardDialog';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, addDaysLocalDateKey, todayLocalDateKey } from '@/lib/format';
 import {
   PlusCircleIcon,
   RefreshCwIcon,
@@ -38,7 +38,7 @@ export function ContainerDepositsManager() {
   const [notes, setNotes] = useState('');
 
   // Refund Form State
-  const [actualReturnDate, setActualReturnDate] = useState(new Date().toISOString().slice(0, 10));
+  const [actualReturnDate, setActualReturnDate] = useState(todayLocalDateKey());
   const [refundedAmountEgp, setRefundedAmountEgp] = useState<number | string>('');
   const [deductionsAmountEgp, setDeductionsAmountEgp] = useState<number>(0);
   const [deductionReason, setDeductionReason] = useState('');
@@ -87,7 +87,7 @@ export function ContainerDepositsManager() {
         containerNo: containerNo.trim(),
         shippingLine,
         depositAmountEgp: Number(depositAmountEgp),
-        expectedReturnDate: expectedReturnDate || new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+        expectedReturnDate: expectedReturnDate || addDaysLocalDateKey(14),
         treasuryAccountId: treasuryAccountId || undefined,
         notes: notes || undefined,
       });

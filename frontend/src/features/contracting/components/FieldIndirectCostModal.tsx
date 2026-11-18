@@ -12,6 +12,7 @@ import type {
 } from '../contracting.types';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface FieldIndirectCostModalProps {
   open: boolean;
@@ -61,16 +62,16 @@ export function FieldIndirectCostModal({
   const [expenseTitle, setExpenseTitle] = useState('');
   const [grossAmount, setGrossAmount] = useState('');
   const [recoveredAmount, setRecoveredAmount] = useState('');
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [expenseDate, setExpenseDate] = useState(todayLocalDateKey());
   const [voucherRef, setVoucherRef] = useState('');
 
   // Run Allocation Batch Form
   const [periodStart, setPeriodStart] = useState(() => {
     const d = new Date();
     d.setDate(1);
-    return d.toISOString().slice(0, 10);
+    return todayLocalDateKey(d);
   });
-  const [periodEnd, setPeriodEnd] = useState(() => new Date().toISOString().slice(0, 10));
+  const [periodEnd, setPeriodEnd] = useState(() => todayLocalDateKey());
   const [deferredInAmount, setDeferredInAmount] = useState('');
   const [batchNotes, setBatchNotes] = useState('');
   const [previewSummary, setPreviewSummary] = useState<BatchAllocationSummary | null>(null);

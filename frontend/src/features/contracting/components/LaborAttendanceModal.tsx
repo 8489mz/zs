@@ -6,6 +6,7 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { contractingApi } from '../api/contracting.api';
 import { ContractingLaborAttendance, ContractingBoqItem } from '../contracting.types';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface LaborAttendanceModalProps {
   isOpen: boolean;
@@ -44,7 +45,7 @@ export function LaborAttendanceModal({
   // Form states
   const [workerName, setWorkerName] = useState('');
   const [trade, setTrade] = useState('حداد مسلح');
-  const [workDate, setWorkDate] = useState(new Date().toISOString().split('T')[0]);
+  const [workDate, setWorkDate] = useState(todayLocalDateKey());
   const [regularHours, setRegularHours] = useState<number>(8);
   const [overtimeHours, setOvertimeHours] = useState<number>(0);
   const [overtimeRate, setOvertimeRate] = useState<number>(40);

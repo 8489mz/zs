@@ -12,6 +12,7 @@ import type {
   ContractingSubcontract,
 } from '../contracting.types';
 import { toast } from '@/shared/components/system-alert';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface SubcontractorBackChargesModalProps {
   open: boolean;
@@ -49,7 +50,7 @@ export function SubcontractorBackChargesModal({ open, onClose, projectId, projec
   const [beneficiarySubcontractId, setBeneficiarySubcontractId] = useState('');
   const [backchargeCategory, setBackchargeCategory] = useState<BackchargeCategory>('damage_rework');
   const [amount, setAmount] = useState<number | ''>('');
-  const [occurrenceDate, setOccurrenceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [occurrenceDate, setOccurrenceDate] = useState(todayLocalDateKey());
   const [description, setDescription] = useState('');
 
   // Status Action State

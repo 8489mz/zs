@@ -15,6 +15,7 @@ import { EndOfServiceKpiCards } from '../components/end-of-service/EndOfServiceK
 import { SettlementsTable } from '../components/end-of-service/SettlementsTable';
 import { CreateSettlementModal } from '../components/end-of-service/CreateSettlementModal';
 import { PrintSettlementModal } from '../components/end-of-service/PrintSettlementModal';
+import { todayLocalDateKey } from '@/lib/format';
 
 export function HrEndOfServicePage() {
   const { t } = useTranslation();
@@ -29,7 +30,7 @@ export function HrEndOfServicePage() {
   // New Settlement Modal state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | ''>('');
-  const [terminationDate, setTerminationDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [terminationDate, setTerminationDate] = useState(() => todayLocalDateKey());
   const [terminationReason, setTerminationReason] = useState('resignation');
   const [lawType, setLawType] = useState<'saudi' | 'egyptian' | 'custom' | ''>('');
   const [customDaysPerYear, setCustomDaysPerYear] = useState(0);

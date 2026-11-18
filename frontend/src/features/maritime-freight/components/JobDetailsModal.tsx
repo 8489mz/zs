@@ -18,6 +18,7 @@ import { JobChargesTab } from './job-details/JobChargesTab';
 import { JobDocumentsTab } from './job-details/JobDocumentsTab';
 import { JobConsolidationTab } from './job-details/JobConsolidationTab';
 import { JobInlandTruckingTab } from './job-details/JobInlandTruckingTab';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface JobDetailsModalProps {
   open: boolean;
@@ -104,7 +105,7 @@ export function JobDetailsModal({ open, jobId, onClose, onUpdated }: JobDetailsM
     premiumAmount: '',
     currency: 'USD',
     coverageType: 'all_risks' as 'all_risks' | 'clauses_a' | 'clauses_b' | 'clauses_c',
-    issueDate: new Date().toISOString().split('T')[0],
+    issueDate: todayLocalDateKey(),
     expiryDate: '',
     notes: '',
   });
@@ -256,7 +257,7 @@ export function JobDetailsModal({ open, jobId, onClose, onUpdated }: JobDetailsM
         premium_amount: premium || 0,
         currency: insuranceForm.currency || 'USD',
         coverage_type: insuranceForm.coverageType,
-        issue_date: insuranceForm.issueDate || new Date().toISOString().split('T')[0],
+        issue_date: insuranceForm.issueDate || todayLocalDateKey(),
         expiry_date: insuranceForm.expiryDate || undefined,
         notes: insuranceForm.notes || undefined,
       });
@@ -269,7 +270,7 @@ export function JobDetailsModal({ open, jobId, onClose, onUpdated }: JobDetailsM
         premiumAmount: '',
         currency: 'USD',
         coverageType: 'all_risks',
-        issueDate: new Date().toISOString().split('T')[0],
+        issueDate: todayLocalDateKey(),
         expiryDate: '',
         notes: '',
       });

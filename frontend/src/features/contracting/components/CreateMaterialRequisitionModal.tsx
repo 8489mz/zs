@@ -7,6 +7,7 @@ import { contractingApi } from '../api/contracting.api';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
 import type { ContractingBoqItem } from '../contracting.types';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface CreateMaterialRequisitionModalProps {
   open: boolean;
@@ -48,7 +49,7 @@ export function CreateMaterialRequisitionModal({
     unit: 'طن',
     quantity: '',
     unitCost: '',
-    issueDate: new Date().toISOString().split('T')[0],
+    issueDate: todayLocalDateKey(),
     recipientName: '',
     notes: '',
   });

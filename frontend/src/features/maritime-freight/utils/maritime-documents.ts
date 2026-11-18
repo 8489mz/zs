@@ -1,5 +1,6 @@
 import { MaritimeJob, MaritimeContainer, MaritimeQuotation } from '../api/maritime-freight.api';
 import { buildQrSvg } from '@/lib/qrcode';
+import { todayLocalDateKey } from '@/lib/format';
 
 export function escapeHtml(str?: string | number | null): string {
   if (str === null || str === undefined) return '';
@@ -1699,7 +1700,7 @@ export function printSolasVgmCertificate(
   const scaleId = vgmDetails?.scaleId || (targetContainer as any)?.scale_id || 'CAL-SCALE-01';
   const calibrationCertNo = vgmDetails?.calibrationCertNo || (targetContainer as any)?.calibration_cert_no || 'ISO/IEC-17025-VGM';
   const signatoryName = vgmDetails?.signatoryName || (targetContainer as any)?.vgm_signatory_name || job.customer_name || 'Authorized Signatory';
-  const weighingDate = vgmDetails?.weighingDate || (targetContainer as any)?.vgm_weighing_date || new Date().toISOString().split('T')[0];
+  const weighingDate = vgmDetails?.weighingDate || (targetContainer as any)?.vgm_weighing_date || todayLocalDateKey();
   const vgmCertNo = `VGM-${escapeHtml(job.job_number)}-${containerNo.slice(-4)}`;
 
   const html = `

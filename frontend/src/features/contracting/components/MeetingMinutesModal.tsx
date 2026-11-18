@@ -7,6 +7,7 @@ import { Field } from '@/shared/ui/field';
 import { contractingApi } from '../api/contracting.api';
 import type { ContractingMeetingMinute, ContractingMeetingMinuteDetail, MeetingAttendee } from '../contracting.types';
 import { toast } from '@/shared/components/system-alert';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface MeetingMinutesModalProps {
   open: boolean;
@@ -32,7 +33,7 @@ export function MeetingMinutesModal({ open, onClose, projectId, projectName }: M
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [meetingType, setMeetingType] = useState('site_progress');
-  const [meetingDate, setMeetingDate] = useState(new Date().toISOString().split('T')[0]);
+  const [meetingDate, setMeetingDate] = useState(todayLocalDateKey());
   const [location, setLocation] = useState('');
   const [attendeesText, setAttendeesText] = useState('');
   const [agenda, setAgenda] = useState('');

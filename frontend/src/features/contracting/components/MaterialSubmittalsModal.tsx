@@ -13,6 +13,7 @@ import type {
   ContractingSubcontract,
 } from '../contracting.types';
 import { toast } from '@/shared/components/system-alert';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface MaterialSubmittalsModalProps {
   open: boolean;
@@ -53,7 +54,7 @@ export function MaterialSubmittalsModal({ open, onClose, projectId, projectName 
   const [supplierManufacturer, setSupplierManufacturer] = useState('');
   const [boqItemId, setBoqItemId] = useState('');
   const [subcontractId, setSubcontractId] = useState('');
-  const [submissionDate, setSubmissionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [submissionDate, setSubmissionDate] = useState(todayLocalDateKey());
   const [reviewDueDate, setReviewDueDate] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -132,7 +133,7 @@ export function MaterialSubmittalsModal({ open, onClose, projectId, projectName 
         status: newStatus,
         consultantName: consultantName.trim() || undefined,
         consultantComments: consultantComments.trim() || undefined,
-        consultantReviewDate: new Date().toISOString().split('T')[0],
+        consultantReviewDate: todayLocalDateKey(),
       });
 
       toast.success('تم توثيق قرار واعتماد الاستشاري بنجاح');

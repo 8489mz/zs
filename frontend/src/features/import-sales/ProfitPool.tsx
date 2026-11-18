@@ -12,7 +12,7 @@ import {
   useImportProjectsQuery,
   Partner,
 } from './api/shipments.api';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { ManagePartnersDialog } from './ManagePartnersDialog';
 import { PartnerLedgerDialog } from './PartnerLedgerComponents';
@@ -495,8 +495,8 @@ function ProjectCloseModal({
 
 export default function ProfitPool() {
   const { t } = useTranslation();
-  const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(todayLocalDateKey(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
+  const [endDate, setEndDate] = useState(todayLocalDateKey());
   // INV-IMPORT-TRACEABILITY-APPROVALS-POOL: the pool used to render
   // only the company-wide aggregate — the report service supports a
   // projectId, but the page never passed one. The filter below scopes

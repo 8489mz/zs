@@ -6,6 +6,7 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { contractingApi } from '../api/contracting.api';
 import { ContractingSupplierPriceMemory } from '../contracting.types';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface SuppliersDirectoryModalProps {
   open: boolean;
@@ -57,7 +58,7 @@ export function SuppliersDirectoryModal({
   const [materialName, setMaterialName] = useState('');
   const [unit, setUnit] = useState('طن');
   const [lastUnitPrice, setLastUnitPrice] = useState<number | ''>('');
-  const [lastPurchaseDate, setLastPurchaseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [lastPurchaseDate, setLastPurchaseDate] = useState(todayLocalDateKey());
   const [governorate, setGovernorate] = useState('القاهرة');
   const [paymentTerms, setPaymentTerms] = useState<any>('cash');
   const [qualityRating, setQualityRating] = useState<number>(5);

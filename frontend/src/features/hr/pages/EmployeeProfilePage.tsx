@@ -45,6 +45,7 @@ import {
   type DocumentDraft,
   type ProfileSection,
 } from '@/features/hr/components/employee-profile/employee-profile-page.helpers';
+import { todayLocalDateKey } from '@/lib/format';
 
 export function EmployeeProfilePage() {
   const { t } = useTranslation();
@@ -160,7 +161,7 @@ export function EmployeeProfilePage() {
         payload: {
           contractType: contractDraft.contractType || 'monthly',
           baseSalary: Number(contractDraft.baseSalary),
-          startDate: new Date().toISOString().slice(0, 10),
+          startDate: todayLocalDateKey(),
         },
       });
       setShowContractForm(false);

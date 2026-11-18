@@ -5,6 +5,7 @@ import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { contractingApi } from '../api/contracting.api';
 import { toast } from '@/shared/components/system-alert';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface AwardTenderModalProps {
   open: boolean;
@@ -34,9 +35,9 @@ export function AwardTenderModal({
   const { t } = useTranslation();
   const { currencySymbol, formatCurrency } = useSystemCurrency();
 
-  const [contractRef, setContractRef] = useState(`CNT-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-0001`);
-  const [contractDate, setContractDate] = useState(new Date().toISOString().slice(0, 10));
-  const [startDate] = useState(new Date().toISOString().slice(0, 10));
+  const [contractRef, setContractRef] = useState(`CNT-${todayLocalDateKey().slice(2).replace(/-/g, '')}-0001`);
+  const [contractDate, setContractDate] = useState(todayLocalDateKey());
+  const [startDate] = useState(todayLocalDateKey());
   const [downPaymentAmount, setDownPaymentAmount] = useState<number | ''>(initialDownPayment || Math.round(contractValue * 0.1));
   const [retentionPercent, setRetentionPercent] = useState<number>(initialRetentionPercent || 5);
   const [projectManager, setProjectManager] = useState('');

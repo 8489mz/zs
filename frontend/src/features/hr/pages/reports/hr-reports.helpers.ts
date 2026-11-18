@@ -1,6 +1,7 @@
 import type { HrEmployee } from '@/types/domain';
 import { getGlobalCurrencySymbol, getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits } from '@/shared/utils/money';
+import { todayLocalDateKey } from '@/lib/format';
 
 export type ReportType = 'all' | 'employees' | 'attendance' | 'leaves' | 'loans' | 'payroll' | 'assets' | 'alerts';
 
@@ -38,7 +39,7 @@ export function normalize(value: unknown) {
 }
 
 export function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalDateKey();
 }
 
 export function monthStartDate() {

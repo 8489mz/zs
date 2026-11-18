@@ -27,6 +27,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import type { Product, ProductUnit } from '@/types/domain';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { shouldShowExpiryDateField } from '@/features/products/utils/product-visibility.utils';
+import { todayLocalDateKey } from '@/lib/format';
 
 export interface BarcodePrintDialogProps {
   open: boolean;
@@ -127,8 +128,8 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
   // متطلبات التموين وحماية المستهلك (بطاقة بيان السلع الغذائية والمعبأة)
   const [showFoodStatement, setShowFoodStatement] = useState(false);
   const [showProductionDate, setShowProductionDate] = useState(false);
-  const [productionDate, setProductionDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [packagingDate, setPackagingDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [productionDate, setProductionDate] = useState(() => todayLocalDateKey());
+  const [packagingDate, setPackagingDate] = useState(() => todayLocalDateKey());
   const [expiryType, setExpiryType] = useState<'period' | 'date'>('period');
   const [expiryPeriodMonths, setExpiryPeriodMonths] = useState(6);
   const [expiryDate, setExpiryDate] = useState(() => getFutureDate(6));
@@ -173,8 +174,8 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
     // Reset Food Statement defaults
     setShowFoodStatement(false);
     setShowProductionDate(false);
-    setProductionDate(new Date().toISOString().slice(0, 10));
-    setPackagingDate(new Date().toISOString().slice(0, 10));
+    setProductionDate(todayLocalDateKey());
+    setPackagingDate(todayLocalDateKey());
     setExpiryType('period');
     setExpiryPeriodMonths(6);
     setExpiryDate(getFutureDate(6));
@@ -382,8 +383,8 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
     setShowVariant(true);
     setShowFoodStatement(false);
     setShowProductionDate(false);
-    setProductionDate(new Date().toISOString().slice(0, 10));
-    setPackagingDate(new Date().toISOString().slice(0, 10));
+    setProductionDate(todayLocalDateKey());
+    setPackagingDate(todayLocalDateKey());
     setExpiryType('period');
     setExpiryPeriodMonths(6);
     setExpiryDate(getFutureDate(6));

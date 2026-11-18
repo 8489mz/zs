@@ -9,6 +9,7 @@ import {
   MobilizationExpenseCategory,
 } from '../contracting.types';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface SiteMobilizationModalProps {
   open: boolean;
@@ -60,7 +61,7 @@ export function SiteMobilizationModal({
   const [category, setCategory] = useState<MobilizationExpenseCategory>('worker_housing');
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState<number | ''>('');
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [expenseDate, setExpenseDate] = useState(todayLocalDateKey());
   const [paidTo, setPaidTo] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [referenceReceipt, setReferenceReceipt] = useState('');

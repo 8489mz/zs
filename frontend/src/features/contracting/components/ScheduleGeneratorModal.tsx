@@ -5,6 +5,7 @@ import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { contractingApi } from '../api/contracting.api';
 import { toast } from '@/shared/components/system-alert';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface ScheduleGeneratorModalProps {
   open: boolean;
@@ -240,7 +241,7 @@ export function ScheduleGeneratorModal({
   const [showTradeSelector, setShowTradeSelector] = useState(false);
   const [isSyncingBoq, setIsSyncingBoq] = useState(false);
 
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(todayLocalDateKey());
   const [floorsCount, setFloorsCount] = useState<number>(4);
   const [includeBasement, setIncludeBasement] = useState(false);
   const [includeRoof, setIncludeRoof] = useState(true);

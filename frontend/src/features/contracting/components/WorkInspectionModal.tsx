@@ -13,6 +13,7 @@ import {
   ContractingSubcontract,
 } from '../contracting.types';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface WorkInspectionModalProps {
   open: boolean;
@@ -66,7 +67,7 @@ export function WorkInspectionModal({ open, onClose, projectId, projectName }: W
   const [tradeCategory, setTradeCategory] = useState('civil_concrete');
   const [inspectionType, setInspectionType] = useState('work_inspection');
   const [locationGrid, setLocationGrid] = useState('');
-  const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split('T')[0]);
+  const [scheduledDate, setScheduledDate] = useState(todayLocalDateKey());
   const [selectedBoqItemId, setSelectedBoqItemId] = useState('');
   const [selectedSubcontractId, setSelectedSubcontractId] = useState('');
   const [consultantName, setConsultantName] = useState('');
@@ -151,7 +152,7 @@ export function WorkInspectionModal({ open, onClose, projectId, projectName }: W
         status: reviewStatus,
         consultantNotes: reviewNotes.trim() || undefined,
         consultantName: reviewConsultantName.trim() || undefined,
-        consultantDecisionDate: new Date().toISOString().split('T')[0],
+        consultantDecisionDate: todayLocalDateKey(),
       });
       toast.success('تم حفظ وتوثيق قرار الاستشاري الهندسي بنجاح');
       setReviewingItem(null);

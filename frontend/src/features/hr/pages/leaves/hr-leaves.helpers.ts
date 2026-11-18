@@ -1,7 +1,8 @@
-﻿import type { HrEmployee } from '@/types/domain';
+﻿import { todayLocalDateKey } from '@/lib/format';
+import type { HrEmployee } from '@/types/domain';
 
 export function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalDateKey();
 }
 
 export function text(value: unknown) {

@@ -13,6 +13,7 @@ import {
   ContractingSubcontract,
 } from '../contracting.types';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface SnagListModalProps {
   open: boolean;
@@ -127,7 +128,7 @@ export function SnagListModal({ open, onClose, projectId, projectName }: SnagLis
       await contractingApi.updateSnagItemStatus(rectifyingItem.id, {
         status: newStatus,
         rectificationNotes: rectificationNotes.trim() || undefined,
-        closedDate: newStatus === 'verified_closed' ? new Date().toISOString().split('T')[0] : undefined,
+        closedDate: newStatus === 'verified_closed' ? todayLocalDateKey() : undefined,
       });
       toast.success('تم تحديث حالة الملاحظة بنجاح');
       setRectifyingItem(null);

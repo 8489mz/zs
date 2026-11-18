@@ -24,6 +24,7 @@ import { LoadingState } from '@/shared/ui/loading-state';
 import { ChinaQuotationsTab } from './components/ChinaQuotationsTab';
 import { ChinaSamplesTab } from './components/ChinaSamplesTab';
 import { ChinaProformasTab } from './components/ChinaProformasTab';
+import { todayLocalDateKey } from '@/lib/format';
 
 export default function ChinaSourcingPage() {
   const { data: suppliers = [], isLoading: isSuppliersLoading, refetch } = useChinaSuppliersQuery();
@@ -37,7 +38,7 @@ export default function ChinaSourcingPage() {
   const [isTripModalOpen, setIsTripModalOpen] = useState(false);
   const [tripTitle, setTripTitle] = useState('');
   const [tripDestination, setTripDestination] = useState('Guangzhou / Yiwu, China');
-  const [tripStartDate, setTripStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [tripStartDate, setTripStartDate] = useState(todayLocalDateKey());
   const [tripEndDate, setTripEndDate] = useState('');
   const [tripBudgetEgp, setTripBudgetEgp] = useState<number>(75000);
   const [tripObjectives, setTripObjectives] = useState('');
@@ -76,7 +77,7 @@ export default function ChinaSourcingPage() {
   // QC Modal
   const [isQcModalOpen, setIsQcModalOpen] = useState(false);
   const [qcStage, setQcStage] = useState('pre_shipment');
-  const [qcDate, setQcDate] = useState(new Date().toISOString().slice(0, 10));
+  const [qcDate, setQcDate] = useState(todayLocalDateKey());
   const [qcInspector, setQcInspector] = useState('');
   const [qcSampleSize, setQcSampleSize] = useState<number>(100);
   const [qcPassedQty, setQcPassedQty] = useState<number>(98);

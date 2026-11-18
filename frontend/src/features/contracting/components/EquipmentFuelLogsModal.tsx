@@ -12,6 +12,7 @@ import type {
   ContractingBoqItem,
 } from '../contracting.types';
 import { toast } from '@/shared/components/system-alert';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface EquipmentFuelLogsModalProps {
   open: boolean;
@@ -31,7 +32,7 @@ export function EquipmentFuelLogsModal({ open, onClose, projectId, projectName }
   // Form State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [equipmentName, setEquipmentName] = useState('');
-  const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0]);
+  const [logDate, setLogDate] = useState(todayLocalDateKey());
   const [startMeterHours, setStartMeterHours] = useState<number | ''>('');
   const [endMeterHours, setEndMeterHours] = useState<number | ''>('');
   const [fuelLitersAdded, setFuelLitersAdded] = useState<number | ''>('');

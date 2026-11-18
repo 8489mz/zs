@@ -9,6 +9,7 @@ import { toast } from '@/shared/components/system-alert';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
 import { useContracting } from '../context/ContractingContext';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface RecordSubcontractorPaymentModalProps {
   open: boolean;
@@ -39,7 +40,7 @@ export function RecordSubcontractorPaymentModal({
   const [formData, setFormData] = useState({
     projectId: projectId || '',
     amount: '',
-    paymentDate: new Date().toISOString().split('T')[0],
+    paymentDate: todayLocalDateKey(),
     paymentMethod: 'bank_transfer' as 'cash' | 'bank_transfer' | 'check',
     paymentCategory: 'progress' as 'progress' | 'advance' | 'operational_advance',
     referenceNumber: '',
@@ -66,7 +67,7 @@ export function RecordSubcontractorPaymentModal({
       setFormData({
         projectId: projectId || (projects.length > 0 ? projects[0].id : ''),
         amount: '',
-        paymentDate: new Date().toISOString().split('T')[0],
+        paymentDate: todayLocalDateKey(),
         paymentMethod: 'bank_transfer',
         paymentCategory: 'progress',
         referenceNumber: '',

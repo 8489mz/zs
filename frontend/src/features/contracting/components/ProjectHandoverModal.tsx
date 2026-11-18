@@ -13,6 +13,7 @@ import {
 import { toast, systemConfirm } from '@/shared/components/system-alert';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface ProjectHandoverModalProps {
   open: boolean;
@@ -37,7 +38,7 @@ export function ProjectHandoverModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [handoverType, setHandoverType] = useState<HandoverType>('preliminary');
   const [handoverNumber, setHandoverNumber] = useState('');
-  const [handoverDate, setHandoverDate] = useState(new Date().toISOString().split('T')[0]);
+  const [handoverDate, setHandoverDate] = useState(todayLocalDateKey());
   const [consultantRep, setConsultantRep] = useState('');
   const [clientRep, setClientRep] = useState(project.clientName || '');
   const [contractorRep, setContractorRep] = useState(project.projectManager || '');
@@ -90,7 +91,7 @@ export function ProjectHandoverModal({
     const startDate = handoverDate;
     const endDateObj = new Date(handoverDate);
     endDateObj.setMonth(endDateObj.getMonth() + (parseInt(warrantyDurationMonths) || 12));
-    const endDate = endDateObj.toISOString().split('T')[0];
+    const endDate = todayLocalDateKey(endDateObj);
 
     setIsSubmitting(true);
     try {

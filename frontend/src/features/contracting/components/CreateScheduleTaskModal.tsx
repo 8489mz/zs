@@ -6,6 +6,7 @@ import { contractingApi } from '../api/contracting.api';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 import type { ContractingBoqItem, ContractingScheduleTask } from '../contracting.types';
+import { addDaysLocalDateKey, todayLocalDateKey } from '@/lib/format';
 
 interface CreateScheduleTaskModalProps {
   open: boolean;
@@ -35,8 +36,8 @@ export function CreateScheduleTaskModal({
     taskCode: '',
     taskName: '',
     wbsCode: '1.0',
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    startDate: todayLocalDateKey(),
+    endDate: addDaysLocalDateKey(7),
     durationDays: '7',
     progressPercent: '0',
     predecessorId: '',

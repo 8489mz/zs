@@ -7,6 +7,7 @@ import type { ContractingGuarantee, GuaranteeType, GuaranteeStatus } from '../co
 import { toast } from '@/shared/components/system-alert';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
 import { CreateGuaranteeModal } from './CreateGuaranteeModal';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface GuaranteesDirectoryModalProps {
   open: boolean;
@@ -39,7 +40,7 @@ export function GuaranteesDirectoryModal({
 
   // Action form inputs
   const [newExpiryDate, setNewExpiryDate] = useState('');
-  const [actionDate, setActionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [actionDate, setActionDate] = useState(todayLocalDateKey());
   const [actionReason, setActionReason] = useState('');
   const [actionAmount, setActionAmount] = useState('');
   const [actionNotes, setActionNotes] = useState('');
@@ -447,7 +448,7 @@ export function GuaranteesDirectoryModal({
                               onClick={() => {
                                 setSelectedGuaranteeForAction(g);
                                 setActionType('release');
-                                setActionDate(new Date().toISOString().split('T')[0]);
+                                setActionDate(todayLocalDateKey());
                                 setActionNotes('');
                               }}
                               title={t('contracting.guarantees_directory_modal.s47', "إفراج ورد أصل الخطاب")}
@@ -471,7 +472,7 @@ export function GuaranteesDirectoryModal({
                               onClick={() => {
                                 setSelectedGuaranteeForAction(g);
                                 setActionType('invoke');
-                                setActionDate(new Date().toISOString().split('T')[0]);
+                                setActionDate(todayLocalDateKey());
                                 setActionAmount(String(g.amount));
                                 setActionReason('');
                                 setActionNotes('');

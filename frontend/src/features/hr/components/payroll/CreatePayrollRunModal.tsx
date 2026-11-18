@@ -5,6 +5,7 @@ import { useServerClock } from '@/shared/hooks/use-server-clock';
 import { Button } from '@/shared/ui/button';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { XIcon, CheckCircleIcon, AlertCircleIcon, CalendarIcon, InfoIcon } from '@/shared/components/icons/AppIcons';
+import { todayLocalDateKey } from '@/lib/format';
 
 export interface PayrollDraft {
   periodMonth: string;
@@ -151,7 +152,7 @@ export function CreatePayrollRunModal({
         // P8 (RC-7): the daily-run "today" comes from the server day in
         // the tenant zone — the old default was a UTC slice, yesterday
         // for the first two hours after midnight (UTC+2).
-        const todayStr = serverClock.todayKey() || new Date().toISOString().slice(0, 10);
+        const todayStr = serverClock.todayKey() || todayLocalDateKey();
         const isCurrentMonth = todayStr.startsWith(m);
         const dayStr = isCurrentMonth ? todayStr.slice(8, 10) : '01';
         newStart = `${m}-${dayStr}`;
@@ -366,7 +367,7 @@ export function CreatePayrollRunModal({
                           type="button"
                           onClick={() => {
                             // P8 (RC-7): "today only" is the server day in the tenant zone.
-                            const todayStr = serverClock.todayKey() || new Date().toISOString().slice(0, 10);
+                            const todayStr = serverClock.todayKey() || todayLocalDateKey();
                             const isCurrentMonth = todayStr.startsWith(draft.periodMonth);
                             const dayNum = isCurrentMonth ? parseInt(todayStr.slice(8, 10), 10) : 1;
                             setPresetDates(dayNum, dayNum);

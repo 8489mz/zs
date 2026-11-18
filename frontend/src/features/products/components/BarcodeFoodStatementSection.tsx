@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Field } from '@/shared/ui/field';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import type { BarcodePrintPreset } from '@/lib/barcode-labels';
+import { todayLocalDateKey } from '@/lib/format';
 
 const EXPIRY_PERIOD_OPTIONS = [
   { value: '1', label: 'شهر واحد' },
@@ -26,7 +27,7 @@ const NET_WEIGHT_PRESETS = ['1 كجم', '500 جم', '250 جم', '5 كجم', '10 
 export function getFutureDate(months: number) {
   const d = new Date();
   d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+  return todayLocalDateKey(d);
 }
 
 interface BarcodeFoodStatementSectionProps {

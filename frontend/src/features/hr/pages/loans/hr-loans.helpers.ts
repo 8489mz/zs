@@ -1,5 +1,6 @@
 import { getGlobalCurrencySymbol, getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits } from '@/shared/utils/money';
+import { todayLocalDateKey } from '@/lib/format';
 export const monthNames = [
   'يناير',
   'فبراير',
@@ -16,7 +17,7 @@ export const monthNames = [
 ];
 
 export function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalDateKey();
 }
 
 export function normalizeArabicDigits(value: string) {

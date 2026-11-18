@@ -30,6 +30,7 @@ import {
   useHrReportsSummary,
   useHrWorkspace,
 } from '@/features/hr/hooks/useHr';
+import { todayLocalDateKey } from '@/lib/format';
 
 type ReviewItem = {
   id: string;
@@ -40,7 +41,7 @@ type ReviewItem = {
 };
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalDateKey();
 }
 
 function monthStartDate(value: string) {

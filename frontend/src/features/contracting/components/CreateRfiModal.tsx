@@ -4,6 +4,7 @@ import { StandardDialog, StandardDialogFooter } from '@/shared/components/Standa
 import { Field } from '@/shared/ui/field';
 import { contractingApi } from '../api/contracting.api';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface CreateRfiModalProps {
   open: boolean;
@@ -30,7 +31,7 @@ export function CreateRfiModal({
     subject: '',
     question: '',
     assignedTo: '',
-    dateRequested: new Date().toISOString().split('T')[0],
+    dateRequested: todayLocalDateKey(),
     dateRequired: '',
     notes: '',
   });

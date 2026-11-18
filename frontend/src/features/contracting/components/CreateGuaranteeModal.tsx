@@ -7,6 +7,7 @@ import { contractingApi } from '../api/contracting.api';
 import type { ContractingSubcontract, ContractingSubcontractor, GuaranteeType } from '../contracting.types';
 import { toast } from '@/shared/components/system-alert';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { addDaysLocalDateKey, todayLocalDateKey } from '@/lib/format';
 
 interface CreateGuaranteeModalProps {
   open: boolean;
@@ -41,8 +42,8 @@ export function CreateGuaranteeModal({
   const [subcontracts, setSubcontracts] = useState<ContractingSubcontract[]>([]);
   const [subcontractors, setSubcontractors] = useState<ContractingSubcontractor[]>([]);
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const nextYearStr = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split('T')[0];
+  const todayStr = todayLocalDateKey();
+  const nextYearStr = addDaysLocalDateKey(365);
 
   const [formData, setFormData] = useState({
     subcontractId: initialSubcontractId || '',

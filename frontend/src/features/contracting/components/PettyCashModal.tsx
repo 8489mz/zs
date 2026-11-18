@@ -5,6 +5,7 @@ import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { contractingApi } from '../api/contracting.api';
 import { ContractingPettyCashRecord } from '../contracting.types';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface PettyCashModalProps {
   isOpen: boolean;
@@ -29,7 +30,7 @@ export function PettyCashModal({
   // New Petty Cash Form
   const [custodianName, setCustodianName] = useState('');
   const [amount, setAmount] = useState<number>(0);
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [issueDate, setIssueDate] = useState(todayLocalDateKey());
   const [notes, setNotes] = useState('');
 
   // Settlement Form

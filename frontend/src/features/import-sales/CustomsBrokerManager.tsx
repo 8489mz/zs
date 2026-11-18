@@ -13,7 +13,7 @@ import {
   CustomsBroker,
 } from './api/shipments.api';
 import { StandardDialog } from '@/shared/components/StandardDialog';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import {
   PlusCircleIcon,
   CheckCircleIcon,
@@ -142,7 +142,7 @@ export function CustomsBrokerManager() {
     try {
       const generatedAdvanceNo =
         advanceNo.trim() ||
-        `ADV-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${String(Math.floor(1000 + Math.random() * 9000))}`;
+        `ADV-${todayLocalDateKey().slice(2).replace(/-/g, '')}-${String(Math.floor(1000 + Math.random() * 9000))}`;
       await disburseAdvanceMutation.mutateAsync({
         brokerId: selectedBrokerId,
         projectId: selectedProjectId || undefined,

@@ -9,6 +9,7 @@ import { hrApi } from '@/features/hr/api/hr.api';
 import { useHrMutations } from '@/features/hr/hooks/useHr';
 import type { HrAttendanceRecord, HrEmployee } from '@/types/domain';
 import { ClockIcon, CheckCircleIcon, MagnifyingGlassIcon } from '@/features/hr/components/HrIcons';
+import { todayLocalDateKey } from '@/lib/format';
 
 export const QUICK_ATTENDANCE_SHORTCUT = 'Ctrl + Alt + H';
 
@@ -24,7 +25,7 @@ function normalize(value: unknown) {
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalDateKey();
 }
 
 function formatTimeText(value?: string) {

@@ -9,6 +9,7 @@ import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/http';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
+import { todayLocalDateKey } from '@/lib/format';
 
 export function CapitalTransactionDialog({ 
   partner, 
@@ -23,7 +24,7 @@ export function CapitalTransactionDialog({
 }) {
   const { t } = useTranslation();
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(todayLocalDateKey());
   const [note, setNote] = useState('');
   const [accountId, setAccountId] = useState('');
   

@@ -4,6 +4,7 @@ import { StandardDialog, StandardDialogFooter } from '@/shared/components/Standa
 import { Field } from '@/shared/ui/field';
 import { contractingApi } from '../api/contracting.api';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
+import { todayLocalDateKey } from '@/lib/format';
 
 interface CreateDailyLogModalProps {
   open: boolean;
@@ -26,7 +27,7 @@ export function CreateDailyLogModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
-    logDate: new Date().toISOString().split('T')[0],
+    logDate: todayLocalDateKey(),
     weatherConditions: 'مشمس / معتدل',
     laborCount: '0',
     subcontractorLaborCount: '0',
