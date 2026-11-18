@@ -124,7 +124,8 @@ describe('router access guards', () => {
         businessName: 'المهندس',
         activityType: 'retail_general',
         planId: 'plan_omnichannel',
-        features: ['sales', 'catalog', 'accounting', 'inventory', 'purchases'],
+        // INV-POS-RETAIL-FEATURE-GATE: 'pos' rides in every retail tenant's effective features (profile default) — a list without it is a tenant shape the backend cannot produce.
+        features: ['sales', 'catalog', 'accounting', 'inventory', 'purchases', 'pos'],
       } as any,
     });
     try {
@@ -144,14 +145,16 @@ describe('router access guards', () => {
       name: 'Pro Commerce',
       activityType: 'retail_general',
       plan_id: 'plan_pro',
-      features: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'suppliers'],
+      // INV-POS-RETAIL-FEATURE-GATE: 'pos' is a retail profile default — a real pro tenant's list carries it.
+      features: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'suppliers', 'pos'],
     } as any;
     const basicTenant = {
       id: 't-basic',
       name: 'Basic Commerce',
       activityType: 'retail_general',
       plan_id: 'plan_basic',
-      features: ['sales', 'catalog', 'sessions', 'cashDrawer'],
+      // INV-POS-RETAIL-FEATURE-GATE: same — 'pos' is not tier-gated, every retail profile defaults it in.
+      features: ['sales', 'catalog', 'sessions', 'cashDrawer', 'pos'],
     } as any;
 
     try {
@@ -312,7 +315,8 @@ describe('INV-HR-ATTENDANCE-SCOPE-AND-OWNER-ROUTE-GUARD', () => {
     isTrial: false,
     trialEndsAt: null,
     trialDaysRemaining: null,
-    features: ['sales', 'catalog', 'sessions', 'cashDrawer', 'reports', 'hr'],
+    // INV-POS-RETAIL-FEATURE-GATE: 'pos' is a retail profile default — a real retail tenant's list carries it.
+    features: ['sales', 'catalog', 'sessions', 'cashDrawer', 'reports', 'hr', 'pos'],
   };
 
   it('locks owner-companion and owner-mobile behind reports and prevents cashier fallback leak', () => {

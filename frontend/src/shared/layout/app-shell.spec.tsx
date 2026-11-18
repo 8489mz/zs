@@ -240,7 +240,8 @@ describe('AppShell', () => {
         isTrial: false,
         trialEndsAt: null,
         trialDaysRemaining: null,
-        features: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'reports'],
+        // INV-POS-RETAIL-FEATURE-GATE: 'pos' is a retail profile default — a real L1 tenant's list carries it.
+        features: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'reports', 'pos'],
       },
       storeName: 'محل تجزئة L1',
       theme: 'light',

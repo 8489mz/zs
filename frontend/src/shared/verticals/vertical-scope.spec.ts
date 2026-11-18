@@ -152,6 +152,24 @@ describe('Vertical Scope & Enterprise Isolation Constitution', () => {
     expect(isRouteAllowedInVertical(vertical, '/products')).toBe(true);
   });
 
+  it('INV-POS-RETAIL-FEATURE-GATE: retail tenants carry pos in the explicit features list, so /pos stays open; a list without pos closes it', () => {
+    // The backend builds the session features list from the industry
+    // profile defaults (resolvePillarScopedFeatures): every retail
+    // profile defaults 'pos' in, while services / wholesale_van /
+    // warehousing delete it unless a super-admin grants it explicitly.
+    // The negative half below must stay strict: if the sidebar showed
+    // POS for a tenant whose list lacks 'pos', the backend sale gate
+    // would still refuse the sale (403).
+    const retailWithPos = ['sales', 'catalog', 'sessions', 'cashDrawer', 'pos'];
+    const retailWithoutPos = ['sales', 'catalog', 'sessions', 'cashDrawer'];
+    expect(isRouteAllowedInVertical('retail_general', '/pos', undefined, retailWithPos)).toBe(true);
+    expect(isRouteAllowedInVertical('retail_general', '/pos', undefined, retailWithoutPos)).toBe(false);
+    expect(isRouteAllowedInVertical('retail_general', '/cash-drawer', undefined, retailWithPos)).toBe(true);
+    expect(isRouteAllowedInVertical('services', '/pos', undefined, ['catalog', 'sales', 'customers', 'treasury', 'accounting', 'reports'])).toBe(false);
+    expect(isRouteAllowedInVertical('wholesale_van', '/pos', undefined, ['catalog', 'products', 'sales', 'inventory', 'purchases', 'suppliers', 'customers', 'deliveryReps', 'vanSales', 'pricing', 'treasury', 'reports'])).toBe(false);
+    expect(isRouteAllowedInVertical('warehousing', '/pos', undefined, ['catalog', 'products', 'inventory', 'purchases', 'suppliers', 'customers', 'sales', 'pricing', 'treasury', 'reports'])).toBe(false);
+  });
+
   it('resolves services only when activityType is explicitly services or consulting and no POS entitlement exists', () => {
     const tenant = {
       id: 'consulting-pro',
