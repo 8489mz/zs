@@ -790,6 +790,13 @@ export class UsersService {
 
     if (Object.keys(updates).length > 0) {
       await this.db.updateTable('users').set(updates).where('id', '=', id).where(this.tenantPredicate(actor)).execute();
+
+      // Invalidate cached authorization immediately on commit (CORE-005):
+      // updateProfile can rename the user, and username lives in the cached
+      // AuthContext — without this the next request keeps serving the old
+      // username (audit attribution, guards) for up to the 60s TTL.
+      this.authCache.invalidateUserSessions(id);
+
       await this.audit.log('تعديل الملف الشخصي', `المستخدم ${existing.username} قام بتعديل بيانات ملفه الشخصي`, actor);
     }
 

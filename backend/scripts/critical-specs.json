@@ -274,6 +274,7 @@
     "test/critical/module-boundary.spec.ts",
     "test/critical/module-doors.spec.ts",
     "test/critical/stock-movements-writes.spec.ts",
-    "test/critical/divergence-9187-stock-scale.spec.ts"
+    "test/critical/divergence-9187-stock-scale.spec.ts",
+    "test/critical/permissions-cache-invalidation.spec.ts"
   ]
 }
