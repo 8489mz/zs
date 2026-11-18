@@ -20,6 +20,7 @@ import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, fromMinorUnits, roundMoney, toMinorUnits } from '../../accounting/engines/money-minor-units.engine';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { PurchasesFinanceService } from './purchases-finance.service';
+import { GoodsReceiptHelpersService } from './goods-receipt-helpers.service';
 import { advancePurchaseOrderReceipt } from '../engines/purchase-order-receipt.engine';
 import { normalizeBillNumber } from '../engines/duplicate-bill-detector.engine';
 import { assertGrnRequestedLocationScope } from '../engines/grn-location-policy.engine';
@@ -27,11 +28,14 @@ import { stockMovementTotal } from '../../catalog/engines/stock-movement-total.e
 
 @Injectable()
 export class GoodsReceiptService {
+  private readonly helpersService: GoodsReceiptHelpersService;
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly accountingPosting: AccountingPostingService,
     private readonly purchasesFinance: PurchasesFinanceService,
-  ) {}
+  ) {
+    this.helpersService = new GoodsReceiptHelpersService();
+  }
 
   private tenantPredicate(auth: AuthContext, alias?: string) {
     const scope = requireTenantScope(auth);
@@ -40,50 +44,8 @@ export class GoodsReceiptService {
       : sql<boolean>`tenant_id = ${scope.tenantId}`;
   }
 
-  /**
-   * Resolve a system account by code, creating it when the tenant's chart lacks it.
-   * The previous `if (account) { ...post... }` pattern silently skipped the whole journal when an
-   * account was missing, while the stock side had already been written.
-   */
   private async resolveAccountByCode(trx: any, tenantId: string, accountId: string, code: string): Promise<number | null> {
-    const existing = await trx
-      .selectFrom('accounting_accounts')
-      .select(['id', 'is_active'])
-      .where('tenant_id', '=', tenantId)
-      .where('code', '=', code)
-      .executeTakeFirst();
-    if (existing) {
-      if (!existing.is_active) throw new UnprocessableEntityException(`الحساب المحاسبي ${code} معطل؛ يلزم تفعيله قبل الترحيل`);
-      return Number(existing.id);
-    }
-
-    const known: Record<string, { ar: string; en: string; type: string; group: string; balance: string }> = {
-      '2125': { ar: 'بضاعة مستلمة غير مفوترة', en: 'Goods Received Not Invoiced', type: 'liability', group: 'current_liabilities', balance: 'credit' },
-      '1140': { ar: 'مخزون بضاعة ومواد خام', en: 'Inventory', type: 'asset', group: 'current_assets', balance: 'debit' },
-      '5190': { ar: 'فروق أسعار مشتريات', en: 'Purchase Price Variance', type: 'expense', group: 'expenses', balance: 'debit' },
-    };
-    const spec = known[code];
-    if (!spec) return null;
-
-    const [created] = await trx
-      .insertInto('accounting_accounts')
-      .values({
-        tenant_id: tenantId,
-        account_id: accountId || tenantId,
-        code,
-        name_ar: spec.ar,
-        name_en: spec.en,
-        account_type: spec.type,
-        account_group: spec.group,
-        normal_balance: spec.balance,
-        is_active: true,
-        is_system: true,
-        created_at: new Date(),
-        updated_at: new Date(),
-      })
-      .returning('id')
-      .execute();
-    return created ? Number(created.id) : null;
+    return this.helpersService.resolveAccountByCode(trx, tenantId, accountId, code);
   }
 
   /*
