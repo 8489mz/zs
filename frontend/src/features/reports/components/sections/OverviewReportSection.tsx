@@ -8,6 +8,7 @@ import type { ReportsSectionContentProps } from '@/features/reports/components/r
 import { CircularProgress } from '@/shared/components/charts/CircularProgress';
 import { SalesTrendChart } from '@/shared/components/charts/SalesTrendChart';
 import { ShiftAnalysisChart } from '@/shared/components/charts/ShiftAnalysisChart';
+import { useShiftAnalysisBars } from '@/features/reports/hooks/useShiftAnalysisBars';
 import { ShoppingCartIcon, PackageIcon, CreditCardIcon, TrendingUpIcon } from '@/shared/components/icons/AppIcons';
 
 export function OverviewReportSection({
@@ -23,6 +24,18 @@ export function OverviewReportSection({
   const cash = accountingCashMovement?.totals;
   const salesTotal = report?.sales.total ?? financial?.grossSales ?? 0;
   const netSales = report?.sales.netSales ?? financial?.netSales ?? 0;
+  // INV-SHIFT-ANALYSIS-REAL-TOTALS: the shift bars come from the closed
+  // shifts themselves (useShiftAnalysisBars), never from a fixed split
+  // of netSales. The range object is memoised so the hook's query key
+  // (plain from/to strings) stays stable across renders.
+  const shiftRange = useMemo(
+    () =>
+      report?.range?.from && report?.range?.to
+        ? { from: report.range.from, to: report.range.to }
+        : null,
+    [report?.range?.from, report?.range?.to],
+  );
+  const shiftAnalysis = useShiftAnalysisBars(shiftRange);
   const grossProfit = report?.commercial.grossProfit ?? financial?.grossProfit ?? 0;
   const netCashMovement = report?.treasury.net ?? cash?.netMovement ?? financial?.netCashMovement ?? 0;
   const grossMarginPercent = report?.commercial.grossMarginPercent ?? (financial?.netSales ? (grossProfit / Math.max(1, financial.netSales)) * 100 : 0);
@@ -261,14 +274,21 @@ export function OverviewReportSection({
         </FormSection>
       </div>
 
-      {/* 2. Secondary Bar Chart: Shifts Performance */}
-      <FormSection title={t('reports.sections.overview_report_section.s13', "المبيعات حسب فترات العمل (الورديات)")} description={t('reports.sections.overview_report_section.s14', "مقارنة مبيعات فترات اليوم (النهار مقابل الليل).")} actions={<span className="nav-pill">{t('reports.sections.overview_report_section.s15', "الورديات")}</span>}>
+      {/* 2. Secondary Bar Chart: Shifts Performance — one bar per closed
+      shift in the range, each bar that shift's own net close figure
+      (INV-SHIFT-ANALYSIS-REAL-TOTALS). While the shifts load, a loading
+      line shows instead of the chart so no empty state flashes; on error
+      or with no closed shift in range the chart renders its honest
+      empty state — a ratio split is never drawn. */}
+      <FormSection title={t('reports.sections.overview_report_section.s13', "المبيعات حسب فترات العمل (الورديات)")} description={t('reports.sections.overview_report_section.s14', "مبيعات الورديات المغلقة في الفترة المختارة، من أرقام إغلاق الوردية نفسها.")} actions={<span className="nav-pill">{t('reports.sections.overview_report_section.s15', "الورديات")}</span>}>
         <div style={{ marginTop: '12px' }}>
-          <ShiftAnalysisChart data={[
-            { shift: t('reports.sections.overview_report_section.s16', "الوردية الصباحية|من 8ص لـ 4م"), sales: Math.round(netSales * 0.45), color: '#3b82f6' },
-            { shift: t('reports.sections.overview_report_section.s17', "الوردية المسائية|من 4م لـ 12ص"), sales: Math.round(netSales * 0.35), color: '#8b5cf6' },
-            { shift: t('reports.sections.overview_report_section.s18', "الوردية الليلية|من 12ص لـ 8ص"), sales: Math.round(netSales * 0.20), color: '#1e293b' }
-          ]} height={220} />
+          {shiftAnalysis.isLoading ? (
+            <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+              {t('reports.sections.overview_report_section.s45', "جاري تحميل مبيعات الورديات...")}
+            </div>
+          ) : (
+            <ShiftAnalysisChart data={shiftAnalysis.bars} height={220} />
+          )}
         </div>
       </FormSection>
 

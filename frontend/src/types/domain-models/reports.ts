@@ -59,6 +59,15 @@ export interface ReportSummary {
     revenue: number;
     total?: number;
   }>;
+  /* INV-SHIFT-ANALYSIS-REAL-TOTALS: the range the backend summary was
+  built over (reports.service.ts returns it as `range`). Absent on old
+  payloads — the shift chart then stays honestly empty. */
+  range?: {
+    from: string;
+    to: string;
+    branchId?: string;
+    locationId?: string;
+  };
   /* INV-REPORTS-REAL-SALES-PURCHASES-SERIES: one point per
   business-date bucket of the selected range (daily up to 92 days,
   monthly beyond), each point the real net sales / net purchases
