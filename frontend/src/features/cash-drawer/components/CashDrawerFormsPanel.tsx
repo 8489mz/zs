@@ -12,22 +12,14 @@ import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { SubmitButton } from '@/shared/components/submit-button';
 import { formatCurrency } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
-import { SINGLE_STORE_MODE } from '@/config/product-scope';
 import type { Branch, CashierShift, Location } from '@/types/domain';
 import type { CloseShiftValues, MovementValues, OpenShiftValues } from '@/features/cash-drawer/hooks/useCashDrawerPageController';
 import { getOfflineSalesQueue } from '@/features/pos/lib/pos-offline-sync';
 import { PrinterIcon, XIcon } from '@/shared/components/icons/AppIcons';
 import { printZReport } from '@/features/cash-drawer/utils/cash-drawer-receipt';
+import { CashDrawerOpenForm, type MutationLike } from '@/features/cash-drawer/components/cash-drawer-forms/CashDrawerOpenForm';
 import { PaymentChannelRow } from '@/features/cash-drawer/components/cash-drawer-forms/PaymentChannelRow';
 import { AlertCircleIcon, CardIcon, CashIcon, InstaPayIcon, WalletIcon } from '@/features/cash-drawer/components/cash-drawer-forms/cash-drawer-form-icons';
-
-interface MutationLike {
-  isPending: boolean;
-  isError: boolean;
-  isSuccess: boolean;
-  error: unknown;
-  reset?: () => void;
-}
 
 interface CashDrawerFormsPanelProps {
   activeForm: 'open' | 'movement' | 'close' | null;
@@ -226,90 +218,15 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
       shellClassName="cash-drawer-adaptive-dialog"
     >
       {props.activeForm === 'open' && (
-        <div className="cash-drawer-modal-scroll">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}>
-            <h2 className="cash-drawer-form-title" style={{ margin: 0 }}>{t('cash_drawer.cash_drawer_forms_panel.s12', "فتح وردية نقطة بيع")}</h2>
-            <button
-              type="button"
-              onClick={props.onCloseForm}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                background: '#f8fafc',
-                color: '#64748b',
-                cursor: 'pointer',
-                flexShrink: 0,
-                padding: 0,
-              }}
-              title={t('common.close', 'إغلاق')}
-            >
-              <XIcon size={18} />
-            </button>
-          </div>
-        <form className="form-grid" onSubmit={props.openForm.handleSubmit((values) => props.openMutation.mutate(values))}>
-          <Field label={t('cash_drawer.cash_drawer_forms_panel.s13', "رصيد الفتح")}><input type="number" step="0.01" {...props.openForm.register('openingCash', { valueAsNumber: true })} disabled={props.openMutation.isPending} onFocus={(e) => e.target.select()} /></Field>
-          {!SINGLE_STORE_MODE ? <Field label={t('cash_drawer.cash_drawer_forms_panel.s14', "الفرع")}>
-            <select
-              {...props.openForm.register('branchId')}
-              disabled={props.openMutation.isPending}
-              onChange={(e) => {
-                const nextBranchId = e.target.value;
-                props.openForm.setValue('branchId', nextBranchId);
-                const branchObj = props.branches.find(b => String(b.id) === String(nextBranchId));
-                const nextLocs = locationList.filter(l => !l.branchId || String(l.branchId) === String(nextBranchId));
-                const nextDefaultLoc = (branchObj?.defaultStockLocationId && locationList.find(l => String(l.id) === String(branchObj.defaultStockLocationId)))
-                  || nextLocs.find(l => l.name.includes(t('cash_drawer.cash_drawer_forms_panel.s15', "الرئيسي")) || l.name.toLowerCase().includes('main'))
-                  || nextLocs[0]
-                  || locationList[0];
-                if (nextDefaultLoc?.id) {
-                  props.openForm.setValue('locationId', nextDefaultLoc.id);
-                }
-              }}
-            >
-              <option value="">{t('cash_drawer.cash_drawer_forms_panel.s16', "بدون فرع")}</option>
-              {props.branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-            </select>
-          </Field> : null}
-          {SINGLE_STORE_MODE ? <Field label={t('cash_drawer.cash_drawer_forms_panel.s17', "المخزن الأساسي")}><input value={locationList[0]?.name || t('cash_drawer.cash_drawer_forms_panel.s18', "سيتم الربط تلقائيًا بالمخزن الأساسي")} disabled readOnly /></Field> : <Field label={t('cash_drawer.cash_drawer_forms_panel.s19', "المخزن")}>
-            <Controller
-              name="locationId"
-              control={props.openForm.control}
-              render={({ field }) => (
-                <CustomSelect
-                  value={field.value}
-                  onChange={field.onChange}
-                  disabled={props.openMutation.isPending}
-                  options={[
-                    { value: '', label: t('cash_drawer.cash_drawer_forms_panel.s20', "بدون مخزن") },
-                    ...availableLocations.map((location) => ({ value: location.id, label: location.name })),
-                  ]}
-                />
-              )}
-            />
-          </Field>}
-          {props.requirePasswordOnShiftOpen ? (
-            <Field label={t('cash_drawer.cash_drawer_forms_panel.open_password', "كلمة مرور المستخدم الحالي (تأكيد الفتح)")}>
-              <input
-                type="password"
-                placeholder={t('cash_drawer.cash_drawer_forms_panel.open_password_ph', "أدخل كلمة المرور لتأكيد فتح الوردية")}
-                required
-                {...props.openForm.register('password', { required: props.requirePasswordOnShiftOpen })}
-                disabled={props.openMutation.isPending}
-                autoComplete="off"
-                data-lpignore="true"
-              />
-            </Field>
-          ) : null}
-          <Field label={t('cash_drawer.cash_drawer_forms_panel.s21', "ملاحظة الافتتاح")}><textarea rows={2} {...props.openForm.register('note')} disabled={props.openMutation.isPending} /></Field>
-          <MutationFeedback isError={props.openMutation.isError} isSuccess={props.openMutation.isSuccess} error={props.openMutation.error} errorFallback={t('cash_drawer.cash_drawer_forms_panel.s22', "تعذر فتح وردية نقطة البيع")} successText={t('cash_drawer.cash_drawer_forms_panel.s23', "تم فتح وردية نقطة البيع بنجاح.")} />
-          <SubmitButton type="submit" isPending={props.openMutation.isPending} idleText={t('cash_drawer.cash_drawer_forms_panel.s24', "فتح وردية نقطة البيع")} pendingText={t('cash_drawer.cash_drawer_forms_panel.s25', "جارٍ الفتح...")} />
-        </form>
-        </div>
+        <CashDrawerOpenForm
+          openForm={props.openForm}
+          openMutation={props.openMutation}
+          branches={props.branches}
+          locationList={locationList}
+          availableLocations={availableLocations}
+          requirePasswordOnShiftOpen={props.requirePasswordOnShiftOpen}
+          onCloseForm={props.onCloseForm}
+        />
       )}
 
       {props.activeForm === 'movement' && (
