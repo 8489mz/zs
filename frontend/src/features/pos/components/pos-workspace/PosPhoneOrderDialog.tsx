@@ -35,6 +35,7 @@ import { PosPhoneOrderDialogFooter } from '@/features/pos/components/pos-workspa
 import { PosPhoneOrderRecentCalls } from '@/features/pos/components/pos-workspace/pos-phone-order/PosPhoneOrderRecentCalls';
 import { PosPhoneOrderDialogHardware } from '@/features/pos/components/pos-workspace/pos-phone-order/PosPhoneOrderDialogHardware';
 import { PosPhoneOrderDialogSearchBar } from '@/features/pos/components/pos-workspace/pos-phone-order/PosPhoneOrderDialogSearchBar';
+import { PosPhoneOrderEmptyPrompt } from '@/features/pos/components/pos-workspace/pos-phone-order/PosPhoneOrderEmptyPrompt';
 
 interface PosPhoneOrderDialogProps {
   open: boolean;
@@ -627,50 +628,12 @@ export function PosPhoneOrderDialog({
           {/* Main Content Area */}
           {!currentCustomer && !isSearchActive ? (
             /* Empty prompt state */
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '36px 20px',
-                textAlign: 'center',
-                background: '#f8fafc',
-                borderRadius: '10px',
-                border: '1px dashed #cbd5e1',
-              }}
-            >
-              <PhoneIcon size={36} color="#94a3b8" style={{ marginBottom: '8px' }} />
-              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
-                {t('pos.pos_workspace.pos_phone_order_dialog.s41', "مكتب استقبال طلبات الهاتف والتوصيل السريع")}
-              </div>
-              <p style={{ fontSize: '0.78rem', color: '#64748b', maxWidth: '440px', margin: '0 0 12px 0', lineHeight: 1.5 }}>
-                {t('pos.pos_workspace.pos_phone_order_dialog.s42', "أدخل")} <strong>{t('pos.pos_workspace.pos_phone_order_dialog.s43', "6 أرقام على الأقل")}</strong> {t('pos.pos_workspace.pos_phone_order_dialog.s44', "للبحث برقم الهاتف لتجاوز بادئة شركات المحمول (010 / 011 / 012 / 015)، أو ابدأ بكتابة اسم العميل.")}
-              </p>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setActiveTab('recent_calls')}
-                  style={{ fontSize: '0.75rem', fontWeight: 700 }}
-                >
-                  <ClockIcon size={12} style={{ marginLeft: '4px' }} />
-                  {t('pos.pos_workspace.pos_phone_order_dialog.s45', "سجل المكالمات الواردة")}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setIsForceNewCustomer(true);
-                    setNewPhone(phoneQuery || '');
-                  }}
-                  style={{ fontSize: '0.75rem', fontWeight: 700 }}
-                >
-                  <PlusIcon size={12} style={{ marginLeft: '4px' }} />
-                  {t('pos.pos_workspace.pos_phone_order_dialog.s46', "تسجيل عميل جديد مباشرة")}
-                </Button>
-              </div>
-            </div>
+            <PosPhoneOrderEmptyPrompt
+              setActiveTab={setActiveTab}
+              setIsForceNewCustomer={setIsForceNewCustomer}
+              setNewPhone={setNewPhone}
+              phoneQuery={phoneQuery}
+            />
           ) : currentCustomer ? (
             /* STATE 1: Existing / Selected Customer Workspace */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
