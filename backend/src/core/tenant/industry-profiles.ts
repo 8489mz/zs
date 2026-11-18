@@ -112,7 +112,12 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     labelEn: 'General Retail & Supermarket',
     descriptionAr: 'نظام كاشير سريع، باركود ومخازن، مشتريات وموردين، وتقارير أرباح ومبيعات متقدمة.',
     defaultRoute: '/dashboard',
-    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'deliveryReps'],
+    // INV-POS-RETAIL-FEATURE-GATE (2026-11-18): 'pos' is a profile
+    // default, not a plan row — the create-sale POS gate
+    // (hasFeature('pos')) reads defaultFeatures before plan_features,
+    // and no migration/fallback ever grants the 'pos' code, so without
+    // this entry every retail POS sale was refused 403.
+    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'pos', 'deliveryReps'],
     allowedExtraFeatures: ['storefront'],
     pricingBand: 1,
   },
@@ -125,7 +130,7 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     labelEn: 'Pharmacy & Medical Supplies',
     descriptionAr: 'محرك تاريخ الصلاحية والتشغيلات (FEFO)، إدارة الأدوية والبدائل والنواقص، والروشتات.',
     defaultRoute: '/dashboard',
-    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'pharmacy', 'deliveryReps'],
+    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'pos', 'pharmacy', 'deliveryReps'],
     allowedExtraFeatures: ['storefront'],
     pricingBand: 2,
   },
@@ -138,7 +143,7 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     labelEn: 'Restaurants & Hospitality',
     descriptionAr: 'شاشات المطبخ الذكية (KDS)، شاشات الانتظار، إضافات الوجبات والمكونات (Modifiers)، والصالات.',
     defaultRoute: '/pos',
-    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'restaurant', 'deliveryReps'],
+    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'pos', 'restaurant', 'deliveryReps'],
     allowedExtraFeatures: ['storefront'],
     pricingBand: 3,
   },
@@ -151,8 +156,14 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     labelEn: 'Manufacturing & Industrial Production',
     descriptionAr: 'منظومة المصانع والمعامل: تخطيط الإنتاج، شجرة المنتج (BOM)، أوامر التشغيل، مستودعات الخامات والمنتج التام، ومحاسبة التكاليف الصناعية.',
     defaultRoute: '/manufacturing/work-orders',
-    // Not an isolated pillar: it sells with POS like any band4 product (a factory outlet counter),
-    // and — per the owner — it also installs as an add-on module on top of ANY other activity
+    // Not an isolated pillar: POS stays OFF for manufacturing by design
+    // (INV-POS-RETAIL-FEATURE-GATE) — the sidebar hides 'pos' for the
+    // manufacturing vertical, the route suite has no 'pos' for it, and
+    // the settings layer forces posModuleEnabled=false. The old comment
+    // here claimed a factory-outlet counter sells with POS; no enforcing
+    // layer ever granted that, so a factory outlet is a separate product
+    // decision, not an implication of this profile. The profile DOES
+    // install as an add-on module on top of ANY other activity
     // (a restaurant making its own chocolate, a pharmacy compounding) via `extraFeatures: ['manufacturing']`,
     // which `hasFeature`'s literal extraFeatures check already grants regardless of pillar/band.
     defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'manufacturing'],
@@ -168,7 +179,7 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     labelEn: 'Maintenance & Service Center',
     descriptionAr: 'كروت استلام وفحص الأجهزة، قطع الغيار المستهلكة، تتبع أرقام السيريال والـ IMEI وتسليم الأجهزة.',
     defaultRoute: '/maintenance',
-    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'maintenance', 'deliveryReps'],
+    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'pos', 'maintenance', 'deliveryReps'],
     allowedExtraFeatures: ['storefront'],
     pricingBand: 2,
   },
@@ -194,7 +205,7 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     labelEn: 'Auto Spare Parts & Vehicles',
     descriptionAr: 'دليل قطع الغيار، أرقام القطع الأصلية (OEM)، توافق الموديلات والماركات وسنوات الصنع.',
     defaultRoute: '/dashboard',
-    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'deliveryReps'],
+    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'pos', 'deliveryReps'],
     allowedExtraFeatures: ['storefront'],
     pricingBand: 1,
   },
@@ -207,7 +218,7 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     labelEn: 'Fashion & Apparel',
     descriptionAr: 'إدارة مصفوفة الألوان والمقاسات (Variants)، وتوليد الباركود للأزياء، وتصنيفات الموديلات.',
     defaultRoute: '/dashboard',
-    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'clothing', 'deliveryReps'],
+    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'pos', 'clothing', 'deliveryReps'],
     allowedExtraFeatures: ['storefront'],
     pricingBand: 1,
   },
@@ -283,7 +294,7 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     labelEn: 'E-Commerce & Digital Stores',
     descriptionAr: 'المتجر الإلكتروني، بوابات الدفع، شحن الطلبات، كاشير الكتروني وتتبع المبيعات أونلاين.',
     defaultRoute: '/storefront',
-    defaultFeatures: ['catalog', 'products', 'sales', 'storefront', 'inventory', 'deliveryReps'],
+    defaultFeatures: ['catalog', 'products', 'sales', 'pos', 'storefront', 'inventory', 'deliveryReps'],
     allowedExtraFeatures: [],
     pricingBand: 4,
   },
@@ -296,7 +307,7 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     labelEn: 'Supermarket & Grocery',
     descriptionAr: 'الباركود الوزني وموازين الباركود، الكاشير السريع، المخزون، ونواقص الرفوف.',
     defaultRoute: '/dashboard',
-    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'inventory', 'deliveryReps'],
+    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'pos', 'inventory', 'deliveryReps'],
     allowedExtraFeatures: ['storefront'],
     pricingBand: 1,
   },
@@ -309,7 +320,7 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     labelEn: 'Appliances & Installment Showrooms',
     descriptionAr: 'جدولة أقساط العملاء، غرامات التأخير، إيصالات وشيكات الأمانة، وإدارة معارض الأجهزة.',
     defaultRoute: '/dashboard',
-    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'installments', 'deliveryReps'],
+    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'pos', 'installments', 'deliveryReps'],
     allowedExtraFeatures: ['storefront'],
     pricingBand: 2,
   },
@@ -322,7 +333,7 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     labelEn: 'Spices & Roasteries',
     descriptionAr: 'خلطات التعبئة والميزان، التجزئة بالأوزان والأحجام، وكاشير سريع للمحامص والمطاحن.',
     defaultRoute: '/dashboard',
-    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'deliveryReps'],
+    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'pos', 'deliveryReps'],
     allowedExtraFeatures: ['storefront'],
     pricingBand: 1,
   },
@@ -335,7 +346,7 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     labelEn: 'Perfumes & Cosmetics',
     descriptionAr: 'تركيبات العطور والزيوت الخام، أحجام الزجاجات والعبوات، والبيع السريع بالباركود.',
     defaultRoute: '/dashboard',
-    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'deliveryReps'],
+    defaultFeatures: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'pos', 'deliveryReps'],
     allowedExtraFeatures: ['storefront'],
     pricingBand: 1,
   },

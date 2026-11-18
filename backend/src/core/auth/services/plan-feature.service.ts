@@ -80,9 +80,16 @@ export class PlanFeatureService implements OnModuleInit {
       }
     }
 
-    // Manufacturing is a normal band-4 commerce product (has POS, like wholesale/import — see
-    // pricing-catalog.json), not an isolated pillar; it falls through to the commerce branch below,
-    // and its sector flag is granted via defaultFeatures. It can also be installed as an add-on
+    // Manufacturing is a normal band-4 commerce product, not an isolated
+    // pillar; it falls through to the commerce branch below, and its
+    // sector flag ('manufacturing') is granted via defaultFeatures.
+    // 'pos' is NOT granted to it (INV-POS-RETAIL-FEATURE-GATE): the
+    // sidebar hides 'pos' for the manufacturing vertical, the route
+    // suite has no 'pos' for it, and the settings layer forces
+    // posModuleEnabled=false, so a factory-outlet counter is a separate
+    // product decision. (An older comment here claimed it "has POS, like
+    // wholesale/import" — wholesale_van and import_export never had POS
+    // either, so the analogy was wrong.) It can also be installed as an add-on
     // module on top of ANY other activity (a restaurant making chocolate, a pharmacy compounding)
     // via the literal extraFeatures check above.
 

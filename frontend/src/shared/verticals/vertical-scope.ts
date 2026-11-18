@@ -67,13 +67,19 @@ export function resolveCurrentVertical(tenant?: any, settings?: any): BusinessVe
   if (isFlagActive(settings?.maritimeFreightModuleEnabled)) return 'maritime';
   if (isFlagActive(settings?.contractingModuleEnabled)) return 'contracting';
 
-  const hasPosEntitlement = Boolean(
-    tenant?.features?.includes('pos') ||
-    tenant?.features?.includes('cashDrawer') ||
-    tenant?.plan_id === 'plan_ultimate' ||
-    tenant?.plan_id === 'plan_omnichannel' ||
-    (isFlagActive(settings?.posModuleEnabled) && !isFlagActive(settings?.contractingModuleEnabled) && !isFlagActive(settings?.maritimeFreightModuleEnabled) && !isFlagActive(settings?.manufacturingModuleEnabled))
-  );
+  // INV-POS-RETAIL-FEATURE-GATE (2026-11-18): the single source of truth
+  // for "this tenant has POS" is whether 'pos' is in the tenant's
+  // EFFECTIVE features (tenant.features, built by the backend from the
+  // industry profile defaults + plan + super-admin overrides). The old
+  // promotion — plan_ultimate/omnichannel, cashDrawer in features, or
+  // posModuleEnabled — promoted every services tenant to retail_general
+  // (every real plan contains cashDrawer; the settings layer also sets
+  // posModuleEnabled for them), so the sidebar showed POS while the
+  // backend gate refused the sale. A services tenant without a real
+  // 'pos' grant stays services; a super-admin 'pos' override lands in
+  // tenant.features and still promotes it (and almhnds keeps its
+  // carve-out below).
+  const hasPosEntitlement = Boolean(tenant?.features?.includes('pos'));
 
   // 1. Explicit configured vertical indicator: HIGHEST AUTHORITY (The tenant's chosen business identity)
   const candidates = [

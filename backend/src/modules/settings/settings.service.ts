@@ -204,14 +204,15 @@ export class SettingsService {
       } else if (settings.contractingModuleEnabled === true || settings.contractingModuleEnabled === 'true') {
         primaryActivity = 'contracting';
       } else if (!primaryActivity || primaryActivity === 'retail_general' || primaryActivity === 'general') {
-        const candidate = (settings.activityType || settings.businessIndustry || primaryActivity || 'retail_general') as string;
-        if ((candidate === 'services' || candidate.includes('خدمات') || candidate.includes('استشار')) && hasPosEntitlement) {
-          primaryActivity = 'retail_general';
-        } else {
-          primaryActivity = candidate;
-        }
-      } else if ((primaryActivity === 'services' || primaryActivity.includes('خدمات') || primaryActivity.includes('استشار')) && hasPosEntitlement) {
-        primaryActivity = 'retail_general';
+        // INV-POS-RETAIL-FEATURE-GATE (2026-11-18): NO services carve-out
+        // here anymore. The old code rewrote a services tenant to
+        // retail_general whenever its plan contained cashDrawer — every
+        // real plan does — so the page/sidebar showed POS while the
+        // backend gate (hasFeature subVertical block) refused the sale:
+        // the client reached checkout and got 403. A services tenant
+        // stays services; only a super-admin 'pos' override (applied
+        // last in getSettings, line ~432) opens POS for it.
+        primaryActivity = (settings.activityType || settings.businessIndustry || primaryActivity || 'retail_general') as string;
       }
       const effectiveType = normalizeIndustryProfileKey(primaryActivity as string);
       const profile = getIndustryProfile(effectiveType);
@@ -255,7 +256,18 @@ export class SettingsService {
       settings.inventoryModuleEnabled = false;
       settings.posModuleEnabled = false;
       settings.requireCashierShiftForSales = false;
-    } else if (settings.pillar === 'manufacturing') {
+    } else if (settings.pillar === 'manufacturing' || (settings.industryProfile as any)?.subVertical === 'manufacturing') {
+      // INV-POS-RETAIL-FEATURE-GATE (2026-11-18): the pillar half of
+      // this condition was DEAD — the manufacturing profile's pillar is
+      // 'commerce', never 'manufacturing', so this branch never fired
+      // and the else-branch below set posModuleEnabled=true (the profile
+      // has 'sales'), while the backend gate, the sidebar (which hides
+      // 'pos' for the manufacturing vertical), the route suite and the
+      // settings UI all force POS off for manufacturing. The page then
+      // showed POS available and the sale was refused at checkout. The
+      // subVertical half restores the branch's evident intent: POS stays
+      // OFF for manufacturing. A factory-outlet counter is a separate
+      // product decision, not part of this fix.
       settings.manufacturingModuleEnabled = true;
       settings.purchasesModuleEnabled = true;
       settings.inventoryModuleEnabled = true;
