@@ -33,6 +33,7 @@ lives under `docs/` itself.
 | [PRODUCT_READINESS_STATUS.md](PRODUCT_READINESS_STATUS.md) | Product readiness verdict (offline pilot ready; scope and status). |
 | [SAAS_ENTITLEMENTS_FUTURE_PLAN.md](SAAS_ENTITLEMENTS_FUTURE_PLAN.md) | Future plan: centralised entitlements and plan management (not built). |
 | [SAAS_TRIAL_FOUNDATION.md](SAAS_TRIAL_FOUNDATION.md) | SaaS trial and tenant lifecycle foundation (current state). |
+| [sentry-live-check.md](sentry-live-check.md) | Sentry live enablement: wiring, deploy gap fix, and the owed live checks (project, DSN, Telegram alerts). |
 | [STOCK_MOVEMENTS_WRITES.md](STOCK_MOVEMENTS_WRITES.md) | Inventory of every direct `stock_movements` write (68) with pairing flags. |
 | [UI_DESIGN_SYSTEM_RULES.md](UI_DESIGN_SYSTEM_RULES.md) | Enterprise UI design-system rules (premium look, consistency). |
 
