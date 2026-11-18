@@ -17,14 +17,15 @@
  * aliases to their owning feature. `src/common`, `src/shared` and
  * intra-module imports are not edges.
  *
- * Pinned baseline (fc3334c46): backend 71 edges / 650 statements
- * (re-pinned from 649 by the residual-rounding-deposits package:
- * one new import-sales->accounting statement — the tenant
- * base-currency lookup the refund path resolves on, the same
- * import the cost-revaluation and receipt-posting slices already
- * carry), frontend 57 edges / 133 statements, 7 backend + 12
- * frontend bidirectional pairs, 79 external imports into
- * `accounting-posting.service` and 15 into
+ * Pinned baseline (fc3334c46): backend 71 edges / 652 statements
+ * (re-pinned from 650 by the van-transfer-loaded-amount-3dp
+ * package: two new delivery-reps->accounting statements — the
+ * tenant base-currency lookup and the roundMoney import the
+ * inter-van transfer accept path resolves on; the 650 pin itself
+ * came from the residual-rounding-deposits package, one new
+ * import-sales->accounting statement), frontend 57 edges / 133
+ * statements, 7 backend + 12 frontend bidirectional pairs, 79
+ * external imports into `accounting-posting.service` and 15 into
  * `accounting-tenant-foundation.service` (callers outside accounting).
  *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
@@ -61,7 +62,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'catalog->inventory': 7,
   'catalog->storefront': 9,
   'contracting->accounting': 21,
-  'delivery-reps->accounting': 61,
+  'delivery-reps->accounting': 63,
   'delivery-reps->cash-drawer': 5,
   'delivery-reps->reports': 1,
   'delivery-reps->sales': 11,
@@ -187,7 +188,7 @@ const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|hr', 'accounti
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|treasury', 'accounts|purchases', 'audit|settings', 'cash-drawer|pos', 'customers|sales', 'inventory|products', 'maintenance|products', 'pos|products', 'pos|sales', 'pos|settings', 'pos|storefront', 'products|settings'];
 const PINNED_POSTING_EXTERNAL = 79;
 const PINNED_FOUNDATION_EXTERNAL = 15;
-const PINNED_BACKEND_TOTAL = 650;
+const PINNED_BACKEND_TOTAL = 652;
 const PINNED_FRONTEND_TOTAL = 133;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;

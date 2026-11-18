@@ -3,6 +3,8 @@ import { Kysely, sql } from '../../../database/kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { moveVanStock, sortItemsByProductId, generateDailySequenceNumber, getOrCreateVanLocation, resolveRepLinkedUserId } from './van-common.util';
 import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 
@@ -281,7 +283,14 @@ export class VanTransfersService {
       }
 
       if (totalTransferRetailValue > 0) {
-        const roundedRetail = Number(totalTransferRetailValue.toFixed(2));
+        // INV-VAN-TRANSFER-LOADED-AMOUNT-3DP: round the transfer
+        // retail value at the tenant's book digits (3dp on a 3dp
+        // tenant), not a hardcoded 2dp — the 2dp cut lost 0.001 per
+        // accept on KWD tenants, and the trips' loaded_amount
+        // (NUMERIC(15,2) until the 0338 widening) truncated it
+        // again on write.
+        const digits = currencyMoneyDigits(await tenantBaseCurrency(trx as unknown as Kysely<Database>, tenantId));
+        const roundedRetail = roundMoney(totalTransferRetailValue, digits);
         // Adjust sender's open trip loaded_amount
         const senderTrip = await trxAny
           .selectFrom('van_sales_trips')

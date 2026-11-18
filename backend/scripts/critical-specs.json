@@ -285,6 +285,7 @@
     "test/critical/job-queue-dead-timer-removed.spec.ts",
     "test/critical/import-deposit-amount-3dp.spec.ts",
     "test/critical/residual-rounding-deposits.spec.ts",
-    "test/critical/unbalanced-journal-throw.spec.ts"
+    "test/critical/unbalanced-journal-throw.spec.ts",
+    "test/critical/van-transfer-loaded-amount-3dp.spec.ts"
   ]
 }
