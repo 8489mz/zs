@@ -11,16 +11,26 @@ import { nextAccountingDay, resolveBusinessDateKey } from '../engines/accounting
 import { assertAccountingCloseReady } from '../accounting-close-readiness';
 import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
+import { FiscalYearYearsService } from './fiscal-year-years.service';
 import type { CreateFiscalYearDto, CloseFiscalYearDto, ReopenFiscalYearDto, FiscalYearPreviewResult } from './fiscal-year.types';
 export type { CreateFiscalYearDto, CloseFiscalYearDto, ReopenFiscalYearDto, FiscalYearAccountBalance, ProposedClosingLine, FiscalYearPreviewResult } from './fiscal-year.types';
 export { fiscalProfitAndLossCategory, resolveClosingJournalAccounts } from './fiscal-year.types';
 
 @Injectable()
 export class FiscalYearService {
+  private readonly years: FiscalYearYearsService;
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly accountingPosting: AccountingPostingService,
-  ) {}
+  ) {
+    this.years = new FiscalYearYearsService({
+      db: this.db,
+      formatDate: this.formatDate.bind(this),
+      toMoney: this.toMoney.bind(this),
+      assertAdmin: this.assertAdmin.bind(this),
+      ensurePeriodsForFiscalYear: this.ensurePeriodsForFiscalYear.bind(this),
+    });
+  }
 
   /* List/get shaping at the tenant's book digits (was hardcoded 2dp).
    * Non-finite input still shapes to 0, as before. */
@@ -51,9 +61,6 @@ export class FiscalYearService {
     }
   }
 
-  /**
-   * List all fiscal years for the tenant with overall stats
-   */
   async listFiscalYears(auth: AuthContext): Promise<{
     data: any[];
     stats: {
@@ -63,170 +70,15 @@ export class FiscalYearService {
       currentYearId: number | null;
     };
   }> {
-    const tenantId = String(auth.tenantId || '');
-    const today = await resolveBusinessDateKey(this.db, tenantId, new Date());
-    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
-
-    const years = await this.db
-      .selectFrom('accounting_fiscal_years')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .orderBy('start_date', 'desc')
-      .execute();
-
-    let openYears = 0;
-    let closedYears = 0;
-    let currentYearId: number | null = null;
-
-    const formatted = years.map((y) => {
-      const start = this.formatDate(y.start_date);
-      const end = this.formatDate(y.end_date);
-      if (y.status === 'closed') {
-        closedYears++;
-      } else {
-        openYears++;
-      }
-      if (today >= start && today <= end) {
-        currentYearId = y.id;
-      }
-      return {
-        ...y,
-        start_date: start,
-        end_date: end,
-        net_profit_loss: this.toMoney(y.net_profit_loss, digits),
-        total_revenue: this.toMoney(y.total_revenue, digits),
-        total_expense: this.toMoney(y.total_expense, digits),
-      };
-    });
-
-    return {
-      data: formatted,
-      stats: {
-        totalYears: years.length,
-        openYears,
-        closedYears,
-        currentYearId,
-      },
-    };
+    return this.years.listFiscalYears(auth);
   }
 
-  /**
-   * Get single fiscal year details
-   */
   async getFiscalYear(auth: AuthContext, id: number): Promise<any> {
-    const tenantId = String(auth.tenantId || '');
-    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
-    const fy = await this.db
-      .selectFrom('accounting_fiscal_years')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', id)
-      .executeTakeFirst();
-
-    if (!fy) {
-      throw new NotFoundException('السنة المالية غير موجودة.');
-    }
-
-    let closingEntry: any = null;
-    if (fy.closing_entry_id) {
-      closingEntry = await this.db
-        .selectFrom('journal_entries')
-        .selectAll()
-        .where('tenant_id', '=', tenantId)
-        .where('id', '=', fy.closing_entry_id)
-        .executeTakeFirst();
-    }
-
-    return {
-      ...fy,
-      start_date: this.formatDate(fy.start_date),
-      end_date: this.formatDate(fy.end_date),
-      net_profit_loss: this.toMoney(fy.net_profit_loss, digits),
-      total_revenue: this.toMoney(fy.total_revenue, digits),
-      total_expense: this.toMoney(fy.total_expense, digits),
-      closingEntry,
-    };
+    return this.years.getFiscalYear(auth, id);
   }
 
-  /**
-   * Create a new fiscal year period
-   */
   async createFiscalYear(auth: AuthContext, dto: CreateFiscalYearDto): Promise<any> {
-    this.assertAdmin(auth);
-    const tenantId = String(auth.tenantId || '');
-
-    const name = String(dto.name || '').trim();
-    if (!name) {
-      throw new BadRequestException('يجب إدخال اسم السنة المالية (مثال: السنة المالية 2025).');
-    }
-
-    const startDate = this.formatDate(dto.startDate);
-    const endDate = this.formatDate(dto.endDate);
-
-    if (!startDate || !endDate) {
-      throw new BadRequestException('يجب تحديد تاريخ بداية وتاريخ نهاية صالحين للسنة المالية.');
-    }
-
-    if (startDate >= endDate) {
-      throw new BadRequestException('تاريخ بداية السنة المالية يجب أن يكون قبل تاريخ النهاية.');
-    }
-
-    // Check overlapping periods in same tenant
-    const overlapping = await this.db
-      .selectFrom('accounting_fiscal_years')
-      .select(['id', 'name', 'start_date', 'end_date'])
-      .where('tenant_id', '=', tenantId)
-      .where('start_date', '<=', endDate as any)
-      .where('end_date', '>=', startDate as any)
-      .executeTakeFirst();
-
-    if (overlapping) {
-      throw new BadRequestException(
-        `توجد سنة مالية أخرى [${overlapping.name}] تتداخل مع هذه الفترة (${this.formatDate(overlapping.start_date)} إلى ${this.formatDate(overlapping.end_date)}).`,
-      );
-    }
-
-    // The overlap SELECT above is only for a friendly message; it races with concurrent creates.
-    // accounting_fiscal_years_no_overlap (EXCLUDE ... USING gist) is the actual guarantee.
-    let inserted;
-    try {
-      inserted = await this.db
-        .insertInto('accounting_fiscal_years')
-        .values({
-          tenant_id: tenantId,
-          name,
-          code: dto.code ? String(dto.code).trim() : null,
-          start_date: startDate as any,
-          end_date: endDate as any,
-          status: 'open',
-          net_profit_loss: 0,
-          total_revenue: 0,
-          total_expense: 0,
-          created_at: sql`NOW()` as any,
-          updated_at: sql`NOW()` as any,
-        })
-        .returningAll()
-        .executeTakeFirstOrThrow();
-    } catch (error: any) {
-      if (error?.code === '23P01' || String(error?.constraint || '') === 'accounting_fiscal_years_no_overlap') {
-        throw new BadRequestException('توجد سنة مالية أخرى تتداخل مع هذه الفترة. يرجى مراجعة التواريخ.');
-      }
-      throw error;
-    }
-
-    // Auto-generate 12 monthly fiscal periods for this fiscal year (البند O6)
-    await this.ensurePeriodsForFiscalYear(
-      tenantId,
-      inserted.id,
-      startDate,
-      endDate,
-    );
-
-    return {
-      ...inserted,
-      start_date: this.formatDate(inserted.start_date),
-      end_date: this.formatDate(inserted.end_date),
-    };
+    return this.years.createFiscalYear(auth, dto);
   }
 
   /**
