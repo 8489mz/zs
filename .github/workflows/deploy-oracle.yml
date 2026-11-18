@@ -78,6 +78,12 @@ jobs:
           # SF-10: set to the root domain (e.g. zsystemai.com) only after wildcard DNS + nginx are live;
           # must match STOREFRONT_ROOT_DOMAIN in backend/.env. Empty = stores stay on /st/<slug>.
           VITE_STOREFRONT_ROOT_DOMAIN: ${{ vars.VITE_STOREFRONT_ROOT_DOMAIN || '' }}
+          # Sentry (INV-SENTRY-LIVE-ENABLEMENT): Vite inlines import.meta.env at build time, so the
+          # frontend DSN must be supplied HERE — a DSN added later on the server can never reach the
+          # shipped bundle. Flag from vars (boolean), DSN from secrets (masked in logs). Both empty
+          # by default: tracking stays off until a Sentry project exists and both are set.
+          VITE_ERROR_TRACKING_ENABLED: ${{ vars.VITE_ERROR_TRACKING_ENABLED || 'false' }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN || '' }}
         run: |
           npm ci
           npm run build

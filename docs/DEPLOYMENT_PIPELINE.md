@@ -116,6 +116,7 @@ GitHub branch: main
 | `ORACLE_HOST` | عنوان IP لسيرفر أوراكل | `92.5.178.54` (اختياري، يملك قيمة افتراضية) |
 | `ORACLE_USER` | اسم المستخدم في السيرفر | `ubuntu` (اختياري، يملك قيمة افتراضية) |
 | `ORACLE_PORT` | منفذ الـ SSH | `22` (اختياري، يملك قيمة افتراضية) |
+| `VITE_SENTRY_DSN` | DSN مشروع Sentry للفرونت إند — يُمرَّر وقت البناء فقط (Vite تثبّت القيمة في الحزمة) | (اختياري — اتركه غير مضبوط حتى يُفعَّل التتبع؛ لا تكتب القيمة في المستودع أبداً) |
 
 ---
 
@@ -133,6 +134,9 @@ MAIL_DELIVERY_MODE=smtp
 PUBLIC_TRIAL_DEBUG_CREDENTIALS=false
 ENABLE_BOOTSTRAP_ADMIN=false
 ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION=false
+# Sentry (اختياري): يُفعَّل فقط بعد إنشاء مشروع Sentry ووضع الـ DSN هنا على السيرفر
+ERROR_TRACKING_ENABLED=false
+SENTRY_DSN=
 ```
 
 بيئة بناء الفرونت إند:
@@ -140,7 +144,11 @@ ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION=false
 VITE_API_BASE_URL=            # فاضي: الـAPI على نفس الدومين (app.zsystemai.com/api)
 VITE_PLATFORM_TENANT_ID=zsystems
 VITE_STOREFRONT_ROOT_DOMAIN=zsystemai.com
+VITE_ERROR_TRACKING_ENABLED=false  # متغير GitHub (vars) — يُشغَّل فقط مع وجود الـ DSN
+VITE_SENTRY_DSN=                   # سرّ GitHub (secrets) — يُضبط بعد إنشاء مشروع Sentry
 ```
+
+التحقق من بوت تليجرام الخاص بالمستودع (تنبيهات النشر والأعطال، وليس تنبيهات Sentry — تفاصيل الفصل في `sentry-live-check.md` §7): على السيرفر `source /etc/zsystems/telegram.env && node backend/scripts/check-telegram-alerts.cjs --send-test` — يفشل مغلقاً عند غياب السرّين ولا يطبع أي قيمة سرّية.
 
 ---
 

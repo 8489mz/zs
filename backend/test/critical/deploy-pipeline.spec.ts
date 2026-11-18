@@ -1,9 +1,12 @@
 import { strict as assert } from 'node:assert';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Guard for the production deploy and backup invariants DEPLOY-1..DEPLOY-9
+// Guard for the production deploy and backup invariants DEPLOY-1..DEPLOY-11
 // (ARCHITECTURE_INVARIANTS.md §2.7, docs/DEPLOYMENT_PIPELINE.md).
+// DEPLOY-9 is the Item 5 migration-auto-revert package, now live on main (691f45ab6);
+// the reservation held so the two packages never collided on a number.
 // Each of these was a real production incident on 2026-09-22: the old flow deleted dist and rebuilt
 // on the 1-OCPU server (1754 failed PM2 restarts), and the nightly backup had silently not run for
 // three weeks. Nothing fails functionally when these regress — production just goes down during
@@ -206,6 +209,132 @@ function testRestoreDrill(): void {
   assert.ok(/RESTORE DRILL OK/.test(watchScript), 'the watchdog must notice a failed or missing drill');
 }
 
+// DEPLOY-10: the live frontend build must be able to carry the Sentry DSN.
+// Vite inlines import.meta.env at BUILD time (frontend/src/lib/error-tracking.ts reads
+// VITE_ERROR_TRACKING_ENABLED / VITE_SENTRY_DSN from import.meta.env), so a DSN added later
+// on the server can never reach the shipped bundle. Before this fix the "Build frontend"
+// step passed only four VITE_ vars and dropped the DSN entirely: the frontend half of
+// Sentry was unreachable by configuration alone, no matter what was set in GitHub or on
+// the server. The backend half needs no workflow change — its env comes from the
+// server-side .env file (deploy-oracle.yml step 6), which the repo never writes; whether
+// ERROR_TRACKING_ENABLED / SENTRY_DSN are set there is a live-server check, recorded in
+// docs (sentry-live-check.md), not something this guard can prove from the repo.
+function testSentryFrontendBuildEnv(): void {
+  const frontendBuild = workflow.match(/- name: Build frontend\n([\s\S]*?)\n\s*- name: Package release/);
+  assert.ok(frontendBuild, 'the "Build frontend" step must exist before "Package release"');
+  const env = frontendBuild[1];
+  assert.ok(
+    /VITE_ERROR_TRACKING_ENABLED: \$\{\{ vars\.VITE_ERROR_TRACKING_ENABLED \|\| 'false' \}\}/.test(env),
+    'the frontend build must pass VITE_ERROR_TRACKING_ENABLED from vars, defaulting to false (tracking off until enabled)',
+  );
+  assert.ok(
+    /VITE_SENTRY_DSN: \$\{\{ secrets\.VITE_SENTRY_DSN \|\| '' \}\}/.test(env),
+    'the frontend build must pass VITE_SENTRY_DSN from secrets, defaulting to empty (no DSN baked in by accident)',
+  );
+  assert.ok(
+    !/ingest\.sentry\.io/.test(workflow),
+    'no literal Sentry DSN may ever be committed — the DSN comes from the secret, never from the repo',
+  );
+}
+
+// DEPLOY-11: the repo's own Telegram bot must be provably postable, and the
+// existing Telegram alert paths must stay wired. Three places already alert
+// through the same Bot API call (POST api.telegram.org/bot<token>/sendMessage):
+// deploy-oracle.yml (deploy failure / rollback), uptime-watch.yml (up/down
+// state change), and TelegramAlertsService via the health controller (DB-down
+// incident + the super-admin POST /api/health/telegram-test endpoint). All
+// three read TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID from the environment only.
+// backend/scripts/check-telegram-alerts.cjs proves that half of the chain:
+// presence, token validity (getMe) and chat reachability (getChat), plus an
+// opt-in --send-test message — and it fails closed (exit 1, naming the
+// missing var) when the secrets are absent, without ever printing a value.
+// Sentry alerts are NOT covered here and must not be confused with this
+// bot: they travel via Sentry's own Telegram Alerts Bot, a dashboard
+// integration with no repo code (sentry-live-check.md §7). The live
+// getMe/getChat success path cannot run from a machine without a route to
+// api.telegram.org — it is proven on the server, where the secrets live;
+// this guard pins the fail-closed behaviour and the --check-only green path,
+// which need no network.
+function testTelegramAlertsCheck(): void {
+  const scriptPath = join(ROOT, 'backend', 'scripts', 'check-telegram-alerts.cjs');
+  const script = read('backend/scripts/check-telegram-alerts.cjs');
+  assert.ok(
+    /process\.env\.TELEGRAM_BOT_TOKEN/.test(script),
+    'the Telegram check script must read the bot token from the environment, never from the repo',
+  );
+  assert.ok(
+    /process\.env\.TELEGRAM_CHAT_ID/.test(script),
+    'the Telegram check script must read the chat id from the environment, never from the repo',
+  );
+  assert.ok(
+    !/bot\d{6,}:/.test(script),
+    'no literal Telegram bot token may ever be committed — the token comes from the secret, never from the repo',
+  );
+  for (const line of script.split('\n')) {
+    if (/console\.(log|error|warn)\(/.test(line)) {
+      assert.ok(
+        !/\b(botToken|chatId)\b/.test(line),
+        `no console line in the Telegram check script may log a secret value (${line.trim().slice(0, 80)})`,
+      );
+    }
+  }
+  // The existing alert paths must stay wired: deploy failure alert and the
+  // uptime state-change alert both still call sendMessage with the secrets.
+  assert.ok(
+    /Send Telegram Deployment Notification/.test(workflow) && /if: failure\(\)/.test(workflow),
+    'the deploy workflow must keep its failure-only Telegram notification step',
+  );
+  const uptimeWorkflow = read('.github/workflows/uptime-watch.yml');
+  assert.ok(
+    /TELEGRAM_BOT_TOKEN/.test(uptimeWorkflow) && /sendMessage/.test(uptimeWorkflow),
+    'the uptime-watch workflow must keep its Telegram state-change alert',
+  );
+
+  const scrubbedEnv: Record<string, string | undefined> = { ...process.env };
+  delete scrubbedEnv.TELEGRAM_BOT_TOKEN;
+  delete scrubbedEnv.TELEGRAM_CHAT_ID;
+  const runScript = (args: string[], env: Record<string, string | undefined>) =>
+    spawnSync(process.execPath, [scriptPath, ...args], { env, encoding: 'utf8', timeout: 30000 });
+
+  // No secrets at all: exit 1, naming the missing token first.
+  const noEnv = runScript([], scrubbedEnv);
+  assert.equal(noEnv.status, 1, 'the Telegram check must fail closed with no secrets set');
+  assert.ok(/TELEGRAM_BOT_TOKEN/.test(noEnv.stderr), 'the failure must name the missing TELEGRAM_BOT_TOKEN');
+  // Token only: exit 1, naming the missing chat id.
+  const tokenOnly = runScript(
+    [],
+    { ...scrubbedEnv, TELEGRAM_BOT_TOKEN: 'dummy-token-for-test' },
+  );
+  assert.equal(tokenOnly.status, 1, 'the Telegram check must fail closed with only the token set');
+  assert.ok(/TELEGRAM_CHAT_ID/.test(tokenOnly.stderr), 'the failure must name the missing TELEGRAM_CHAT_ID');
+  assert.ok(
+    !/dummy-token-for-test/.test(tokenOnly.stdout + tokenOnly.stderr),
+    'the Telegram check must never echo a secret value',
+  );
+  // Both set, presence only: exit 0 with no network involved.
+  const checkOnly = runScript(
+    ['--check-only'],
+    { ...scrubbedEnv, TELEGRAM_BOT_TOKEN: 'dummy-token-for-test', TELEGRAM_CHAT_ID: 'dummy-chat-for-test' },
+  );
+  assert.equal(checkOnly.status, 0, 'the Telegram check --check-only must pass when both vars are set');
+  assert.ok(
+    !/dummy-token-for-test|dummy-chat-for-test/.test(checkOnly.stdout + checkOnly.stderr),
+    'the Telegram check must never echo a secret value',
+  );
+  // Both dummy, live verification: exit 1 — a dummy token is rejected by
+  // Telegram, and a machine with no route to api.telegram.org fails the
+  // same way. Either way the script must fail closed and leak nothing.
+  const live = runScript(
+    [],
+    { ...scrubbedEnv, TELEGRAM_BOT_TOKEN: 'dummy-token-for-test', TELEGRAM_CHAT_ID: 'dummy-chat-for-test' },
+  );
+  assert.equal(live.status, 1, 'the Telegram check must fail closed for an invalid token');
+  assert.ok(
+    !/dummy-token-for-test|dummy-chat-for-test/.test(live.stdout + live.stderr),
+    'the Telegram check must never echo a secret value',
+  );
+}
+
 function run(): void {
   testNoBuildOnServer();
   testNoLiveDistDeletion();
@@ -216,8 +345,10 @@ function run(): void {
   testNoCommittedParUrl();
   testHourlyBackupMode();
   testRestoreDrill();
+  testSentryFrontendBuildEnv();
+  testTelegramAlertsCheck();
   // eslint-disable-next-line no-console
-  console.log('deploy-pipeline.spec: all deploy and backup invariants hold (DEPLOY-1..DEPLOY-9)');
+  console.log('deploy-pipeline.spec: all deploy and backup invariants hold (DEPLOY-1..DEPLOY-11)');
 }
 
 try {
