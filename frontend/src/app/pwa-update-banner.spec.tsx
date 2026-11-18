@@ -303,15 +303,22 @@ describe('PwaUpdateBanner', () => {
   });
 
   it('build tag fallback is unique per build, never a same-day constant', () => {
-    const configPath = path.join(__dirname, '..', '..', 'vite.config.ts');
-    const config = fs.readFileSync(configPath, 'utf8');
+    // The tag lives in scripts/get-build-tag.ts now (vite.config.ts only
+    // calls it): git short HEAD first, GITHUB_SHA / build-version.json /
+    // timestamp as fallbacks. The timestamp fallback used to be the
+    // same-day constant MMDD-0001, so a dismiss could never tell a new
+    // build from the dismissed one.
+    const tagPath = path.join(__dirname, '..', '..', 'scripts', 'get-build-tag.ts');
+    const tag = fs.readFileSync(tagPath, 'utf8');
 
-    // Two same-day builds must not share a worker URL: the fallback used to
-    // be the same-day constant MMDD-0001, so a dismiss could never tell a
-    // new build from the dismissed one.
-    expect(config).not.toContain('-0001');
+    expect(tag).not.toContain('-0001');
     // The fallback carries the time of day down to the millisecond.
-    expect(config).toContain('getHours');
-    expect(config).toContain('getMilliseconds');
+    expect(tag).toContain('getHours');
+    expect(tag).toContain('getMilliseconds');
+    // And the real per-deploy source is the commit, not the static file:
+    // build-version.json ("1010-0001", unbumped since 2026-10-10) is only
+    // a fallback once git and GITHUB_SHA are both absent.
+    expect(tag).toContain('git rev-parse --short HEAD');
+    expect(tag).toContain('GITHUB_SHA');
   });
 });

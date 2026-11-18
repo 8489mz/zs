@@ -3,33 +3,10 @@ import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { VitePWA } from 'vite-plugin-pwa';
 import { createRequire } from 'node:module';
-import { execSync } from 'node:child_process';
-
-import fs from 'node:fs';
+import { getBuildTag } from './scripts/get-build-tag';
 
 const require = createRequire(import.meta.url);
 const pkg = require('./package.json') as { version: string };
-
-const getBuildTag = () => {
-  try {
-    const versionFile = path.resolve(__dirname, 'build-version.json');
-    if (fs.existsSync(versionFile)) {
-      const data = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
-      if (data.buildId) return String(data.buildId).trim();
-    }
-  } catch {}
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  const ms = String(d.getMilliseconds()).padStart(3, '0');
-  // Never a same-day constant: two builds on the same day must not share a
-  // worker URL, or the PWA banner dismiss cannot tell a new build from the
-  // dismissed one. Time of day to the millisecond makes each build unique.
-  return `${mm}${dd}-${hh}${min}${ss}${ms}`;
-};
 
 export default defineConfig(({ mode }) => {
   const isDesktop = mode === 'electron' || mode === 'portable' || process.env.ELECTRON === 'true';
@@ -144,7 +121,12 @@ export default defineConfig(({ mode }) => {
   resolve: { alias: { '@': path.resolve(__dirname, './src') } },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
-    __APP_BUILD_ID__: JSON.stringify(getBuildTag()),
+    // INV-SERVICE-WORKER-BUILD-MARKER: the tag is the deployed commit
+    // (git short HEAD; CI env / the static version file / timestamp only
+    // as fallbacks — see scripts/get-build-tag.ts), so two consecutive
+    // deploys never share a worker URL and a dismissed update banner
+    // re-shows on the next build. The static file alone froze the tag.
+    __APP_BUILD_ID__: JSON.stringify(getBuildTag({ root: __dirname })),
   },
   server: {
     host: true,
