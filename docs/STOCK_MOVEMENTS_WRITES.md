@@ -76,7 +76,7 @@
 | backend/src/modules/returns/returns-sale-return.service.ts:367 | insert | sale_return | yes |  |
 | backend/src/modules/returns/returns-sale-return.service.ts:380 | insert | sale_return | yes |  |
 | backend/src/modules/sales/services/create-sale.service.ts:1572 | insert | sale | yes |  |
-| backend/src/modules/sales/services/create-sale.service.ts:1714 | insert | sale | yes |  |
+| backend/src/modules/sales/services/create-sale.service.ts:1715 | insert | sale | yes | Modifier leg (was :1714 before the INV-SALE-MOVEMENT-UNIT-COST +1 line); now stores unit_cost (per-stock-unit WAC). |
 | backend/src/modules/sales/services/restaurant-food-waste.service.ts:147 | insert | damaged | yes |  |
 | backend/src/modules/sales/services/restaurant-food-waste.service.ts:243 | insert | damaged | yes |  |
 | backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:660 | insert | sale_edit_reversal | yes |  |

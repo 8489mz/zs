@@ -41,12 +41,16 @@
  * 3. The writer audit: no stock_movements insert in backend/src
  *    writes unit_cost through a 2dp rounding (toFixed(2) /
  *    roundMoney(..., 2)); writers pass the raw frozen cost, a 6dp
- *    value, or a book-digits total. And the recorded gap: the core
- *    retail sale movements (create-sale.service.ts, 'sale' and
- *    'sale_modifier') store NO unit_cost at all — the cost trace for
- *    a sale lives on sale_items.cost_price, not on the movement row —
- *    so a valuation that reads unit_cost off a 'sale' movement finds
- *    NULL. That is a finding, not a fix in this package.
+ *    value, or a book-digits total. And the recorded gap, CLOSED
+ *    by the sale-movement-unit-cost package: the core retail sale
+ *    movements (create-sale.service.ts, 'sale' and 'sale_modifier')
+ *    used to store NO unit_cost at all — the cost trace for a sale
+ *    lived on sale_items.cost_price, not on the movement row — so a
+ *    valuation that read unit_cost off a 'sale' movement found
+ *    NULL. Both rows now store the frozen cost (main leg
+ *    item.costPrice; modifier leg the per-stock-unit WAC), and
+ *    this audit asserts exactly that: 2 create-sale 'sale' rows
+ *    WITH unit_cost, 0 without.
  *
  * Prospective only: no posted row is rewritten. A 91.87/91.88 pair
  * already in the books is historical data from a pre-fix posting;
@@ -234,6 +238,7 @@ function checkWriters(): void {
   let insertSites = 0;
   let unitCostSites = 0;
   const saleMovementFilesWithoutUnitCost: string[] = [];
+  const saleMovementFilesWithUnitCost: string[] = [];
   for (const file of walkTsFiles(BACKEND_SRC)) {
     const rel = path.relative(REPO_ROOT, file).split(path.sep).join('/');
     if (rel.startsWith('backend/src/database/migrations/') || rel.startsWith('backend/src/database/legacy-migration/')) continue;
@@ -259,23 +264,36 @@ function checkWriters(): void {
         continue;
       }
       unitCostSites++;
+      if (/movement_type\s*:\s*'sale'/.test(code)) {
+        saleMovementFilesWithUnitCost.push(`${rel}:${i + 1}`);
+      }
       assert.ok(!/toFixed\(2\)/.test(code), `${rel}:${i + 1} must not write unit_cost through toFixed(2)`);
       assert.ok(!/roundMoney\([^)]*,\s*2\s*\)/.test(code), `${rel}:${i + 1} must not write unit_cost through roundMoney(..., 2)`);
     }
   }
   assert.ok(insertSites > 0, 'writer audit must find stock_movements inserts');
   assert.ok(unitCostSites > 0, 'writer audit must find stock_movements inserts that set unit_cost');
-  // The core retail sale path stores no unit_cost on its movements:
-  // create-sale.service.ts 'sale' + 'sale_modifier' rows. The cost
-  // trace for a sale lives on sale_items.cost_price. If a future
-  // change starts storing it, this assertion names the file to review.
+  // The core retail sale path used to store no unit_cost on its
+  // movements (create-sale.service.ts 'sale' + 'sale_modifier'
+  // rows); the sale-movement-unit-cost package closed that gap, so
+  // this audit now pins the fixed state: exactly 2 create-sale
+  // 'sale' rows WITH unit_cost (the frozen cost), 0 without. If a
+  // future change drops one, this assertion names the file.
   const createSaleNoCost = saleMovementFilesWithoutUnitCost.filter((s) =>
+    s.startsWith('backend/src/modules/sales/services/create-sale.service.ts:'),
+  );
+  const createSaleWithCost = saleMovementFilesWithUnitCost.filter((s) =>
     s.startsWith('backend/src/modules/sales/services/create-sale.service.ts:'),
   );
   assert.equal(
     createSaleNoCost.length,
+    0,
+    `create-sale.service.ts must have 0 sale movements without unit_cost (found: ${createSaleNoCost.join(', ') || 'none'})`,
+  );
+  assert.equal(
+    createSaleWithCost.length,
     2,
-    `create-sale.service.ts must have exactly 2 sale movements without unit_cost (found: ${createSaleNoCost.join(', ') || 'none'})`,
+    `create-sale.service.ts must have exactly 2 sale movements with unit_cost (found: ${createSaleWithCost.join(', ') || 'none'})`,
   );
   console.log(`writer audit: ${insertSites} stock_movements inserts scanned, ${unitCostSites} set unit_cost, 0 use 2dp rounding`);
 }

@@ -1576,6 +1576,7 @@ export class CreateSaleService {
               qty: -alloc.qty,
               before_qty: stockChange.scopeBefore,
               after_qty: stockChange.scopeAfter,
+              unit_cost: item.costPrice, // INV-SALE-MOVEMENT-UNIT-COST: frozen line cost, same value as sale_items.cost_price
               reason: 'sale',
               note: `Sale S-${id}`,
               reference_type: 'sale',
@@ -1718,6 +1719,8 @@ export class CreateSaleService {
                     qty: -alloc.qty,
                     before_qty: modStockChange.scopeBefore,
                     after_qty: modStockChange.scopeAfter,
+                    // INV-SALE-MOVEMENT-UNIT-COST: per-stock-unit WAC = frozen per-serving cost / consumption rate (qty counts stock units).
+                    unit_cost: Number((Number(mod.costPrice || 0) / Number(mod.consumptionQty || 1)).toFixed(6)),
                     reason: 'sale_modifier',
                     note: `Sale S-${id} (${item.productName})`,
                     reference_type: 'sale',

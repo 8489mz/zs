@@ -42,6 +42,6 @@
     "src/modules/settings/services/settings-import.service.ts": 1222,
     "src/modules/settings/settings.service.ts": 1169,
     "src/modules/sales/services/sales-edit-and-cancel.service.ts": 2411,
-    "src/modules/sales/services/create-sale.service.ts": 2007
+    "src/modules/sales/services/create-sale.service.ts": 2010
   }
 }
