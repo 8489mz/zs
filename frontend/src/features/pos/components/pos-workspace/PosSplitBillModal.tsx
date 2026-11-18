@@ -2,9 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo } from 'react';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { Card } from '@/shared/ui/card';
-import { Button } from '@/shared/ui/button';
 import { formatCurrency } from '@/lib/format';
-import { UsersIcon } from '@/shared/components/icons/AppIcons';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
@@ -28,8 +26,9 @@ import {
   type SplitOrderTotals,
   type SplitBillAmounts,
 } from './pos-split-bill.helpers';
-import { PosSplitBillItemsMode } from './pos-split-bill/PosSplitBillItemsMode';
 import { PosSplitBillHeader } from '@/features/pos/components/pos-workspace/pos-split-bill/PosSplitBillHeader';
+import { PosSplitBillItemsMode } from '@/features/pos/components/pos-workspace/pos-split-bill/PosSplitBillItemsMode';
+import { PosSplitBillEvenMode } from '@/features/pos/components/pos-workspace/pos-split-bill/PosSplitBillEvenMode';
 
 export {
   moveSplitBillItem,
@@ -46,7 +45,6 @@ export {
   type SplitOrderTotals,
   type SplitBillAmounts,
 };
-import { PosSplitBillEvenMode } from '@/features/pos/components/pos-workspace/pos-split-bill/PosSplitBillEvenMode';
 
 interface PosSplitBillModalProps {
   open: boolean;
