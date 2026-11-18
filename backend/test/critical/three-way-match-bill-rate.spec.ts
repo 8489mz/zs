@@ -148,8 +148,11 @@ async function main(): Promise<void> {
       insertInto: () => chainable('insert', { execute: async () => ({}) }),
       updateTable: () => chainable('update', { execute: async () => ({}) }),
     };
-    const service: any = Object.create(GoodsReceiptService.prototype);
-    service.db = { transaction: () => ({ execute: async (cb: any) => cb(trx) }) };
+    const service: any = new GoodsReceiptService(
+      { transaction: () => ({ execute: async (cb: any) => cb(trx) }) } as any,
+      {} as any,
+      {} as any,
+    );
     const auth = { userId: 99, role: 'admin', tenantId: 't1', accountId: 'a1', sessionId: 's', username: 'u', permissions: [] as string[] };
     return service.verifyPurchaseThreeWayMatch(5, {}, auth);
   }

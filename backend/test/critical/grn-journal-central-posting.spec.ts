@@ -334,7 +334,7 @@ async function main(): Promise<void> {
   // Case 5: source + invariant pins (presence only — no last-line pin).
   {
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/purchases/services/goods-receipt.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(here, '../../src/modules/purchases/services/goods-receipt-post.service.ts'), 'utf8');
     assert.ok(serviceSource.includes('postDomainJournal'), 'postGoodsReceipt posts through the central boundary');
     assert.ok(serviceSource.includes('stockMovementTotal'), 'movement total uses the single book-digits computation');
     assert.ok(!serviceSource.includes('JRN-TMP-GRN'), 'no direct temporary-number journal insert remains');

@@ -442,7 +442,7 @@ async function main(): Promise<void> {
   // Case 6: source pins — the canonical allocator and the modal wiring.
   {
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/purchases/services/goods-receipt.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(here, '../../src/modules/purchases/services/goods-receipt-post.service.ts'), 'utf8');
     assert.ok(serviceSource.includes('allocateLandedCosts'), 'postGoodsReceipt allocates through the canonical allocator');
     assert.ok(serviceSource.includes('INV-SHIPPING-ALLOCATION'), 'postGoodsReceipt names the invariant');
     const modalSource = readFileSync(resolve(here, '../../../frontend/src/features/purchases/components/GoodsReceiptModal.tsx'), 'utf8');

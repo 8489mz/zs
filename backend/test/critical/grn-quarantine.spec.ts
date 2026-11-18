@@ -527,7 +527,7 @@ async function main(): Promise<void> {
   // Case 6: source pins — every layer names the quarantine type.
   {
     const here = __dirname;
-    const grnSource = readFileSync(resolve(here, '../../src/modules/purchases/services/goods-receipt.service.ts'), 'utf8');
+    const grnSource = readFileSync(resolve(here, '../../src/modules/purchases/services/goods-receipt-create.service.ts'), 'utf8');
     assert.ok(grnSource.includes('INV-GRN-REAL-QUARANTINE'), 'postGoodsReceipt names the invariant');
     assert.ok(grnSource.includes('quarantineLocationId'), 'the acceptance path reads the quarantine id');
     const qaSource = readFileSync(resolve(here, '../../src/modules/inventory/services/quality-assurance.service.ts'), 'utf8');
@@ -535,8 +535,8 @@ async function main(): Promise<void> {
     assert.ok(qaSource.includes('relocateStockBetweenLocations'), 'the release routes through the canonical transfer primitive');
     const engineSource = readFileSync(resolve(here, '../../src/common/engines/branch-sellable-locations.engine.ts'), 'utf8');
     assert.ok(engineSource.includes("'quarantine'"), 'the sellable-locations engine excludes quarantine');
-    const salesWriteSource = readFileSync(resolve(here, '../../src/modules/sales/services/sales-write.service.ts'), 'utf8');
-    assert.ok(salesWriteSource.includes("'damaged', 'in_transit', 'quarantine'"), 'the sale guards exclude quarantine');
+    const createSaleSource = readFileSync(resolve(here, '../../src/modules/sales/services/create-sale.service.ts'), 'utf8');
+    assert.ok(createSaleSource.includes("'damaged', 'in_transit', 'quarantine'"), 'the sale guards exclude quarantine');
     const settingsSource = readFileSync(resolve(here, '../../src/modules/settings/settings.service.ts'), 'utf8');
     assert.ok(settingsSource.includes("'damaged', 'quarantine'"), 'location creation accepts the quarantine type');
     const locationsPage = readFileSync(resolve(here, '../../../frontend/src/features/inventory/pages/LocationsManagementPage.tsx'), 'utf8');

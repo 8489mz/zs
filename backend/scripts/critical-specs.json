@@ -265,6 +265,11 @@
     "test/critical/expected-cash-single-window.spec.ts",
     "test/critical/manager-pin-drawer.spec.ts",
     "test/critical/shift-expected-per-method-collections.spec.ts",
-    "test/critical/treasury-expense-idempotency.spec.ts"
+    "test/critical/treasury-expense-idempotency.spec.ts",
+    "test/critical/grn-freight-allocation.spec.ts",
+    "test/critical/grn-journal-central-posting.spec.ts",
+    "test/critical/grn-pending-review.spec.ts",
+    "test/critical/grn-quarantine.spec.ts",
+    "test/critical/three-way-match-bill-rate.spec.ts"
   ]
 }

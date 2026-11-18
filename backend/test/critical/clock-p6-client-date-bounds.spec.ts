@@ -656,7 +656,7 @@ async function main(): Promise<void> {
   assert.ok(helperSource.includes('CLIENT_BUSINESS_DATE_PAST_DAYS = 7'), 'the past bound mirrors the P2 7-day window');
   for (const file of [
     '../../src/modules/treasury/treasury.service.ts',
-    '../../src/modules/purchases/services/goods-receipt.service.ts',
+    '../../src/modules/purchases/services/goods-receipt-create.service.ts',
     '../../src/modules/sales/services/sales-orders.service.ts',
     '../../src/modules/sales/services/customer-installments.service.ts',
     '../../src/modules/accounting/services/ar-collections.service.ts',
