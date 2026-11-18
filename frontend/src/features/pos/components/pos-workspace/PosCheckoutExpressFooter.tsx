@@ -4,7 +4,7 @@ import { UserIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon } from '@/shared/co
 import { toast } from '@/shared/components/system-alert';
 import { canChangePaymentAfterTerminalApproval, isTerminalApprovalLive } from '@/features/pos/components/pos-workspace/pos-terminal-charge-safety';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
-import type { PaymentPreset } from '@/features/pos/components/pos-workspace/PosCheckoutDialogSections';
+import type { PaymentPreset } from '@/features/pos/types/pos.types';
 
 export interface PosCheckoutExpressFooterProps {
   pos: PosWorkspaceState;

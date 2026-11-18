@@ -9,7 +9,7 @@ import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { canChangePaymentAfterTerminalApproval, isTerminalApprovalLive } from '@/features/pos/components/pos-workspace/pos-terminal-charge-safety';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
-import type { PaymentPreset } from '@/features/pos/components/pos-workspace/PosCheckoutDialogSections';
+import type { PaymentPreset } from '@/features/pos/types/pos.types';
 import { PosCheckoutExpressFooter } from './PosCheckoutExpressFooter';
 
 export interface PosCheckoutExpressShortcutHandlers {

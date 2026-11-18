@@ -2,8 +2,6 @@ import { getGlobalSystemCurrency, getSystemCountryCode, isKuwait, isSaudi } from
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { useState, useEffect, useMemo, type FormEvent, type RefObject } from 'react';
 import { posApi } from '@/features/pos/api/pos.api';
-import { Button } from '@/shared/ui/button';
-import { formatCurrency } from '@/lib/format';
 import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 import { shouldTryAlternateTerminalCharge, canChangePaymentAfterTerminalApproval, isTerminalApprovalLive, terminalAuthorizationLabel } from './pos-terminal-charge-safety';
 import { toast } from '@/shared/components/system-alert';
@@ -18,8 +16,8 @@ import {
   type CheckoutPaymentButtonAction,
 } from './pos-checkout-shortcuts';
 import { PosCheckoutPaymentMethods } from '@/features/pos/components/pos-workspace/pos-checkout-payment/PosCheckoutPaymentMethods';
-import { PosCheckoutPaymentLegs } from '@/features/pos/components/pos-workspace/pos-checkout/PosCheckoutPaymentLegs';
-import { PosCheckoutDiscountStrip } from '@/features/pos/components/pos-workspace/pos-checkout/PosCheckoutDiscountStrip';
+import { PosCheckoutPaymentLegs } from '@/features/pos/components/pos-workspace/pos-checkout-payment/PosCheckoutPaymentLegs';
+import { PosCheckoutDiscountStrip } from '@/features/pos/components/pos-workspace/pos-checkout-payment/PosCheckoutDiscountStrip';
 import { PosCheckoutTerminalBanner } from '@/features/pos/components/pos-workspace/pos-checkout-payment/PosCheckoutTerminalBanner';
 import { PosCheckoutApprovalChargesTip } from '@/features/pos/components/pos-workspace/pos-checkout-payment/PosCheckoutApprovalChargesTip';
 import { PosCheckoutPaymentSummary } from '@/features/pos/components/pos-workspace/pos-checkout-payment/PosCheckoutPaymentSummary';
