@@ -1,7 +1,7 @@
 # Module Public Doors — Inventory
 
 - Grounded at HEAD `fc3334c46` (file #20 repair). Method: the same static import scan as `zs-module-isolation-map.md` and `backend/test/critical/module-boundary.spec.ts` (INV-MODULE-BOUNDARY-BASELINE): every static import statement in a non-spec source file counts once; comments stripped first.
-- Pinned coupling at this HEAD: backend 71 edges / 649 statements, frontend 57 edges / 133 statements, 7 backend + 12 frontend bidirectional pairs, 79 external imports into `accounting-posting.service`, 15 into `accounting-tenant-foundation.service`.
+- Pinned coupling at this HEAD: backend 71 edges / 650 statements (re-pinned from 649 by the residual-rounding-deposits package: one new import-sales->accounting statement, the tenant base-currency lookup), frontend 57 edges / 133 statements, 7 backend + 12 frontend bidirectional pairs, 79 external imports into `accounting-posting.service`, 15 into `accounting-tenant-foundation.service`.
 - Backend modules: 37. Modules with inbound imports today: 20. Modules with no inbound imports today: 17 — their intended door is their Nest module file only, until a caller needs more.
 - Frontend features: 40. Features with inbound imports today: 20. Features with a public `index.ts`: 26 of 40; missing it: 14 (listed in §3).
 - `Imported by` lists the files other modules actually import today, with the importing module and statement count. That list IS the de-facto door today. Phase 1 is decided (2026-11-18): the 8 helper/util files once flagged in this inventory are all confirmed public doors — each is a shared function surface whose cross-module importers are legitimate and whose owning module is correct (reasons per door in section 4). No file is hidden by this document.

@@ -283,6 +283,7 @@
     "test/critical/sale-movement-unit-cost.spec.ts",
     "test/critical/direct-mutation-allowlist.spec.ts",
     "test/critical/job-queue-dead-timer-removed.spec.ts",
-    "test/critical/import-deposit-amount-3dp.spec.ts"
+    "test/critical/import-deposit-amount-3dp.spec.ts",
+    "test/critical/residual-rounding-deposits.spec.ts"
   ]
 }

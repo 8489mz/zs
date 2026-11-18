@@ -6,6 +6,7 @@ import { Database } from '../../../database/database.types';
 import { RecordContainerDepositDto, RecordContainerReturnRefundDto } from '../dto/import-sales.dto';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { resolveFxRate } from '../../accounting/fx-rate-resolution';
 
 /**
@@ -31,10 +32,15 @@ import { resolveFxRate } from '../../accounting/fx-rate-resolution';
  * in the facade, so the guard's facade FX pin drops to 0 at this
  * slice's merge; extending the guard to count across the slice files
  * is merge-owned, not part of this patch.
- * Money note (pre-existing, byte-preserved): the refund JE posts the
- * toFixed(2)-rounded settled total directly (credit: callSettled) and
- * the rounded totals persist to the deposit row; the autopsy sheet's
- * toFixed(2) sites are display/summary values only.
+ * Money note: the refund JE posts the settled total rounded at the
+ * tenant base currency's book digits (credit: callSettled) and the
+ * rounded totals persist to the deposit row and the refund event;
+ * the autopsy sheet's money sites round at the same tenant digits.
+ * On a 2dp tenant the figures are identical to the old hardcoded
+ * 2dp rounding; on a 3dp tenant the journal, the deposit row and
+ * the event all carry the third decimal (the deposit columns were
+ * widened to scale 3 first, so nothing is truncated on write).
+ * The ROI percentage stays at 2dp: it is a percentage, not money.
  * replayContainerDepositOrThrow is public here (private in the facade
  * delegate) — the facade, a different class, cannot call a private
  * slice method (tsc TS2341); the facade delegate stays private, so
@@ -271,7 +277,18 @@ export class ImportContainerDepositsService {
       const prevRefunded = Number(deposit.refunded_amount_egp || 0);
       const prevDeductions = Number(deposit.deductions_amount_egp || 0);
       const totalDeposit = Number(deposit.deposit_amount_egp);
-      const remainingDeposit = Number((totalDeposit - prevRefunded - prevDeductions).toFixed(2));
+      // Book digits: the refund settles at the tenant base
+      // currency's digits, resolved fail-closed on this trx handle
+      // (a settings / rates mismatch throws before any write), so a
+      // 3dp tenant's journal, deposit row and refund event all carry
+      // the third decimal instead of the old hardcoded 2dp cut.
+      // This slice's db is Kysely<any> (the facade passes its own
+      // untyped handle); the cast to the typed executor is the same
+      // shape the profit-report slice uses for its executor, and
+      // the trx still runs the settings/rates reads inside the
+      // refund transaction.
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(trx as unknown as Kysely<Database>, tenantId));
+      const remainingDeposit = roundMoney(totalDeposit - prevRefunded - prevDeductions, digits);
 
       if (deposit.refund_status === 'refunded' || deposit.refund_status === 'forfeited' || remainingDeposit <= 0.001) {
         throw new BadRequestException('تمت تسوية واسترداد تأمين هذه الحاوية بالكامل مسبقاً، ولا يمكن تكرار الاسترداد.');
@@ -279,7 +296,7 @@ export class ImportContainerDepositsService {
 
       const currentRefund = Number(dto.refundedAmountEgp);
       const currentDeductions = Number(dto.deductionsAmountEgp || 0);
-      const callSettled = Number((currentRefund + currentDeductions).toFixed(2));
+      const callSettled = roundMoney(currentRefund + currentDeductions, digits);
 
       if (callSettled <= 0) {
         throw new BadRequestException('يجب تحديد مبلغ استرداد أو خصم أكبر من الصفر لتسوية التأمين.');
@@ -287,13 +304,13 @@ export class ImportContainerDepositsService {
 
       if (callSettled > remainingDeposit + 0.01) {
         throw new BadRequestException(
-          `مجموع الاسترداد والخصومات (${callSettled.toFixed(2)}) يتجاوز الرصيد المتبقي من التأمين الأصلي (${remainingDeposit.toFixed(2)}).`
+          `مجموع الاسترداد والخصومات (${callSettled.toFixed(digits)}) يتجاوز الرصيد المتبقي من التأمين الأصلي (${remainingDeposit.toFixed(digits)}).`
         );
       }
 
-      const newTotalRefunded = Number((prevRefunded + currentRefund).toFixed(2));
-      const newTotalDeductions = Number((prevDeductions + currentDeductions).toFixed(2));
-      const newRemaining = Number((totalDeposit - newTotalRefunded - newTotalDeductions).toFixed(2));
+      const newTotalRefunded = roundMoney(prevRefunded + currentRefund, digits);
+      const newTotalDeductions = roundMoney(prevDeductions + currentDeductions, digits);
+      const newRemaining = roundMoney(totalDeposit - newTotalRefunded - newTotalDeductions, digits);
 
       let newStatus = 'partially_refunded';
       if (newRemaining <= 0.01) {
@@ -494,6 +511,12 @@ export class ImportContainerDepositsService {
     // shipment or live-registered. The flag stays in the response so
     // existing consumers keep their shape.
     const exchangeRateAssumed = false;
+    // Book digits for the sheet below: every money figure on this
+    // sheet rounds at the tenant base currency's digits (the same
+    // canonical wiring as the refund path above), never a hardcoded
+    // 2dp — the architecture guard dispositions every hardcoded 2dp
+    // rounding site in this file.
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const factoryTotalUsd = items.reduce((acc, i) => acc + Number(i.quantity) * Number(i.factory_unit_price_usd), 0);
     const factoryTotalEgp = factoryTotalUsd * exRate;
     // Factory cost on the B/L (ordered) quantity is what the
@@ -569,8 +592,9 @@ export class ImportContainerDepositsService {
               .where('account_id', 'in', inventoryAccountIds)
               .execute()
           : [];
-        postedLandedValueEgp = Number(
-          invLines.reduce((sum, l) => sum + Number(l.debit || 0) - Number(l.credit || 0), 0).toFixed(2),
+        postedLandedValueEgp = roundMoney(
+          invLines.reduce((sum, l) => sum + Number(l.debit || 0) - Number(l.credit || 0), 0),
+          digits,
         );
       }
     }
@@ -581,7 +605,7 @@ export class ImportContainerDepositsService {
       const state = String((e as any).capitalization_state || 'unknown');
       const slot = brokerByState.get(state) || { count: 0, amountEgp: 0 };
       slot.count += 1;
-      slot.amountEgp = Number((slot.amountEgp + Number((e as any).amount_egp || 0)).toFixed(2));
+      slot.amountEgp = roundMoney(slot.amountEgp + Number((e as any).amount_egp || 0), digits);
       brokerByState.set(state, slot);
       if ((e as any).is_verified) brokerVerifiedCount += 1;
       else brokerUnverifiedCount += 1;
@@ -592,13 +616,13 @@ export class ImportContainerDepositsService {
       .where('tenant_id', '=', tenantId)
       .where('shipment_id', '=', shipmentId)
       .execute();
-    const brokerCapitalisedInLandedEgp = Number(
+    const brokerCapitalisedInLandedEgp = roundMoney(
       brokerLinks
         .filter((l) => ['folded', 'consumed', 'revalued'].includes(String(l.state)))
-        .reduce((sum, l) => sum + Number(l.amount_egp || 0), 0)
-        .toFixed(2),
+        .reduce((sum, l) => sum + Number(l.amount_egp || 0), 0),
+      digits,
     );
-    const brokerExpensedEgp = Number((brokerByState.get('expensed')?.amountEgp || 0).toFixed(2));
+    const brokerExpensedEgp = roundMoney(brokerByState.get('expensed')?.amountEgp || 0, digits);
 
     const allocations = await this.db
       .selectFrom('import_sale_allocations')
@@ -680,7 +704,7 @@ export class ImportContainerDepositsService {
       return {
         ...item,
         unit_landed_cost_egp: unitLandedCostEgp,
-        total_landed_cost_egp: roundMoney(unitLandedCostEgp * receivedQty, currencyMoneyDigits('EGP')),
+        total_landed_cost_egp: roundMoney(unitLandedCostEgp * receivedQty, digits),
       };
     });
 
@@ -758,52 +782,52 @@ export class ImportContainerDepositsService {
         exchangeRate: exRate,
         exchangeRateSource,
         exchangeRateAssumed,
-        factoryTotalUsd: Number(factoryTotalUsd.toFixed(2)),
-        factoryTotalEgp: Number(factoryTotalEgp.toFixed(2)),
+        factoryTotalUsd: roundMoney(factoryTotalUsd, digits),
+        factoryTotalEgp: roundMoney(factoryTotalEgp, digits),
         factoryTotalBasis: 'bill_of_lading_quantity',
-        factoryTotalReceivedUsd: Number(factoryTotalReceivedUsd.toFixed(2)),
-        factoryTotalReceivedEgp: Number(factoryTotalReceivedEgp.toFixed(2)),
-        shippingEgp: Number(shippingEgp.toFixed(2)),
-        customsEgp: Number(customsEgp.toFixed(2)),
-        transportEgp: Number(transportEgp.toFixed(2)),
-        demurrageEgp: Number(demurrageEgp.toFixed(2)),
-        lateExpensesEgp: Number(lateExpensesEgp.toFixed(2)),
-        insuranceEgp: roundMoney(insuranceEgp, currencyMoneyDigits('EGP')),
-        dutyEgp: roundMoney(dutyEgp, currencyMoneyDigits('EGP')),
-        vatEgp: roundMoney(vatEgp, currencyMoneyDigits('EGP')),
-        totalLandedCostEgp: Number(totalLandedCostEgp.toFixed(2)),
+        factoryTotalReceivedUsd: roundMoney(factoryTotalReceivedUsd, digits),
+        factoryTotalReceivedEgp: roundMoney(factoryTotalReceivedEgp, digits),
+        shippingEgp: roundMoney(shippingEgp, digits),
+        customsEgp: roundMoney(customsEgp, digits),
+        transportEgp: roundMoney(transportEgp, digits),
+        demurrageEgp: roundMoney(demurrageEgp, digits),
+        lateExpensesEgp: roundMoney(lateExpensesEgp, digits),
+        insuranceEgp: roundMoney(insuranceEgp, digits),
+        dutyEgp: roundMoney(dutyEgp, digits),
+        vatEgp: roundMoney(vatEgp, digits),
+        totalLandedCostEgp: roundMoney(totalLandedCostEgp, digits),
         landedCostBasis: postedLandedValueEgp !== null ? 'posted_receipt_journal' : 'shipment_field_estimates',
         postedLandedValueEgp,
         avgCostPerUnitEgp: Number(avgCostPerUnit.toFixed(4)),
       },
       salesAndInventory: {
-        invoicedSalesEgp: Number(actualInvoicedSalesEgp.toFixed(2)),
-        grossSalesEgp: Number(actualInvoicedSalesEgp.toFixed(2)),
-        inTransitPreordersRevenue: Number(preordersTotalRevenue.toFixed(2)),
-        depositsCollectedEgp: Number(preordersDepositsCollected.toFixed(2)),
-        refundedPreorderDepositsEgp: Number(preordersDepositsRefunded.toFixed(2)),
-        unearnedPreorderLiabilityEgp: Number(preordersDepositsCollected.toFixed(2)),
+        invoicedSalesEgp: roundMoney(actualInvoicedSalesEgp, digits),
+        grossSalesEgp: roundMoney(actualInvoicedSalesEgp, digits),
+        inTransitPreordersRevenue: roundMoney(preordersTotalRevenue, digits),
+        depositsCollectedEgp: roundMoney(preordersDepositsCollected, digits),
+        refundedPreorderDepositsEgp: roundMoney(preordersDepositsRefunded, digits),
+        unearnedPreorderLiabilityEgp: roundMoney(preordersDepositsCollected, digits),
         liabilityBasis: 'deposits_held_for_open_bookings_net_of_refunds',
-        unsoldStockLandedValueEgp: Number(unsoldStockLandedValueEgp.toFixed(2)),
+        unsoldStockLandedValueEgp: roundMoney(unsoldStockLandedValueEgp, digits),
         lotsCount: lots.length,
       },
       profitability: {
-        cogsSoldUnitsEgp: Number(cogsSoldUnitsEgp.toFixed(2)),
-        realizedGrossTradingMarginEgp: Number(realizedGrossTradingMarginEgp.toFixed(2)),
+        cogsSoldUnitsEgp: roundMoney(cogsSoldUnitsEgp, digits),
+        realizedGrossTradingMarginEgp: roundMoney(realizedGrossTradingMarginEgp, digits),
         marginBasis:
           'gross_trading_margin_excluding_operating_costs_broker_expensed_fx_variance_shortage_and_deposit_deductions',
         roiPercentage: Number(roiPercentage.toFixed(2)),
         roiBasis: 'gross_trading_margin_divided_by_estimated_total_landed_cost',
       },
       inTransitPreorders: {
-        totalBookingsEgp: Number(preordersTotalRevenue.toFixed(2)),
-        depositsCollectedEgp: Number(preordersDepositsCollected.toFixed(2)),
-        unearnedLiabilityEgp: Number(preordersDepositsCollected.toFixed(2)),
+        totalBookingsEgp: roundMoney(preordersTotalRevenue, digits),
+        depositsCollectedEgp: roundMoney(preordersDepositsCollected, digits),
+        unearnedLiabilityEgp: roundMoney(preordersDepositsCollected, digits),
         preordersCount: preorders.length,
       },
       liabilities: {
         pendingContainerDepositsCount: pendingDeposits.length,
-        totalPendingDepositEgp: Number(totalPendingDepositEgp.toFixed(2)),
+        totalPendingDepositEgp: roundMoney(totalPendingDepositEgp, digits),
         brokerExpensesCount: brokerExpenses.length,
         brokerExpensesByState: Object.fromEntries(brokerByState),
         brokerVerifiedCount,

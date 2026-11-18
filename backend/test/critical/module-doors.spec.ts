@@ -102,7 +102,7 @@ async function main(): Promise<void> {
   }
 
   // 4. The doc states the pinned P0-1 coupling counts.
-  assert.ok(doc.includes('71 edges / 649 statements'), 'docs/MODULE_DOORS.md must state the pinned backend coupling (71 edges / 649 statements)');
+  assert.ok(doc.includes('71 edges / 650 statements'), 'docs/MODULE_DOORS.md must state the pinned backend coupling (71 edges / 650 statements)');
   assert.ok(doc.includes('57 edges / 133 statements'), 'docs/MODULE_DOORS.md must state the pinned frontend coupling (57 edges / 133 statements)');
   assert.ok(doc.includes('79 external imports into `accounting-posting.service`'), 'docs/MODULE_DOORS.md must state the pinned posting-service cap');
   assert.ok(doc.includes('15 into `accounting-tenant-foundation.service`'), 'docs/MODULE_DOORS.md must state the pinned foundation-service cap');
