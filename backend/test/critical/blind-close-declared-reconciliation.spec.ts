@@ -77,10 +77,11 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE supplier_payments (id bigint PRIMARY KEY, tenant_id text, supplier_id bigint, created_by bigint, payment_date timestamptz, created_at timestamptz, branch_id bigint, location_id bigint, payment_channel text, amount numeric, note text);
     CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, name text);
     CREATE TABLE customer_payments (id bigint PRIMARY KEY, tenant_id text, created_by bigint, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, payment_channel text, amount numeric, note text);
-    CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, amount numeric, title text, note text);
+    CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, amount numeric, title text, note text, cancelled_at timestamptz, cancelled_by bigint, cancel_reason text);
     CREATE TABLE treasury_transactions (id bigserial PRIMARY KEY, tenant_id text, account_id text, txn_type text, amount numeric, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, payment_channel text, return_document_id bigint, request_key text, created_at timestamptz DEFAULT NOW());
     CREATE TABLE delivery_representatives (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, vehicle_plate text, van_location_id bigint, is_van_rep boolean DEFAULT false, updated_at timestamptz DEFAULT NOW());
-    CREATE TABLE cashier_shifts (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, opened_by bigint, status text, branch_id bigint, location_id bigint, opening_cash numeric, opening_note text, expected_cash numeric, counted_cash numeric, variance numeric, close_note text, closed_by bigint, created_at timestamptz DEFAULT NOW(), closed_at timestamptz, updated_at timestamptz, variance_resolution text, variance_journal_entry_id bigint, variance_charged_to_user_id bigint, variance_approved_by bigint, variance_approved_at timestamptz);
+    CREATE TABLE cashier_shifts (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, opened_by bigint, status text, branch_id bigint, location_id bigint, opening_cash numeric, opening_note text, expected_cash numeric, counted_cash numeric, variance numeric, close_note text, closed_by bigint, created_at timestamptz DEFAULT NOW(), closed_at timestamptz, updated_at timestamptz, variance_resolution text, variance_journal_entry_id bigint, variance_charged_to_user_id bigint, variance_approved_by bigint, variance_approved_at timestamptz, terminal_code text);
+    CREATE TABLE held_sales (id bigint PRIMARY KEY, tenant_id text, account_id text, table_number text, order_type text, customer_id bigint, payment_type text, payment_channel text, paid_amount numeric DEFAULT 0, cash_amount numeric DEFAULT 0, card_amount numeric DEFAULT 0, discount numeric DEFAULT 0, delivery_fee numeric DEFAULT 0, note text, search text, price_type text, branch_id bigint, location_id bigint, created_by bigint, delivery_rep_id bigint, collection_status text, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
   `);
   return { pg, db };
 }
@@ -165,19 +166,22 @@ async function main(): Promise<void> {
     assert.equal(stored.details.card[0].amount, 100.005);
     assert.equal(stored.reconciliation, undefined);
 
-    const review = await drawer.reviewCashierShiftClose(1, { note: 'reviewed' }, managerAuth);
+    const review = await drawer.reviewCashierShiftClose(1, { decision: 'approve', note: 'reviewed' }, managerAuth);
     const reconciliation = review.reconciliation as any;
     assert.deepEqual(reconciliation.card, {
       declared: 100.005, computed: 105.001, delta: -4.996,
       declaredCount: 1, computedCount: 1, countDelta: 0,
+      detailTotal: 100.005, detailDelta: 0,
     });
     assert.deepEqual(reconciliation.wallet, {
       declared: 50.002, computed: 50.002, delta: 0,
       declaredCount: 1, computedCount: 1, countDelta: 0,
+      detailTotal: 50.002, detailDelta: 0,
     });
     assert.deepEqual(reconciliation.instapay, {
       declared: 0, computed: 0, delta: 0,
       declaredCount: 0, computedCount: 0, countDelta: 0,
+      detailTotal: 0, detailDelta: 0,
     });
 
     const persisted = await readCloseNote(db, 1);
@@ -206,10 +210,11 @@ async function main(): Promise<void> {
     await anyDb.insertInto('cashier_shifts').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'SHIFT-2', opened_by: 2, status: 'pending_review', branch_id: null, location_id: null, opening_cash: 0, expected_cash: 0, counted_cash: 0, variance: 0, close_note: legacyNote, created_at: '2026-02-01T00:00:00.000Z', closed_at: '2026-02-01T20:00:00.000Z' }).execute();
     await anyDb.insertInto('sales').values({ id: 3, tenant_id: TENANT, account_id: ACCOUNT, status: 'posted', created_by: 2, created_at: '2026-02-01T10:00:00.000Z', total: 100.01, paid_amount: 100.01, payment_channel: 'card' }).execute();
     await anyDb.insertInto('sale_payments').values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 3, payment_channel: 'card', amount: 100.01 }).execute();
-    const legacyReview = await drawer.reviewCashierShiftClose(2, { note: 'legacy' }, managerAuth);
+    const legacyReview = await drawer.reviewCashierShiftClose(2, { decision: 'approve', note: 'legacy' }, managerAuth);
     assert.deepEqual((legacyReview.reconciliation as any).card, {
       declared: 100.01, computed: 100.01, delta: 0,
       declaredCount: 1, computedCount: 1, countDelta: 0,
+      detailTotal: 100.01, detailDelta: 0,
     });
 
     // Invariant pin: the entry exists exactly once and is last.
