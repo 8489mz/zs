@@ -43,7 +43,6 @@ import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
 import { TenantSubscriptionModule } from './modules/tenant-subscription/tenant-subscription.module';
 import { StorefrontModule } from './modules/storefront/storefront.module';
 import { AiCopilotModule } from './modules/ai-copilot/ai-copilot.module';
-import { JobQueueModule } from './common/queue/job-queue.module';
 import { BostaModule } from './modules/bosta/bosta.module';
 import { GccShippingModule } from './modules/gcc-shipping/gcc-shipping.module';
 import { CrmModule } from './modules/crm/crm.module';
@@ -55,7 +54,6 @@ import { ContractingModule } from './modules/contracting/contracting.module';
   imports: [
     ContractingModule,
     ApprovalsModule,
-    JobQueueModule,
     AppConfigModule,
     ConfigAccessModule,
     LoggingModule,

@@ -1,7 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { ZatcaPhase2Service, ZatcaInvoiceData } from '../src/modules/tax-integration/services/zatca/zatca-phase2.service';
 import { PosTerminalService } from '../src/modules/sales/services/pos-terminal.service';
-import { JobQueueService } from '../src/common/queue/job-queue.service';
 
 async function runTests() {
   console.log('--- Starting Comprehensive New Features Audit ---');
@@ -137,38 +136,6 @@ async function runTests() {
   assert.equal(cancelResult.status, 'cancelled', 'Cancelled transaction must have status cancelled');
 
   console.log('✓ POS Terminal tests passed successfully');
-
-  // ==========================================
-  // Test 3: Background Job Queue Engine
-  // ==========================================
-  console.log('Testing Background Job Queue Engine...');
-  const jobQueue = new JobQueueService();
-  jobQueue.onModuleInit();
-
-  let jobExecuted = false;
-  let receivedPayload: any = null;
-
-  jobQueue.registerHandler('TEST_JOB', async (job) => {
-    jobExecuted = true;
-    receivedPayload = job.payload;
-    return { processed: true, count: job.payload.count };
-  });
-
-  const queuedJob = await jobQueue.enqueue('TEST_JOB', { message: 'Hello Background Queue', count: 42 });
-  assert.equal(queuedJob.status, 'queued', 'Enqueued job should start as queued');
-
-  // Wait for processor
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-
-  const updatedJob = jobQueue.getJob(queuedJob.id);
-  assert.ok(updatedJob, 'Job must exist in queue');
-  assert.equal(jobExecuted, true, 'Job handler must have executed');
-  assert.equal(receivedPayload?.count, 42, 'Payload must be delivered intact');
-  assert.equal(updatedJob?.status, 'completed', 'Job should be completed');
-  assert.equal(updatedJob?.progress, 100, 'Job progress should be 100%');
-
-  jobQueue.onModuleDestroy();
-  console.log('✓ Job Queue Engine tests passed successfully');
 
   console.log('--- ALL COMPREHENSIVE NEW FEATURE TESTS PASSED! ---');
 }

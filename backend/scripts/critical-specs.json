@@ -281,6 +281,7 @@
     "test/critical/docs-index.spec.ts",
     "test/critical/stock-movements-archive-residual-row.spec.ts",
     "test/critical/sale-movement-unit-cost.spec.ts",
-    "test/critical/direct-mutation-allowlist.spec.ts"
+    "test/critical/direct-mutation-allowlist.spec.ts",
+    "test/critical/job-queue-dead-timer-removed.spec.ts"
   ]
 }
