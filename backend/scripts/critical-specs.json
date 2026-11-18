@@ -52,6 +52,8 @@
     "test/critical/phase11-saas-platform.spec.ts",
     "test/critical/phase12-billing-security-hardening.spec.ts",
     "test/critical/storefront-payment-webhooks.spec.ts",
+    "test/critical/storefront-gateway-amounts.spec.ts",
+    "test/critical/storefront-paymob-capture.spec.ts",
     "test/critical/storefront-order-access.spec.ts",
     "test/critical/storefront-order-entitlement.spec.ts",
     "test/critical/store-public-url.spec.ts",
