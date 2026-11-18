@@ -15,9 +15,9 @@ import { TransactionHelper } from '../../database/helpers/transaction.helper';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { generatePhoneSearchVariants, validateAndNormalizePhone } from '../../core/utils/phone-utils';
-import { resolveUserLimit, isUserLimitReached } from './engines/user-plan-limit.engine';
 import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
 import { getPermissionArabicLabel } from './permission-labels';
+import { UsersPlanLimitService } from './users-plan-limit.service';
 
 function parseStoredPermissions(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.map(String);
@@ -52,12 +52,16 @@ function roleRank(role: unknown): number {
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
+  private readonly planLimitService: UsersPlanLimitService;
+
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly tx: TransactionHelper,
     private readonly audit: AuditService,
     private readonly authCache: AuthCacheService = new AuthCacheService(),
-  ) {}
+  ) {
+    this.planLimitService = new UsersPlanLimitService({ db: this.db });
+  }
 
   private scope(actor: AuthContext) { return requireTenantScope(actor); }
   private tenantPredicate(actor: AuthContext, alias?: string) {
@@ -219,118 +223,7 @@ export class UsersService {
     planName: string;
     planCode: string | null;
   }> {
-    const isPlatformTenant = isPlatformTenantId(tenantId);
-    const isPlatformAdmin = actor.role === 'super_admin' && isPlatformTenant;
-
-    if (isPlatformAdmin) {
-      return {
-        maxUsers: null,
-        isUnlimited: true,
-        isLimitReached: false,
-        activeUsersCount,
-        planName: 'مالك المنظومة (غير مقيد)',
-        planCode: 'PLATFORM',
-      };
-    }
-
-    const tenant = await this.db
-      .selectFrom('tenants')
-      .select(['id', 'plan_id', 'status'])
-      .where('id', '=', tenantId)
-      .executeTakeFirst();
-
-    // 1. فحص الاشتراك النشط من tenant_subscriptions مربوطاً بـ saas_plans
-    let activeSub: any;
-    try {
-      activeSub = await this.db
-        .selectFrom('tenant_subscriptions as s')
-        .leftJoin('saas_plans as p', 'p.id', 's.plan_id')
-        .select([
-          's.id as subscription_id',
-          's.plan_id as sub_plan_id',
-          'p.id as saas_plan_id',
-          'p.max_users',
-          'p.code as plan_code',
-          'p.name as plan_name',
-          'p.feature_plan_id',
-        ])
-        .where('s.tenant_id', '=', tenantId)
-        .where('s.status', 'in', ['active', 'past_due'])
-        .orderBy('s.created_at', 'desc')
-        .executeTakeFirst();
-    } catch {
-      activeSub = undefined;
-    }
-
-    // 2. قراءة الباقة من saas_plans بالربط: tenants.plan_id ⇄ saas_plans.code أو feature_plan_id
-    let planFromDb: { id: number; max_users: number | null; code: string; name: string; feature_plan_id: string | null } | undefined;
-    if (tenant?.plan_id) {
-      const cleanPlan = tenant.plan_id.trim();
-      const codeUpper = cleanPlan.replace(/^plan_/, '').toUpperCase();
-      try {
-        planFromDb = await this.db
-          .selectFrom('saas_plans')
-          .select(['id', 'max_users', 'code', 'name', 'feature_plan_id'])
-          .where((eb) =>
-            eb.or([
-              eb('feature_plan_id', '=', cleanPlan),
-              eb('code', '=', codeUpper),
-              eb(sql<string>`LOWER(code)`, '=', cleanPlan.toLowerCase()),
-            ]),
-          )
-          .where('is_active', '=', true)
-          .executeTakeFirst();
-      } catch {
-        planFromDb = undefined;
-      }
-    }
-
-    // مزامنة علاجية تلقائية إذا كان الاشتراك معلقاً على باقة قديمة تختلف عن باقة المنشأة الحالية
-    if (activeSub && planFromDb && activeSub.sub_plan_id !== planFromDb.id) {
-      try {
-        await this.db
-          .updateTable('tenant_subscriptions')
-          .set({
-            plan_id: planFromDb.id,
-            updated_at: new Date(),
-          })
-          .where('id', '=', activeSub.subscription_id)
-          .execute();
-
-        activeSub.max_users = planFromDb.max_users;
-        activeSub.plan_code = planFromDb.code;
-        activeSub.plan_name = planFromDb.name;
-        activeSub.feature_plan_id = planFromDb.feature_plan_id;
-        activeSub.sub_plan_id = planFromDb.id;
-      } catch (err) {
-        this.logger.warn(`Failed to auto-heal tenant subscription for ${tenantId}: ${err}`);
-      }
-    }
-
-    const limit = resolveUserLimit({
-      hasActiveSubscription: Boolean(activeSub),
-      subscriptionMaxUsers: activeSub?.max_users,
-      subscriptionPlanCode: activeSub?.plan_code,
-      subscriptionFeaturePlanId: activeSub?.feature_plan_id,
-      planFoundInDb: Boolean(planFromDb),
-      planFromDbMaxUsers: planFromDb?.max_users,
-      tenantPlanId: tenant?.plan_id,
-      isTrial: tenant?.status === 'trial',
-    });
-
-    const isUnlimited = limit === null;
-    const isLimitReached = !isUnlimited && activeUsersCount >= limit;
-    const planName = planFromDb?.name || activeSub?.plan_name || (tenant?.status === 'trial' ? 'فترة تجريبية' : 'الافتراضية');
-    const planCode = planFromDb?.code || activeSub?.plan_code || null;
-
-    return {
-      maxUsers: limit,
-      isUnlimited,
-      isLimitReached,
-      activeUsersCount,
-      planName,
-      planCode,
-    };
+    return this.planLimitService.getPlanLimitForTenant(tenantId, actor, activeUsersCount);
   }
 
   async listUsers(query: Record<string, unknown>, actor: AuthContext): Promise<Record<string, unknown>> {
