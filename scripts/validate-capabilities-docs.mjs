@@ -55,7 +55,8 @@ for (const m of modules) if (!registerModules.has(m)) errors.push('Module missin
 // Historical capabilities/roadmap bodies intentionally retain older unverified references.
 const navDocs = [
   'SYSTEM_CAPABILITIES.md', 'SYSTEM_MODES_AND_TIERS_MATRIX.md',
-  'docs/capabilities/README.md', 'docs/reviews/README.md'
+  'docs/capabilities/README.md', 'docs/reviews/README.md',
+  'docs/README.md'
 ];
 for (const doc of navDocs) {
   const contents = read(doc);
@@ -70,6 +71,24 @@ for (const doc of navDocs) {
     if (!dest.startsWith(root + path.sep) && dest !== root) errors.push('Link escapes repository in ' + doc + ': ' + url);
     else if (!fs.existsSync(dest)) errors.push('Broken relative link in ' + doc + ': ' + url);
   }
+}
+// Docs index: docs/README.md is the single index over the scattered docs.
+// Every top-level docs/*.md file and every docs/*/ subdirectory must be
+// reachable from it, and the central index must point at it. A new doc
+// that no index links is invisible; this fails loudly instead of
+// silently joining the 16 files that were unlinked before the index.
+const docsIndexPath = path.join(root, 'docs/README.md');
+if (!fs.existsSync(docsIndexPath)) {
+  errors.push('Missing docs index: docs/README.md');
+} else {
+  const docsIndex = fs.readFileSync(docsIndexPath, 'utf8');
+  for (const f of fs.readdirSync(path.join(root, 'docs')).filter((f) => f.endsWith('.md') && f !== 'README.md')) {
+    if (!docsIndex.includes(`](${f})`)) errors.push(`Not linked from docs index: docs/${f}`);
+  }
+  for (const d of fs.readdirSync(path.join(root, 'docs'), { withFileTypes: true }).filter((d) => d.isDirectory())) {
+    if (!docsIndex.includes(`](${d.name}/README.md)`) && !docsIndex.includes(`](${d.name}/)`)) errors.push(`Not linked from docs index: docs/${d.name}/`);
+  }
+  if (!index.includes('](docs/README.md)')) errors.push('Not linked from index: docs/README.md');
 }
 if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }
 else console.log(`Capability docs OK: ${files.size} domains, ${owners.size} modules, ${manifest.sections.length} migration anchors.`);
