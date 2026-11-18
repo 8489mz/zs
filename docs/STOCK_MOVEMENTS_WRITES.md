@@ -1,0 +1,99 @@
+# stock_movements Direct Writes — Inventory
+
+- Grounded at HEAD `fc3334c46` (file #20 repair). Method: line-based scan of `backend/src` (spec/test files and `database/migrations` + `database/legacy-migration` excluded) — a line is a business write iff it calls `insertInto('stock_movements')`, `deleteFrom('stock_movements')`, or `.from('stock_movements').update(...)`. Comments, type declarations, backup table-name lists and reads (`selectFrom` / `.from().select`) are not writes.
+- Total business writes: **67**. One further write exists in migration code (`backend/src/database/legacy-migration/entities/inventory.migration.ts:108`, data migration, not a business write) and is excluded by design.
+- The ledger (`applyStockDelta` in `backend/src/common/utils/location-stock-ledger.ts`) updates balances; each caller still writes its own `stock_movements` row. That split is the risk this inventory exists to close in Phase 1 (single writer).
+- `paired` below is file-level (YES if the same file calls `applyStockDelta` anywhere) — deterministic and reproducible. It does NOT prove the ledger call and the row happen in the same branch: see the notes, especially the archive residual.
+- VERIFIED ASYMMETRY (catalog archive): in `catalog-product-archive.service.ts`, `toggleProductArchive` calls `applyStockDelta` at line 316 for the residual global stock (`-remainingGlobal`) and writes NO `stock_movements` row for that residual — the balance moves, the audit trail has no row for it. Phase 1 must add the row (or prove the residual is covered by the rows at lines 254/290, which are on other branches).
+- Resolves the map's UNVERIFIED maintenance path: `maintenance/maintenance.service.ts:992,1116,1218` are all real inserts (maintenance_consumption / maintenance_return), listed below.
+- This document is pinned by `backend/test/critical/stock-movements-writes.spec.ts` (INV-STOCK-MOVEMENTS-WRITE-INVENTORY): the scanned write count must equal 67 and every `file:line` below must be listed.
+
+## Per-module totals
+
+- `catalog`: 8
+- `delivery-reps`: 1
+- `import-sales`: 3
+- `inventory`: 19
+- `maintenance`: 3
+- `manufacturing`: 5
+- `purchases`: 6
+- `returns`: 3
+- `sales`: 12
+- `settings`: 6
+- `tradein`: 1
+
+## All 67 writes
+
+| file:line | kind | movement_type | paired (file calls applyStockDelta) | notes |
+|---|---|---|---|---|
+| backend/src/modules/catalog/services/catalog-product-archive.service.ts:254 | insert | deduct | yes | Archive deduct; same method also calls applyStockDelta (line 280) — paired per flow, not per branch. |
+| backend/src/modules/catalog/services/catalog-product-archive.service.ts:290 | insert | deduct | yes | Restore deduct; same method also calls applyStockDelta (line 280) — paired per flow, not per branch. |
+| backend/src/modules/catalog/services/catalog-product-fashion.service.ts:355 | insert | transfer | yes |  |
+| backend/src/modules/catalog/services/catalog-product-fashion.service.ts:373 | insert | transfer | yes |  |
+| backend/src/modules/catalog/services/catalog-product-fashion.service.ts:429 | insert | deduct | yes |  |
+| backend/src/modules/catalog/services/catalog-product-fashion.service.ts:543 | insert | expr: stockDelta > 0 ? 'add' : 'deduct' | yes |  |
+| backend/src/modules/catalog/services/catalog-product-fashion.service.ts:640 | insert | opening_balance | yes |  |
+| backend/src/modules/catalog/services/catalog-product-write.service.ts:662 | insert | opening_balance | no | Opening balance: writes product_location_stock directly + this row; file never calls applyStockDelta. Phase 1: route through the ledger or document why direct. |
+| backend/src/modules/delivery-reps/services/van-common.util.ts:57 | insert | expr: params.movementType | yes |  |
+| backend/src/modules/import-sales/services/import-container-preorders.service.ts:675 | insert | sale | yes |  |
+| backend/src/modules/import-sales/services/import-receipt-posting.service.ts:339 | insert | import_receipt | yes |  |
+| backend/src/modules/import-sales/services/import-receipt-posting.service.ts:701 | insert | import_receipt_reversal | yes |  |
+| backend/src/modules/inventory/services/inventory-adjustment.service.ts:180 | insert | expr: payload.actionType | yes |  |
+| backend/src/modules/inventory/services/inventory-count.service.ts:537 | insert | via spread: ...buildStockCountPostingMovement | yes |  |
+| backend/src/modules/inventory/services/inventory-count.service.ts:716 | insert | via spread: ...writeModels.stockMovement | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:184 | insert | expr: isFinalIssue ? 'transfer_final_issue' : 'transfer_send' | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:212 | insert | transfer_transit_in | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:364 | insert | transfer_transit_out | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:370 | insert | transfer_receive | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:412 | insert | transfer_transit_loss | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:505 | insert | transfer_transit_cancel | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:510 | insert | transfer_cancel | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:590 | insert | transfer_send | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:595 | insert | transfer_receive | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:667 | insert | transfer_send | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:677 | insert | expr: isUnassignedLink ? 'stock_assign' : 'transfer_receive' | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:770 | insert | transfer_send | yes |  |
+| backend/src/modules/inventory/services/inventory-transfer.service.ts:775 | insert | transfer_receive | yes |  |
+| backend/src/modules/inventory/services/quality-assurance.service.ts:340 | insert | transfer_send | no | File never calls applyStockDelta — balances for QA moves are not routed through the ledger. Phase 1: verify per caller. |
+| backend/src/modules/inventory/services/quality-assurance.service.ts:349 | insert | transfer_receive | no | File never calls applyStockDelta — see above. |
+| backend/src/modules/inventory/services/warehouse-bins.service.ts:111 | insert | expr: args.movementType | no | Shared writer helper (takes movement args, writes one row); the ledger call lives with the caller. Phase 1: verify per caller. |
+| backend/src/modules/maintenance/maintenance.service.ts:992 | insert | maintenance_consumption | yes |  |
+| backend/src/modules/maintenance/maintenance.service.ts:1116 | insert | maintenance_return | yes |  |
+| backend/src/modules/maintenance/maintenance.service.ts:1218 | insert | maintenance_return | yes |  |
+| backend/src/modules/manufacturing/services/manufacturing.service.ts:415 | insert | manufacturing_consumption | yes |  |
+| backend/src/modules/manufacturing/services/manufacturing.service.ts:487 | insert | manufacturing_production | yes |  |
+| backend/src/modules/manufacturing/services/manufacturing.service.ts:516 | insert | manufacturing_byproduct | yes |  |
+| backend/src/modules/manufacturing/services/manufacturing.service.ts:802 | insert | manufacturing_unbuild | yes |  |
+| backend/src/modules/manufacturing/services/manufacturing.service.ts:837 | insert | manufacturing_unbuild_recovery | yes |  |
+| backend/src/modules/purchases/services/goods-receipt-post.service.ts:260 | insert | goods_receipt | yes |  |
+| backend/src/modules/purchases/services/purchases-write-cancel.service.ts:173 | insert | purchase_cancel | yes |  |
+| backend/src/modules/purchases/services/purchases-write-create.service.ts:549 | insert | purchase | yes |  |
+| backend/src/modules/purchases/services/purchases-write-receive-goods.service.ts:196 | insert | purchase_receipt | yes |  |
+| backend/src/modules/purchases/services/purchases-write-update.service.ts:143 | insert | purchase_edit_restore | yes |  |
+| backend/src/modules/purchases/services/purchases-write-update.service.ts:298 | insert | purchase_edit_apply | yes |  |
+| backend/src/modules/returns/returns-purchase-return.service.ts:256 | insert | purchase_return | yes |  |
+| backend/src/modules/returns/returns-sale-return.service.ts:367 | insert | sale_return | yes |  |
+| backend/src/modules/returns/returns-sale-return.service.ts:380 | insert | sale_return | yes |  |
+| backend/src/modules/sales/services/create-sale.service.ts:1572 | insert | sale | yes |  |
+| backend/src/modules/sales/services/create-sale.service.ts:1714 | insert | sale | yes |  |
+| backend/src/modules/sales/services/restaurant-food-waste.service.ts:147 | insert | damaged | yes |  |
+| backend/src/modules/sales/services/restaurant-food-waste.service.ts:243 | insert | damaged | yes |  |
+| backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:660 | insert | sale_edit_reversal | yes |  |
+| backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:699 | insert | sale_edit_reversal | yes |  |
+| backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:1375 | insert | sale_edit | yes |  |
+| backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:1509 | insert | sale_edit | yes |  |
+| backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:2156 | insert | sale_cancel | yes |  |
+| backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:2189 | insert | sale_cancel | yes |  |
+| backend/src/modules/sales/services/sales-restaurant-and-serials.service.ts:443 | insert | manufacturing_consumption | yes |  |
+| backend/src/modules/sales/services/sales-restaurant-and-serials.service.ts:471 | insert | manufacturing_production | yes |  |
+| backend/src/modules/settings/services/settings-demo-data-wipe-tables.ts:95 | delete | (delete) | no | Tenant wipe/demo reset (deleteFrom), not a ledger movement. |
+| backend/src/modules/settings/services/settings-demo-data.service.ts:201 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
+| backend/src/modules/settings/services/settings-demo-data.service.ts:281 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
+| backend/src/modules/settings/services/settings-import.service.ts:615 | insert | opening_balance | yes | Opening balance on import: row written without an applyStockDelta call in this file. Phase 1: route through the ledger or document why direct. |
+| backend/src/modules/settings/services/settings-import.service.ts:1067 | insert | opening_stock | yes | Opening stock on import: see above. |
+| backend/src/modules/settings/settings.service.ts:951 | delete | (delete) | no | Location delete cleanup (deleteFrom), not a ledger movement. |
+| backend/src/modules/tradein/tradein.service.ts:346 | insert | tradein_in | yes |  |
+
+## Reverse asymmetry (screening only, not proven violations)
+
+- 17 `applyStockDelta` calls have no `stock_movements` insert in the same enclosing function (heuristic function detection; multi-line signatures fall back, so treat as candidates for Phase 1, not violations). One is by design: `backend/src/common/utils/location-stock-ledger.ts:382` is inside the ledger helper itself, which never writes rows — its callers do. One is VERIFIED above: `catalog-product-archive.service.ts:316` (residual branch, no row). The remaining 15 are listed in the grounding data (`/tmp/p0-stock-data.json`, `reverse_asymmetry`) and must be checked per call site in Phase 1 before being called violations.
