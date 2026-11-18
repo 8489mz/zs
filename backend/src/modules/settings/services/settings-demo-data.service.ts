@@ -11,6 +11,7 @@ import { SettingsBackupService } from './settings-backup.service';
 import { createPasswordRecord, verifyPassword } from '../../../core/auth/utils/password-hasher';
 import { isPlatformTenantId } from '../../../core/auth/utils/tenant-boundary';
 import { getDemoDataset, listSupportedDemoActivities, mapIndustryToDemoActivity, DemoActivityDataset } from './demo-datasets';
+import { resetTenantStockToZero } from '../../../common/utils/location-stock-ledger';
 
 export interface SeedDemoDataDto {
   activityType?: string;
@@ -205,21 +206,23 @@ export class SettingsDemoDataService {
       await (trx as any).deleteFrom('online_orders').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
       await (trx as any).deleteFrom('sale_line_stock_allocations').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
 
-      // 2. Reset product stock quantities to 0 across all products
+      // 2. Reset product stock quantities to 0 across all products.
+      // INV-DIRECT-MUTATION-ALLOWLIST-LEDGER-ONLY: the bulk zero
+      // lives in the ledger module (resetTenantStockToZero) — this
+      // file holds no direct products.stock_qty write anymore, so
+      // its allowlist entry is removed. Per-product applyStockDelta
+      // deltas would be ceremony here: step 1 above just deleted
+      // the movement trail the deltas would write to, and the
+      // ledger does not touch reserved_qty, which a reset also
+      // zeroes. The wipe's guards are unchanged (admin + password,
+      // auto-backup first).
       const countRes = await trx.selectFrom('products')
         .select(trx.fn.count('id').as('cnt'))
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .executeTakeFirst();
       productsCount = Number(countRes?.cnt || 0);
 
-      await trx.updateTable('products')
-        .set({
-          stock_qty: 0,
-          reserved_qty: 0,
-          updated_at: sql`NOW()`,
-        })
-        .where(sql<boolean>`tenant_id = ${tenantId}`)
-        .execute();
+      await resetTenantStockToZero(trx, tenantId);
 
       // Reset journal entries for sales/purchases/inventory to keep ledger clean
       await trx.deleteFrom('journal_entry_lines').where(sql<boolean>`tenant_id = ${tenantId}`).execute();

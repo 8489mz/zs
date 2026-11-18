@@ -88,13 +88,13 @@
 | backend/src/modules/sales/services/sales-restaurant-and-serials.service.ts:443 | insert | manufacturing_consumption | yes |  |
 | backend/src/modules/sales/services/sales-restaurant-and-serials.service.ts:471 | insert | manufacturing_production | yes |  |
 | backend/src/modules/settings/services/settings-demo-data-wipe-tables.ts:95 | delete | (delete) | no | Tenant wipe/demo reset (deleteFrom), not a ledger movement. |
-| backend/src/modules/settings/services/settings-demo-data.service.ts:201 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
-| backend/src/modules/settings/services/settings-demo-data.service.ts:281 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
+| backend/src/modules/settings/services/settings-demo-data.service.ts:202 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
+| backend/src/modules/settings/services/settings-demo-data.service.ts:284 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
 | backend/src/modules/settings/services/settings-import.service.ts:615 | insert | opening_balance | yes | Opening balance on import: row written without an applyStockDelta call in this file. Phase 1: route through the ledger or document why direct. |
 | backend/src/modules/settings/services/settings-import.service.ts:1067 | insert | opening_stock | yes | Opening stock on import: see above. |
-| backend/src/modules/settings/settings.service.ts:951 | delete | (delete) | no | Location delete cleanup (deleteFrom), not a ledger movement. |
+| backend/src/modules/settings/settings.service.ts:948 | delete | (delete) | no | Location delete cleanup (deleteFrom), not a ledger movement. |
 | backend/src/modules/tradein/tradein.service.ts:346 | insert | tradein_in | yes |  |
 
 ## Reverse asymmetry (screening only, not proven violations)
 
-- 17 `applyStockDelta` calls have no `stock_movements` insert in the same enclosing function (heuristic function detection; multi-line signatures fall back, so treat as candidates for Phase 1, not violations). One is by design: `backend/src/common/utils/location-stock-ledger.ts:382` is inside the ledger helper itself, which never writes rows — its callers do. One is VERIFIED above: `catalog-product-archive.service.ts:316` (residual branch, no row). The remaining 15 are listed in the grounding data (`/tmp/p0-stock-data.json`, `reverse_asymmetry`) and must be checked per call site in Phase 1 before being called violations.
+- 17 `applyStockDelta` calls have no `stock_movements` insert in the same enclosing function (heuristic function detection; multi-line signatures fall back, so treat as candidates for Phase 1, not violations). One is by design: `backend/src/common/utils/location-stock-ledger.ts:409` is inside the ledger helper itself, which never writes rows — its callers do. (Was :382 before the INV-DIRECT-MUTATION-ALLOWLIST-LEDGER-ONLY helper.) One was VERIFIED above and is now FIXED: `catalog-product-archive.service.ts:331` writes the residual row (INV-STOCK-MOVEMENTS-ARCHIVE-ROW; see the FIXED ASYMMETRY note above). The remaining 15 are listed in the grounding data (`/tmp/p0-stock-data.json`, `reverse_asymmetry`) and must be checked per call site in Phase 1 before being called violations.

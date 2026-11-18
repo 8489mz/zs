@@ -337,6 +337,33 @@ async function updateGlobalQty(db: Kysely<Database>, scope: RequiredTenantStockS
     .execute();
 }
 
+/**
+ * INV-DIRECT-MUTATION-ALLOWLIST-LEDGER-ONLY: the single bulk zero
+ * for a tenant-wide stock reset. This is the ONLY bulk direct
+ * products.stock_qty write outside applyStockDelta, and it lives
+ * here — in the ledger module — so the guard's
+ * directMutationAllowList holds exactly this file.
+ *
+ * Why not per-product applyStockDelta deltas: the caller is
+ * SettingsDemoDataService.resetStockBalances, a tenant wipe that
+ * first DELETES the movement trail (and every other transactional
+ * table) after an auto-backup, behind admin + password. Routing
+ * one delta per product through applyStockDelta would write
+ * movement rows the wipe immediately deletes — ceremony with no
+ * trail to keep — and applyStockDelta does not touch
+ * reserved_qty, which a reset must also zero. So the wipe zeroes
+ * both columns in one tenant-scoped statement, owned by the
+ * ledger. Returns the number of products zeroed.
+ */
+export async function resetTenantStockToZero(db: Kysely<Database>, tenantId: string): Promise<number> {
+  const result = await db
+    .updateTable('products')
+    .set({ stock_qty: 0, reserved_qty: 0, updated_at: sql`NOW()` })
+    .where('tenant_id', '=', tenantId)
+    .executeTakeFirst();
+  return Number((result as unknown as { numUpdatedRows?: bigint | number }).numUpdatedRows ?? 0);
+}
+
 export async function previewConsumableStockQty(db: Kysely<Database>, params: StockScopeParams): Promise<number> {
   const state = await loadLockedState(db, params);
   const globalAvailable = roundStockQty(Math.max(0, Number(state.product.stock_qty || 0) - Number(state.product.reserved_qty || 0)));

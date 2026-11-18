@@ -141,12 +141,20 @@ assert(inventoryCountSource.includes('branch_id: session.branch_id'), 'Stock cou
 assert(inventoryCountSource.includes('location_id: session.location_id'), 'Stock count posting must stamp location_id on stock movements');
 
 const forbiddenDirectMutationPattern = /updateTable\((['"])products\1\)\s*\.set\(\{[^}]*\bstock_qty\b[^}]*\}\)/m;
+// INV-DIRECT-MUTATION-ALLOWLIST-LEDGER-ONLY (2026-11-18): the
+// allowlist holds exactly the ledger utility. The four former
+// entries were removed because they were dead or moved into the
+// ledger: maintenance and tradein never had a direct products
+// write (they route through applyStockDelta); the import-sales
+// facade never had one (its slices route through
+// applyStockDelta); settings-demo-data's bulk reset zero now
+// lives in the ledger as the named resetTenantStockToZero helper
+// (a tenant wipe deletes the movement trail by design, so
+// per-product deltas would be ceremony, and applyStockDelta does
+// not touch reserved_qty). Any new direct products.stock_qty
+// write must live in the ledger utility or the guard fails.
 const directMutationAllowList = new Set([
   'src/common/utils/location-stock-ledger.ts',
-  'src/modules/maintenance/maintenance.service.ts',
-  'src/modules/tradein/tradein.service.ts',
-  'src/modules/import-sales/import-sales.service.ts',
-  'src/modules/settings/services/settings-demo-data.service.ts',
 ]);
 
 const tsFiles = walk(path.join(root, 'src')).filter((relPath) => relPath.endsWith('.ts'));

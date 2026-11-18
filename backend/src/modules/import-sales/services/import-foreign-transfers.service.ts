@@ -28,9 +28,11 @@ import { isPaymentMethod, validatePaymentEvidence } from '../engines/import-paym
  * pg DATE key. Both methods are public in the facade, so there is NO
  * visibility change in this slice. The INV comments travel with the
  * methods (INV-IMPORT-SUPPLIER-CREDIT-TRANSFER-REGISTER,
- * INV-IMPORT-PAYMENT-METHODS). The directMutationAllowList entry for
- * the facade is NOT touched: the forbidden stock_qty pattern matches
- * nowhere in the facade on this base, and this slice introduces none.
+ * INV-IMPORT-PAYMENT-METHODS). The directMutationAllowList holds
+ * only the stock ledger (INV-DIRECT-MUTATION-ALLOWLIST-LEDGER-ONLY)
+ * and no entry for the facade: the forbidden stock_qty pattern
+ * matches nowhere in the facade on this base, and this slice
+ * introduces none.
  */
 
 export interface ImportForeignTransfersDeps {

@@ -43,8 +43,10 @@ import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-
  * revalueStockCost is NOT here as a method — it is an imported engine
  * function (accounting/inventory-valuation), called from inside
  * applyImportCostRevaluation; the import travels with the move.
- * directMutationAllowList does not exist on this base (grep-proven),
- * so there is no allowlist entry to move for applySuggestedPrices.
+ * directMutationAllowList holds only the stock ledger
+ * (INV-DIRECT-MUTATION-ALLOWLIST-LEDGER-ONLY), so there is no
+ * allowlist entry for the facade — and none is needed, because
+ * applySuggestedPrices writes no products.stock_qty.
  */
 
 export interface ImportCostRevaluationDeps {
