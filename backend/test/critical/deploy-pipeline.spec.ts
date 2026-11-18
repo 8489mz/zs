@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Guard for the production deploy and backup invariants DEPLOY-1..DEPLOY-8
+// Guard for the production deploy and backup invariants DEPLOY-1..DEPLOY-9
 // (ARCHITECTURE_INVARIANTS.md §2.7, docs/DEPLOYMENT_PIPELINE.md).
 // Each of these was a real production incident on 2026-09-22: the old flow deleted dist and rebuilt
 // on the 1-OCPU server (1754 failed PM2 restarts), and the nightly backup had silently not run for
@@ -56,6 +56,44 @@ function testMigrationOrderAndRollback(): void {
   assert.ok(/if ! check_health; then[\s\S]*?swap_back "\$TARGET_DIR\/backend\/dist"[\s\S]*?exit 1/.test(remote),
     'an unhealthy deploy must swap the previous build back and fail the job');
   assert.ok(/set -euo pipefail/.test(remote), 'the server step must stop on the first error');
+}
+
+// DEPLOY-9: a failed deploy leaves the DATABASE at the pre-deploy schema, not
+// just the folders. Before the fix the remote script rolled only the folders
+// back: a failed migration left already-applied migrations in place, and a
+// health-check failure left the new schema under the old code.
+function testMigrationAutoRevert(): void {
+  const remote = remoteScript();
+  // The pre-deploy schema is recorded BEFORE the migrate step, fail-closed.
+  const listAt = remote.indexOf('npm run --silent migration:list');
+  const migrateAt = remote.indexOf('npm run migration:run');
+  assert.ok(listAt > -1 && migrateAt > -1 && listAt < migrateAt,
+    'the pre-deploy migration list must be captured before migration:run');
+  assert.ok(/PRE_MIGRATION_COUNT/.test(remote) && /refusing to deploy/.test(remote),
+    'a missing or empty pre-deploy migration list must refuse the deploy, not migrate blind');
+  // Migration failure traps into the DB decision instead of aborting with the schema half-applied.
+  assert.ok(/if ! npm run migration:run; then[\s\S]*?restore_db_to_pre_deploy[\s\S]*?exit 1/.test(remote),
+    'a failed migration:run must restore the database to the pre-deploy schema and fail the job');
+  // The revert loop uses one `down` per migration and verifies the count drops:
+  // Kysely's migrateDown silently skips a migration with no `down` and still
+  // exits 0, so an exit code alone proves nothing.
+  assert.ok(/npm run migration:revert/.test(remote), 'the revert loop must call migration:revert');
+  assert.ok(/did not reduce the applied count/.test(remote),
+    'a revert that does not reduce the applied count must fall through to the backup restore');
+  // Last resort: the step-4 hourly backup. zsystems-restore.sh cannot do this
+  // (daily bundles only, and `full` refuses a non-empty database), so the
+  // script restores the encrypted hourly pg_dump itself, with the drill's recipe.
+  assert.ok(/zsystems_hourly_\*\.sql\.gz\.enc/.test(remote), 'the restore source must be the step-4 hourly backup');
+  assert.ok(/openssl enc -d -aes-256-cbc -pbkdf2/.test(remote), 'the hourly backup must be decrypted with the drill recipe');
+  assert.ok(/DROP DATABASE IF EXISTS zsystems_db WITH \(FORCE\)/.test(remote), 'the live database must be dropped before the dump is restored into it');
+  assert.ok(/CREATE DATABASE zsystems_db/.test(remote), 'the live database must be recreated before the dump is restored into it');
+  assert.ok(/grep -c "\^ERROR"/.test(remote), 'errors during the restore must be counted, not ignored');
+  // Health-check failure applies the same DB decision instead of folder-only rollback, then re-checks.
+  assert.ok(/if ! check_health; then[\s\S]*?swap_back "\$TARGET_DIR\/backend\/dist"[\s\S]*?restore_db_to_pre_deploy[\s\S]*?check_health[\s\S]*?exit 1/.test(remote),
+    'an unhealthy deploy must restore the database to the pre-deploy schema, re-check health, and fail the job');
+  // The failure alert still fires: the Telegram step runs on job failure.
+  assert.ok(/if: failure\(\)/.test(workflow) && /TELEGRAM_BOT_TOKEN/.test(workflow),
+    'a failed or rolled-back deploy must still send the Telegram failure alert');
 }
 
 // DEPLOY-4: the commit that passed CI is the one deployed.
@@ -172,13 +210,14 @@ function run(): void {
   testNoBuildOnServer();
   testNoLiveDistDeletion();
   testMigrationOrderAndRollback();
+  testMigrationAutoRevert();
   testDeploysTestedCommit();
   testBackupScript();
   testNoCommittedParUrl();
   testHourlyBackupMode();
   testRestoreDrill();
   // eslint-disable-next-line no-console
-  console.log('deploy-pipeline.spec: all deploy and backup invariants hold (DEPLOY-1..DEPLOY-8)');
+  console.log('deploy-pipeline.spec: all deploy and backup invariants hold (DEPLOY-1..DEPLOY-9)');
 }
 
 try {

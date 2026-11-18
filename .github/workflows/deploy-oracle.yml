@@ -148,8 +148,176 @@ jobs:
           test -s /etc/zsystems/backup-passphrase
           bash "$TARGET_DIR/deploy/scripts/zsystems-backup.sh" hourly
 
+          echo "=== 4b. Record pre-deploy schema state (for the failure trap) ==="
+          # Kysely runs a whole `migration:run` batch in ONE transaction (kysely
+          # 0.28 Migrator wraps the run when the adapter supports transactional
+          # DDL, and this repo never sets disableTransactions), so a failed
+          # migrate normally leaves nothing applied. The trap below still
+          # verifies that instead of assuming it: a migration that escapes the
+          # transaction, or a healthy migrate followed by an unhealthy build,
+          # is what the revert loop and the backup restore are for.
+          PRE_MIGRATIONS_FILE="/tmp/zsystems-pre-deploy-migrations-$DEPLOY_SHA.txt"
+          if ! npm run --silent migration:list > "$PRE_MIGRATIONS_FILE" 2>/dev/null; then
+            echo "Cannot list migrations - refusing to deploy without a known pre-deploy schema"
+            exit 1
+          fi
+          PRE_MIGRATION_COUNT=$(grep -c ': applied$' "$PRE_MIGRATIONS_FILE" || true)
+          if [ "${PRE_MIGRATION_COUNT:-0}" -le 0 ]; then
+            echo "Pre-deploy migration list is empty - refusing to deploy without a known pre-deploy schema"
+            exit 1
+          fi
+          echo "Pre-deploy applied migrations: $PRE_MIGRATION_COUNT"
+          # The step-4 backup is the restore source of last resort. It must be
+          # the file this deploy just took, not an older one.
+          HOURLY_BACKUP=$(find /var/backups/zsystems -maxdepth 1 -type f -name 'zsystems_hourly_*.sql.gz.enc' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
+          if [ -z "$HOURLY_BACKUP" ] || [ ! -r "$HOURLY_BACKUP" ]; then
+            echo "No readable hourly backup from step 4 - refusing to deploy without a restore source"
+            exit 1
+          fi
+          echo "Restore source if the schema cannot be reverted: $HOURLY_BACKUP"
+
+          # --- Failure trap: bring the database back to the pre-deploy schema ---
+          # NOTE: the helpers below never spell out the step-6 reload command
+          # literally (they use $BACKEND_PM2_NAME): the deploy guard pins the
+          # step-6 reload to its position after the folder swap, and a second
+          # literal occurrence would move that pin.
+          BACKEND_PM2_NAME="zsystems-backend"
+
+          applied_migration_count() {
+            # Prints the applied count, or nothing when the list cannot be read
+            # (callers must treat "no number" as "state unknown", never as 0:
+            # 0 would make the revert loop try to undo every migration).
+            local list_output count
+            list_output=$(npm run --silent migration:list 2>/dev/null) || return 1
+            [ -n "$list_output" ] || return 1
+            count=$(printf '%s\n' "$list_output" | grep -c ': applied$' || true)
+            printf '%s\n' "$count"
+          }
+
+          restart_backend() {
+            # Same start-or-reload decision as step 6, usable after a rollback
+            # that may have stopped the backend (the restore path does).
+            # `pm2 reload` on a stopped process fails, so it falls through to
+            # `pm2 restart`, which starts a stopped process.
+            local env_file=""
+            for f in "$TARGET_DIR/backend/.env" "$TARGET_DIR/.env" "/var/www/zsystems/.env"; do
+              if [ -f "$f" ]; then env_file="$f"; break; fi
+            done
+            if pm2 describe "$BACKEND_PM2_NAME" > /dev/null 2>&1; then
+              pm2 reload "$BACKEND_PM2_NAME" --update-env || pm2 restart "$BACKEND_PM2_NAME" --update-env || true
+            elif [ -n "$env_file" ]; then
+              pm2 start dist/main.js --name "$BACKEND_PM2_NAME" --cwd "$TARGET_DIR/backend" --node-args="--env-file=$env_file" || true
+            else
+              pm2 start dist/main.js --name "$BACKEND_PM2_NAME" --cwd "$TARGET_DIR/backend" || true
+            fi
+          }
+
+          revert_migrations_to_pre_deploy() {
+            # Undoes, one `down` per migration, until the applied list is the
+            # pre-deploy list again. Returns:
+            #   0 — schema is back at the pre-deploy list
+            #   1 — schema is verified ahead AND the revert cannot proceed
+            #       (a failed `down`, or a migration without a `down`: Kysely's
+            #       migrateDown silently skips it and still exits 0, so the
+            #       applied count not dropping is the only signal) — the caller
+            #       must fall back to the backup restore
+            #   2 — the schema state cannot be read at all — the caller must
+            #       NOT restore on an unverified state (dropping the database
+            #       on a guess loses data); it must alert and stop instead
+            local current next attempts=0
+            current=$(applied_migration_count) || return 2
+            while [ "$current" -gt "$PRE_MIGRATION_COUNT" ] && [ "$attempts" -lt 100 ]; do
+              attempts=$((attempts + 1))
+              echo "Reverting one migration (applied $current, pre-deploy $PRE_MIGRATION_COUNT, attempt $attempts)..."
+              if ! npm run migration:revert; then
+                echo "migration:revert failed - falling back to backup restore"
+                return 1
+              fi
+              next=$(applied_migration_count) || return 2
+              if [ "$next" -ge "$current" ]; then
+                echo "migration:revert did not reduce the applied count ($current -> $next) - the last migration has no down step; falling back to backup restore"
+                return 1
+              fi
+              current="$next"
+            done
+            if [ "$current" -eq "$PRE_MIGRATION_COUNT" ]; then
+              echo "Schema is back at the pre-deploy migration list ($PRE_MIGRATION_COUNT applied)"
+              return 0
+            fi
+            echo "Revert loop stopped with $current applied migrations (pre-deploy $PRE_MIGRATION_COUNT) - falling back to backup restore"
+            return 1
+          }
+
+          restore_database_from_hourly_backup() {
+            # LAST RESORT ONLY: drops the live database and restores the step-4
+            # hourly dump. Everything written after the backup is lost (hourly
+            # RPO: up to one hour of data), so this runs only when the revert
+            # loop demonstrably cannot restore the pre-deploy list.
+            # zsystems-restore.sh cannot do this: it only restores daily
+            # bundles, and its `full` mode refuses a non-empty database. The
+            # decrypt + verify + restore steps below are the recipe proven by
+            # the weekly restore drill (zsystems-restore-drill.sh §2-§3).
+            local work_dir sql_gz restore_log errors restored_count
+            [ -n "${HOURLY_BACKUP:-}" ] && [ -r "$HOURLY_BACKUP" ] || { echo "No hourly backup file to restore from"; return 1; }
+            work_dir=$(mktemp -d /tmp/zs-deploy-restore-XXXXXX) || return 1
+            sql_gz="$work_dir/dump.sql.gz"
+            restore_log="$work_dir/restore.log"
+            echo "Restoring the database from hourly backup $(basename "$HOURLY_BACKUP") - data written after the backup is lost"
+            if ! openssl enc -d -aes-256-cbc -pbkdf2 -in "$HOURLY_BACKUP" -out "$sql_gz" -pass "file:/etc/zsystems/backup-passphrase"; then
+              echo "Failed to decrypt the hourly backup - manual recovery needed (docs/DISASTER_RECOVERY.md)"
+              rm -rf "$work_dir"
+              return 1
+            fi
+            if ! gzip -cd "$sql_gz" | tail -n 5 | grep -q "PostgreSQL database dump complete"; then
+              echo "Hourly backup is truncated - refusing to restore it; manual recovery needed"
+              rm -rf "$work_dir"
+              return 1
+            fi
+            pm2 stop "$BACKEND_PM2_NAME" || true
+            sudo docker exec zsystems-postgres psql -U postgres -d postgres -q -c "DROP DATABASE IF EXISTS zsystems_db WITH (FORCE)" || { echo "Failed to drop the live database - manual recovery needed"; restart_backend; rm -rf "$work_dir"; return 1; }
+            sudo docker exec zsystems-postgres psql -U postgres -d postgres -q -c "CREATE DATABASE zsystems_db" || { echo "Failed to recreate the live database - manual recovery needed"; restart_backend; rm -rf "$work_dir"; return 1; }
+            gzip -cd "$sql_gz" | sudo docker exec -i zsystems-postgres psql -U postgres -d zsystems_db -q > "$restore_log" 2>&1 || true
+            errors=$(grep -c "^ERROR" "$restore_log" || true)
+            if [ "${errors:-0}" -gt 0 ]; then
+              echo "Restore finished with $errors ERROR lines - first: $(grep -m1 -A1 '^ERROR' "$restore_log" | tr '\n' ' ' | cut -c1-300)"
+              restart_backend
+              rm -rf "$work_dir"
+              return 1
+            fi
+            restored_count=$(applied_migration_count) || { echo "Restored the backup but cannot verify the migration list - manual check needed"; restart_backend; rm -rf "$work_dir"; return 1; }
+            rm -rf "$work_dir"
+            if [ "$restored_count" -ne "$PRE_MIGRATION_COUNT" ]; then
+              echo "Restored backup has $restored_count applied migrations, expected pre-deploy $PRE_MIGRATION_COUNT - manual check needed"
+              restart_backend
+              return 1
+            fi
+            echo "Database restored from the hourly backup ($PRE_MIGRATION_COUNT applied migrations)"
+            restart_backend
+            return 0
+          }
+
+          restore_db_to_pre_deploy() {
+            # One decision for both failure modes (failed migrate, failed
+            # health check): revert first, restore only when revert cannot.
+            # Returns 0 when the schema is back at the pre-deploy list.
+            local rc=0
+            revert_migrations_to_pre_deploy || rc=$?
+            if [ "$rc" -eq 0 ]; then return 0; fi
+            if [ "$rc" -eq 2 ]; then
+              echo "WARNING: cannot read the migration list - NOT restoring on an unverified state; manual recovery needed"
+              return 2
+            fi
+            restore_database_from_hourly_backup
+          }
+
           echo "=== 5. Database migrations (before the new code goes live) ==="
-          npm run migration:run
+          if ! npm run migration:run; then
+            echo "Migration failed - restoring the database to the pre-deploy schema"
+            if ! restore_db_to_pre_deploy; then
+              echo "WARNING: the database could not be brought back to the pre-deploy schema - manual recovery needed (docs/DISASTER_RECOVERY.md)"
+            fi
+            exit 1
+          fi
 
           echo "=== 6. Swap in the new build ==="
           swap_in() {
@@ -195,7 +363,13 @@ jobs:
             pm2 logs zsystems-backend --nostream --lines 50 || true
             swap_back "$TARGET_DIR/backend/dist"
             swap_back "$TARGET_DIR/frontend/dist"
-            pm2 reload zsystems-backend --update-env || true
+            # Folder-only rollback is not enough: the migrations already ran,
+            # so the old build would run against the new schema. Bring the
+            # database back to the pre-deploy list first, then re-check.
+            if ! restore_db_to_pre_deploy; then
+              echo "WARNING: the database could not be brought back to the pre-deploy schema - the old build is running against the new schema; manual recovery needed (docs/DISASTER_RECOVERY.md)"
+            fi
+            restart_backend
             check_health || echo "WARNING: previous build is not healthy either"
             exit 1
           fi

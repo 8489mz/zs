@@ -22,7 +22,8 @@
  *  - the passphrase requirement is named, not assumed;
  *  - the playbook states the CURRENT deploy-failure DB behaviour and cites
  *    deploy-oracle.yml as its source, so a change to that behaviour must
- *    update the playbook in the same package;
+ *    update the playbook in the same package — since INV-MIGRATION-AUTO-REVERT
+ *    went live, the playbook states the automatic revert-or-restore IS live;
  *  - the playbook is reachable from docs/DISASTER_RECOVERY.md.
  *
  * Fail-first: the row matcher is self-checked against a sample table below,
@@ -154,8 +155,9 @@ async function main(): Promise<void> {
 
   // 7. The playbook states the CURRENT deploy-failure DB behaviour and cites its source.
   assert.ok(playbook.includes('deploy-oracle.yml'), 'playbook must cite the deploy workflow as the source of the failure-path behaviour');
-  assert.ok(playbook.includes('INV-MIGRATION-AUTO-REVERT'), 'playbook must name the pending automatic revert-or-restore invariant');
-  assert.ok(playbook.includes('ليس حياً بعد'), 'playbook must state that automatic revert-or-restore is not live yet');
+  assert.ok(playbook.includes('INV-MIGRATION-AUTO-REVERT'), 'playbook must name the automatic revert-or-restore invariant');
+  assert.ok(playbook.includes('حي على `main`'), 'playbook must state that automatic revert-or-restore is live on main');
+  assert.ok(!playbook.includes('ليس حياً بعد'), 'playbook must not still claim automatic revert-or-restore is not live yet');
 
   // 8. The playbook is reachable from the disaster-recovery doc, and vice versa.
   assert.ok(disasterRecovery.includes('FIRE_DRILL_PLAYBOOK.md'), 'DISASTER_RECOVERY.md must link to the fire-drill playbook');
