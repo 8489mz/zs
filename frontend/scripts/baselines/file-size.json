@@ -49,7 +49,6 @@
     "src/features/maritime-freight/components/MaritimeSettingsTab.tsx": 1315,
     "src/features/maritime-freight/pages/MaritimeCustomerPortalPage.tsx": 1686,
     "src/features/maritime-freight/utils/maritime-documents.ts": 2010,
-    "src/features/pos/components/PosProductsPanel.tsx": 2454,
     "src/features/pos/components/PosWorkspace.tsx": 1288,
     "src/features/pos/components/pos-workspace/PosCheckoutDialogSections.tsx": 2043,
     "src/features/pos/components/pos-workspace/PosPhoneOrderDialog.tsx": 2171,

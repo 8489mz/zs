@@ -9,7 +9,7 @@ import type { PosProductGroup } from '@/features/pos/lib/pos-product-groups';
 import { isInvoiceBarcodeQuery } from '@/features/pos/lib/pos-barcode-normalizer';
 import type { useProductIconSettings } from '@/shared/components/icons/product-icon-theme';
 import type { PosUiCustomization } from '@/features/pos/hooks/usePosUiCustomization';
-import type { PosCardDensity, PosProductGroupCardProps } from '@/features/pos/components/PosProductsPanel';
+import type { PosCardDensity, PosProductGroupCardProps } from '@/features/pos/types/pos.types';
 
 function groupMetaLabel(group: PosProductGroup) {
   if (!group.hasVariants) {

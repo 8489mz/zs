@@ -9,7 +9,7 @@
 import { StarIcon, PlusIcon, ChevronDownIcon } from '@/shared/components/icons/AppIcons';
 import { ProductIcon } from '@/shared/components/icons/product-svg-catalog';
 import { useCachedT } from '@/features/pos/lib/cached-t';
-import type { PosProductGroupCardProps } from '@/features/pos/components/PosProductsPanel';
+import type { PosProductGroupCardProps } from '@/features/pos/types/pos.types';
 
 export function PosProductGroupCardCompact({
   groupKey,

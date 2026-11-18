@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import type { Dispatch, SetStateAction } from 'react';
 import type { PosGroupShelf } from '@/features/pos/lib/pos-product-groups';
 import type { Product } from '@/types/domain';
-import type { PosCardDensity } from '@/features/pos/components/PosProductsPanel';
+import type { PosCardDensity } from '@/features/pos/types/pos.types';
 
 export interface PosDaypartRowProps {
   activeDaypart: 'all' | 'breakfast' | 'lunch' | 'dinner' | 'beverages';

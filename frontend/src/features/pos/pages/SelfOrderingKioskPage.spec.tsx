@@ -420,7 +420,7 @@ describe('SelfOrderingKioskPage — tray neutral wording (T15-C)', () => {
   it('legitimate food screens keep their own "وجبة" wording', () => {
     const expectations: Array<[string, string[]]> = [
       [
-        'src/features/pos/components/PosProductsPanel.tsx',
+        'src/features/pos/components/pos-products/PosProductsFilterRows.tsx',
         ['جميع الوجبات', 'وجبات الغداء', 'وجبات العشاء'],
       ],
       [
