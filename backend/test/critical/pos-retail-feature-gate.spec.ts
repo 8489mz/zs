@@ -341,6 +341,7 @@ interface Agreement {
   backendAllowed: boolean;
   featuresIncludePos: boolean;
   vertical: string;
+  tenantFeatures: string[];
 }
 
 /* The three POS decisions, each read from the real production path:
@@ -360,7 +361,7 @@ async function readAgreement(db: Kysely<Database>, svc: Services, auth: AuthCont
   const featuresIncludePos = tenantFeatures.includes('pos');
   const { resolveCurrentVertical } = await loadVerticalScope();
   const vertical = resolveCurrentVertical(me?.tenant, settings);
-  return { frontendAvailable, backendAllowed, featuresIncludePos, vertical };
+  return { frontendAvailable, backendAllowed, featuresIncludePos, vertical, tenantFeatures };
 }
 
 async function freshCase(
@@ -566,7 +567,44 @@ async function main(): Promise<void> {
   });
   console.log('  5. super-admin hide closes retail on every layer — passed');
 
-  // 6. Source + invariant pins.
+  // 6. The route closes on hide too: isRouteAllowedInVertical refuses
+  // 'pos' for a retail tenant whose explicit tenant.features list lacks
+  // it, while the P10 grant escape still opens it and an empty/missing
+  // list keeps the legacy retail default. The cash-drawer route follows
+  // the same rule keyed on its own feature ('cashDrawer').
+  {
+    const { isRouteAllowedInVertical } = await loadVerticalScope();
+    // (a) Hide: clothing + super-admin hide of 'pos' (case 5 setup).
+    await freshCase('clothing', 'plan_ultimate', PLAN_ULTIMATE_FEATURES, async (db, svc) => {
+      await svc.saasAdmin.updateTenantPlan(TENANT, {
+        featureOverrides: [{ featureCode: 'pos', granted: false, reason: 'hide POS for this tenant' }],
+      }, superAdminAuth);
+      const auth = await resolveAdminAuth(svc);
+      const agreement = await readAgreement(db, svc, auth);
+      assert.equal(agreement.featuresIncludePos, false, 'clothing+hide: tenant.features excludes pos');
+      assert.equal(isRouteAllowedInVertical('retail_general', 'pos', undefined, agreement.tenantFeatures), false, 'clothing+hide: /pos route refused');
+      assert.equal(isRouteAllowedInVertical('retail_general', 'pos/new', undefined, agreement.tenantFeatures), false, 'clothing+hide: /pos subroute refused');
+      // The drawer follows its own feature: 'cashDrawer' is still granted here, so its route stays open.
+      assert.equal(isRouteAllowedInVertical('retail_general', 'cash-drawer', undefined, agreement.tenantFeatures), true, 'clothing+hide pos only: cash-drawer route stays open (cashDrawer still granted)');
+      assert.equal(isRouteAllowedInVertical('retail_general', 'cash-drawer', undefined, ['sales', 'catalog']), false, 'cash-drawer route closes when the list lacks cashDrawer');
+      assert.equal(isRouteAllowedInVertical('retail_general', 'pos', undefined, ['sales', 'catalog', 'cashDrawer']), false, 'pos route closes when the list lacks pos even with cashDrawer');
+    });
+    // (b) Grant: clothing with 'pos' in the list → route open (P10 escape intact).
+    await freshCase('clothing', 'plan_ultimate', PLAN_ULTIMATE_FEATURES, async (db, svc) => {
+      const auth = await resolveAdminAuth(svc);
+      const agreement = await readAgreement(db, svc, auth);
+      assert.equal(agreement.featuresIncludePos, true, 'clothing: tenant.features includes pos');
+      assert.equal(isRouteAllowedInVertical('retail_general', 'pos', undefined, agreement.tenantFeatures), true, 'clothing: /pos route open');
+      assert.equal(isRouteAllowedInVertical('retail_general', 'cash-drawer', undefined, agreement.tenantFeatures), true, 'clothing: cash-drawer route open');
+    });
+    // (c) Legacy: an empty or missing list keeps the retail default.
+    assert.equal(isRouteAllowedInVertical('retail_general', 'pos', undefined, []), true, 'legacy empty list: /pos route open');
+    assert.equal(isRouteAllowedInVertical('retail_general', 'pos'), true, 'legacy no list: /pos route open');
+    assert.equal(isRouteAllowedInVertical('retail_general', 'cash-drawer', undefined, []), true, 'legacy empty list: cash-drawer route open');
+  }
+  console.log('  6. route closes on hide, opens on grant, legacy empty list unchanged — passed');
+
+  // 7. Source + invariant pins.
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
@@ -581,7 +619,7 @@ async function main(): Promise<void> {
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('- INV-POS-RETAIL-FEATURE-GATE ').length - 1, 1, 'invariant entry exists exactly once');
   }
-  console.log('  6. source + invariant pins passed');
+  console.log('  7. source + invariant pins passed');
 
   console.log('pos-retail-feature-gate: OK');
 }

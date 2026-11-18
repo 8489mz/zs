@@ -304,6 +304,9 @@ export function isRouteAllowedInVertical(vertical: BusinessVertical, target: str
       : key === 'cash-drawer' || key.startsWith('cash-drawer/') ? 'cashDrawer'
       : null;
     if (routeFeature && grantedFeatures.includes(routeFeature)) return true;
+    // INV-POS-RETAIL-FEATURE-GATE: negative half of the P10 escape — a non-empty list lacking the route feature means hidden/excluded, so close the route instead of falling through to the retail default.
+    // An empty/missing list keeps the legacy retail default.
+    if (routeFeature) return false;
   }
 
   // Specific settings routes that belong exclusively to retail e-commerce or retail warehouse management
