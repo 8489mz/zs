@@ -1,15 +1,11 @@
-import { Inject, Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { Kysely, sql } from 'kysely';
+import { Inject, Injectable, ForbiddenException } from '@nestjs/common';
+import { Kysely } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { CloseFiscalPeriodDto, ReopenFiscalPeriodDto, FiscalPeriodResponse } from '../dto/fiscal-period.dto';
 import { AccountingPostingService } from '../accounting-posting.service';
-import { lockAccountingPeriod } from '../accounting-period-lock';
-import { nextAccountingDay, resolveBusinessDateKey } from '../engines/accounting-date.engine';
-import { assertAccountingCloseReady } from '../accounting-close-readiness';
-import { tenantBaseCurrency } from '../accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
+import { roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { FiscalYearPeriodCloseService } from './fiscal-year-period-close.service';
 import { FiscalYearPeriodsService } from './fiscal-year-periods.service';
 import { FiscalYearCloseService } from './fiscal-year-close.service';
@@ -24,7 +20,6 @@ export class FiscalYearService {
   private readonly close: FiscalYearCloseService;
   private readonly periods: FiscalYearPeriodsService;
   private readonly periodClose: FiscalYearPeriodCloseService;
-
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
