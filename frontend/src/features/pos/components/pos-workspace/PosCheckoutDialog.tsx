@@ -7,12 +7,12 @@ import { Card } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
 import { getErrorMessage } from '@/lib/errors';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
+import type { PaymentPreset } from '@/features/pos/types/pos.types';
 import {
   PosCheckoutCustomerSection,
   PosCheckoutOrderTypeSection,
   PosCheckoutPaymentSection,
   PosCheckoutDeliverySection,
-  type PaymentPreset,
 } from '@/features/pos/components/pos-workspace/PosCheckoutDialogSections';
 import { PosCheckoutExpressSection, type PosCheckoutExpressShortcutHandlers } from './PosCheckoutExpressSection';
 import {
