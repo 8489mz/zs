@@ -247,7 +247,10 @@ async function main(): Promise<void> {
       const service = buildService(db);
       const stale = await service.previewFiscalYearClose(auth, 1);
       await seedPostedEntry(db, [{ accountId: 10, debit: 0, credit: 0.005 }]);
-      (service as any).previewFiscalYearClose = async () => stale;
+      // Stub the SLICE's preview, not the facade's: execute lives in the
+      // close slice and calls its own previewFiscalYearClose, so a stub on
+      // the facade never reaches it (the split moved the call inside).
+      (service as any).close.previewFiscalYearClose = async () => stale;
       await assert.rejects(
         () => service.executeFiscalYearClose(auth, 1, {}),
         /تغير رصيد/,
