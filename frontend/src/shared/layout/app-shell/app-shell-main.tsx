@@ -9,7 +9,7 @@ import { PwaInstallBanner } from '@/shared/components/PwaInstallBanner';
 import { QuickAttendanceShortcut } from '@/shared/layout/quick-attendance-shortcut';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { SidebarContextMenu } from '@/shared/layout/SidebarContextMenu';
-import type { SidebarContextMenuState } from './app-shell-sidebar';
+import type { SidebarContextMenuState } from '@/shared/layout/app-shell/app-shell-sidebar';
 import { ImpersonationBanner } from '@/shared/system/impersonation-banner';
 import { BootstrapAdminBanner } from '@/shared/system/bootstrap-admin-banner';
 import { TrialStatusBanner } from '@/shared/system/trial-status-banner';

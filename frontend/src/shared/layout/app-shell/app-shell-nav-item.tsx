@@ -4,8 +4,8 @@ import { AppNavIcon } from '@/shared/layout/nav-icons';
 import { useTabsStore } from '@/stores/tabs-store';
 import { prefetchRouteData } from '@/app/router/route-prefetch';
 import type { NavigationItemDefinition } from '@/app/router/types';
-import { activeIconTone, defaultIconTone } from './app-shell-types';
-import type { SidebarContextMenuState } from './app-shell-sidebar';
+import { activeIconTone, defaultIconTone } from '@/shared/layout/app-shell/app-shell-types';
+import type { SidebarContextMenuState } from '@/shared/layout/app-shell/app-shell-sidebar';
 
 export interface AppShellNavItemProps {
   item: NavigationItemDefinition;

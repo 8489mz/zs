@@ -7,9 +7,9 @@ import { SearchIcon, XIcon } from '@/shared/components/icons/AppIcons';
 import { AppNavIcon } from '@/shared/layout/nav-icons';
 import type { ContextMenuTarget } from '@/shared/layout/SidebarContextMenu';
 import type { NavigationItemDefinition } from '@/app/router/types';
-import { activeIconTone, defaultIconTone } from './app-shell-types';
-import type { SidebarGroupDefinition } from './app-shell-types';
-import { AppShellNavItem } from './app-shell-nav-item';
+import { activeIconTone, defaultIconTone } from '@/shared/layout/app-shell/app-shell-types';
+import type { SidebarGroupDefinition } from '@/shared/layout/app-shell/app-shell-types';
+import { AppShellNavItem } from '@/shared/layout/app-shell/app-shell-nav-item';
 
 export type SidebarContextMenuState = {
   isOpen: boolean;
@@ -28,7 +28,7 @@ export type AppShellSidebarProps = {
   isPosRoute: boolean;
   isPosChromeHidden: boolean;
   isMobileScreen: boolean;
-  isStandalonePosTerminal: boolean;
+  isStandalonePosTerminal: () => boolean;
   sidebarRef: RefObject<HTMLElement | null>;
   sidebarSearchWrapperRef: RefObject<HTMLDivElement | null>;
   sidebarSearchInputRef: RefObject<HTMLInputElement | null>;
@@ -47,6 +47,8 @@ export type AppShellSidebarProps = {
   setSidebarSearchQuery: Dispatch<SetStateAction<string>>;
   filteredPrimaryNavigationItems: NavigationItemDefinition[];
   filteredSidebarGroups: AppShellSidebarGroup[];
+  visibleNavigationItems: NavigationItemDefinition[];
+  pendingOrdersCount: number;
   toggleSidebar: () => void;
   isSearchingSidebar: boolean;
   totalMatchingItemsCount: number;
@@ -79,6 +81,8 @@ export function AppShellSidebar({
   setSidebarSearchQuery,
   filteredPrimaryNavigationItems,
   filteredSidebarGroups,
+  visibleNavigationItems,
+  pendingOrdersCount,
   toggleSidebar,
   isSearchingSidebar,
   totalMatchingItemsCount,
@@ -192,7 +196,7 @@ export function AppShellSidebar({
       </div>
 
       <nav className="sidebar-nav">
-        {filteredPrimaryNavigationItems.map((item) => <AppShellNavItem key={`primary-${item.key}`} item={item} keyPrefix="primary" onContextMenu={setSidebarContextMenu} />)}
+        {filteredPrimaryNavigationItems.map((item) => <AppShellNavItem key={`primary-${item.key}`} item={item} keyPrefix="primary" onContextMenu={setSidebarContextMenu} visibleNavigationItems={visibleNavigationItems} effectiveSidebarCollapsed={effectiveSidebarCollapsed} pendingOrdersCount={pendingOrdersCount} isSidebarSearchOpen={isSidebarSearchOpen} handleCloseSidebarSearch={handleCloseSidebarSearch} />)}
         {filteredSidebarGroups.map(({ group, groupItems, isActive, isOpen }) => {
           const groupIconItemKey = group.iconKey || groupItems[0]?.key || 'settings';
           const tone = (isActive || isOpen) ? activeIconTone : defaultIconTone;
@@ -213,7 +217,7 @@ export function AppShellSidebar({
                 <span className="sidebar-group-icon" aria-hidden="true"><AppNavIcon itemKey={groupIconItemKey} /></span>
                 <span className="sidebar-label">{groupTitle}</span>
               </div>
-              {isOpen ? <div className="sidebar-group-items">{groupItems.map((item) => <AppShellNavItem key={`group-${item.key}`} item={item} keyPrefix="group" onContextMenu={setSidebarContextMenu} />)}</div> : null}
+              {isOpen ? <div className="sidebar-group-items">{groupItems.map((item) => <AppShellNavItem key={`group-${item.key}`} item={item} keyPrefix="group" onContextMenu={setSidebarContextMenu} visibleNavigationItems={visibleNavigationItems} effectiveSidebarCollapsed={effectiveSidebarCollapsed} pendingOrdersCount={pendingOrdersCount} isSidebarSearchOpen={isSidebarSearchOpen} handleCloseSidebarSearch={handleCloseSidebarSearch} />)}</div> : null}
             </div>
           );
         })}

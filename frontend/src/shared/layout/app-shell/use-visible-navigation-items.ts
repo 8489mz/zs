@@ -6,8 +6,8 @@ import { getMaintenanceProfile } from '@/features/maintenance/constants/maintena
 import { resolveCurrentVertical } from '@/shared/verticals/vertical-scope';
 import type { AuthTenant, AuthUser } from '@/types/auth';
 import type { AppSettings } from '@/types/domain';
-import { contractingOrder, maritimeOrder, warehousingOrder, wholesaleVanOrder } from './app-shell-navigation-orders-a';
-import { importOrder, manufacturingOrder, servicesOrder, standardOrder } from './app-shell-navigation-orders-b';
+import { contractingOrder, maritimeOrder, warehousingOrder, wholesaleVanOrder } from '@/shared/layout/app-shell/app-shell-navigation-orders-a';
+import { importOrder, manufacturingOrder, servicesOrder, standardOrder } from '@/shared/layout/app-shell/app-shell-navigation-orders-b';
 
 export type UseVisibleNavigationItemsParams = {
   user: AuthUser | null;

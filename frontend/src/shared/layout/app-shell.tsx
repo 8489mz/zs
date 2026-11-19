@@ -1,23 +1,15 @@
-import { CSSProperties, PropsWithChildren, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import { PropsWithChildren, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
 import { http } from '@/lib/http';
-import { Button } from '@/shared/ui/button';
 import { authApi } from '@/shared/api/auth';
 import { resetAuthenticatedClient } from '@/lib/query-client-session';
 import { DEFAULT_STORE_NAME, useAuthStore } from '@/stores/auth-store';
-import { navigationItems } from '@/app/router/registry';
-import { canAccessNavigationItem, canAccessPath, getHrHomePath, matchesNavigationSearch, isDesktopOfflineApp, isPlatformAdmin, tenantHasFeature } from '@/app/router/access';
+import { canAccessPath, matchesNavigationSearch, isPlatformAdmin } from '@/app/router/access';
 import { userHasAnyPermission } from '@/shared/hooks/use-permission';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
-import { PasswordRotationGate } from '@/shared/system/password-rotation-gate';
-import { SystemStatusBanner } from '@/shared/system/system-status-banner';
-import { BootstrapAdminBanner } from '@/shared/system/bootstrap-admin-banner';
-import { TrialStatusBanner } from '@/shared/system/trial-status-banner';
-import { ImpersonationBanner } from '@/shared/system/impersonation-banner';
-import { PwaInstallBanner } from '@/shared/components/PwaInstallBanner';
 import { useOfflineUpdateCheck } from '@/features/updates/hooks/useOfflineUpdateCheck';
 import {
   POS_SHELL_VISIBILITY_KEY,
@@ -26,15 +18,8 @@ import {
   readPosShellPreference,
   isStandalonePosTerminal,
 } from '@/features/pos/lib/pos-shell';
-import { QuickAttendanceShortcut } from '@/shared/layout/quick-attendance-shortcut';
-import { GlobalAppToolbar } from '@/shared/layout/GlobalAppToolbar';
-import { MobileBottomNav } from '@/shared/layout/MobileBottomNav';
 import { resolveCurrentVertical } from '@/shared/verticals/vertical-scope';
 import { useToolbarStore } from '@/stores/toolbar-store';
-import { DialogShell } from '@/shared/components/dialog-shell';
-import { SearchIcon, CheckCircleIcon , XIcon } from '@/shared/components/icons/AppIcons';
-import { getMaintenanceProfile } from '@/features/maintenance/constants/maintenance-profiles';
-import { prefetchRouteData } from '@/app/router/route-prefetch';
 import { resolveAutoBreadcrumbs } from '@/shared/layout/breadcrumbs.helper';
 import { AppShellNavItem } from '@/shared/layout/app-shell/app-shell-nav-item';
 import { useVisibleNavigationItems } from '@/shared/layout/app-shell/use-visible-navigation-items';
@@ -43,19 +28,13 @@ import { manufacturingOrder, importOrder, servicesOrder, standardOrder } from '@
 import { AppShellSidebar } from '@/shared/layout/app-shell/app-shell-sidebar';
 import { AppShellMain } from '@/shared/layout/app-shell/app-shell-main';
 
+import { defaultIconTone, activeIconTone, type SidebarGroupDefinition } from '@/shared/layout/app-shell/app-shell-types';
 
-import { defaultIconTone, activeIconTone, type SidebarGroupDefinition } from './app-shell/app-shell-types';
-
-
-import { AppNavIcon } from '@/shared/layout/nav-icons';
-import { openExternalWindow } from '@/shared/layout/AppBrowserTabBar';
-import { SidebarContextMenu, type ContextMenuTarget } from '@/shared/layout/SidebarContextMenu';
-import { useTabsStore } from '@/stores/tabs-store';
-import { toast } from '@/shared/components/system-alert';
+import type { ContextMenuTarget } from '@/shared/layout/SidebarContextMenu';
 
 import { translateUiText } from '@/lib/auto-translator';
 import { useSidebarGroups } from '@/shared/layout/app-shell/use-sidebar-groups';
-import { warehousingOrder, wholesaleVanOrder, contractingOrder, maritimeOrder } from './app-shell/app-shell-navigation-orders-a';
+import { warehousingOrder, wholesaleVanOrder, contractingOrder, maritimeOrder } from '@/shared/layout/app-shell/app-shell-navigation-orders-a';
 
 function formatWorkspaceName(name: string, isEn = false) {
   if (isEn) {
@@ -135,7 +114,6 @@ export function AppShell({ children }: PropsWithChildren) {
     return false;
   });
 
-  const tabsStore = useTabsStore();
   const [sidebarContextMenu, setSidebarContextMenu] = useState<{
     isOpen: boolean;
     position: { x: number; y: number };
@@ -625,6 +603,8 @@ export function AppShell({ children }: PropsWithChildren) {
         setSidebarSearchQuery={setSidebarSearchQuery}
         filteredPrimaryNavigationItems={filteredPrimaryNavigationItems}
         filteredSidebarGroups={filteredSidebarGroups}
+        visibleNavigationItems={visibleNavigationItems}
+        pendingOrdersCount={pendingOrdersCount}
         toggleSidebar={toggleSidebar}
         isSearchingSidebar={isSearchingSidebar}
         totalMatchingItemsCount={totalMatchingItemsCount}
@@ -633,6 +613,7 @@ export function AppShell({ children }: PropsWithChildren) {
         handleLogout={handleLogout}
         setSidebarContextMenu={setSidebarContextMenu}
       />
+      {/* BootstrapAdminBanner renders globally via AppShellMain (S4 slice) */}
       <AppShellMain
         isPosRoute={isPosRoute}
         isPosChromeHidden={isPosChromeHidden}
