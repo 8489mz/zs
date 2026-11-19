@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PosWorkspaceHeader } from '@/features/pos/components/pos-workspace/PosWorkspaceHeader';
 import { PosWorkspaceMainContent } from '@/features/pos/components/pos-workspace/PosWorkspaceMainContent';
+import { PosWorkspaceCheckoutDialogs } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceCheckoutDialogs';
 import { PosWorkspaceTablesDialog } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceTablesDialog';
+import { PosWorkspaceHeldDraftsDialog } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceHeldDraftsDialog';
+import { PosWorkspaceConfirmDialogsSection } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceConfirmDialogsSection';
+import { PosWorkspaceAuxDialogs1 } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceAuxDialogs1';
+import { PosWorkspaceAuxDialogs2 } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceAuxDialogs2';
 import { printOrderCupLabels } from '@/lib/pos-printing/cup-label';
 import { salesApi } from '@/features/sales/api/sales.api';
 import { getSelectedCustomerName, printCurrentPosDraft } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
@@ -32,11 +37,6 @@ import {
 import type { PosPriceType } from '@/features/pos/types/pos.types';
 import type { Product, Sale } from '@/types/domain';
 import { toast } from '@/shared/components/system-alert';
-import { PosWorkspaceAuxDialogs2 } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceAuxDialogs2';
-import { PosWorkspaceAuxDialogs1 } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceAuxDialogs1';
-import { PosWorkspaceConfirmDialogsSection } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceConfirmDialogsSection';
-import { PosWorkspaceHeldDraftsDialog } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceHeldDraftsDialog';
-import { PosWorkspaceCheckoutDialogs } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceCheckoutDialogs';
 
 
 export function PosWorkspace() {
