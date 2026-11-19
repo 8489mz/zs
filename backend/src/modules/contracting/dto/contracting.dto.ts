@@ -13,3 +13,5 @@ export { CreateRetentionRecordDto, ReleaseRetentionDto, CreatePaymentHoldDto, Re
 export { CreateMasterBoqLibraryItemDto, UpdateMasterBoqLibraryItemDto, BatchImportMasterBoqDto, ToggleMasterBoqItemStatusDto, ImportMasterBoqToProjectDto, BoqTakeoffItemDto, SaveBoqTakeoffsDto } from './contracting-dto/contracting-dto-master-boq';
 
 export { CreateSiteMobilizationExpenseDto, RecordLaborAttendanceRecordDto, CreateClientPaymentMilestoneDto, RecordInKindBarterDeductionDto, CreateEquipmentAssetDto, TransferEquipmentAssetDto, RecordSupplierPriceMemoryDto } from './contracting-dto/contracting-dto-field-ops';
+
+export { CreateInspectionRequestDto, UpdateInspectionRequestStatusDto, CreateSnagItemDto, UpdateSnagItemStatusDto, CreateProjectHandoverDto, ApproveProjectHandoverDto, CreateSubmittalDto, UpdateSubmittalStatusDto, CreateMaterialEscalationDto } from './contracting-dto/contracting-dto-quality-handover';
