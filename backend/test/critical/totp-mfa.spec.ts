@@ -1,4 +1,7 @@
 import { strict as assert } from 'node:assert';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
   buildOtpauthUri,
   decodeBase32,
@@ -154,14 +157,21 @@ function runSecretCipher(): void {
   assert.throws(() => encryptMfaSecret(secret, cloudNoSecret), /MFA_ENCRYPTION_KEY_MISSING/);
   assert.throws(() => decryptMfaSecret(stored, cloudNoSecret), /MFA_ENCRYPTION_KEY_MISSING/);
 
-  // الديسكتوب/الأوفلاين: مفتاح محلي، لأن القاعدة والمفتاح على نفس الجهاز أصلاً.
-  const desktopEnv = { APP_MODE: 'SELF_CONTAINED' } as unknown as NodeJS.ProcessEnv;
-  const desktopStored = encryptMfaSecret(secret, desktopEnv);
-  assert.equal(decryptMfaSecret(desktopStored, desktopEnv), secret);
+  // الديسكتوب/الأوفلاين: مفتاح مشتق من سر التثبيت المحلي (ملف مؤقت هنا)،
+  // لا من ثابت مكتوب في الكود.
+  const installSecretDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zs-install-secret-'));
+  const installSecretPath = path.join(installSecretDir, 'install-secret');
+  try {
+    const desktopEnv = { APP_MODE: 'SELF_CONTAINED', ZS_INSTALL_SECRET_PATH: installSecretPath } as unknown as NodeJS.ProcessEnv;
+    const desktopStored = encryptMfaSecret(secret, desktopEnv);
+    assert.equal(decryptMfaSecret(desktopStored, desktopEnv), secret);
 
-  const pilotEnv = { APP_MODE: 'LOCAL_PILOT' } as unknown as NodeJS.ProcessEnv;
-  const pilotStored = encryptMfaSecret(secret, pilotEnv);
-  assert.equal(decryptMfaSecret(pilotStored, pilotEnv), secret);
+    const pilotEnv = { APP_MODE: 'LOCAL_PILOT', ZS_INSTALL_SECRET_PATH: installSecretPath } as unknown as NodeJS.ProcessEnv;
+    const pilotStored = encryptMfaSecret(secret, pilotEnv);
+    assert.equal(decryptMfaSecret(pilotStored, pilotEnv), secret);
+  } finally {
+    fs.rmSync(installSecretDir, { recursive: true, force: true });
+  }
 
   // مفتاح مخصَّص له الأولوية على SESSION_SECRET.
   const dedicated = { APP_MODE: 'CLOUD_SAAS', SESSION_SECRET: 'a-very-long-session-secret-value', MFA_ENCRYPTION_KEY: 'dedicated-mfa-key-long-enough-01' } as unknown as NodeJS.ProcessEnv;

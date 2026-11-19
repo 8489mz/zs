@@ -17,6 +17,7 @@
     "test/critical/tenant-boundary.spec.ts",
     "test/critical/tenant-scoped-reads.spec.ts",
     "test/critical/portal-token.spec.ts",
+    "test/critical/no-hardcoded-auth-secrets.spec.ts",
     "test/critical/tenant-timezone-attendance.spec.ts",
     "test/critical/maritime-cargo-insurance.spec.ts",
     "test/critical/payroll-loan-allocation.spec.ts",

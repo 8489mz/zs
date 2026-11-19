@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from 'node:crypto';
 import { AppError } from '../../../common/errors/app-error';
 import { isDesktopRuntimeMode } from '../../../config/app-mode';
+import { deriveInstallSecret } from './install-secret';
 
 /**
  * تشفير سر المصادقة الثنائية قبل تخزينه.
@@ -14,18 +15,20 @@ import { isDesktopRuntimeMode } from '../../../config/app-mode';
  *
  * المفتاح: `MFA_ENCRYPTION_KEY` إن وُجد، وإلا يُشتق بـscrypt من `SESSION_SECRET`. في وضع السحابة
  * **لا يوجد مفتاح افتراضي إطلاقاً** — غيابهما معاً يرفض التشفير وفك التشفير معاً، تماماً كما
- * يفعل `portal-token.ts`. وفي الديسكتوب/الأوفلاين يُستعمل مفتاح محلي ثابت، لأن القاعدة والمفتاح
- * على نفس الجهاز أصلاً فلا يضيف الفصل شيئاً هناك.
+ * يفعل `portal-token.ts`. وفي الديسكتوب/الأوفلاين يُشتق المفتاح بـscrypt من سر التثبيت
+ * المحلي (`install-secret.ts`)، لأن القاعدة والمفتاح على نفس الجهاز أصلاً. المفتاح
+ * الثابت الذي كان مكتوباً في الكود حُذف، وأسرار MFA المشفَّرة به تصبح غير قابلة
+ * للفك — أصحابها يدخلون برموز الاسترداد ويعيدون التفعيل، بلا توافق خلفي.
  *
  * **تنبيه تشغيلي:** تغيير `SESSION_SECRET` (بلا `MFA_ENCRYPTION_KEY` مضبوط) يُبطل أسرار المصادقة
- * الثنائية القائمة، فيدخل أصحابها برموز الاسترداد ويعيدون التفعيل.
+ * الثنائية القائمة، فيدخل أصحابها برموز الاسترداد ويعيدون التفعيل. ونفس الشيء
+ * عند حذف ملف سر التثبيت وإعادة توليده على الديسكتوب.
  */
 
 const MIN_SECRET_LENGTH = 16;
 const KEY_BYTES = 32;
 const IV_BYTES = 12;
 const SCRYPT_SALT = 'zs-mfa-secret-v1';
-const DESKTOP_LOCAL_KEY = 'zs-desktop-offline-mfa-encryption-key';
 const FORMAT_PREFIX = 'v1';
 
 function isDesktopMode(env: NodeJS.ProcessEnv): boolean {
@@ -46,7 +49,7 @@ export function resolveMfaEncryptionKey(env: NodeJS.ProcessEnv = process.env): B
   }
 
   if (isDesktopMode(env)) {
-    return scryptSync(DESKTOP_LOCAL_KEY, SCRYPT_SALT, KEY_BYTES);
+    return scryptSync(deriveInstallSecret('mfa-encryption', env), SCRYPT_SALT, KEY_BYTES);
   }
 
   throw new AppError(

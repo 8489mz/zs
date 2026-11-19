@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { AppError } from '../../../common/errors/app-error';
 import { isDesktopRuntimeMode } from '../../../config/app-mode';
+import { deriveInstallSecret } from './install-secret';
 
 /**
  * المصدر الوحيد للحقيقة لرموز بوابات الأطراف الخارجية (موظف / مندوب / بصمة موبايل).
@@ -10,15 +11,16 @@ import { isDesktopRuntimeMode } from '../../../config/app-mode';
  * مقارنة توقيع بـ`!==`) يعيد فتح ثغرة انتحال هوية عابرة للمستأجرين.
  *
  * قاعدتان مفروضتان هنا:
- *  1. **فشل آمن (Fail-Closed):** في وضع السحابة لا يوجد سر افتراضي إطلاقاً.
- *     غياب `SESSION_SECRET` يرفض إصدار/قبول أي رمز بدل أن يوقّع بمفتاح معروف للجميع.
+ *  1. **فشل آمن (Fail-Closed):** لا يوجد سر افتراضي إطلاقاً في أي وضع. في
+ *     وضع السحابة غياب `SESSION_SECRET` يرفض إصدار/قبول أي رمز بدل أن يوقّع
+ *     بمفتاح معروف للجميع. وفي الديسكتوب/الأوفلاين السر سر تثبيت عشوائي
+ *     يُولَّد عند أول تشغيل ويُحفَظ محلياً (`install-secret.ts`) — والسر
+ *     الثابت الذي كان مكتوباً في الكود (`zs-desktop-offline-...`) حُذف،
+ *     والرموز الموقَّعة به مرفوضة بلا توافق خلفي لأنه سر عام.
  *  2. **مقارنة ثابتة الزمن:** `timingSafeEqual` لا `!==`.
  */
 
 const MIN_SECRET_LENGTH = 16;
-
-/** سر محلي للديسكتوب/الأوفلاين فقط — لا يُستخدم أبداً في وضع السحابة. */
-const DESKTOP_LOCAL_SECRET = 'zs-desktop-offline-portal-token-secret';
 
 function isDesktopMode(): boolean {
   return isDesktopRuntimeMode(process.env.APP_MODE);
@@ -38,7 +40,7 @@ export function resolvePortalTokenSecret(): string {
   }
 
   if (isDesktopMode()) {
-    return DESKTOP_LOCAL_SECRET;
+    return deriveInstallSecret('portal-token');
   }
 
   throw new AppError(

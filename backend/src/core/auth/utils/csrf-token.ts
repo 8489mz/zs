@@ -1,10 +1,16 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { AppError } from '../../../common/errors/app-error';
 
 export const CSRF_COOKIE_NAME = 'csrf_token';
 export const CSRF_HEADER_NAME = 'x-csrf-token';
 
+/** سر فارغ = إعداد ناقص، يُرفَض مغلقاً — لا سر افتراضي معروف للجميع. */
 function normalizeSecret(secret: string): string {
-  return secret.trim() || 'local-dev-csrf-secret';
+  const trimmed = secret.trim();
+  if (!trimmed) {
+    throw new AppError('CSRF secret is not configured.', 'CSRF_SECRET_MISSING', 500);
+  }
+  return trimmed;
 }
 
 export function createCsrfToken(sessionId: string, secret: string): string {

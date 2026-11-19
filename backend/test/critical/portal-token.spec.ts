@@ -1,5 +1,8 @@
 import { strict as assert } from 'node:assert';
 import { createHmac } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { AppError } from '../../src/common/errors/app-error';
 import {
   PORTAL_TOKEN_TTL_MS,
@@ -18,10 +21,14 @@ const ERRORS: PortalTokenErrorSpec = {
 
 const REAL_SECRET = 'a-real-production-session-secret-value';
 
+/** السر الثابت الذي كان مكتوباً في الكود للديسكتوب — منشور، فأي رمز موقَّع به مرفوض. */
+const OLD_DESKTOP_LITERAL = 'zs-desktop-offline-portal-token-secret';
+
 /** الأسرار الافتراضية التي كانت مكتوبة داخل الكود قبل الإصلاح. */
 const LEAKED_LEGACY_SECRETS = [
   'zs-attendance-mobile-punch-secret-2026',
   'zs-delivery-secret-token-key-2026',
+  OLD_DESKTOP_LITERAL,
 ];
 
 function withEnv(env: Record<string, string | undefined>, fn: () => void): void {
@@ -49,9 +56,20 @@ const CLOUD_ENV = {
   APP_MODE: 'CLOUD_SAAS',
   SESSION_SECRET: undefined,
   SESSION_CSRF_SECRET: undefined,
+  ZS_INSTALL_SECRET_PATH: undefined,
   PORTABLE_MODE: undefined,
   IS_ELECTRON: undefined,
 };
+
+/** يشغّل fn بمسار ملف سر تثبيت مؤقت، ثم يمسح المجلد. */
+function withTempSecretFile(fn: (secretPath: string) => void): void {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zs-install-secret-'));
+  try {
+    fn(path.join(dir, 'install-secret'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 function run(): void {
   // 1. فشل آمن: في السحابة بلا سر لا يُصدَر ولا يُقبَل أي رمز إطلاقاً.
@@ -74,18 +92,29 @@ function run(): void {
     expectAppError('PORTAL_TOKEN_SECRET_MISSING', () => resolvePortalTokenSecret());
   });
 
-  // 3. الديسكتوب/الأوفلاين يعمل بلا سر مضبوط (لا شبكة عامة ولا تعدد مستأجرين).
-  withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined }, () => {
-    const token = signPortalToken({ employeeId: 7, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
-    const payload = verifyPortalToken<any>(`Bearer ${token}`, ERRORS);
-    assert.equal(payload.employeeId, 7);
+  // 3. الديسكتوب/الأوفلاين يعمل بلا سر مضبوط: سر التثبيت يُولَّد عند أول تشغيل
+  //    ويُحفَظ محلياً — ولا يكون أبداً السر الثابت العام القديم.
+  withTempSecretFile((secretPath) => {
+    withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, ZS_INSTALL_SECRET_PATH: secretPath }, () => {
+      const resolved = resolvePortalTokenSecret();
+      assert.notEqual(resolved, OLD_DESKTOP_LITERAL, 'the resolved desktop secret must never be the retired public literal');
+      const token = signPortalToken({ employeeId: 7, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
+      const payload = verifyPortalToken<any>(`Bearer ${token}`, ERRORS);
+      assert.equal(payload.employeeId, 7);
+      const stored = fs.readFileSync(secretPath, 'utf8').trim();
+      assert.match(stored, /^[0-9a-f]{64}$/, 'the install secret file must hold 64 hex chars');
+      assert.equal(resolvePortalTokenSecret(), resolved, 'the install secret must be stable across resolves');
+    });
   });
 
   // 3-b. بيئة التطوير والبايلوت المحلي (LOCAL_PILOT) تعمل أيضاً كبيئة محلية بلا إيقاف البوابات.
-  withEnv({ APP_MODE: 'LOCAL_PILOT', SESSION_SECRET: undefined }, () => {
-    const token = signPortalToken({ employeeId: 9, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
-    const payload = verifyPortalToken<any>(`Bearer ${token}`, ERRORS);
-    assert.equal(payload.employeeId, 9);
+  withTempSecretFile((secretPath) => {
+    withEnv({ APP_MODE: 'LOCAL_PILOT', SESSION_SECRET: undefined, ZS_INSTALL_SECRET_PATH: secretPath }, () => {
+      assert.notEqual(resolvePortalTokenSecret(), OLD_DESKTOP_LITERAL);
+      const token = signPortalToken({ employeeId: 9, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
+      const payload = verifyPortalToken<any>(`Bearer ${token}`, ERRORS);
+      assert.equal(payload.employeeId, 9);
+    });
   });
 
   withEnv({ APP_MODE: 'CLOUD_SAAS', SESSION_SECRET: REAL_SECRET }, () => {
@@ -128,6 +157,25 @@ function run(): void {
     const badSignature = createHmac('sha256', REAL_SECRET).update(badBody).digest('base64url');
     expectAppError('INVALID', () => verifyPortalToken(`${badBody}.${badSignature}`, ERRORS));
   });
+
+  // 9. تدوير سر التثبيت يُبطل الرموز الصادرة بالسر القديم — بلا توافق خلفي،
+  //    لأن السر القديم منشور في الكود العام.
+  {
+    const dirA = fs.mkdtempSync(path.join(os.tmpdir(), 'zs-install-secret-a-'));
+    const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'zs-install-secret-b-'));
+    try {
+      let token = '';
+      withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, ZS_INSTALL_SECRET_PATH: path.join(dirA, 'install-secret') }, () => {
+        token = signPortalToken({ employeeId: 7, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
+      });
+      withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, ZS_INSTALL_SECRET_PATH: path.join(dirB, 'install-secret') }, () => {
+        expectAppError('BAD_SIGNATURE', () => verifyPortalToken(token, ERRORS));
+      });
+    } finally {
+      fs.rmSync(dirA, { recursive: true, force: true });
+      fs.rmSync(dirB, { recursive: true, force: true });
+    }
+  }
 
   console.log('portal-token.spec: ok');
 }
