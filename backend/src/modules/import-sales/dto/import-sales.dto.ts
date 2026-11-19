@@ -17,3 +17,5 @@ export { ProformaInvoiceItemDto, CreateProformaInvoiceDto } from './import-sales
 export { CreateCustomsBrokerDto, DisburseBrokerAdvanceDto, LiquidateBrokerExpenseDto, RecordContainerDepositDto, RecordContainerReturnRefundDto } from './import-sales-dto/import-sales-dto-brokers-deposits';
 
 export { CreateContainerPreorderDto, ConvertPreorderToSaleDto, RefundImportPreorderDto, RecordFxAcquisitionDto } from './import-sales-dto/import-sales-dto-preorders-fx';
+
+export { PostSourcingTripExpenseDto, CreateImportDocumentDto, CreateApprovalRequestDto, CloseImportProjectDto, ReverseImportReceiptDto, ResolveLegacyReceiptDto, VerifyBrokerExpenseDto, DecideApprovalRequestDto, ResolveExceptionDto, RecordPartnerPayoutDto } from './import-sales-dto/import-sales-dto-documents-approvals';
