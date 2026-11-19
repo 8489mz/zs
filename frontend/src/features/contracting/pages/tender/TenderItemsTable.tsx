@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Fragment } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
+import type { TenderItem } from './tender-page-types';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { getTextDirection } from '@/lib/arabic-normalization';
 
@@ -21,19 +23,19 @@ const formatUnitLabel = (unit?: string, compCode?: string): string => {
 };
 
 export interface TenderItemsTableProps {
-  items: any[];
-  setItems: (updater: (prev: any[]) => any[]) => void;
+  items: TenderItem[];
+  setItems: Dispatch<SetStateAction<TenderItem[]>>;
   expandedItemId: string | null;
   setExpandedItemId: (value: string | null) => void;
   selectedTradeFilter: string;
   setSelectedTradeFilter: (value: string) => void;
   availableTrades: string[];
   availableSourceFiles: Array<{ fileName: string; count: number }>;
-  displayedItems: any[];
+  displayedItems: TenderItem[];
   tradeSubtotal: number;
   activeScopeLabel: string;
   TRADE_LABELS: Record<string, string>;
-  calculateItemRates: (item: any) => { directCost: number; sellingUnitPrice: number; totalItemValue: number; totalItemDirectCost: number; totalItemProfit: number };
+  calculateItemRates: (item: TenderItem) => { directCost: number; sellingUnitPrice: number; totalItemValue: number; totalItemDirectCost: number; totalItemProfit: number };
   formatCurrency: (amount: number) => string;
   handleAddComponent: (itemId: string) => void;
   handleRemoveComponent: (itemId: string, compIdx: number) => void;

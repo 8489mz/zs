@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { contractingApi } from '../api/contracting.api';
@@ -39,7 +38,6 @@ const TRADE_LABELS: Record<string, string> = {
 };
 
 export function ContractingTenderPage() {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const projectIdParam = searchParams.get('projectId');

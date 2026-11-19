@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 import { contractingApi } from '../../api/contracting.api';
 import { roundMoneyValue } from '@/shared/utils/money';
+import type { MoneyDigits } from '@/shared/utils/money';
 import { toast } from '@/shared/components/system-alert';
 import { ImportBoqModal } from '../../components/LazyImportBoqModal';
 import { ImportMasterBoqModal } from '../../components/ImportMasterBoqModal';
@@ -25,7 +26,7 @@ export interface TenderModalsProps {
   globalProfitMargin: number;
   globalOverhead: number;
   globalWaste: number;
-  bookDigits: number;
+  bookDigits: MoneyDigits;
   isImportMasterOpen: boolean;
   setIsImportMasterOpen: Dispatch<SetStateAction<boolean>>;
   isAutoPricingOpen: boolean;
