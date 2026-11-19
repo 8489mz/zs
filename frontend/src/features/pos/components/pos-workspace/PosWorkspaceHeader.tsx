@@ -15,12 +15,9 @@ import { toast } from '@/shared/components/system-alert';
 
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import type { PosSaleMode } from '@/features/pos/lib/pos-sale-mode';
-import { dispatchPosChromeToggle, dispatchPosFullscreenToggle } from '@/features/pos/lib/pos-shell';
 import { usePosOfflineSync } from '@/features/pos/hooks/usePosOfflineSync';
 import { useAuthStore, isAdminUser } from '@/stores/auth-store';
 import {
-  MaximizeIcon,
-  MenuIcon,
   PrinterIcon,
   SlidersIcon,
 } from '@/shared/components/icons/AppIcons';
@@ -29,6 +26,7 @@ import { PosWorkspaceHeaderBadge } from '@/features/pos/components/pos-workspace
 import { PosWorkspaceHeaderTableControls } from '@/features/pos/components/pos-workspace/pos-workspace-header/PosWorkspaceHeaderTableControls';
 import { PosWorkspaceHeaderHubButtons } from '@/features/pos/components/pos-workspace/pos-workspace-header/PosWorkspaceHeaderHubButtons';
 import { PosWorkspaceHeaderShiftControls } from '@/features/pos/components/pos-workspace/pos-workspace-header/PosWorkspaceHeaderShiftControls';
+import { PosWorkspaceHeaderWindowControls } from '@/features/pos/components/pos-workspace/pos-workspace-header/PosWorkspaceHeaderWindowControls';
 
 interface PosWorkspaceHeaderProps {
   pos: PosWorkspaceState;
@@ -281,53 +279,7 @@ function PosWorkspaceHeaderComponent({
             onRequestOpenShift={onRequestOpenShift}
           />
 
-          {/* 8. Compact Window Controls */}
-          <div className="desktop-only-toolbar-item pos-window-controls" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginInlineStart: 'auto' }}>
-            <button
-              type="button"
-              onClick={() => dispatchPosChromeToggle()}
-              title={t('pos.pos_workspace.pos_workspace_header.s51', "إظهار / إخفاء القائمة الجانبية (F10)")}
-              style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '8px',
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#475569',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#0f172a'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#475569'; }}
-            >
-              <MenuIcon size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => dispatchPosFullscreenToggle()}
-              title={t('pos.pos_workspace.pos_workspace_header.s52', "ملء الشاشة الكاملة (F11)")}
-              style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '8px',
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#475569',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#0f172a'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#475569'; }}
-            >
-              <MaximizeIcon size={15} />
-            </button>
-          </div>
+          <PosWorkspaceHeaderWindowControls />
         </div>
       )}
     />
