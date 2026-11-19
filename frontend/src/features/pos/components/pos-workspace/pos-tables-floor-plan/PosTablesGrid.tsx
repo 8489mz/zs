@@ -19,12 +19,12 @@ interface PosTablesGridProps {
   kdsTableMap: Map<string, KdsTicket>;
   pendingCallsByTable: Map<string, TableServiceCall[]>;
   currentTableNumber: string;
-  currentCartItemsCount: number | undefined;
+  currentCartItemsCount: number;
   pendingRecallId: string;
   isSubmittingTable: boolean;
   handleTableClick: (tableNum: string) => Promise<void>;
   confirmedReservationsMap: Map<string, TableReservation>;
-  currentCartTotal: number | undefined;
+  currentCartTotal: number;
   handleOpenItemTransfer: (tableNum: string) => void;
   handleResolveTableCalls: (e: React.MouseEvent, tableNum: string) => Promise<void>;
   firingTable: string | null;

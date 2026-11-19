@@ -30,7 +30,7 @@ interface PosFloorStatsBarProps {
   confirmedReservationsMap: Map<string, TableReservation>;
   setIsPrintersModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
   currentTableNumber: string;
-  currentCartItemsCount: number | undefined;
+  currentCartItemsCount: number;
   heldDrafts: HeldPosDraftSummary[];
   setIsTransferring: React.Dispatch<React.SetStateAction<boolean>>;
   isTransferring: boolean;
