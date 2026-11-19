@@ -21,20 +21,15 @@ import {
 import { resolveCurrentVertical } from '@/shared/verticals/vertical-scope';
 import { useToolbarStore } from '@/stores/toolbar-store';
 import { resolveAutoBreadcrumbs } from '@/shared/layout/breadcrumbs.helper';
-import { AppShellNavItem } from '@/shared/layout/app-shell/app-shell-nav-item';
 import { useVisibleNavigationItems } from '@/shared/layout/app-shell/use-visible-navigation-items';
-import { manufacturingOrder, importOrder, servicesOrder, standardOrder } from '@/shared/layout/app-shell/app-shell-navigation-orders-b';
 
 import { AppShellSidebar } from '@/shared/layout/app-shell/app-shell-sidebar';
 import { AppShellMain } from '@/shared/layout/app-shell/app-shell-main';
-
-import { defaultIconTone, activeIconTone, type SidebarGroupDefinition } from '@/shared/layout/app-shell/app-shell-types';
 
 import type { ContextMenuTarget } from '@/shared/layout/SidebarContextMenu';
 
 import { translateUiText } from '@/lib/auto-translator';
 import { useSidebarGroups } from '@/shared/layout/app-shell/use-sidebar-groups';
-import { warehousingOrder, wholesaleVanOrder, contractingOrder, maritimeOrder } from '@/shared/layout/app-shell/app-shell-navigation-orders-a';
 
 function formatWorkspaceName(name: string, isEn = false) {
   if (isEn) {
@@ -53,8 +48,7 @@ function formatWorkspaceName(name: string, isEn = false) {
 }
 
 export function AppShell({ children }: PropsWithChildren) {
-  const { t: __t } = useTranslation();
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
   const isEn = Boolean(i18n.language && i18n.language.startsWith('en'));
 
   useEffect(() => {
