@@ -5,3 +5,5 @@ export { UpdateShipmentCostsDto } from './import-sales-dto/import-sales-dto-ship
 export { AddShipmentItemDto, UpdateShipmentItemDto, RecordForeignTransferDto } from './import-sales-dto/import-sales-dto-shipment-items';
 
 export { CreateImportProjectDto, UpdateImportProjectDto } from './import-sales-dto/import-sales-dto-projects';
+
+export { CalculateFeasibilityDto, CreateChinaSupplierDto, UpsertSupplierMetaDto } from './import-sales-dto/import-sales-dto-sourcing';
