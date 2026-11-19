@@ -27,6 +27,18 @@
  * statements, 7 backend + 12 frontend bidirectional pairs, 79
  * external imports into `accounting-posting.service` and 15 into
  * `accounting-tenant-foundation.service` (callers outside accounting).
+ * File #32 (restaurant-advanced-fnb split) re-pins sales->accounting
+ * 52 -> 58: the split moves the facade's accounting imports into the
+ * slices that use them (tips-create 3, prep 1, stamps-costing 2,
+ * manager-comp 2 engine statements + the AccountingPostingService
+ * type for its ctor = 9 statements where the facade had 4 — 3 engine
+ * imports + the posting-service import, which stays on the facade),
+ * so the same imports are now stated once per slice instead of once
+ * for the whole file. Pure-move consequence, no new coupling: every
+ * added statement is an import the pre-split facade already had.
+ * Backend total re-pinned 652 -> 658 in the same repair (the spec
+ * reports exactly 658: pristine total was exactly 652, +6 = the
+ * edge delta, no other growth).
  *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
@@ -99,7 +111,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'returns->settings': 3,
   'saas-admin->settings': 3,
   'saas-admin->storefront': 2,
-  'sales->accounting': 52,
+  'sales->accounting': 58,
   'sales->cash-drawer': 4,
   'sales->delivery-reps': 2,
   'sales->import-sales': 3,
@@ -188,7 +200,7 @@ const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|hr', 'accounti
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|treasury', 'accounts|purchases', 'audit|settings', 'cash-drawer|pos', 'customers|sales', 'inventory|products', 'maintenance|products', 'pos|products', 'pos|sales', 'pos|settings', 'pos|storefront', 'products|settings'];
 const PINNED_POSTING_EXTERNAL = 79;
 const PINNED_FOUNDATION_EXTERNAL = 15;
-const PINNED_BACKEND_TOTAL = 652;
+const PINNED_BACKEND_TOTAL = 658;
 const PINNED_FRONTEND_TOTAL = 133;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
