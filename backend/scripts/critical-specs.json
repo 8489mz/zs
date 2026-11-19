@@ -94,6 +94,7 @@
     "test/critical/pos-bridge-security.spec.ts",
     "test/critical/forex-rate-validation.spec.ts",
     "test/critical/offline-update-sha256.spec.ts",
+    "test/critical/updates-cors.spec.ts",
     "test/critical/customer-payment-job-ownership.spec.ts",
     "test/critical/bank-statement-integrity.spec.ts",
     "test/critical/supplier-schedule-coverage.spec.ts",

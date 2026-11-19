@@ -18,7 +18,7 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 import { RequestContextInterceptor } from './common/interceptors/request-context.interceptor';
 import { ResponseMetadataInterceptor } from './common/interceptors/response-metadata.interceptor';
 import { requestValidationPipe } from './common/pipes/request-validation.pipe';
-import { isPublicApiPath, resolvePublicApiCorsOrigin } from './common/utils/public-cors-origin.util';
+import { buildCorsOriginCallback } from './common/utils/cors-options.util';
 import { LoggerService } from './core/logging/logger.service';
 import { isDesktopRuntimeMode } from './config/app-mode';
 import { JSON_BODY_LIMIT } from './config/http-limits';
@@ -156,33 +156,11 @@ async function bootstrap(): Promise<void> {
     .map((value) => value.trim())
     .filter(Boolean);
 
-  app.enableCors((req: any, callback: any) => {
-    const originHeader = req.headers?.origin;
-    // Public marketing endpoints (pricing catalog, trial signup) must be
-    // readable from the marketing site regardless of the CORS_ORIGINS env
-    // list: the single pricing endpoint serves the website, the in-app
-    // client, and every other caller, so a missing env entry must never
-    // silently hide prices. Exact-origin match only; any other origin is
-    // denied (no Access-Control-Allow-Origin header).
-    if (isPublicApiPath(req.url)) {
-      callback(null, {
-        origin: resolvePublicApiCorsOrigin(originHeader, corsOrigins),
-        credentials: true,
-      });
-      return;
-    }
-    if (req.url && req.url.startsWith('/api/updates/') && req.method === 'GET') {
-      callback(null, { origin: originHeader || true, credentials: true });
-    } else {
-      let allowedOrigins: (string | RegExp)[] = [...corsOrigins];
-      const isLanServer = process.env.APP_MODE === 'SELF_CONTAINED' && process.env.ELECTRON_RUNTIME_MODE === 'lan_server';
-      if (isLanServer) {
-        allowedOrigins.push('null');
-      }
-
-      callback(null, { origin: allowedOrigins, credentials: true });
-    }
-  });
+  // CORS policy lives in cors-options.util.ts (buildCorsOriginCallback):
+  // public marketing paths allow the marketing origin + CORS_ORIGINS,
+  // every other path (including GET /api/updates/*) allows CORS_ORIGINS
+  // only. No origin is ever reflected back.
+  app.enableCors(buildCorsOriginCallback(corsOrigins));
 
   const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
   if (isDesktopRuntimeMode(configService.get<string>('app.mode')) || isDev) {
