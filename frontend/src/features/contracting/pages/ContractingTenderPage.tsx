@@ -1,23 +1,12 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect, useMemo, Fragment } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AppIcons } from '@/shared/components/icons/AppIcons';
-import { getTextDirection } from '@/lib/arabic-normalization';
 import { contractingApi } from '../api/contracting.api';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
-import { ImportBoqModal } from '../components/LazyImportBoqModal';
-import { ImportMasterBoqModal } from '../components/ImportMasterBoqModal';
-import { AutoPricingModal } from '../components/AutoPricingModal';
-import { ClientQuotationModal } from '../components/ClientQuotationModal';
-import { MarkTenderLostModal } from '../components/MarkTenderLostModal';
-import { AwardTenderModal } from '../components/AwardTenderModal';
-import { TenderSwitcherModal } from '../components/TenderSwitcherModal';
-import { ContractingWorkflowMapModal } from '../components/ContractingWorkflowMapModal';
 import { BRICK_SIZE_PRESETS } from '../components/TenderEstimatorModal';
 import { useContracting } from '../context/ContractingContext';
-import { matchEngineeringConstant } from '../utils/engineeringMasterPricingCore';
 import { exportPricedBoqWorkbook } from '../utils/originalWorkbookPricer';
 import { useTenderCalculations } from './tender/useTenderCalculations';
 import { TenderModals } from './tender/TenderModals';
@@ -48,9 +37,6 @@ const TRADE_LABELS: Record<string, string> = {
   finishes: 'أعمال الدهانات والتشطيب',
   general: 'أعمال عامة ومتنوعة',
 };
-
-
-
 
 export function ContractingTenderPage() {
   const { t } = useTranslation();
