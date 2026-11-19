@@ -16,11 +16,13 @@ import { AppError } from '../../common/errors/app-error';
 import { AUDIT_EVENT_CODES } from '../../core/audit/audit.service';
 import { VanSalesDriverPreSalesSlice } from './van-sales-driver/van-sales-driver-pre-sales';
 import { VanSalesDriverTripsSettleSlice } from './van-sales-driver/van-sales-driver-trips-settle';
+import { VanSalesDriverSalesSlice } from './van-sales-driver/van-sales-driver-sales';
 
 @Controller('api/driver-portal/van-sales')
 export class VanSalesController {
   private readonly preSalesSlice: VanSalesDriverPreSalesSlice;
   private readonly tripsSettleSlice: VanSalesDriverTripsSettleSlice;
+  private readonly driverSales: VanSalesDriverSalesSlice;
 
   constructor(
     private readonly vanSalesService: VanSalesService,
@@ -39,6 +41,10 @@ export class VanSalesController {
       this.deliveryRepsService,
       this.verifyDriver.bind(this),
     );
+    this.driverSales = new VanSalesDriverSalesSlice({
+      vanSalesService: this.vanSalesService,
+      verifyDriver: this.verifyDriver.bind(this),
+    });
   }
 
   /**
@@ -204,10 +210,7 @@ export class VanSalesController {
       // offline (outbox createdAt, ISO with offset).
       offlineCreatedAt?: string;
     },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanSalesService.executeFieldSale(driver.repId, driver.tenantId, driver.accountId, body);
-  }
+  ) { return this.driverSales.executeSale(authHeader, body); }
 
   @Get('sales')
   async listDriverSales(
@@ -218,18 +221,7 @@ export class VanSalesController {
     @Query('search') search?: string,
     @Query('tripId') tripId?: string,
     @Query('discountedOnly') discountedOnly?: string,
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    const sales = await this.vanSalesService.listDriverSales(driver.tenantId, driver.repId, {
-      dateScope: dateScope || 'all',
-      customerId: customerId ? Number(customerId) : undefined,
-      paymentMethod,
-      search,
-      tripId: tripId ? Number(tripId) : undefined,
-      discountedOnly: discountedOnly === 'true',
-    });
-    return { ok: true, sales };
-  }
+  ) { return this.driverSales.listDriverSales(authHeader, dateScope, customerId, paymentMethod, search, tripId, discountedOnly); }
 
   @Post('collections')
   async recordCollection(
@@ -251,10 +243,7 @@ export class VanSalesController {
       // made offline (outbox createdAt, ISO with offset).
       offlineCreatedAt?: string;
     },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanSalesService.recordFieldCollection(driver.repId, driver.tenantId, driver.accountId, body);
-  }
+  ) { return this.driverSales.recordCollection(authHeader, body); }
 
   @Post('trips/:tripId/damaged-swap')
   async executeDamagedSwap(
@@ -271,33 +260,19 @@ export class VanSalesController {
       notes?: string;
       clientTxId?: string;
     },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanSalesService.executeDamagedSwap(driver.repId, driver.tenantId, driver.accountId, {
-      tripId,
-      ...body,
-    });
-  }
+  ) { return this.driverSales.executeDamagedSwap(authHeader, tripId, body); }
 
   @Get('trips/:tripId/damaged-swaps')
   async listTripDamagedSwaps(
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    const swaps = await this.vanSalesService.listTripDamagedSwaps(driver.tenantId, tripId, driver.repId);
-    return { ok: true, swaps };
-  }
+  ) { return this.driverSales.listTripDamagedSwaps(authHeader, tripId); }
 
   @Get('customers/:customerId/eligible-sales')
   async getCustomerEligibleSales(
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    const sales = await this.vanSalesService.getCustomerEligibleSales(driver.tenantId, customerId, driver.repId);
-    return { ok: true, sales };
-  }
+  ) { return this.driverSales.getCustomerEligibleSales(authHeader, customerId); }
 
   @Post('field-returns')
   async submitFieldReturn(
@@ -315,10 +290,7 @@ export class VanSalesController {
       // offline (outbox createdAt, ISO with offset).
       offlineCreatedAt?: string;
     },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanSalesService.submitFieldReturn(driver.repId, driver.tenantId, driver.accountId, body);
-  }
+  ) { return this.driverSales.submitFieldReturn(authHeader, body); }
 
   @Post('requisitions')
   async submitLoadRequisition(
