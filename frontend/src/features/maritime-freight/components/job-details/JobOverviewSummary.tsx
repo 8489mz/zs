@@ -12,8 +12,6 @@ interface JobOverviewSummaryProps {
   handleSettleFromBalance: () => Promise<void>;
   handleOpenEditVoyage: () => void;
   handleCopyTrackingLink: () => void;
-  setSmartParseText: Dispatch<SetStateAction<string>>;
-  setParsedBookingData: Dispatch<SetStateAction<any | null>>;
   setShowSmartParseModal: Dispatch<SetStateAction<boolean>>;
 }
 
@@ -27,8 +25,6 @@ export function JobOverviewSummary({
   handleSettleFromBalance,
   handleOpenEditVoyage,
   handleCopyTrackingLink,
-  setSmartParseText,
-  setParsedBookingData,
   setShowSmartParseModal,
 }: JobOverviewSummaryProps) {
   const { t } = useTranslation();
@@ -92,8 +88,6 @@ export function JobOverviewSummary({
                     <button
                       type="button"
                       onClick={() => {
-                        setSmartParseText('');
-                        setParsedBookingData(null);
                         setShowSmartParseModal(true);
                       }}
                       style={{

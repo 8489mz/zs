@@ -1,8 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useRef } from 'react';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
-import { Field } from '@/shared/ui/field';
-import { CustomSelect } from '@/shared/ui/custom-select';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { maritimeApi, MaritimeJob, MaritimeContainer, MaritimeCarrierInvoice, CargoInsurance, WarehouseReceipt } from '../api/maritime-freight.api';
@@ -513,8 +511,6 @@ export function JobDetailsModal({ open, jobId, onClose, onUpdated }: JobDetailsM
                   handleSettleFromBalance={handleSettleFromBalance}
                   handleOpenEditVoyage={handleOpenEditVoyage}
                   handleCopyTrackingLink={handleCopyTrackingLink}
-                  setSmartParseText={setSmartParseText}
-                  setParsedBookingData={setParsedBookingData}
                   setShowSmartParseModal={setShowSmartParseModal}
                 />
 
@@ -592,8 +588,7 @@ export function JobDetailsModal({ open, jobId, onClose, onUpdated }: JobDetailsM
             )}
 
             {/* Tab 5: ربحية العملية والحسابات */}
-            {activeTab === 'finance' && (() => {
-              return (
+            {activeTab === 'finance' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <JobFinanceSummary
                     job={job}
@@ -624,8 +619,7 @@ export function JobDetailsModal({ open, jobId, onClose, onUpdated }: JobDetailsM
                     handleOpenClaim={handleOpenClaim}
                   />
                 </div>
-              );
-            })()}
+            )}
           </div>
         </div>
       </StandardDialog>

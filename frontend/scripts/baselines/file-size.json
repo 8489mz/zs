@@ -43,7 +43,6 @@
     "src/features/import-sales/api/shipments.api.ts": 2081,
     "src/features/inventory/components/sections/InventoryComposerCards.tsx": 1278,
     "src/features/maritime-freight/api/maritime-freight.api.ts": 1365,
-    "src/features/maritime-freight/components/JobDetailsModal.tsx": 4143,
     "src/features/maritime-freight/components/MaritimeMasterDataTab.tsx": 2701,
     "src/features/maritime-freight/components/MaritimeSettingsTab.tsx": 1315,
     "src/features/maritime-freight/pages/MaritimeCustomerPortalPage.tsx": 1686,
