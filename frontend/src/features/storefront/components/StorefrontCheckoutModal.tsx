@@ -18,6 +18,7 @@ import { saveLocalOrderRecord } from './StorefrontMyOrdersModal';
 import { calculateCartSubtotal } from '../lib/storefront-cart-pricing';
 import { getContrastTextColor } from '../lib/storefront-theme-contrast';
 import { useBodyScrollLock } from '@/shared/components/dialog-shell';
+import { CheckoutPaymentSection } from './storefront-checkout/checkout-payment-section';
 import { CheckoutNotesPromoBar } from './storefront-checkout/checkout-notes-promo-bar';
 import { CheckoutCustomerSection } from './storefront-checkout/checkout-customer-section';
 import { useKuwaitAddress } from './storefront-checkout/use-kuwait-address';
@@ -791,203 +792,17 @@ export function StorefrontCheckoutModal({
 
               {/* Column 2: Payment, Promo, Summary */}
               <div className="storefront-checkout-col">
-                {/* Payment Method Selector */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#1e293b', marginBottom: '3px' }}>
-                    {t('storefront.storefront_checkout_modal.s32', "طريقة الدفع")}
-                  </label>
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      gap: '6px',
-                      width: '100%',
-                    }}
-                  >
-                    {/* COD Option */}
-                    <div
-                      onClick={() => setPaymentMethod('cod')}
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        border: paymentMethod === 'cod' ? `2px solid ${brandColor}` : '1.5px solid #cbd5e1',
-                        background: paymentMethod === 'cod' ? 'rgba(23, 14, 94, 0.04)' : '#ffffff',
-                        borderRadius: '8px',
-                        padding: '4px 8px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        height: '36px',
-                        boxSizing: 'border-box',
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: '12px',
-                          height: '12px',
-                          borderRadius: '50%',
-                          border: paymentMethod === 'cod' ? `3.5px solid ${brandColor}` : '1.5px solid #94a3b8',
-                          background: '#ffffff',
-                          flexShrink: 0,
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: '11.5px',
-                          fontWeight: 700,
-                          color: paymentMethod === 'cod' ? brandColor : '#0f172a',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {isDineIn ? t('storefront.storefront_checkout_modal.s33', "في الصالة") : isEn ? "Cash on Delivery" : "عند الاستلام"}
-                      </span>
-                    </div>
-
-                    {/* Pre-payment Option */}
-                    <div
-                      onClick={() => setPaymentMethod('instapay_wallet')}
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        border: paymentMethod === 'instapay_wallet' ? `2px solid ${brandColor}` : '1.5px solid #cbd5e1',
-                        background: paymentMethod === 'instapay_wallet' ? 'rgba(23, 14, 94, 0.04)' : '#ffffff',
-                        borderRadius: '8px',
-                        padding: '4px 8px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        height: '36px',
-                        boxSizing: 'border-box',
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: '12px',
-                          height: '12px',
-                          borderRadius: '50%',
-                          border: paymentMethod === 'instapay_wallet' ? `3.5px solid ${brandColor}` : '1.5px solid #94a3b8',
-                          background: '#ffffff',
-                          flexShrink: 0,
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: '11.5px',
-                          fontWeight: 700,
-                          color: paymentMethod === 'instapay_wallet' ? brandColor : '#0f172a',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {isKuwait ? (isEn ? "Bank Transfer" : "تحويل بنكي") : t('storefront.storefront_checkout_modal.s37', "إنستاباي / محفظة")}
-                      </span>
-                    </div>
-
-                    {/* Credit Card Online Payment Option */}
-                    {info?.onlinePaymentEnabled && (
-                      <div
-                        onClick={() => setPaymentMethod('credit_card')}
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          border: paymentMethod === 'credit_card' ? `2px solid ${brandColor}` : '1.5px solid #cbd5e1',
-                          background: paymentMethod === 'credit_card' ? 'rgba(23, 14, 94, 0.04)' : '#ffffff',
-                          borderRadius: '8px',
-                          padding: '4px 8px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '5px',
-                          height: '36px',
-                          boxSizing: 'border-box',
-                          transition: 'all 0.15s ease',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '12px',
-                            height: '12px',
-                            borderRadius: '50%',
-                            border: paymentMethod === 'credit_card' ? `3.5px solid ${brandColor}` : '1.5px solid #94a3b8',
-                            background: '#ffffff',
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span
-                          style={{
-                            fontSize: '11.5px',
-                            fontWeight: 700,
-                            color: paymentMethod === 'credit_card' ? brandColor : '#0f172a',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {isKuwait ? (isEn ? "K-NET / Card" : "كي نت / بطاقة") : t('storefront.storefront_checkout_modal.s39', "بطاقة بنكية")}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Notice if credit_card is selected */}
-                  {paymentMethod === 'credit_card' && (
-                    <div
-                      style={{
-                        marginTop: '6px',
-                        background: '#f0f9ff',
-                        border: '1px solid #bae6fd',
-                        borderRadius: '6px',
-                        padding: '6px 10px',
-                        fontSize: '11.5px',
-                        color: '#0369a1',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '3px',
-                      }}
-                    >
-                      <div style={{ fontWeight: 800 }}>
-                        {isKuwait ? t('storefront.storefront_checkout_modal.s40', "دفع إلكتروني فوري وآمن (كي نت / بطاقات بنكية):") : t('storefront.storefront_checkout_modal.s41', "دفع إلكتروني فوري وآمن:")}
-                      </div>
-                      <div style={{ color: '#0c4a6e', fontSize: '11px', lineHeight: '1.4' }}>
-                        {isKuwait
-                          ? `سيتم فتح بوابة الدفع الآمنة لسداد مبلغ الطلب (${formatMoney(total)} ${activeCurrencySymbol}) فور الضغط على إرسال الطلب.`
-                          : `سيتم فتح بوابة الدفع الآمنة لسداد مبلغ الطلب (${formatMoney(total)} ${activeCurrencySymbol}) ببطاقتك البنكية فور الضغط على إرسال الطلب.`}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Notice if instapay/wallet is selected */}
-                  {paymentMethod === 'instapay_wallet' && (
-                    <div
-                      style={{
-                        marginTop: '6px',
-                        background: '#f0fdf4',
-                        border: '1px solid #bbf7d0',
-                        borderRadius: '6px',
-                        padding: '6px 10px',
-                        fontSize: '11.5px',
-                        color: '#166534',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '3px',
-                      }}
-                    >
-                      <div style={{ fontWeight: 800 }}>
-                        {isKuwait ? t('storefront.storefront_checkout_modal.s42', "بيانات التحويل البنكي / الرابط:") : t('storefront.storefront_checkout_modal.s43', "رقم التحويل (إنستاباي / كاش):")}{' '}
-                        <span style={{ direction: 'ltr', display: 'inline-block', color: brandColor, fontWeight: 900 }}>
-                          {info?.whatsappPhone || t('storefront.storefront_checkout_modal.s44', "يرجى التواصل عبر الواتساب")}
-                        </span>
-                      </div>
-                      <div style={{ color: '#15803d', fontSize: '11px', lineHeight: '1.4' }}>
-                        {isKuwait
-                          ? `يرجى تحويل مبلغ الطلب (${formatMoney(total)} ${activeCurrencySymbol}) وإرسال إشعار التحويل عبر الواتساب لتأكيد الطلب فوراً.`
-                          : `يرجى تحويل مبلغ الطلب (${formatMoney(total)} ${activeCurrencySymbol}) وإرسال إشعار التحويل عبر الواتساب لتأكيد الشحن فوراً.`}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <CheckoutPaymentSection
+                  paymentMethod={paymentMethod}
+                  setPaymentMethod={setPaymentMethod}
+                  total={total}
+                  formatMoney={formatMoney}
+                  brandColor={brandColor}
+                  activeCurrencySymbol={activeCurrencySymbol}
+                  isKuwait={isKuwait}
+                  isDineIn={isDineIn}
+                  info={info}
+                />
 
                 {/* Automatic Free Shipping Callout (Hidden for Dine-In) */}
                 {!isDineIn && info?.freeShippingEnabled && (
