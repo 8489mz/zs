@@ -3,14 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { PosWorkspaceHeader } from '@/features/pos/components/pos-workspace/PosWorkspaceHeader';
 import { PosWorkspaceMainContent } from '@/features/pos/components/pos-workspace/PosWorkspaceMainContent';
 import { PosWorkspaceTablesDialog } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceTablesDialog';
-import { PosItemModifiersModal } from '@/features/pos/components/pos-cart-panel/PosItemModifiersModal';
-import { PosDraftSwitcherOverlay } from '@/features/pos/components/pos-workspace/PosDraftSwitcherOverlay';
-import { PosOpenShiftModal } from '@/features/pos/components/pos-workspace/PosOpenShiftModal';
-import { SerialLookupModal } from '@/features/products/components/SerialLookupModal';
-import { QuickProductModal } from '@/shared/components/QuickProductModal';
 import { PosNewProductModal } from '@/features/pos/components/pos-workspace/PosNewProductModal';
 import { PosScannedInvoiceModal } from '@/features/pos/components/pos-workspace/PosScannedInvoiceModal';
-import { PosRecentSalesReprintModal } from '@/features/pos/components/pos-workspace/PosRecentSalesReprintModal';
 import { PosPhoneOrderDialog } from '@/features/pos/components/pos-workspace/PosPhoneOrderDialog';
 import { PosCallerIdFloatingAlert } from '@/features/pos/components/pos-workspace/PosCallerIdFloatingAlert';
 import { printOrderCupLabels } from '@/lib/pos-printing/cup-label';
@@ -42,6 +36,7 @@ import {
 import type { PosPriceType } from '@/features/pos/types/pos.types';
 import type { Product, Sale } from '@/types/domain';
 import { toast } from '@/shared/components/system-alert';
+import { PosWorkspaceAuxDialogs1 } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceAuxDialogs1';
 import { PosWorkspaceConfirmDialogsSection } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceConfirmDialogsSection';
 import { PosWorkspaceHeldDraftsDialog } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceHeldDraftsDialog';
 import { PosWorkspaceCheckoutDialogs } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceCheckoutDialogs';
@@ -742,80 +737,21 @@ export function PosWorkspace() {
         setSaleSuccessDialogOpen={setSaleSuccessDialogOpen}
       />
 
-      {reprintModalOpen && (
-        <PosRecentSalesReprintModal
-          isOpen={reprintModalOpen}
-          onClose={() => {
-            setReprintModalOpen(false);
-            focusBarcodeEntry();
-          }}
-          lastSale={pos.lastSale}
-          settings={pos.settingsQuery.data || null}
-          cashierName={(pos.ownOpenShift as any)?.openedByName || '—'}
-          onReprintLastSale={() => {
-            pos.reprintLastSale();
-          }}
-        />
-      )}
-
-      <PosDraftSwitcherOverlay
-        drafts={pos.heldDraftSummaries}
-        onRecall={requestRecallHeldDraftByIndex}
+      <PosWorkspaceAuxDialogs1
+        reprintModalOpen={reprintModalOpen}
+        setReprintModalOpen={setReprintModalOpen}
+        focusBarcodeEntry={focusBarcodeEntry}
+        pos={pos}
+        requestRecallHeldDraftByIndex={requestRecallHeldDraftByIndex}
+        modifiersModalLineKey={modifiersModalLineKey}
+        setModifiersModalLineKey={setModifiersModalLineKey}
+        openShiftModalOpen={openShiftModalOpen}
+        setOpenShiftModalOpen={setOpenShiftModalOpen}
+        serialLookupOpen={serialLookupOpen}
+        setSerialLookupOpen={setSerialLookupOpen}
+        quickServiceOpen={quickServiceOpen}
+        setQuickServiceOpen={setQuickServiceOpen}
       />
-
-      <PosItemModifiersModal
-        open={Boolean(modifiersModalLineKey)}
-        onClose={() => {
-          setModifiersModalLineKey('');
-          focusBarcodeEntry();
-        }}
-        item={pos.cart.find((item) => item.lineKey === modifiersModalLineKey) || null}
-        onSave={(modifiers) => {
-          if (modifiersModalLineKey) {
-            pos.setItemModifiers(modifiersModalLineKey, modifiers);
-          }
-        }}
-      />
-
-      {openShiftModalOpen && (
-        <PosOpenShiftModal
-          open={openShiftModalOpen}
-          onClose={() => {
-            setOpenShiftModalOpen(false);
-            focusBarcodeEntry();
-          }}
-          branches={pos.branchesQuery.data || []}
-          locations={pos.locationsQuery.data || []}
-          defaultBranchId={pos.branchId}
-          defaultLocationId={pos.locationId}
-          requirePassword={Boolean(pos.settings?.requirePasswordOnShiftOpen)}
-          onShiftOpened={() => {
-            void pos.refetchCatalogs();
-          }}
-        />
-      )}
-
-      {serialLookupOpen && (
-        <SerialLookupModal
-          open={serialLookupOpen}
-          onClose={() => {
-            setSerialLookupOpen(false);
-            focusBarcodeEntry();
-          }}
-        />
-      )}
-
-      {quickServiceOpen && (
-        <QuickProductModal
-          isOpen={quickServiceOpen}
-          onClose={() => setQuickServiceOpen(false)}
-          itemType="service"
-          onSuccess={(newServiceProduct) => {
-            pos.handleAddProduct(newServiceProduct);
-            focusBarcodeEntry();
-          }}
-        />
-      )}
 
       {newProductModalOpen && (
         <PosNewProductModal
