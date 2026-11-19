@@ -43,33 +43,7 @@ const DeveloperActivationPanel = lazy(() => import('@/shared/system/DeveloperAct
 const LiveOrderNotificationBanner = lazy(() => import('@/features/storefront/components/LiveOrderNotificationBanner').then((m) => ({ default: m.LiveOrderNotificationBanner })));
 
 
-type SidebarGroupDefinition = {
-  key: string;
-  label: string;
-  itemKeys: string[];
-  iconKey?: string;
-};
-
-type IconTone = {
-  bg: string;
-  border: string;
-  fg: string;
-  glow: string;
-};
-
-const defaultIconTone: IconTone = {
-  bg: '#f8fafc',
-  border: '#e2e8f0',
-  fg: '#475569',
-  glow: 'transparent',
-};
-
-const activeIconTone: IconTone = {
-  bg: '#eef2ff',
-  border: '#c7d2fe',
-  fg: '#170e5e',
-  glow: 'rgba(23, 14, 94, 0.08)',
-};
+import { defaultIconTone, activeIconTone, type SidebarGroupDefinition } from './app-shell/app-shell-types';
 
 
 import { AppNavIcon } from '@/shared/layout/nav-icons';
