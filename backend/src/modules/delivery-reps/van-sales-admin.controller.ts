@@ -12,6 +12,7 @@ import { RequireFeature } from '../../core/auth/decorators/feature.decorator';
 import { VanSalesAdminPreSalesTripsSlice } from './van-sales-admin/van-sales-admin-pre-sales-trips';
 import { VanSalesAdminFleetSlice } from './van-sales-admin/van-sales-admin-fleet';
 import { VanSalesAdminTargetsSlice } from './van-sales-admin/van-sales-admin-targets';
+import { VanSalesAdminOpsSlice } from './van-sales-admin/van-sales-admin-ops';
 
 @Controller('api/van-sales/admin')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -20,6 +21,7 @@ export class VanSalesAdminController {
   private readonly adminPreSalesTrips: VanSalesAdminPreSalesTripsSlice;
   private readonly adminFleet: VanSalesAdminFleetSlice;
   private readonly adminTargets: VanSalesAdminTargetsSlice;
+  private readonly adminOps: VanSalesAdminOpsSlice;
 
   constructor(
     private readonly vanSalesService: VanSalesService,
@@ -36,6 +38,9 @@ export class VanSalesAdminController {
       this.vanSalesService,
     );
     this.adminTargets = new VanSalesAdminTargetsSlice(
+      this.vanSalesService,
+    );
+    this.adminOps = new VanSalesAdminOpsSlice(
       this.vanSalesService,
     );
   }
@@ -495,5 +500,135 @@ export class VanSalesAdminController {
     },
   ) {
     return this.adminTargets.recordFuelLog(req, body);
+  }
+
+  @Get('oil-changes')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async listOilChanges(
+    @Req() req: RequestWithAuth,
+    @Query('vehicleId') vehicleId?: string,
+  ) {
+    return this.adminOps.listOilChanges(req, vehicleId);
+  }
+
+  @Post('oil-changes')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async recordOilChange(
+    @Req() req: RequestWithAuth,
+    @Body()
+    body: {
+      vehicleId: number;
+      odometerAtChange: number;
+      oilType: string;
+      ratedKm: number;
+      withFilter: boolean;
+      alertKmBefore?: number;
+      cost?: number;
+      performedBy?: string;
+      notes?: string;
+      repId?: number;
+    },
+  ) {
+    return this.adminOps.recordOilChange(req, body);
+  }
+
+  @Get('maintenance-alerts')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async getMaintenanceAlerts(@Req() req: RequestWithAuth) {
+    return this.adminOps.getMaintenanceAlerts(req);
+  }
+
+  @Get('vehicles/:id/drivers')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async listVehicleDrivers(
+    @Req() req: RequestWithAuth,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.adminOps.listVehicleDrivers(req, id);
+  }
+
+  @Post('vehicles/:id/drivers')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async assignVehicleDriver(
+    @Req() req: RequestWithAuth,
+    @Param('id', ParseIntPipe) id: number,
+    @Body()
+    body: {
+      repId: number;
+      shiftName: string;
+      shiftStartTime?: string;
+      shiftEndTime?: string;
+      notes?: string;
+    },
+  ) {
+    return this.adminOps.assignVehicleDriver(req, id, body);
+  }
+
+  @Delete('vehicles/:id/drivers/:driverId')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async removeVehicleDriver(
+    @Req() req: RequestWithAuth,
+    @Param('driverId', ParseIntPipe) driverId: number,
+  ) {
+    return this.adminOps.removeVehicleDriver(req, driverId);
+  }
+
+  @Get('transfers')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async listAdminTransfers(
+    @Req() req: RequestWithAuth,
+    @Query('repId') repId?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.adminOps.listAdminTransfers(req, repId, status);
+  }
+
+  @Get('trips/:id/expenses')
+  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  async getAdminTripExpenses(
+    @Req() req: RequestWithAuth,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.adminOps.getAdminTripExpenses(req, id);
+  }
+
+  @Get('trips/:id/packaging')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async getAdminTripPackaging(
+    @Req() req: RequestWithAuth,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.adminOps.getAdminTripPackaging(req, id);
+  }
+
+  @Get('customers/:customerId/packaging')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async getAdminCustomerPackaging(
+    @Req() req: RequestWithAuth,
+    @Param('customerId', ParseIntPipe) customerId: number,
+  ) {
+    return this.adminOps.getAdminCustomerPackaging(req, customerId);
+  }
+
+  @Get('fraud-radar/summary')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory', 'accounting')
+  async getFraudRadarSummary(
+    @Req() req: RequestWithAuth,
+    @Query('days') days?: string,
+    @Query('repId') repId?: string,
+  ) {
+    return this.adminOps.getFraudRadarSummary(req, days, repId);
+  }
+
+  @Get('fraud-radar/events')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory', 'accounting')
+  async getFraudRadarEvents(
+    @Req() req: RequestWithAuth,
+    @Query('days') days?: string,
+    @Query('repId') repId?: string,
+    @Query('eventCode') eventCode?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminOps.getFraudRadarEvents(req, days, repId, eventCode, limit);
   }
 }
