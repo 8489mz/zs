@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { VanSalesService } from './van-sales.service';
 import { VanPreSalesService } from './services/van-pre-sales.service';
 import { VanPromotionsService } from './services/van-promotions.service';
@@ -13,6 +13,7 @@ import { VanSalesAdminPreSalesTripsSlice } from './van-sales-admin/van-sales-adm
 import { VanSalesAdminFleetSlice } from './van-sales-admin/van-sales-admin-fleet';
 import { VanSalesAdminTargetsSlice } from './van-sales-admin/van-sales-admin-targets';
 import { VanSalesAdminOpsSlice } from './van-sales-admin/van-sales-admin-ops';
+import { VanSalesAdminPromotionsLedgerSlice } from './van-sales-admin/van-sales-admin-promotions-ledger';
 
 @Controller('api/van-sales/admin')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -22,6 +23,7 @@ export class VanSalesAdminController {
   private readonly adminFleet: VanSalesAdminFleetSlice;
   private readonly adminTargets: VanSalesAdminTargetsSlice;
   private readonly adminOps: VanSalesAdminOpsSlice;
+  private readonly adminPromotionsLedger: VanSalesAdminPromotionsLedgerSlice;
 
   constructor(
     private readonly vanSalesService: VanSalesService,
@@ -42,6 +44,12 @@ export class VanSalesAdminController {
     );
     this.adminOps = new VanSalesAdminOpsSlice(
       this.vanSalesService,
+    );
+    this.adminPromotionsLedger = new VanSalesAdminPromotionsLedgerSlice(
+      this.vanSalesService,
+      this.vanPromotionsService,
+      this.vanRoutesService,
+      this.vanFieldExecutionService,
     );
   }
 
@@ -630,5 +638,168 @@ export class VanSalesAdminController {
     @Query('limit') limit?: string,
   ) {
     return this.adminOps.getFraudRadarEvents(req, days, repId, eventCode, limit);
+  }
+
+  @Get('promotions')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async listAdminPromotions(
+    @Req() req: RequestWithAuth,
+    @Query('isActive') isActive?: string,
+    @Query('promoType') promoType?: string,
+  ) {
+    return this.adminPromotionsLedger.listAdminPromotions(req, isActive, promoType);
+  }
+
+  @Post('promotions')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async createPromotion(
+    @Req() req: RequestWithAuth,
+    @Body() body: any,
+  ) {
+    return this.adminPromotionsLedger.createPromotion(req, body);
+  }
+
+  @Put('promotions/:id')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async updatePromotion(
+    @Req() req: RequestWithAuth,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: any,
+  ) {
+    return this.adminPromotionsLedger.updatePromotion(req, id, body);
+  }
+
+  @Delete('promotions/:id')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async deletePromotion(
+    @Req() req: RequestWithAuth,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.adminPromotionsLedger.deletePromotion(req, id);
+  }
+
+  @Patch('promotions/:id/toggle-active')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async togglePromotionActive(
+    @Req() req: RequestWithAuth,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { isActive: boolean },
+  ) {
+    return this.adminPromotionsLedger.togglePromotionActive(req, id, body);
+  }
+
+  @Post('routes/optimize')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async optimizeSupervisorRoute(
+    @Req() req: RequestWithAuth,
+    @Body() body: {
+      customerIds?: number[];
+      route?: string;
+      repId?: number;
+      startLat?: number;
+      startLng?: number;
+      persistSequence?: boolean;
+    },
+  ) {
+    return this.adminPromotionsLedger.optimizeSupervisorRoute(req, body);
+  }
+
+  @Get('visits')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async listVisitsHistory(
+    @Req() req: RequestWithAuth,
+    @Query('tripId') tripId?: string,
+    @Query('repId') repId?: string,
+    @Query('customerId') customerId?: string,
+    @Query('date') date?: string,
+    @Query('noSaleOnly') noSaleOnly?: string,
+  ) {
+    return this.adminPromotionsLedger.listVisitsHistory(req, tripId, repId, customerId, date, noSaleOnly);
+  }
+
+  @Get('trade-surveys')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async listTradeSurveys(
+    @Req() req: RequestWithAuth,
+    @Query('tripId') tripId?: string,
+    @Query('customerId') customerId?: string,
+    @Query('surveyType') surveyType?: string,
+  ) {
+    return this.adminPromotionsLedger.listTradeSurveys(req, tripId, customerId, surveyType);
+  }
+
+  @Get('trips/:tripId/breadcrumbs')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async getLiveTripBreadcrumbs(
+    @Req() req: RequestWithAuth,
+    @Param('tripId', ParseIntPipe) tripId: number,
+  ) {
+    return this.adminPromotionsLedger.getLiveTripBreadcrumbs(req, tripId);
+  }
+
+  @Get('financial-ledger')
+  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  async getRepFinancialLedger(
+    @Req() req: RequestWithAuth,
+    @Query('repId') repId?: string,
+    @Query('status') status?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.adminPromotionsLedger.getRepFinancialLedger(req, repId, status, dateFrom, dateTo);
+  }
+
+  @Post('financial-ledger/:id/settle')
+  @RequirePermissions('deliveryReps')
+  async settleRepFinancialItem(
+    @Req() req: RequestWithAuth,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { method: 'cash' | 'waiver'; notes?: string; reason?: string; supervisorPin?: string },
+  ) {
+    return this.adminPromotionsLedger.settleRepFinancialItem(req, id, body);
+  }
+
+  @Post('financial-ledger/push-to-payroll')
+  @RequireAnyPermission('hrPayrollManage', 'accounting')
+  async pushRepShortagesToPayroll(
+    @Req() req: RequestWithAuth,
+    @Body() body: { settlementIds: number[]; targetMonth?: string },
+  ) {
+    return this.adminPromotionsLedger.pushRepShortagesToPayroll(req, body);
+  }
+
+  @Post('financial-ledger/bonus')
+  @RequirePermissions('deliveryReps')
+  async addRepBonusOrCommission(
+    @Req() req: RequestWithAuth,
+    @Body() body: { repId: number; entryType: 'bonus' | 'commission'; amount: number; notes: string },
+  ) {
+    return this.adminPromotionsLedger.addRepBonusOrCommission(req, body);
+  }
+
+  @Post('financial-ledger/link-employee')
+  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  async linkRepToEmployee(
+    @Req() req: RequestWithAuth,
+    @Body() body: { repId: number; employeeId: number | null },
+  ) {
+    return this.adminPromotionsLedger.linkRepToEmployee(req, body);
+  }
+
+  @Get('financial-ledger/candidate-employees')
+  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  async listCandidateEmployees(
+    @Req() req: RequestWithAuth,
+  ) {
+    return this.adminPromotionsLedger.listCandidateEmployees(req);
+  }
+
+  @Post('financial-ledger/auto-create-employee')
+  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  async autoCreateEmployee(
+    @Req() req: RequestWithAuth,
+    @Body() body: { repId: number },
+  ) {
+    return this.adminPromotionsLedger.autoCreateEmployee(req, body);
   }
 }
