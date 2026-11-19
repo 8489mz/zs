@@ -14,6 +14,7 @@ import { RequireFeature } from '../../core/auth/decorators/feature.decorator';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../common/errors/app-error';
 import { AUDIT_EVENT_CODES } from '../../core/audit/audit.service';
+import { VanSalesDriverPreSalesSlice } from './van-sales-driver/van-sales-driver-pre-sales';
 
 @Controller('api/driver-portal/van-sales')
 export class VanSalesController {
@@ -24,7 +25,14 @@ export class VanSalesController {
     private readonly vanPromotionsService: VanPromotionsService,
     private readonly vanRoutesService: VanRoutesService,
     private readonly vanFieldExecutionService: VanFieldExecutionService,
-  ) {}
+  ) {
+    this.preSalesSlice = new VanSalesDriverPreSalesSlice(
+      this.vanPreSalesService,
+      this.verifyDriver.bind(this),
+    );
+  }
+
+  private readonly preSalesSlice: VanSalesDriverPreSalesSlice;
 
   /**
    * INV-DRIVER-PIN-FIRST-LOGIN-CHANGE (H4 ride-along, M16): every
@@ -47,13 +55,7 @@ export class VanSalesController {
     @Query('search') search?: string,
     @Query('categoryId') categoryId?: string,
   ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanPreSalesService.listWarehouseCatalog(
-      driver.tenantId,
-      warehouseLocationId ? Number(warehouseLocationId) : undefined,
-      { search, categoryId: categoryId ? Number(categoryId) : undefined },
-      driver.repId,
-    );
+    return this.preSalesSlice.listPreSalesCatalog(authHeader, warehouseLocationId, search, categoryId);
   }
 
   @Post('pre-sales/orders')
@@ -61,8 +63,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Body() body: any,
   ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanPreSalesService.createPreSalesOrder(driver.repId, driver.tenantId, driver.accountId, body);
+    return this.preSalesSlice.createPreSalesOrder(authHeader, body);
   }
 
   @Get('pre-sales/my-orders')
@@ -73,14 +74,7 @@ export class VanSalesController {
     @Query('dateTo') dateTo?: string,
     @Query('search') search?: string,
   ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanPreSalesService.listPreSalesOrders(driver.tenantId, {
-      repId: driver.repId,
-      status,
-      dateFrom,
-      dateTo,
-      search,
-    });
+    return this.preSalesSlice.listMyPreSalesOrders(authHeader, status, dateFrom, dateTo, search);
   }
 
   @Get('pre-sales/orders/:id')
@@ -88,8 +82,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanPreSalesService.getPreSalesOrderDetails(id, driver.tenantId, driver.repId);
+    return this.preSalesSlice.getMyPreSalesOrderDetails(authHeader, id);
   }
 
   @Get('active-trip')
