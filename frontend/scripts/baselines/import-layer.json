@@ -31,6 +31,7 @@
   "features/contracting/pages/ContractingWorkspacePage.tsx imports another page module (./ContractingRfiPage)",
   "features/contracting/pages/ContractingWorkspacePage.tsx imports another page module (./ContractingSubcontractsPage)",
   "features/contracting/pages/tender/TenderHeaderTop.tsx imports another page module (./tender-page-types)",
+  "features/contracting/pages/tender/TenderItemsTable.tsx imports another page module (./tender-page-types)",
   "features/contracting/pages/tender/TenderModals.tsx imports another page module (./tender-page-types)",
   "features/contracting/pages/tender/TenderToolbar.tsx imports another page module (./tender-page-types)",
   "features/contracting/pages/tender/useTenderCalculations.ts imports another page module (./tender-page-types)",
