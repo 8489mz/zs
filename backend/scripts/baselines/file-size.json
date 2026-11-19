@@ -13,7 +13,6 @@
     "src/modules/ai-copilot/ai-copilot.service.ts": 1510,
     "src/modules/contracting/contracting.controller.ts": 1363,
     "src/modules/contracting/contracting.service.ts": 1004,
-    "src/modules/contracting/dto/contracting.dto.ts": 2615,
     "src/modules/delivery-reps/rep-target.engine.ts": 1020,
     "src/modules/delivery-reps/services/van-collections-and-swaps.service.ts": 1028,
     "src/modules/delivery-reps/services/van-field-execution.service.ts": 1018,
