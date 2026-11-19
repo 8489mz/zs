@@ -341,6 +341,7 @@ export class VanSalesAdminController {
     return this.adminFleet.deleteRequisition(req, id);
   }
 
+  // Targets Management Endpoints
   @Get('targets')
   @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
   async listRepTargets(
@@ -510,6 +511,7 @@ export class VanSalesAdminController {
     return this.adminTargets.recordFuelLog(req, body);
   }
 
+  // Fleet Oil Changes Endpoints
   @Get('oil-changes')
   @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
   async listOilChanges(
@@ -639,6 +641,10 @@ export class VanSalesAdminController {
   ) {
     return this.adminOps.getFraudRadarEvents(req, days, repId, eventCode, limit);
   }
+
+  // =========================================================================
+  // FMCG MIX & MATCH PROMOTIONS ADMIN
+  // =========================================================================
 
   @Get('promotions')
   @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
