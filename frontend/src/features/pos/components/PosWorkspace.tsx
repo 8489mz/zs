@@ -1,12 +1,8 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PosWorkspaceHeader } from '@/features/pos/components/pos-workspace/PosWorkspaceHeader';
 import { PosWorkspaceMainContent } from '@/features/pos/components/pos-workspace/PosWorkspaceMainContent';
 import { PosWorkspaceTablesDialog } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceTablesDialog';
-import { PosNewProductModal } from '@/features/pos/components/pos-workspace/PosNewProductModal';
-import { PosScannedInvoiceModal } from '@/features/pos/components/pos-workspace/PosScannedInvoiceModal';
-import { PosPhoneOrderDialog } from '@/features/pos/components/pos-workspace/PosPhoneOrderDialog';
-import { PosCallerIdFloatingAlert } from '@/features/pos/components/pos-workspace/PosCallerIdFloatingAlert';
 import { printOrderCupLabels } from '@/lib/pos-printing/cup-label';
 import { salesApi } from '@/features/sales/api/sales.api';
 import { getSelectedCustomerName, printCurrentPosDraft } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
@@ -36,12 +32,12 @@ import {
 import type { PosPriceType } from '@/features/pos/types/pos.types';
 import type { Product, Sale } from '@/types/domain';
 import { toast } from '@/shared/components/system-alert';
+import { PosWorkspaceAuxDialogs2 } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceAuxDialogs2';
 import { PosWorkspaceAuxDialogs1 } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceAuxDialogs1';
 import { PosWorkspaceConfirmDialogsSection } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceConfirmDialogsSection';
 import { PosWorkspaceHeldDraftsDialog } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceHeldDraftsDialog';
 import { PosWorkspaceCheckoutDialogs } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceCheckoutDialogs';
 
-const LazyPosEditProductModal = lazy(() => import('@/features/pos/components/pos-workspace/PosEditProductModal').then((m) => ({ default: m.PosEditProductModal })));
 
 export function PosWorkspace() {
   const navigate = useNavigate();
@@ -753,79 +749,29 @@ export function PosWorkspace() {
         setQuickServiceOpen={setQuickServiceOpen}
       />
 
-      {newProductModalOpen && (
-        <PosNewProductModal
-          isOpen={newProductModalOpen}
-          onClose={() => {
-            setNewProductModalOpen(false);
-            focusBarcodeEntry();
-          }}
-          initialName={newProductInitialName}
-          initialBarcode={newProductInitialBarcode}
-          onSuccess={(newProduct) => {
-            setNewProductModalOpen(false);
-            if (newProduct.itemKind === 'fashion' && newProduct.styleCode) {
-              // A grouped creation returns its first variant, not the customer's size.
-              const suffix = [newProduct.color, newProduct.size].filter(Boolean).join(' / ');
-              const baseName = suffix && newProduct.name.endsWith(` - ${suffix}`)
-                ? newProduct.name.slice(0, -(` - ${suffix}`).length) : newProduct.name;
-              pos.setSearch(baseName);
-              toast.warning('الموديل اتضاف. اختار اللون والمقاس المطلوب من النتائج قبل إضافته للسلة.');
-            } else {
-              pos.handleAddProduct(newProduct);
-              pos.setSearch('');
-            }
-            focusBarcodeEntry();
-          }}
-        />
-      )}
-
-      {editProductId && (
-        <Suspense fallback={null}>
-          <LazyPosEditProductModal
-            isOpen={Boolean(editProductId)}
-            productId={editProductId}
-            initialProduct={editProduct}
-            onClose={() => {
-              setEditProductId(null);
-              focusBarcodeEntry();
-            }}
-            onSuccess={handleProductUpdatedFromModal}
-          />
-        </Suspense>
-      )}
-
-      <PosScannedInvoiceModal
-        sale={scannedSale}
-        isOpen={scannedSaleModalOpen}
-        onClose={() => {
-          setScannedSaleModalOpen(false);
-          setScannedSale(null);
-          focusBarcodeEntry();
-        }}
-        settings={pos.settingsQuery.data}
-        onOpenReturns={(targetSale) => {
-          setScannedSaleModalOpen(false);
-          setScannedSale(null);
-          navigate(`/returns?invoiceId=${targetSale.id}&docNo=${encodeURIComponent(targetSale.docNo || '')}`);
-        }}
+      <PosWorkspaceAuxDialogs2
+        newProductModalOpen={newProductModalOpen}
+        setNewProductModalOpen={setNewProductModalOpen}
+        focusBarcodeEntry={focusBarcodeEntry}
+        newProductInitialName={newProductInitialName}
+        newProductInitialBarcode={newProductInitialBarcode}
+        pos={pos}
+        editProductId={editProductId}
+        editProduct={editProduct}
+        setEditProductId={setEditProductId}
+        handleProductUpdatedFromModal={handleProductUpdatedFromModal}
+        scannedSale={scannedSale}
+        scannedSaleModalOpen={scannedSaleModalOpen}
+        setScannedSaleModalOpen={setScannedSaleModalOpen}
+        setScannedSale={setScannedSale}
+        navigate={navigate}
+        isPhoneOrdersActive={isPhoneOrdersActive}
+        handleOpenPhoneOrder={handleOpenPhoneOrder}
+        phoneOrderOpen={phoneOrderOpen}
+        setPhoneOrderOpen={setPhoneOrderOpen}
+        phoneOrderInitialPhone={phoneOrderInitialPhone}
+        phoneOrderInitialName={phoneOrderInitialName}
       />
-
-      {isPhoneOrdersActive && (
-        <>
-          <PosCallerIdFloatingAlert onOpenPhoneOrder={handleOpenPhoneOrder} />
-          <PosPhoneOrderDialog
-            open={phoneOrderOpen}
-            onClose={() => {
-              setPhoneOrderOpen(false);
-              focusBarcodeEntry();
-            }}
-            pos={pos}
-            initialPhone={phoneOrderInitialPhone}
-            initialName={phoneOrderInitialName}
-          />
-        </>
-      )}
     </div>
   );
 }
