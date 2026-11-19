@@ -23,10 +23,17 @@
  * tenant base-currency lookup and the roundMoney import the
  * inter-van transfer accept path resolves on; the 650 pin itself
  * came from the residual-rounding-deposits package, one new
- * import-sales->accounting statement), frontend 57 edges / 133
- * statements, 7 backend + 12 frontend bidirectional pairs, 79
+ * import-sales->accounting statement), frontend 57 edges / 135
+ * statements, 7 backend + 12 frontend bidirectional pairs, 80
  * external imports into `accounting-posting.service` and 15 into
  * `accounting-tenant-foundation.service` (callers outside accounting).
+ * Pos->storefront re-pin 10 -> 12 and posting external 79 -> 80:
+ * the PosTablesGrid + PosFloorStatsBar slice splits each restate the
+ * facade's `OnlineOrderRecord` type import from storefront (+2), and
+ * file #32's S7 manager-comp slice restates the facade's
+ * `AccountingPostingService` import for its ctor (+1). Pure-move
+ * duplication, no new coupling: no new edge, no new pair, every
+ * added statement is an import the pre-split facade already had.
  * File #32 (restaurant-advanced-fnb split) re-pins sales->accounting
  * 52 -> 58: the split moves the facade's accounting imports into the
  * slices that use them (tips-create 3, prep 1, stamps-costing 2,
@@ -166,7 +173,7 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
   'pos->products': 5,
   'pos->sales': 3,
   'pos->settings': 3,
-  'pos->storefront': 10,
+  'pos->storefront': 12,
   'products->inventory': 2,
   'products->maintenance': 2,
   'products->pos': 5,
@@ -198,10 +205,10 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
 
 const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|hr', 'accounting|manufacturing', 'accounting|purchases', 'delivery-reps|sales', 'returns|sales', 'sales|settings', 'sales|storefront'];
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|treasury', 'accounts|purchases', 'audit|settings', 'cash-drawer|pos', 'customers|sales', 'inventory|products', 'maintenance|products', 'pos|products', 'pos|sales', 'pos|settings', 'pos|storefront', 'products|settings'];
-const PINNED_POSTING_EXTERNAL = 79;
+const PINNED_POSTING_EXTERNAL = 80;
 const PINNED_FOUNDATION_EXTERNAL = 15;
 const PINNED_BACKEND_TOTAL = 658;
-const PINNED_FRONTEND_TOTAL = 133;
+const PINNED_FRONTEND_TOTAL = 135;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
 const BACKEND_EDGE_FLOOR = 60;
