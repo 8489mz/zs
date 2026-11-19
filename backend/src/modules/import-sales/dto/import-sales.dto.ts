@@ -11,3 +11,5 @@ export { CalculateFeasibilityDto, CreateChinaSupplierDto, UpsertSupplierMetaDto 
 export { CreateQcInspectionDto, UpsertAciComplianceDto, CreateSourcingTripDto, ProcessLateExpenseDto, CalculateCustomsTaxDto } from './import-sales-dto/import-sales-dto-sourcing-ops';
 
 export { VerifyBankDetailsDto, CreateQuotationDto, SelectQuotationDto, CreateSampleOrderDto, UpdateSampleOrderInspectionDto, ConvertFeasibilityToProjectDto } from './import-sales-dto/import-sales-dto-commercial';
+
+export { ProformaInvoiceItemDto, CreateProformaInvoiceDto } from './import-sales-dto/import-sales-dto-proforma';
