@@ -18,6 +18,7 @@ import { saveLocalOrderRecord } from './StorefrontMyOrdersModal';
 import { calculateCartSubtotal } from '../lib/storefront-cart-pricing';
 import { getContrastTextColor } from '../lib/storefront-theme-contrast';
 import { useBodyScrollLock } from '@/shared/components/dialog-shell';
+import { CheckoutNotesPromoBar } from './storefront-checkout/checkout-notes-promo-bar';
 import { CheckoutCustomerSection } from './storefront-checkout/checkout-customer-section';
 import { useKuwaitAddress } from './storefront-checkout/use-kuwait-address';
 import {
@@ -776,80 +777,16 @@ export function StorefrontCheckoutModal({
                   brandColor={brandColor}
                 />
 
-                {/* Optional Notes & Promo Link Bar */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '1px 2px' }}>
-                  {!showNotes && !customerNotes.trim() ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowNotes(true)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: brandColor,
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        padding: '2px 0',
-                        fontFamily: 'inherit',
-                      }}
-                    >
-                      {t('storefront.storefront_checkout_modal.s28', "+ إضافة ملاحظات للطلب (اختياري)")}
-                    </button>
-                  ) : (
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>{t('storefront.storefront_checkout_modal.s29', "ملاحظات الطلب")}</span>
-                  )}
-
-                  {!showCouponInput && !appliedCoupon?.ok ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowCouponInput(true)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#b45309',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        padding: '2px 0',
-                        fontFamily: 'inherit',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                      }}
-                    >
-                      <TagIcon size={13} color="#b45309" />
-                      <span>{t('storefront.storefront_checkout_modal.s30', "لديك كوبون خصم؟")}</span>
-                    </button>
-                  ) : null}
-                </div>
-
-                {/* Collapsed Notes Field (visible when clicked or has content) */}
-                {(showNotes || customerNotes.trim()) && (
-                  <div>
-                    <textarea
-                      rows={1}
-                      autoFocus={showNotes && !customerNotes}
-                      value={customerNotes}
-                      onChange={(e) => setCustomerNotes(e.target.value)}
-                      placeholder={t('storefront.storefront_checkout_modal.s31', "اكتب أي تعليمات لتحضير طلبك أو للتوصيل (اختياري)...")}
-                      style={{
-                        width: '100%',
-                        padding: '6px 10px',
-                        borderRadius: '8px',
-                        border: '1.5px solid #cbd5e1',
-                        outline: 'none',
-                        background: '#f8fafc',
-                        fontFamily: 'inherit',
-                        resize: 'none',
-                        minHeight: '40px',
-                        height: '40px',
-                        boxSizing: 'border-box',
-                        lineHeight: '1.45',
-                        fontSize: '12.5px',
-                      }}
-                    />
-                  </div>
-                )}
+                <CheckoutNotesPromoBar
+                  showNotes={showNotes}
+                  setShowNotes={setShowNotes}
+                  customerNotes={customerNotes}
+                  setCustomerNotes={setCustomerNotes}
+                  showCouponInput={showCouponInput}
+                  setShowCouponInput={setShowCouponInput}
+                  appliedCoupon={appliedCoupon}
+                  brandColor={brandColor}
+                />
               </div>
 
               {/* Column 2: Payment, Promo, Summary */}
