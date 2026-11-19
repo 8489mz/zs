@@ -10,13 +10,13 @@ import {
   ArrowRightIcon,
   BellIcon,
   ShoppingCartIcon,
-  UtensilsIcon,
 } from '@/shared/components/icons/AppIcons';
 import { WaiterStationTableHeader } from '@/features/pos/components/pos-workspace/waiter-station/WaiterStationTableHeader';
 import { WaiterStationTableKpis } from '@/features/pos/components/pos-workspace/waiter-station/WaiterStationTableKpis';
 import { WaiterStationServiceCallsBanner } from '@/features/pos/components/pos-workspace/waiter-station/WaiterStationServiceCallsBanner';
 import { WaiterStationTablesGrid } from '@/features/pos/components/pos-workspace/waiter-station/WaiterStationTablesGrid';
 import { WaiterStationOrderHeader } from '@/features/pos/components/pos-workspace/waiter-station/WaiterStationOrderHeader';
+import { WaiterStationMobileTabSwitcher } from '@/features/pos/components/pos-workspace/waiter-station/WaiterStationMobileTabSwitcher';
 
 export function WaiterStationPage() {
   const { currentLang, toggleLanguage } = useIsolatedDisplayLanguage('waiter_ui_lang');
@@ -250,62 +250,7 @@ export function WaiterStationPage() {
       />
 
       {/* Mobile Device Tab Switcher (Phone / Vertical Tablet) */}
-      {isMobile && (
-        <div
-          style={{
-            display: 'flex',
-            background: '#ffffff',
-            borderBottom: '1px solid #e2e8f0',
-            padding: '6px 12px',
-            gap: '8px',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setMobileActiveTab('menu')}
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              border: mobileActiveTab === 'menu' ? '1px solid #170e5e' : '1px solid #e2e8f0',
-              background: mobileActiveTab === 'menu' ? '#170e5e' : '#f8fafc',
-              color: mobileActiveTab === 'menu' ? '#ffffff' : '#475569',
-              fontSize: '12.5px',
-              fontWeight: 800,
-              cursor: 'pointer',
-            }}
-          >
-            <UtensilsIcon size={14} color={mobileActiveTab === 'menu' ? '#ffffff' : '#475569'} />
-            <span>{t('pos.waiter_station_page.s26', "قائمة الأصناف (")}{filteredProducts.length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobileActiveTab('cart')}
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              border: mobileActiveTab === 'cart' ? '1px solid #170e5e' : '1px solid #e2e8f0',
-              background: mobileActiveTab === 'cart' ? '#170e5e' : '#f8fafc',
-              color: mobileActiveTab === 'cart' ? '#ffffff' : '#475569',
-              fontSize: '12.5px',
-              fontWeight: 800,
-              cursor: 'pointer',
-            }}
-          >
-            <ShoppingCartIcon size={14} color={mobileActiveTab === 'cart' ? '#ffffff' : '#475569'} />
-            <span>{t('pos.waiter_station_page.s27', "سلة الطلب (")}{cartItemsCount}) · {formatCurrency(cartTotal)}</span>
-          </button>
-        </div>
-      )}
+      <WaiterStationMobileTabSwitcher isMobile={isMobile} setMobileActiveTab={setMobileActiveTab} mobileActiveTab={mobileActiveTab} filteredProducts={filteredProducts} cartItemsCount={cartItemsCount} cartTotal={cartTotal} />
 
       {/* Main Body: Adaptive Layout (Mobile Tabbed / Desktop Side-by-Side) */}
       <div
