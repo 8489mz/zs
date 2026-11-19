@@ -2,8 +2,6 @@ import { useTranslation } from 'react-i18next';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/shared/components/page-header';
-import { Button } from '@/shared/ui/button';
-import { PosWorkspaceHeaderCoreActions } from '@/features/pos/components/pos-workspace/pos-workspace-header/PosWorkspaceHeaderCoreActions';
 import { posApi } from '@/features/pos/api/pos.api';
 import { storefrontApi } from '@/features/storefront/api/storefront.api';
 import { PosWorkspaceHeaderModals } from './PosWorkspaceHeaderModals';
@@ -17,12 +15,9 @@ import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/
 import type { PosSaleMode } from '@/features/pos/lib/pos-sale-mode';
 import { usePosOfflineSync } from '@/features/pos/hooks/usePosOfflineSync';
 import { useAuthStore, isAdminUser } from '@/stores/auth-store';
-import {
-  PrinterIcon,
-  SlidersIcon,
-} from '@/shared/components/icons/AppIcons';
 import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 import { PosWorkspaceHeaderBadge } from '@/features/pos/components/pos-workspace/pos-workspace-header/PosWorkspaceHeaderBadge';
+import { PosWorkspaceHeaderCoreActions } from '@/features/pos/components/pos-workspace/pos-workspace-header/PosWorkspaceHeaderCoreActions';
 import { PosWorkspaceHeaderTableControls } from '@/features/pos/components/pos-workspace/pos-workspace-header/PosWorkspaceHeaderTableControls';
 import { PosWorkspaceHeaderHubButtons } from '@/features/pos/components/pos-workspace/pos-workspace-header/PosWorkspaceHeaderHubButtons';
 import { PosWorkspaceHeaderShiftControls } from '@/features/pos/components/pos-workspace/pos-workspace-header/PosWorkspaceHeaderShiftControls';
