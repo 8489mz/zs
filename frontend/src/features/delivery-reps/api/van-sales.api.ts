@@ -17,10 +17,6 @@ export type {
 
 export type { RepTargetSummary, TripAdminDetails, VanCustomerItineraryItem, FleetFuelLogRecord, FleetOilChangeRecord, FleetMaintenanceAlert, VehicleDriverShiftRecord, InterVanTransferRecord, SupervisorRouteKpiSummary } from './van-sales/van-sales-types-c';
 
-function getDriverAuthHeaders() {
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('zs_driver_portal_token') : null;
-  return { Authorization: `Bearer ${token || ''}` };
-}
 
 export const vanSalesApi = {
   getActiveTrip: async (): Promise<VanActiveTripResponse> => {
