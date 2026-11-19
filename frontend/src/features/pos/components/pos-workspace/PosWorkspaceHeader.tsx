@@ -57,8 +57,7 @@ function PosWorkspaceHeaderComponent({
   onOpenManagerComp,
   onPrintCupLabels,
 }: PosWorkspaceHeaderProps) {
-  const { t, i18n } = useTranslation();
-  const isEn = Boolean(i18n.language && i18n.language.startsWith('en'));
+  const { t } = useTranslation();
   const { data: settings } = useSettingsQuery();
   const hasStorefrontFeature = useHasFeature('storefront');
   const isRestaurantActive = settings?.restaurantModuleEnabled === true;
