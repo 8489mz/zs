@@ -20,6 +20,7 @@ import { RestaurantFnbPrepSlice } from './restaurant-fnb/restaurant-fnb-prep';
 import { RestaurantFnbStampsCostingSlice } from './restaurant-fnb/restaurant-fnb-stamps-costing';
 import { RestaurantFnbManagerCompSlice } from './restaurant-fnb/restaurant-fnb-manager-comp';
 import { RestaurantFnbRatingsDriveThruSlice } from './restaurant-fnb/restaurant-fnb-ratings-drive-thru';
+import { RestaurantFnbUpsellLayoutsSlice } from './restaurant-fnb/restaurant-fnb-upsell-layouts';
 
 
 
@@ -37,6 +38,7 @@ export class RestaurantAdvancedFnbService {
   private readonly stampsCosting: RestaurantFnbStampsCostingSlice;
   private readonly managerComp: RestaurantFnbManagerCompSlice;
   private readonly ratingsDriveThru: RestaurantFnbRatingsDriveThruSlice;
+  private readonly upsellLayouts: RestaurantFnbUpsellLayoutsSlice;
 
   // The posting service is optional ONLY so existing direct constructions
   // (d6c-misc-book-digits.spec.ts builds the service with the db alone to
@@ -56,6 +58,7 @@ export class RestaurantAdvancedFnbService {
     this.stampsCosting = new RestaurantFnbStampsCostingSlice(this.db);
     this.managerComp = new RestaurantFnbManagerCompSlice(this.db, this.assertManagerCaller.bind(this), this.resolveCompAccount.bind(this), this.accountingPosting);
     this.ratingsDriveThru = new RestaurantFnbRatingsDriveThruSlice(this.db);
+    this.upsellLayouts = new RestaurantFnbUpsellLayoutsSlice(this.db, this.assertManagerCaller.bind(this));
   }
 
   private assertManagerCaller(scope: TenantScope): void {
@@ -180,25 +183,8 @@ export class RestaurantAdvancedFnbService {
     return this.ratingsDriveThru.updateDriveThruStatus(scope, id, status);
   }
 
-  // ==========================================
-  // 11. SMART UPSELLING & CROSS-SELLING ENGINE
-  // ==========================================
-
   async getUpsellRecommendations(scope: TenantScope, triggerProductId?: number, categoryName?: string) {
-    let query = this.db
-      .selectFrom('restaurant_upsell_rules')
-      .selectAll()
-      .where('tenant_id', '=', scope.tenantId)
-      .where('is_active', '=', true);
-
-    if (triggerProductId) {
-      query = query.where('trigger_product_id', '=', Number(triggerProductId));
-    } else if (categoryName) {
-      query = query.where('trigger_category_name', '=', categoryName);
-    }
-
-    const rules = await query.limit(5).execute();
-    return rules;
+    return this.upsellLayouts.getUpsellRecommendations(scope, triggerProductId, categoryName);
   }
 
   async createUpsellRule(scope: TenantScope, dto: {
@@ -209,55 +195,11 @@ export class RestaurantAdvancedFnbService {
     title: string;
     discountAmount?: number;
   }) {
-    const [rule] = await this.db
-      .insertInto('restaurant_upsell_rules')
-      .values({
-        tenant_id: scope.tenantId,
-        trigger_product_id: dto.triggerProductId ? Number(dto.triggerProductId) : null,
-        trigger_category_name: dto.triggerCategoryName || null,
-        suggested_product_id: Number(dto.suggestedProductId),
-        suggested_product_name: dto.suggestedProductName,
-        title: dto.title,
-        discount_amount: dto.discountAmount || 0,
-        is_active: true,
-        created_at: new Date(),
-      })
-      .returningAll()
-      .execute();
-
-    return { success: true, rule, message: 'تم حفظ قاعدة الاقتراح الذكي بنجاح' };
+    return this.upsellLayouts.createUpsellRule(scope, dto);
   }
 
-  // ==========================================
-  // 12. VISUAL FLOOR PLAN CANVAS & TABLE LAYOUTS
-  // ==========================================
-
   async getTableLayouts(scope: TenantScope, branchId?: number | null) {
-    let query = this.db
-      .selectFrom('restaurant_table_layouts')
-      .selectAll()
-      .where('tenant_id', '=', scope.tenantId)
-      .where('is_active', '=', true);
-
-    if (branchId) {
-      query = query.where((eb) =>
-        eb.or([
-          eb('branch_id', '=', branchId),
-          eb('branch_id', 'is', null),
-        ])
-      );
-    }
-
-    const layouts = await query.orderBy('id', 'asc').execute();
-    return layouts.map((l) => ({
-      ...l,
-      x_pos: Number(l.x_pos || 10),
-      y_pos: Number(l.y_pos || 10),
-      width: Number(l.width || 80),
-      height: Number(l.height || 80),
-      seats: Number(l.seats || 4),
-      rotation: Number(l.rotation || 0),
-    }));
+    return this.upsellLayouts.getTableLayouts(scope, branchId);
   }
 
   async saveTableLayouts(
@@ -276,137 +218,15 @@ export class RestaurantAdvancedFnbService {
     }>,
     branchId?: number | null,
   ) {
-    // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I37): design mode is
-    // manager-only. A cashier overwriting the shared floor layout could
-    // hide live orders; the gate lives here (not in a decorator) because
-    // the manager definition is admin role OR pos_manager /
-    // manage_restaurant permission — the same definition the POS uses for
-    // its manager tiles — and PermissionsGuard checks permission strings
-    // only. Read stays authenticated-any.
-    this.assertManagerCaller(scope);
-    if (!Array.isArray(layouts)) return [];
-
-    return await this.db.transaction().execute(async (trx) => {
-      const saved: any[] = [];
-      for (const item of layouts) {
-        if (!item.table_number) continue;
-
-        const existing = await trx
-          .selectFrom('restaurant_table_layouts')
-          .select(['id'])
-          .where('tenant_id', '=', scope.tenantId)
-          .where('table_number', '=', String(item.table_number).trim())
-          .executeTakeFirst();
-
-        if (existing) {
-          const [updated] = await trx
-            .updateTable('restaurant_table_layouts')
-            .set({
-              zone_code: item.zone_code || 'main',
-              shape: item.shape || 'square',
-              x_pos: Number(item.x_pos || 10),
-              y_pos: Number(item.y_pos || 10),
-              width: Number(item.width || 80),
-              height: Number(item.height || 80),
-              seats: Number(item.seats || 4),
-              rotation: Number(item.rotation || 0),
-              updated_at: new Date(),
-            })
-            .where('id', '=', existing.id)
-            .returningAll()
-            .execute();
-          saved.push(updated);
-        } else {
-          const [created] = await trx
-            .insertInto('restaurant_table_layouts')
-            .values({
-              tenant_id: scope.tenantId,
-              branch_id: branchId ? Number(branchId) : null,
-              table_number: String(item.table_number).trim(),
-              zone_code: item.zone_code || 'main',
-              shape: item.shape || 'square',
-              x_pos: Number(item.x_pos || 10),
-              y_pos: Number(item.y_pos || 10),
-              width: Number(item.width || 80),
-              height: Number(item.height || 80),
-              seats: Number(item.seats || 4),
-              rotation: Number(item.rotation || 0),
-              is_active: true,
-              created_at: new Date(),
-              updated_at: new Date(),
-            })
-            .returningAll()
-            .execute();
-          saved.push(created);
-        }
-      }
-      return saved;
-    });
+    return this.upsellLayouts.saveTableLayouts(scope, layouts, branchId);
   }
 
   async deleteTableLayout(scope: TenantScope, id: number) {
-    // INV-REST-FLOOR-DESIGN-GATES (B2): deleting a layout is a design
-    // write like saving one — manager-only (R5-D). At base any
-    // authenticated caller could delete the shared floor through the API.
-    this.assertManagerCaller(scope);
-    await this.db
-      .deleteFrom('restaurant_table_layouts')
-      .where('tenant_id', '=', scope.tenantId)
-      .where('id', '=', id)
-      .execute();
-    return { success: true };
+    return this.upsellLayouts.deleteTableLayout(scope, id);
   }
 
-  /*
-   * INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I35): real whole-table transfer
-   * for a held draft. The rename updates ONLY held_sales.table_number —
-   * no other column is touched — so it needs no dependency on the
-   * hold/recall snapshot work (R5-B): the draft's cart, totals and
-   * discounts are never re-saved, only re-pointed at the target table.
-   * A target table that already holds a draft is refused (409), the
-   * same one-draft-per-table rule saveHeldSale enforces (R4-D I42).
-   */
   async renameHeldDraftTable(scope: TenantScope, draftId: number, toTableNumber: string) {
-    // INV-REST-FLOOR-DESIGN-GATES (B2, decision): deliberately NOT
-    // manager-gated. This is the whole-table TRANSFER engine
-    // (transferTableOrder + the held-drafts dialog rename, both open to
-    // any POS role in the UI) — it changes ONLY held_sales.table_number,
-    // no amounts or cart contents, is fully reversible, and the 409
-    // occupied-table guard prevents collisions. Gating it would block
-    // every waiter/cashier table move; a table move is neither loss nor
-    // fraud. Pinned by restaurant-floor-state.spec.ts check (13).
-    const to = String(toTableNumber || '').trim();
-    if (!to) {
-      throw new AppError('رقم الطاولة الجديدة إلزامي.', 'HELD_DRAFT_TABLE_REQUIRED', 400);
-    }
-    const draft = await this.db
-      .selectFrom('held_sales')
-      .selectAll()
-      .where('id', '=', Number(draftId))
-      .where('tenant_id', '=', scope.tenantId)
-      .executeTakeFirst();
-    if (!draft) {
-      throw new AppError('الطلب المحفوظ غير موجود.', 'HELD_DRAFT_NOT_FOUND', 404);
-    }
-    if (String(draft.table_number).trim() === to) return draft;
-    const occupant = await this.db
-      .selectFrom('held_sales')
-      .select('id')
-      .where('tenant_id', '=', scope.tenantId)
-      .where('table_number', '=', to)
-      .where('id', '!=', Number(draftId))
-      .executeTakeFirst();
-    if (occupant) {
-      throw new AppError(`الطاولة ${to} مشغولة بالفعل بطلب محفوظ.`, 'HELD_DRAFT_TABLE_OCCUPIED', 409);
-    }
-    const [renamed] = await this.db
-      .updateTable('held_sales')
-      .set({ table_number: to, updated_at: new Date() })
-      .where('id', '=', Number(draftId))
-      .where('tenant_id', '=', scope.tenantId)
-      .returningAll()
-      .execute();
-    return renamed;
+    return this.upsellLayouts.renameHeldDraftTable(scope, draftId, toTableNumber);
   }
 }
 
