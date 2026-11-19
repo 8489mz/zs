@@ -11,3 +11,5 @@ export { CreateMasterPriceItemDto, UpdateMasterPriceItemDto, CreateEngineeringCo
 export { CreateRetentionRecordDto, ReleaseRetentionDto, CreatePaymentHoldDto, ReleasePaymentHoldDto, CreateSupplierReturnDto, CreateLaborAttendanceDto, CreatePettyCashDto, SettlePettyCashDto, CreateGovernmentLicenseDto } from './contracting-dto/contracting-dto-money-ops';
 
 export { CreateMasterBoqLibraryItemDto, UpdateMasterBoqLibraryItemDto, BatchImportMasterBoqDto, ToggleMasterBoqItemStatusDto, ImportMasterBoqToProjectDto, BoqTakeoffItemDto, SaveBoqTakeoffsDto } from './contracting-dto/contracting-dto-master-boq';
+
+export { CreateSiteMobilizationExpenseDto, RecordLaborAttendanceRecordDto, CreateClientPaymentMilestoneDto, RecordInKindBarterDeductionDto, CreateEquipmentAssetDto, TransferEquipmentAssetDto, RecordSupplierPriceMemoryDto } from './contracting-dto/contracting-dto-field-ops';
