@@ -1,38 +1,36 @@
 import { useTranslation } from 'react-i18next';
 import { useStorefrontLang } from '@/i18n';
-import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { getGlobalCurrencySymbol, getCurrencySymbol, isThreeDecimalCurrency, getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits } from '@/shared/utils/money';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { CreateOnlineOrderResponse, ValidateCouponResponse, StorefrontPaymentSessionResponse, QuoteCartResponse } from '../types/storefront.types';
 import { storefrontApi } from '../api/storefront.api';
-import { StorefrontCheckoutShell } from './storefront-checkout/storefront-checkout-shell';
-import { CheckoutFulfillmentSection } from './storefront-checkout/checkout-fulfillment-section';
-import { CheckoutAddressSection } from './storefront-checkout/checkout-address-section';
-import { CheckIcon, TagIcon, TruckIcon, PackageIcon } from '@/shared/components/icons/AppIcons';
+import { StorefrontCheckoutShell } from '@/features/storefront/components/storefront-checkout/storefront-checkout-shell';
+import { CheckoutFulfillmentSection } from '@/features/storefront/components/storefront-checkout/checkout-fulfillment-section';
+import { CheckoutAddressSection } from '@/features/storefront/components/storefront-checkout/checkout-address-section';
 import { trackStorefrontEvent } from '../lib/storefront-pixel-tracker';
 import { getCustomerOrderToken, saveCustomerOrderRef } from '../lib/customer-order-refs';
 import { saveLocalOrderRecord } from './StorefrontMyOrdersModal';
 import { calculateCartSubtotal } from '../lib/storefront-cart-pricing';
 import { getContrastTextColor } from '../lib/storefront-theme-contrast';
 import { useBodyScrollLock } from '@/shared/components/dialog-shell';
-import { CheckoutPaymentOverlay } from './storefront-checkout/checkout-payment-overlay';
-import { CheckoutFooter } from './storefront-checkout/checkout-footer';
-import { CheckoutSummarySection } from './storefront-checkout/checkout-summary-section';
-import { CheckoutShippingPromoSection } from './storefront-checkout/checkout-shipping-promo-section';
-import { CheckoutPaymentSection } from './storefront-checkout/checkout-payment-section';
-import { CheckoutNotesPromoBar } from './storefront-checkout/checkout-notes-promo-bar';
-import { CheckoutCustomerSection } from './storefront-checkout/checkout-customer-section';
-import { useKuwaitAddress } from './storefront-checkout/use-kuwait-address';
+import { CheckoutPaymentOverlay } from '@/features/storefront/components/storefront-checkout/checkout-payment-overlay';
+import { CheckoutFooter } from '@/features/storefront/components/storefront-checkout/checkout-footer';
+import { CheckoutSummarySection } from '@/features/storefront/components/storefront-checkout/checkout-summary-section';
+import { CheckoutShippingPromoSection } from '@/features/storefront/components/storefront-checkout/checkout-shipping-promo-section';
+import { CheckoutPaymentSection } from '@/features/storefront/components/storefront-checkout/checkout-payment-section';
+import { CheckoutNotesPromoBar } from '@/features/storefront/components/storefront-checkout/checkout-notes-promo-bar';
+import { CheckoutCustomerSection } from '@/features/storefront/components/storefront-checkout/checkout-customer-section';
+import { useKuwaitAddress } from '@/features/storefront/components/storefront-checkout/use-kuwait-address';
 import {
   STOREFRONT_SAVED_CUSTOMER_KEY,
   getCustomerAddressValidation,
   getCustomerNameValidation,
   getDynamicPhoneValidation,
   parseKuwaitAddress,
-} from './storefront-checkout/storefront-checkout-helpers';
-import type { StorefrontCheckoutModalProps } from './storefront-checkout/storefront-checkout-helpers';
+} from '@/features/storefront/components/storefront-checkout/storefront-checkout-helpers';
+import type { StorefrontCheckoutModalProps } from '@/features/storefront/components/storefront-checkout/storefront-checkout-helpers';
 export {
   COUNTRY_OPTIONS,
   KUWAIT_POPULAR_AREAS,
@@ -42,9 +40,8 @@ export {
   getDynamicPhoneValidation,
   getEgyptianPhoneValidation,
   parseKuwaitAddress,
-} from './storefront-checkout/storefront-checkout-helpers';
-export type { CountryOption } from './storefront-checkout/storefront-checkout-helpers';
-
+} from '@/features/storefront/components/storefront-checkout/storefront-checkout-helpers';
+export type { CountryOption } from '@/features/storefront/components/storefront-checkout/storefront-checkout-helpers';
 
 export function StorefrontCheckoutModal({
   isOpen,
