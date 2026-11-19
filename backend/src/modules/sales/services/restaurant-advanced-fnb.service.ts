@@ -13,6 +13,7 @@ import { AccountingPostingService } from '../../accounting/accounting-posting.se
 import type { TenantScope, Toggle86ItemDto, CalculateTipPoolDto, SaveTableZoneDto, GeneratePrepSheetDto } from './restaurant-fnb/restaurant-fnb-types';
 export type { Toggle86ItemDto, CalculateTipPoolDto, SaveTableZoneDto, GeneratePrepSheetDto } from './restaurant-fnb/restaurant-fnb-types';
 import { RestaurantFnbGates86Slice } from './restaurant-fnb/restaurant-fnb-gates-86';
+import { RestaurantFnbTipsReadSlice } from './restaurant-fnb/restaurant-fnb-tips-read';
 
 
 
@@ -23,6 +24,7 @@ import { RestaurantFnbGates86Slice } from './restaurant-fnb/restaurant-fnb-gates
 export class RestaurantAdvancedFnbService {
   private readonly logger = new Logger(RestaurantAdvancedFnbService.name);
   private readonly gates86: RestaurantFnbGates86Slice;
+  private readonly tipsReadSlice: RestaurantFnbTipsReadSlice;
 
   // The posting service is optional ONLY so existing direct constructions
   // (d6c-misc-book-digits.spec.ts builds the service with the db alone to
@@ -35,6 +37,7 @@ export class RestaurantAdvancedFnbService {
     private readonly accountingPosting?: AccountingPostingService,
   ) {
     this.gates86 = new RestaurantFnbGates86Slice(this.db);
+    this.tipsReadSlice = new RestaurantFnbTipsReadSlice(this.db);
   }
 
   private assertManagerCaller(scope: TenantScope): void {
@@ -58,73 +61,12 @@ export class RestaurantAdvancedFnbService {
     return this.gates86.toggle86Item(scope, dto);
   }
 
-  // ==========================================
-  // 2. TIP POOLING & SHIFT DISTRIBUTION ENGINE
-  // ==========================================
-
   async getTipPools(scope: TenantScope, shiftDate?: string) {
-    let query = this.db
-      .selectFrom('restaurant_tip_pools')
-      .selectAll()
-      .where('tenant_id', '=', scope.tenantId);
-
-    if (shiftDate) {
-      query = query.where('shift_date', '=', shiftDate);
-    }
-
-    const pools = await query.orderBy('created_at', 'desc').limit(30).execute();
-
-    const poolIds = pools.map((p) => p.id);
-    let distributions: any[] = [];
-    if (poolIds.length > 0) {
-      distributions = await this.db
-        .selectFrom('restaurant_tip_pool_distributions')
-        .selectAll()
-        .where('tenant_id', '=', scope.tenantId)
-        .where('pool_id', 'in', poolIds)
-        .execute();
-    }
-
-    const distMap = new Map<number, any[]>();
-    for (const d of distributions) {
-      if (!distMap.has(d.pool_id)) distMap.set(d.pool_id, []);
-      distMap.get(d.pool_id)!.push(d);
-    }
-
-    return pools.map((p) => ({
-      ...p,
-      distributions: distMap.get(p.id) || [],
-    }));
+    return this.tipsReadSlice.getTipPools(scope, shiftDate);
   }
 
-  /**
-   * INV-REST-TIP-STAFF-REAL: the narrow staff list the tip-pool picker
-   * reads. GET /api/hr/employees is NOT the source: it requires
-   * hrEmployees or hrAttendance, which the manager caller who opens the
-   * tip modal (admin role, or pos_manager / manage_restaurant) does not
-   * necessarily hold — PermissionsGuard checks permission strings only,
-   * so a tenant admin or a pos_manager cashier would 403 on exactly the
-   * call the modal needs. This endpoint is tenant-scoped, returns active
-   * employees only, and exposes id + displayName + branchId +
-   * expectedDailyHours only — no salary, no PIN status, no HR detail —
-   * so granting cashiers hrEmployees was never an option.
-   */
   async getTipPoolStaff(scope: TenantScope) {
-    const rows = await this.db
-      .selectFrom('hr_employees')
-      .select(['id', 'display_name', 'branch_id', 'expected_daily_hours', 'status'])
-      .where('tenant_id', '=', scope.tenantId)
-      .where('status', '=', 'active')
-      .orderBy('display_name', 'asc')
-      .execute();
-    return rows.map((row) => ({
-      id: String(row.id),
-      displayName: String(row.display_name || ''),
-      branchId: row.branch_id != null ? String(row.branch_id) : null,
-      expectedDailyHours:
-        row.expected_daily_hours != null ? Number(row.expected_daily_hours) : null,
-      status: 'active' as const,
-    }));
+    return this.tipsReadSlice.getTipPoolStaff(scope);
   }
 
   async calculateAndSaveTipPool(scope: TenantScope, dto: CalculateTipPoolDto) {
