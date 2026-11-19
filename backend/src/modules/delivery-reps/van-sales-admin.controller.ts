@@ -11,6 +11,7 @@ import { RequireAnyPermission, RequirePermissions } from '../../core/auth/decora
 import { RequireFeature } from '../../core/auth/decorators/feature.decorator';
 import { VanSalesAdminPreSalesTripsSlice } from './van-sales-admin/van-sales-admin-pre-sales-trips';
 import { VanSalesAdminFleetSlice } from './van-sales-admin/van-sales-admin-fleet';
+import { VanSalesAdminTargetsSlice } from './van-sales-admin/van-sales-admin-targets';
 
 @Controller('api/van-sales/admin')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -18,6 +19,7 @@ import { VanSalesAdminFleetSlice } from './van-sales-admin/van-sales-admin-fleet
 export class VanSalesAdminController {
   private readonly adminPreSalesTrips: VanSalesAdminPreSalesTripsSlice;
   private readonly adminFleet: VanSalesAdminFleetSlice;
+  private readonly adminTargets: VanSalesAdminTargetsSlice;
 
   constructor(
     private readonly vanSalesService: VanSalesService,
@@ -31,6 +33,9 @@ export class VanSalesAdminController {
       this.vanPreSalesService,
     );
     this.adminFleet = new VanSalesAdminFleetSlice(
+      this.vanSalesService,
+    );
+    this.adminTargets = new VanSalesAdminTargetsSlice(
       this.vanSalesService,
     );
   }
@@ -321,5 +326,174 @@ export class VanSalesAdminController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.adminFleet.deleteRequisition(req, id);
+  }
+
+  @Get('targets')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async listRepTargets(
+    @Req() req: RequestWithAuth,
+    @Query('month') month?: string,
+  ) {
+    return this.adminTargets.listRepTargets(req, month);
+  }
+
+  @Post('targets')
+  @RequirePermissions('deliveryReps')
+  async setRepTarget(
+    @Req() req: RequestWithAuth,
+    @Body()
+    body: {
+      repId: number;
+      month: string;
+      targetAmount: number;
+      collectionTarget?: number | null;
+      visitsTarget?: number | null;
+      salesCommissionRatePercent?: number;
+      collectionCommissionRatePercent?: number;
+      targetBonusRatePercent?: number;
+    },
+  ) {
+    return this.adminTargets.setRepTarget(req, body);
+  }
+
+  @Get('targets/commission-config')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async getCommissionConfig(@Req() req: RequestWithAuth) {
+    return this.adminTargets.getCommissionConfig(req);
+  }
+
+  @Post('targets/commission-config')
+  @RequirePermissions('deliveryReps')
+  async saveCommissionConfig(
+    @Req() req: RequestWithAuth,
+    @Body()
+    body: {
+      salesCommissionRatePercent?: number;
+      collectionCommissionRatePercent?: number;
+      targetBonusRatePercent?: number;
+      repId?: number;
+    },
+  ) {
+    return this.adminTargets.saveCommissionConfig(req, body);
+  }
+
+  @Post('targets/settle-commission')
+  @RequirePermissions('deliveryReps')
+  async settleRepCommission(
+    @Req() req: RequestWithAuth,
+    @Body()
+    body: {
+      repId: number;
+      periodMonth: string;
+      amount?: number;
+      notes?: string;
+    },
+  ) {
+    return this.adminTargets.settleRepCommission(req, body);
+  }
+
+  @Get('kpis')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async getRouteKpis(
+    @Req() req: RequestWithAuth,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.adminTargets.getRouteKpis(req, dateFrom, dateTo);
+  }
+
+  @Get('field-visits')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async listFieldVisits(
+    @Req() req: RequestWithAuth,
+    @Query('repId') repId?: string,
+    @Query('customerId') customerId?: string,
+    @Query('visitType') visitType?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.adminTargets.listFieldVisits(req, repId, customerId, visitType, dateFrom, dateTo);
+  }
+
+  @Post('customers/:id/route-schedule')
+  @RequirePermissions('deliveryReps')
+  async setCustomerRouteSchedule(
+    @Req() req: RequestWithAuth,
+    @Param('id', ParseIntPipe) id: number,
+    @Body()
+    body: {
+      route?: string;
+      routeSequence?: number;
+      visitDays?: string[];
+      customerCode?: string;
+      locationUrl?: string;
+      assignedRepId?: number | null;
+      assignedRepIds?: number[];
+      assignedRepName?: string;
+      repSchedules?: Array<{ repId: number; repName?: string; days: string[] }>;
+    },
+  ) {
+    return this.adminTargets.setCustomerRouteSchedule(req, id, body);
+  }
+
+  @Get('supervisor/customer-routes')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async getSupervisorCustomerRoutes(
+    @Req() req: RequestWithAuth,
+    @Query('search') search?: string,
+    @Query('repId') repId?: string,
+    @Query('route') route?: string,
+    @Query('unassignedOnly') unassignedOnly?: string,
+  ) {
+    return this.adminTargets.getSupervisorCustomerRoutes(req, search, repId, route, unassignedOnly);
+  }
+
+  @Post('supervisor/customer-routes/bulk-assign')
+  @RequirePermissions('deliveryReps')
+  async bulkAssignCustomerRoutes(
+    @Req() req: RequestWithAuth,
+    @Body()
+    body: {
+      customerIds: number[];
+      assignedRepId?: number | null;
+      assignedRepIds?: number[];
+      appendReps?: boolean;
+      assignedRepName?: string;
+      route?: string;
+      visitDays?: string[];
+    },
+  ) {
+    return this.adminTargets.bulkAssignCustomerRoutes(req, body);
+  }
+
+  @Get('fuel-logs')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async listFuelLogs(
+    @Req() req: RequestWithAuth,
+    @Query('vehicleId') vehicleId?: string,
+    @Query('repId') repId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.adminTargets.listFuelLogs(req, vehicleId, repId, dateFrom, dateTo);
+  }
+
+  @Post('fuel-logs')
+  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  async recordFuelLog(
+    @Req() req: RequestWithAuth,
+    @Body()
+    body: {
+      vehicleId: number;
+      tripId?: number;
+      repId?: number;
+      odometer: number;
+      liters: number;
+      pricePerLiter: number;
+      stationName?: string;
+      notes?: string;
+    },
+  ) {
+    return this.adminTargets.recordFuelLog(req, body);
   }
 }
