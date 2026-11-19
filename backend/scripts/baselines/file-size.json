@@ -33,7 +33,6 @@
     "src/modules/pharmacy/pharmacy.service.ts": 1194,
     "src/modules/saas-admin/saas-admin.service.ts": 1785,
     "src/modules/sales/services/pos-terminal.service.ts": 1412,
-    "src/modules/sales/services/restaurant-advanced-fnb.service.ts": 1654,
     "src/modules/sales/services/sales-orders.service.ts": 1204,
     "src/modules/settings/services/offline-releases.service.ts": 1133,
     "src/modules/settings/services/settings-demo-data.service.ts": 1489,

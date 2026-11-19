@@ -1,14 +1,8 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Database } from '../../../database/database.types';
 import { KYSELY_DB } from '../../../database/database.constants';
-import { Kysely, sql, type Transaction } from 'kysely';
+import { Kysely, type Transaction } from 'kysely';
 import { AppError } from '../../../common/errors/app-error';
-import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
-import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
-import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
-import { authorizeManagerSecret } from '../../../common/utils/manager-approval';
-import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import type { TenantScope, Toggle86ItemDto, CalculateTipPoolDto, SaveTableZoneDto, GeneratePrepSheetDto } from './restaurant-fnb/restaurant-fnb-types';
 export type { Toggle86ItemDto, CalculateTipPoolDto, SaveTableZoneDto, GeneratePrepSheetDto } from './restaurant-fnb/restaurant-fnb-types';
@@ -21,11 +15,6 @@ import { RestaurantFnbStampsCostingSlice } from './restaurant-fnb/restaurant-fnb
 import { RestaurantFnbManagerCompSlice } from './restaurant-fnb/restaurant-fnb-manager-comp';
 import { RestaurantFnbRatingsDriveThruSlice } from './restaurant-fnb/restaurant-fnb-ratings-drive-thru';
 import { RestaurantFnbUpsellLayoutsSlice } from './restaurant-fnb/restaurant-fnb-upsell-layouts';
-
-
-
-
-
 
 @Injectable()
 export class RestaurantAdvancedFnbService {
@@ -93,7 +82,6 @@ export class RestaurantAdvancedFnbService {
   async calculateAndSaveTipPool(scope: TenantScope, dto: CalculateTipPoolDto) {
     return this.tipsCreate.calculateAndSaveTipPool(scope, dto);
   }
-
 
   async confirmTipDistribution(scope: TenantScope, poolId: number) {
     return this.confirmZones.confirmTipDistribution(scope, poolId);
