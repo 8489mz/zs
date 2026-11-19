@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { buildStorePublicUrl, storePublicUrlParts } from '@/lib/store-public-url';
-import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { storefrontApi } from '../api/storefront.api';
@@ -17,14 +16,6 @@ import { StorefrontIdentityCard } from './storefront-settings/StorefrontIdentity
 import type { StorefrontMidBanner } from '../types/storefront.types';
 import {
   CheckIcon,
-  LightbulbIcon,
-  TruckIcon,
-  Trash2Icon,
-  QrCodeIcon,
-  PlusCircleIcon,
-  LayersIcon,
-  TrendingUpIcon,
-  UploadIcon,
 } from '@/shared/components/icons/AppIcons';
 import { TableQrPrintDialog } from '@/features/pos';
 import { StorefrontPixelTrackingCard } from './storefront-settings/StorefrontPixelTrackingCard';
