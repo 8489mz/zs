@@ -7,9 +7,7 @@ import {
   ReferenceDataResponse,
   maritimeApi,
 } from '../api/maritime-freight.api';
-import { Field } from '@/shared/ui/field';
 import { MasterDataLinesTable } from './master-data/MasterDataLinesTable';
-import { AppIcons, XIcon } from '@/shared/components/icons/AppIcons';
 import { PartnerFormModal } from './PartnerFormModal';
 import { ImportCarriersModal } from './ImportCarriersModal';
 import { MasterDataTerminalsSection } from './master-data/MasterDataTerminalsSection';
@@ -20,7 +18,6 @@ import { MasterDataAgentsTable } from './master-data/MasterDataAgentsTable';
 import { MasterDataAirlinesTable } from './master-data/MasterDataAirlinesTable';
 import { MasterDataTabsBar } from './master-data/MasterDataTabsBar';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
-import { CustomSelect } from '@/shared/ui/custom-select';
 import { MasterDataFilterBars } from './master-data/MasterDataFilterBars';
 import { useMaritime } from '../context/MaritimeContext';
 import { MasterDataStandardsBar } from './master-data/MasterDataStandardsBar';
