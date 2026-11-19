@@ -72,7 +72,7 @@ import { AuditService } from '../../src/core/audit/audit.service';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { VanSalesService } from '../../src/modules/delivery-reps/van-sales.service';
-import { VanSalesAdminController } from '../../src/modules/delivery-reps/van-sales.controller';
+import { VanSalesAdminController } from '../../src/modules/delivery-reps/van-sales-admin.controller';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
 const TENANT = 't1';
@@ -347,9 +347,12 @@ async function main(): Promise<void> {
     assert.ok(vanSource.includes("['cash_overage', 'stock_overage']"), 'both overage types are recognised');
     assert.ok(vanSource.includes('repEntry.settledShortages + repEntry.pushedToPayroll'), 'settled and pushed shortages enter the per-rep net');
     assert.ok(vanSource.includes('totalSettledShortages + totalPushedToPayroll'), 'settled and pushed shortages enter the totals net');
-    const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.controller.ts'), 'utf8');
-    assert.ok(controllerSource.includes('getRepFinancialLedger'), 'the controller exposes the ledger endpoint');
-    assert.ok(controllerSource.includes('req.authContext!'), 'the controller forwards the real auth context');
+    // File #30 split: getRepFinancialLedger moved to the S10
+    // promotions-ledger slice; the admin facade keeps only a thin
+    // delegate that forwards req itself.
+    const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales-admin/van-sales-admin-promotions-ledger.ts'), 'utf8');
+    assert.ok(controllerSource.includes('getRepFinancialLedger'), 'the ledger slice exposes the ledger endpoint');
+    assert.ok(controllerSource.includes('req.authContext!'), 'the ledger slice forwards the real auth context');
     console.log('  PASS M7 source pins');
   }
 

@@ -387,10 +387,12 @@ async function main(): Promise<void> {
       );
       assert.ok(!fnSlice.includes('previousBalance: 0'), 'no replay branch returns previousBalance 0');
       assert.ok(!fnSlice.includes('newBalance: 0'), 'no replay branch returns newBalance 0');
-      const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.controller.ts'), 'utf8');
+      // File #30 split: recordFieldCollection moved to the S3 sales
+      // slice; the facade keeps only a thin delegate.
+      const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales-driver/van-sales-driver-sales.ts'), 'utf8');
       assert.ok(
         controllerSource.includes('recordFieldCollection(driver.repId, driver.tenantId, driver.accountId, body)'),
-        'the driver controller forwards the verified driver to recordFieldCollection',
+        'the driver sales slice forwards the verified driver to recordFieldCollection',
       );
       console.log('  source pins passed');
     }

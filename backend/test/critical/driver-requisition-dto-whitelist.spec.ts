@@ -173,20 +173,28 @@ async function main(): Promise<void> {
   // false into the shared funnel.
   {
     let captured: any = null;
-    const controller = Object.create(VanSalesController.prototype);
-    controller.deliveryRepsService = {
-      verifyDriverToken: async () => ({ repId: REP_ID, tenantId: TENANT, accountId: ACCOUNT }),
-      // verifyDriver (INV-DRIVER-PIN-FIRST-LOGIN-CHANGE) re-derives the
-      // default-PIN flag from the live hash on every driver endpoint —
-      // the stub must answer it or the controller call never runs.
-      assertDriverPinChanged: async () => undefined,
-    };
-    controller.vanSalesService = {
-      submitLoadRequisition: async (_repId: number, _tenantId: string, _accountId: string, payload: any) => {
-        captured = payload;
-        return { ok: true, docNo: 'REQ-X', requisitionId: 1 };
-      },
-    };
+    // Real ctor (file #30 split): the facade constructs the
+    // requisitions slice eagerly, so a prototype-only controller
+    // throws — the delegate needs this.requisitions built.
+    const controller = new VanSalesController(
+      {
+        submitLoadRequisition: async (_repId: number, _tenantId: string, _accountId: string, payload: any) => {
+          captured = payload;
+          return { ok: true, docNo: 'REQ-X', requisitionId: 1 };
+        },
+      } as any,
+      {
+        verifyDriverToken: async () => ({ repId: REP_ID, tenantId: TENANT, accountId: ACCOUNT }),
+        // verifyDriver (INV-DRIVER-PIN-FIRST-LOGIN-CHANGE) re-derives the
+        // default-PIN flag from the live hash on every driver endpoint —
+        // the stub must answer it or the controller call never runs.
+        assertDriverPinChanged: async () => undefined,
+      } as any,
+      undefined as any,
+      undefined as any,
+      undefined as any,
+      undefined as any,
+    );
     const res = await controller.submitLoadRequisition('Bearer driver-token', {
       sourceWarehouseId: 1,
       items: [{ productId: 10, qty: 2 }],
@@ -343,12 +351,14 @@ async function main(): Promise<void> {
     console.log('  (e2) real driver frontend payload passes the pipe passed');
   }
 
-  // Source pins: the controller forces the flag false and takes the
-  // DTO; the DTO itself never mentions the flag.
+  // Source pins: the slice forces the flag false and takes the
+  // DTO; the DTO itself never mentions the flag. (File #30 split:
+  // submitLoadRequisition moved to the S4 requisitions slice; the
+  // facade keeps only a thin delegate.)
   {
     const here = __dirname;
     const controllerSource = readFileSync(
-      resolve(here, '../../src/modules/delivery-reps/van-sales.controller.ts'),
+      resolve(here, '../../src/modules/delivery-reps/van-sales-driver/van-sales-driver-requisitions.ts'),
       'utf8',
     );
     assert.ok(

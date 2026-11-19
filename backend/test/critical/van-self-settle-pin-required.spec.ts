@@ -183,12 +183,24 @@ function buildService(db: any, postCalls: unknown[]): any {
 }
 
 function buildController(service: any): any {
-  const controller = Object.create(VanSalesController.prototype);
-  controller.vanSalesService = service;
-  controller.deliveryRepsService = {
-    verifyDriverTokenForSettlement: async () => ({ ...DRIVER }),
-  };
-  return controller;
+  // Real ctor (file #30 split): the facade constructs the
+  // trips-settle slice eagerly, so a prototype-only controller
+  // throws — the delegate needs this.tripsSettleSlice built.
+  // NOTE: the stub also gains assertDriverPinChanged — the moved
+  // settleTrip calls it and the old stub lacked it, so this spec
+  // threw TypeError even before the split (it is not in the 287
+  // critical list, which is why CI never caught it).
+  return new VanSalesController(
+    service,
+    {
+      verifyDriverTokenForSettlement: async () => ({ ...DRIVER }),
+      assertDriverPinChanged: async () => undefined,
+    } as any,
+    undefined as any,
+    undefined as any,
+    undefined as any,
+    undefined as any,
+  );
 }
 
 async function main(): Promise<void> {
@@ -452,9 +464,9 @@ async function main(): Promise<void> {
     const serviceSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
     assert.ok(serviceSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'service names the invariant');
     assert.ok(serviceSource.includes('chargeStockVarianceDecidedBySupervisor'), 'service carries the supervisor-decision flag');
-    const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.controller.ts'), 'utf8');
-    assert.ok(controllerSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'controller names the invariant');
-    assert.ok(!controllerSource.includes('nightStockApproved: !body.unloadRemainingToWarehouse'), 'the controller no longer auto-approves night stock');
+    const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales-driver/van-sales-driver-trips-settle.ts'), 'utf8');
+    assert.ok(controllerSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'settle slice names the invariant');
+    assert.ok(!controllerSource.includes('nightStockApproved: !body.unloadRemainingToWarehouse'), 'the slice no longer auto-approves night stock');
     const tabSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/components/VanSettleTab.tsx'), 'utf8');
     assert.ok(tabSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'settle tab names the invariant');
     assert.ok(!tabSource.includes('setChargeStockVarianceToRep'), 'the rep-side charge checkbox is gone');

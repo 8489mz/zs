@@ -529,6 +529,18 @@ async function main(): Promise<void> {
       const fleetSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-fleet.service.ts'), 'utf8');
       const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-expenses-packaging-customers.service.ts'), 'utf8');
       const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.controller.ts'), 'utf8');
+      // File #30 split: the visit forwards moved to the S5 field
+      // slice and the gated-helper call sites moved to the S1–S5
+      // driver slices — the facade keeps only the verifyDriver
+      // kernel plus thin delegates.
+      const fieldSliceSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales-driver/van-sales-driver-field.ts'), 'utf8');
+      const driverSlicesSource = [
+        'van-sales-driver-pre-sales.ts',
+        'van-sales-driver-trips-settle.ts',
+        'van-sales-driver-sales.ts',
+        'van-sales-driver-requisitions.ts',
+        'van-sales-driver-field.ts',
+      ].map((name) => readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales-driver', name), 'utf8')).join('\n');
       assert.ok(fieldSource.includes('INV-REP-DRIVER-WRITES-OWNERSHIP'), 'the field-execution fix names its invariant');
       assert.ok(fieldSource.includes('REP_VISIT_NOT_OWNED'), 'the visit guard names its error code');
       assert.ok(fieldSource.includes('REP_VISIT_SALE_UNVERIFIED'), 'the checkout amount guard names its error code');
@@ -545,16 +557,16 @@ async function main(): Promise<void> {
       assert.ok(controllerSource.includes('private async verifyDriver(authHeader: string)'), 'the controller routes driver calls through one PIN-gated helper');
       assert.ok(controllerSource.includes('assertDriverPinChanged(driver)'), 'the helper calls the H4 PIN gate');
       assert.ok(
-        controllerSource.includes('recordVisitInventory(driver.tenantId, id, body, driver.repId)'),
-        'the controller forwards the caller repId into the visit inventory write',
+        fieldSliceSource.includes('recordVisitInventory(driver.tenantId, id, body, driver.repId)'),
+        'the field slice forwards the caller repId into the visit inventory write',
       );
       assert.ok(
-        controllerSource.includes('checkOutVisit(driver.tenantId, id, body, driver.repId)'),
-        'the controller forwards the caller repId into the visit check-out',
+        fieldSliceSource.includes('checkOutVisit(driver.tenantId, id, body, driver.repId)'),
+        'the field slice forwards the caller repId into the visit check-out',
       );
       const ungatedTokenCalls = controllerSource.split('this.deliveryRepsService.verifyDriverToken(authHeader);').length - 1;
       assert.equal(ungatedTokenCalls, 1, 'exactly one raw verifyDriverToken call remains, inside the PIN-gated helper');
-      const gatedHelperCalls = controllerSource.split('this.verifyDriver(authHeader)').length - 1;
+      const gatedHelperCalls = driverSlicesSource.split('this.verifyDriver(authHeader)').length - 1;
       assert.ok(gatedHelperCalls >= 49, 'every driver endpoint routes through the PIN-gated helper');
       console.log('  source pins passed');
     }

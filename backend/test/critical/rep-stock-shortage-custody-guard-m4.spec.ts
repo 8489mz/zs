@@ -84,7 +84,7 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { CashDrawerService } from '../../src/modules/cash-drawer/cash-drawer.service';
 import { VanSalesService } from '../../src/modules/delivery-reps/van-sales.service';
-import { VanSalesAdminController } from '../../src/modules/delivery-reps/van-sales.controller';
+import { VanSalesAdminController } from '../../src/modules/delivery-reps/van-sales-admin.controller';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { formatDailyDocumentNumber } from '../../src/common/utils/document-number.util';
 

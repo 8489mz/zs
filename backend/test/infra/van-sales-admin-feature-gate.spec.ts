@@ -28,7 +28,7 @@ import {
   REQUIRED_ANY_PERMISSIONS_KEY,
   REQUIRED_PERMISSIONS_KEY,
 } from '../../src/core/auth/decorators/permissions.decorator';
-import { VanSalesAdminController } from '../../src/modules/delivery-reps/van-sales.controller';
+import { VanSalesAdminController } from '../../src/modules/delivery-reps/van-sales-admin.controller';
 
 /* Money routes narrowed by M17: trip settlement, return approval,
  * commission/target adjustment, ledger settlement, load-requisition

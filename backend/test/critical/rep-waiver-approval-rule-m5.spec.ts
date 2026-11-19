@@ -113,7 +113,7 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { CashDrawerService } from '../../src/modules/cash-drawer/cash-drawer.service';
 import { VanSalesService } from '../../src/modules/delivery-reps/van-sales.service';
-import { VanSalesAdminController } from '../../src/modules/delivery-reps/van-sales.controller';
+import { VanSalesAdminController } from '../../src/modules/delivery-reps/van-sales-admin.controller';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { formatDailyDocumentNumber } from '../../src/common/utils/document-number.util';
 import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
@@ -656,9 +656,12 @@ async function main(): Promise<void> {
       2,
       'the gate is defined once and called from the waiver branch',
     );
-    const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.controller.ts'), 'utf8');
-    assert.ok(controllerSource.includes('supervisorPin'), 'the controller forwards the supervisor PIN');
-    assert.ok(controllerSource.includes('req.authContext!'), 'the controller forwards the real auth context');
+    // File #30 split: settleRepFinancialItem moved to the S10
+    // promotions-ledger slice; the admin facade keeps only a thin
+    // delegate that forwards req + body.
+    const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales-admin/van-sales-admin-promotions-ledger.ts'), 'utf8');
+    assert.ok(controllerSource.includes('supervisorPin'), 'the ledger slice forwards the supervisor PIN');
+    assert.ok(controllerSource.includes('req.authContext!'), 'the ledger slice forwards the real auth context');
     console.log('  PASS M5 source pins');
   }
 
