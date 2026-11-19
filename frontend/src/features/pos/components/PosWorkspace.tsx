@@ -1,8 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PosWorkspaceHeader } from '@/features/pos/components/pos-workspace/PosWorkspaceHeader';
-import { PosWorkspaceConfirmDialogs } from '@/features/pos/components/pos-workspace/PosWorkspaceConfirmDialogs';
-import { PosSaleSuccessDialog } from '@/features/pos/components/pos-workspace/PosSaleSuccessDialog';
 import { PosWorkspaceMainContent } from '@/features/pos/components/pos-workspace/PosWorkspaceMainContent';
 import { PosWorkspaceTablesDialog } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceTablesDialog';
 import { PosItemModifiersModal } from '@/features/pos/components/pos-cart-panel/PosItemModifiersModal';
@@ -44,6 +42,7 @@ import {
 import type { PosPriceType } from '@/features/pos/types/pos.types';
 import type { Product, Sale } from '@/types/domain';
 import { toast } from '@/shared/components/system-alert';
+import { PosWorkspaceConfirmDialogsSection } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceConfirmDialogsSection';
 import { PosWorkspaceHeldDraftsDialog } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceHeldDraftsDialog';
 import { PosWorkspaceCheckoutDialogs } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceCheckoutDialogs';
 
@@ -725,94 +724,22 @@ export function PosWorkspace() {
         focusBarcodeEntry={focusBarcodeEntry}
       />
 
-      <PosWorkspaceConfirmDialogs
+      <PosWorkspaceConfirmDialogsSection
         clearCartConfirmOpen={clearCartConfirmOpen}
         lineDeleteConfirmItem={lineDeleteConfirmItem}
         heldDeleteConfirmDraft={heldDeleteConfirmDraft}
         clearHeldConfirmOpen={clearHeldConfirmOpen}
-        heldDraftsCount={pos.heldDraftSummaries.length}
-        onCancelClearCart={() => {
-          setClearCartConfirmOpen(false);
-          focusBarcodeEntry();
-        }}
-        onConfirmClearCart={() => {
-          pos.resetPosDraft();
-          setClearCartConfirmOpen(false);
-        }}
-        onCancelLineDelete={() => {
-          setLineDeleteConfirmKey('');
-          focusBarcodeEntry();
-        }}
-        onConfirmLineDelete={() => {
-          if (lineDeleteConfirmKey) pos.removeItem(lineDeleteConfirmKey);
-          setLineDeleteConfirmKey('');
-          focusBarcodeEntry();
-        }}
-        onCancelHeldDelete={() => {
-          setHeldDeleteConfirmId('');
-          focusBarcodeEntry();
-        }}
-        onConfirmHeldDelete={async () => {
-          if (heldDeleteConfirmId) await pos.deleteDraft(heldDeleteConfirmId);
-          setHeldDeleteConfirmId('');
-          focusBarcodeEntry();
-        }}
-        onCancelClearHeld={() => {
-          setClearHeldConfirmOpen(false);
-          focusBarcodeEntry();
-        }}
-        onConfirmClearHeld={async () => {
-          await pos.clearHeldDrafts();
-          setClearHeldConfirmOpen(false);
-          focusBarcodeEntry();
-        }}
-      />
-
-      <PosSaleSuccessDialog
-        open={saleSuccessDialogOpen && Boolean(pos.lastSale)}
-        sale={pos.lastSale}
-        customer={lastSaleCustomer}
-        settings={pos.settingsQuery.data || null}
-        onClose={() => {
-          pos.completePostSaleCycle();
-          setSaleSuccessDialogOpen(false);
-          focusBarcodeEntry();
-        }}
-        onNewSale={() => {
-          pos.completePostSaleCycle();
-          setSaleSuccessDialogOpen(false);
-          focusBarcodeEntry();
-        }}
-        onPrintReceipt={() => {
-          pos.printReceiptNow();
-          pos.completePostSaleCycle('تمت طباعة الريسيت. جاهز لعميل جديد.');
-          setSaleSuccessDialogOpen(false);
-          focusBarcodeEntry();
-        }}
-        onPrintDualReceipt={() => {
-          pos.printDualReceiptNow();
-          pos.completePostSaleCycle('تمت طباعة نسختي الريسيت (العميل + المحل). جاهز لعميل جديد.');
-          setSaleSuccessDialogOpen(false);
-          focusBarcodeEntry();
-        }}
-        onPrintA4={() => {
-          pos.printA4Now();
-          pos.completePostSaleCycle('تم فتح طباعة A4. جاهز لعميل جديد.');
-          setSaleSuccessDialogOpen(false);
-          focusBarcodeEntry();
-        }}
-        onPrintKitchen={() => {
-          pos.printKitchenNow();
-          pos.completePostSaleCycle('تم طباعة شيت المطبخ. جاهز لعميل جديد.');
-          setSaleSuccessDialogOpen(false);
-          focusBarcodeEntry();
-        }}
-        onPrintBoth={() => {
-          pos.printBothNow();
-          pos.completePostSaleCycle('تمت طباعة الريسيت وشيت المطبخ. جاهز لعميل جديد.');
-          setSaleSuccessDialogOpen(false);
-          focusBarcodeEntry();
-        }}
+        pos={pos}
+        setClearCartConfirmOpen={setClearCartConfirmOpen}
+        focusBarcodeEntry={focusBarcodeEntry}
+        setLineDeleteConfirmKey={setLineDeleteConfirmKey}
+        lineDeleteConfirmKey={lineDeleteConfirmKey}
+        setHeldDeleteConfirmId={setHeldDeleteConfirmId}
+        heldDeleteConfirmId={heldDeleteConfirmId}
+        setClearHeldConfirmOpen={setClearHeldConfirmOpen}
+        saleSuccessDialogOpen={saleSuccessDialogOpen}
+        lastSaleCustomer={lastSaleCustomer}
+        setSaleSuccessDialogOpen={setSaleSuccessDialogOpen}
       />
 
       {reprintModalOpen && (
