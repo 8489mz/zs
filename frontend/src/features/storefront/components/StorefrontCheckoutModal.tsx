@@ -18,6 +18,7 @@ import { saveLocalOrderRecord } from './StorefrontMyOrdersModal';
 import { calculateCartSubtotal } from '../lib/storefront-cart-pricing';
 import { getContrastTextColor } from '../lib/storefront-theme-contrast';
 import { useBodyScrollLock } from '@/shared/components/dialog-shell';
+import { CheckoutSummarySection } from './storefront-checkout/checkout-summary-section';
 import { CheckoutShippingPromoSection } from './storefront-checkout/checkout-shipping-promo-section';
 import { CheckoutPaymentSection } from './storefront-checkout/checkout-payment-section';
 import { CheckoutNotesPromoBar } from './storefront-checkout/checkout-notes-promo-bar';
@@ -829,106 +830,23 @@ export function StorefrontCheckoutModal({
                   brandColorContrast={brandColorContrast}
                 />
 
-                {/* Order Total Summary */}
-                <div
-                  style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    padding: '6px 10px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '3px',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
-                    <span>{t('storefront.storefront_checkout_modal.s58', "مجموع الأصناف:")}</span>
-                    <span style={{ fontWeight: 600, color: '#334155' }}>{formatMoney(subtotal)} <CurrencySymbol currency={storeCurrency} /></span>
-                  </div>
-
-                  {bogoSavings > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#059669', background: '#ecfdf5', padding: '3px 6px', borderRadius: '4px' }}>
-                      <span style={{ fontWeight: 700 }}>{t('storefront.storefront_checkout_modal.s59', "وفرت من عروض المتجر (BOGO):")}</span>
-                      <strong style={{ fontWeight: 800 }}>- {formatMoney(bogoSavings)} <CurrencySymbol currency={storeCurrency} /></strong>
-                    </div>
-                  )}
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
-                    <span>
-                      {isDineIn
-                        ? t('storefront.storefront_checkout_modal.s60', "خدمة الصالة / الطاولة:")
-                        : isEn
-                        ? `Delivery Fee ${selectedZone ? `(${selectedZone.name})` : ''}:`
-                        : `خدمة التوصيل ${selectedZone ? `(${selectedZone.name})` : ''}:`}
-                    </span>
-                    {isDineIn ? (
-                      <strong style={{ color: '#166534' }}>{t('storefront.storefront_checkout_modal.s61', "مجاناً (طلب صالة)")}</strong>
-                    ) : effectiveDeliveryFee === 0 ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        {rawDeliveryFee > 0 && (
-                          <span style={{ textDecoration: 'line-through', color: '#94a3b8' }}>{formatMoney(rawDeliveryFee)} {activeCurrencySymbol}</span>
-                        )}
-                        <strong style={{ color: '#166534' }}>{t('storefront.storefront_checkout_modal.s62', "توصيل مجاني")}</strong>
-                      </div>
-                    ) : (
-                      <span style={{ fontWeight: 600, color: '#334155' }}>{formatMoney(effectiveDeliveryFee)} <CurrencySymbol currency={storeCurrency} /></span>
-                    )}
-                  </div>
-
-                  {discountAmount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#16a34a' }}>
-                      <span>{t('storefront.storefront_checkout_modal.s63', "خصم الكوبون (")}{appliedCoupon?.code}):</span>
-                      <strong style={{ fontWeight: 800 }}>- {formatMoney(discountAmount)} <CurrencySymbol currency={storeCurrency} /></strong>
-                    </div>
-                  )}
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      paddingTop: '3px',
-                      marginTop: '1px',
-                      borderTop: '1px dashed #cbd5e1',
-                    }}
-                  >
-                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
-                      {t('storefront.storefront_checkout_modal.s64', "المبلغ الإجمالي للدفع:")}
-                    </span>
-                    <span style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a' }}>
-                      {formatMoney(total)} <CurrencySymbol currency={storeCurrency} />
-                    </span>
-                  </div>
-                </div>
-
-                {/* Remember details checkbox (default checked) */}
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    cursor: 'pointer',
-                    fontSize: '11.5px',
-                    color: '#475569',
-                    userSelect: 'none',
-                    margin: '2px 2px', gap: '6px',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={rememberDevice}
-                    onChange={(e) => setRememberDevice(e.target.checked)}
-                    style={{
-                      width: '14px',
-                      height: '14px',
-                      accentColor: brandColor,
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                    }}
-                  />
-                  <span style={{ fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>
-                    {t('storefront.storefront_checkout_modal.s65', "تذكر بياناتي على هذا الجهاز لتسريع الطلب في المرات القادمة")}
-                  </span>
-                </label>
+                <CheckoutSummarySection
+                  subtotal={subtotal}
+                  formatMoney={formatMoney}
+                  storeCurrency={storeCurrency}
+                  bogoSavings={bogoSavings}
+                  isDineIn={isDineIn}
+                  selectedZone={selectedZone}
+                  effectiveDeliveryFee={effectiveDeliveryFee}
+                  rawDeliveryFee={rawDeliveryFee}
+                  activeCurrencySymbol={activeCurrencySymbol}
+                  discountAmount={discountAmount}
+                  appliedCoupon={appliedCoupon}
+                  total={total}
+                  rememberDevice={rememberDevice}
+                  setRememberDevice={setRememberDevice}
+                  brandColor={brandColor}
+                />
               </div>
             </div>
         </div>
