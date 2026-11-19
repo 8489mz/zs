@@ -58,7 +58,7 @@ export function StorefrontCheckoutModal({
   onSubmitOrder,
 }: StorefrontCheckoutModalProps) {
   const { t } = useTranslation();
-  const { isEn, dir } = useStorefrontLang();
+  const { isEn } = useStorefrontLang();
   const isDineIn = Boolean(tableNumber) || orderType === 'dine_in';
   const [fulfillmentType, setFulfillmentType] = useState<'delivery' | 'pickup'>('delivery');
   const [selectedCountry, setSelectedCountry] = useState<string>(() => {

@@ -1,6 +1,6 @@
 import type { CartItem, CreateOnlineOrderResponse, StorefrontInfo } from '../../types/storefront.types';
 
-const STOREFRONT_SAVED_CUSTOMER_KEY = 'zsystems.storefront.saved_customer';
+export const STOREFRONT_SAVED_CUSTOMER_KEY = 'zsystems.storefront.saved_customer';
 
 export interface StorefrontCheckoutModalProps {
   isOpen: boolean;
