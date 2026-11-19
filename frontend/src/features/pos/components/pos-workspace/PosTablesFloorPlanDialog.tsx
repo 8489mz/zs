@@ -3,7 +3,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { Button } from '@/shared/ui/button';
-import { AlertTriangleIcon, BellIcon } from '@/shared/components/icons/AppIcons';
 import { formatCurrency } from '@/lib/format';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
 import { settingsApi } from '@/features/settings/api/settings.api';
