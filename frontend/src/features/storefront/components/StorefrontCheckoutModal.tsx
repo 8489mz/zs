@@ -18,6 +18,7 @@ import { saveLocalOrderRecord } from './StorefrontMyOrdersModal';
 import { calculateCartSubtotal } from '../lib/storefront-cart-pricing';
 import { getContrastTextColor } from '../lib/storefront-theme-contrast';
 import { useBodyScrollLock } from '@/shared/components/dialog-shell';
+import { CheckoutFooter } from './storefront-checkout/checkout-footer';
 import { CheckoutSummarySection } from './storefront-checkout/checkout-summary-section';
 import { CheckoutShippingPromoSection } from './storefront-checkout/checkout-shipping-promo-section';
 import { CheckoutPaymentSection } from './storefront-checkout/checkout-payment-section';
@@ -851,72 +852,15 @@ export function StorefrontCheckoutModal({
             </div>
         </div>
 
-        {/* Sticky Bottom Actions Bar (Always visible & accessible on all screens) */}
-        <div
-          className="storefront-checkout-footer"
-          style={{
-            borderTop: '1px solid #e2e8f0',
-            background: '#ffffff',
-            display: 'flex',
-            gap: '8px',
-            flexShrink: 0,
-            boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.04)',
-            zIndex: 10,
-          }}
-        >
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              flex: 1,
-              height: '40px',
-              padding: '0 20px',
-              borderRadius: '12px',
-              background: brandColor,
-              color: brandColorContrast || 'var(--storefront-primary-contrast, #ffffff)',
-              fontSize: '13px',
-              fontWeight: 700,
-              border: `1px solid ${brandColor}`,
-              cursor: loading ? 'wait' : 'pointer',
-              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            {loading
-              ? t('storefront.storefront_checkout_modal.s66', "جاري الحفظ...")
-              : editingOrderNumber
-              ? t('storefront.storefront_checkout_modal.s67', "حفظ تعديلات الطلب")
-              : isDineIn
-              ? (isEn ? `Send to Kitchen (Table ${tableNumber || ''})` : `إرسال للمطبخ (طاولة ${tableNumber || ''})`)
-              : t('storefront.storefront_checkout_modal.s68', "إرسال وتأكيد الطلب الآن")}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-            style={{
-              height: '40px',
-              padding: '0 18px',
-              borderRadius: '12px',
-              border: '1px solid #dadce0',
-              background: '#ffffff',
-              color: '#1f1f1f',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            {t('storefront.storefront_checkout_modal.s69', "إلغاء")}
-          </button>
-        </div>
+        <CheckoutFooter
+          loading={loading}
+          brandColor={brandColor}
+          brandColorContrast={brandColorContrast}
+          editingOrderNumber={editingOrderNumber}
+          isDineIn={isDineIn}
+          tableNumber={tableNumber}
+          onClose={onClose}
+        />
       </form>
 
     {/* Online Payment Gateway Overlay */}
