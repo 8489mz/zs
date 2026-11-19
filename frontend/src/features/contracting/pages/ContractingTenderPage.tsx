@@ -19,6 +19,7 @@ import { BRICK_SIZE_PRESETS } from '../components/TenderEstimatorModal';
 import { useContracting } from '../context/ContractingContext';
 import { matchEngineeringConstant } from '../utils/engineeringMasterPricingCore';
 import { exportPricedBoqWorkbook } from '../utils/originalWorkbookPricer';
+import type { TenderItem, TenderItemComponent } from './tender/tender-page-types';
 
 const DRAFT_STORAGE_KEY = 'zs_tender_estimator_draft_v2';
 
@@ -40,36 +41,6 @@ const TRADE_LABELS: Record<string, string> = {
 };
 
 
-
-interface TenderItemComponent {
-  componentCode: string;
-  componentName: string;
-  unit: string;
-  qtyPerUnit: number;
-  unitRate: number;
-  componentType: 'material' | 'labor' | 'equipment' | 'subcontractor';
-}
-
-interface TenderItem {
-  id: string;
-  itemCode: string;
-  description: string;
-  unit: string;
-  estimatedQty: number;
-  trade: string;
-  sourceFileName?: string;
-  sourceSheetName?: string;
-  rawRowIdx?: number;
-  components: TenderItemComponent[];
-  wastePercent: number;
-  overheadPercent: number;
-  profitMarkupPercent: number;
-  notes?: string;
-  drawingLength?: number;
-  drawingWidth?: number;
-  drawingHeight?: number;
-  drawingCount?: number;
-}
 
 const formatUnitLabel = (unit?: string, compCode?: string): string => {
   const u = (unit || '').toLowerCase().trim();
