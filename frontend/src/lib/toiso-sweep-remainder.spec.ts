@@ -141,7 +141,7 @@ describe('package-3 conversions in place', () => {
       expect(text).toContain('return todayLocalDateKey(d);');
     }
     const pos = fs.readFileSync(
-      path.join(FRONTEND_SRC, 'features/pos/lib/pos.domain.ts'),
+      path.join(FRONTEND_SRC, 'features/pos/lib/pos-domain/pos-domain-helpers.ts'),
       'utf8',
     );
     expect(pos).toContain('todayLocalDateKey(parsed)');
