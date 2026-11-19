@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import { PageHeader } from '@/shared/components/page-header';
-import { Button } from '@/shared/ui/button';
 import {
   useImportProjectsQuery,
   useCreateImportProjectMutation,
@@ -16,35 +14,14 @@ import {
   usePartnersQuery,
 } from './api/shipments.api';
 import { StandardDialog } from '@/shared/components/StandardDialog';
-import {
-  PlusCircleIcon,
-  RefreshCwIcon,
-  XIcon,
-  SlidersIcon,
-  CheckCircleIcon,
-  SearchIcon,
-  CheckShieldIcon,
-  TruckIcon,
-  DollarSignIcon,
-  TrendingUpIcon,
-  UsersIcon,
-  Trash2Icon,
-} from '@/shared/components/icons/AppIcons';
 import { toast } from '@/shared/components/system-alert';
-import { LoadingState } from '@/shared/ui/loading-state';
 import { useProductsQuery } from '@/shared/hooks/use-catalog-queries';
-import { SearchableCombobox } from '@/shared/ui/searchable-combobox';
 import {
-  formatMarketProfitEgp,
-  formatMarketRoiBadge,
-  getImportProjectStatusLabel,
   normalizeFeasibilityNumber,
-  parseFeasibilityNumberInput,
 } from './utils/import-display-formatters';
 import {
   buildTruckPartsPreset,
   EMPTY_FEASIBILITY_COSTS,
-  TRUCK_PARTS_PRESET_COSTS,
 } from './feasibility-preset';
 import { ImportProjectsTable } from './components/ImportProjectsTable';
 import { FeasibilityPresetParams } from './components/FeasibilityPresetParams';

@@ -38,7 +38,6 @@
     "src/features/hr/pages/HrPayrollPage.tsx": 1170,
     "src/features/import-sales/ChinaSourcingPage.tsx": 1224,
     "src/features/import-sales/CustomsBrokerManager.tsx": 1051,
-    "src/features/import-sales/ImportProjectsManager.tsx": 2954,
     "src/features/import-sales/ShipmentDetailsPage.tsx": 1258,
     "src/features/import-sales/api/shipments.api.ts": 2081,
     "src/features/inventory/components/sections/InventoryComposerCards.tsx": 1278,
