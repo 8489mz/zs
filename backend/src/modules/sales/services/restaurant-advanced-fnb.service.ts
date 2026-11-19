@@ -5,7 +5,7 @@ import { Kysely, type Transaction } from 'kysely';
 import { AppError } from '../../../common/errors/app-error';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import type { TenantScope, Toggle86ItemDto, CalculateTipPoolDto, SaveTableZoneDto, GeneratePrepSheetDto } from './restaurant-fnb/restaurant-fnb-types';
-export type { Toggle86ItemDto, CalculateTipPoolDto, SaveTableZoneDto, GeneratePrepSheetDto } from './restaurant-fnb/restaurant-fnb-types';
+export type { TenantScope, Toggle86ItemDto, CalculateTipPoolDto, SaveTableZoneDto, GeneratePrepSheetDto } from './restaurant-fnb/restaurant-fnb-types';
 import { RestaurantFnbGates86Slice } from './restaurant-fnb/restaurant-fnb-gates-86';
 import { RestaurantFnbTipsReadSlice } from './restaurant-fnb/restaurant-fnb-tips-read';
 import { RestaurantFnbTipsCreateSlice } from './restaurant-fnb/restaurant-fnb-tips-create';
