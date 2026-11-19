@@ -18,6 +18,7 @@ import { VanSalesDriverPreSalesSlice } from './van-sales-driver/van-sales-driver
 import { VanSalesDriverTripsSettleSlice } from './van-sales-driver/van-sales-driver-trips-settle';
 import { VanSalesDriverSalesSlice } from './van-sales-driver/van-sales-driver-sales';
 import { VanSalesDriverRequisitionsSlice } from './van-sales-driver/van-sales-driver-requisitions';
+import { VanSalesDriverFieldSlice } from './van-sales-driver/van-sales-driver-field';
 
 @Controller('api/driver-portal/van-sales')
 export class VanSalesController {
@@ -25,6 +26,7 @@ export class VanSalesController {
   private readonly tripsSettleSlice: VanSalesDriverTripsSettleSlice;
   private readonly driverSales: VanSalesDriverSalesSlice;
   private readonly requisitions: VanSalesDriverRequisitionsSlice;
+  private readonly driverField: VanSalesDriverFieldSlice;
 
   constructor(
     private readonly vanSalesService: VanSalesService,
@@ -49,6 +51,13 @@ export class VanSalesController {
     });
     this.requisitions = new VanSalesDriverRequisitionsSlice({
       vanSalesService: this.vanSalesService,
+      verifyDriver: this.verifyDriver.bind(this),
+    });
+    this.driverField = new VanSalesDriverFieldSlice({
+      vanSalesService: this.vanSalesService,
+      vanPromotionsService: this.vanPromotionsService,
+      vanRoutesService: this.vanRoutesService,
+      vanFieldExecutionService: this.vanFieldExecutionService,
       verifyDriver: this.verifyDriver.bind(this),
     });
   }
@@ -439,179 +448,104 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
     @Body() body: { expenseType: string; amount: number; notes?: string; receiptPhotoUrl?: string; supervisorOverridePin?: string },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanSalesService.recordTripExpense(driver.repId, driver.tenantId, driver.accountId, {
-      ...body,
-      tripId,
-    });
-  }
+  ) { return this.driverField.recordTripExpense(authHeader, tripId, body); }
 
   @Get('trips/:tripId/expenses')
   async getTripExpenses(
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanSalesService.getTripExpenses(tripId, driver.tenantId, driver.repId);
-  }
-
-  // =========================================================================
-  // RETURNABLE PACKAGING & EMPTIES LEDGER
-  // =========================================================================
+  ) { return this.driverField.getTripExpenses(authHeader, tripId); }
 
   @Post('trips/:tripId/packaging')
   async recordPackagingMovement(
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
     @Body() body: { customerId?: number; packageType: string; deliveredQty: number; returnedQty: number; notes?: string },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanSalesService.recordPackagingMovement(driver.repId, driver.tenantId, driver.accountId, {
-      ...body,
-      tripId,
-    });
-  }
+  ) { return this.driverField.recordPackagingMovement(authHeader, tripId, body); }
 
   @Get('trips/:tripId/packaging')
   async getTripPackagingMovements(
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanSalesService.getTripPackagingMovements(tripId, driver.tenantId, driver.repId);
-  }
+  ) { return this.driverField.getTripPackagingMovements(authHeader, tripId); }
 
   @Get('customers/:customerId/packaging')
   async getCustomerPackagingBalance(
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanSalesService.getCustomerPackagingBalance(customerId, driver.tenantId, driver.repId);
-  }
+  ) { return this.driverField.getCustomerPackagingBalance(authHeader, customerId); }
 
   @Get('customers/:customerId/suggested-order')
   async getCustomerSuggestedOrder(
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanSalesService.getCustomerSuggestedOrder(driver.tenantId, driver.accountId, driver.repId, customerId);
-  }
+  ) { return this.driverField.getCustomerSuggestedOrder(authHeader, customerId); }
 
   @Get('customers/:customerId/last-prices')
   async getCustomerLastSoldPrices(
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanSalesService.getCustomerLastSoldPrices(driver.tenantId, customerId, driver.repId);
-  }
+  ) { return this.driverField.getCustomerLastSoldPrices(authHeader, customerId); }
 
   @Get('customers/:customerId/field-statement')
   async getCustomerFieldStatement(
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanSalesService.getCustomerFieldStatement(driver.tenantId, customerId, driver.repId);
-  }
+  ) { return this.driverField.getCustomerFieldStatement(authHeader, customerId); }
 
   @Get('promotions')
-  async listActivePromotions(@Headers('authorization') authHeader: string) {
-    const driver = await this.verifyDriver(authHeader);
-    const promotions = await this.vanPromotionsService.listPromotions(driver.tenantId, { isActive: true });
-    return { ok: true, promotions };
-  }
+  async listActivePromotions(@Headers('authorization') authHeader: string) { return this.driverField.listActivePromotions(authHeader); }
 
   @Post('promotions/evaluate-cart')
   async evaluateCartPromotions(
     @Headers('authorization') authHeader: string,
     @Body() body: { cartItems: any[]; invoiceSubtotal?: number; customerType?: string },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    const result = await this.vanPromotionsService.evaluateCart(driver.tenantId, body);
-    return { ok: true, ...result };
-  }
+  ) { return this.driverField.evaluateCartPromotions(authHeader, body); }
 
   @Post('routes/optimize')
   async optimizeDriverRoute(
     @Headers('authorization') authHeader: string,
     @Body() body: { customerIds?: number[]; startLat?: number; startLng?: number; persistSequence?: boolean; route?: string },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    const result = await this.vanRoutesService.optimizeCustomerRoute(driver.tenantId, {
-      ...body,
-      repId: driver.repId,
-      // H9 (D4): the driver acts for himself here, so a persist is
-      // gated on his own can_edit_routes flag (the supervisor
-      // endpoint passes no actingRepId and is never gated by it).
-      actingRepId: driver.repId,
-    });
-    return { ok: true, ...result };
-  }
-
-  // =========================================================================
-  // FMCG STRUCTURED STORE VISITS & MERCHANDISING (DRIVER)
-  // =========================================================================
+  ) { return this.driverField.optimizeDriverRoute(authHeader, body); }
 
   @Post('visits/check-in')
   async checkInStoreVisit(
     @Headers('authorization') authHeader: string,
     @Body() body: { tripId?: number; customerId: number; customerName?: string; latitude?: number; longitude?: number },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanFieldExecutionService.checkInVisit(driver.tenantId, Number(driver.accountId || 0), driver.repId, body);
-  }
+  ) { return this.driverField.checkInStoreVisit(authHeader, body); }
 
   @Post('visits/:id/inventory')
   async recordVisitInventory(
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { items: any[] },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanFieldExecutionService.recordVisitInventory(driver.tenantId, id, body, driver.repId);
-  }
+  ) { return this.driverField.recordVisitInventory(authHeader, id, body); }
 
   @Post('visits/:id/no-sale')
   async recordVisitNoSale(
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { noSaleReason: string; noSaleNotes?: string },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanFieldExecutionService.recordVisitNoSale(driver.tenantId, id, body, driver.repId);
-  }
+  ) { return this.driverField.recordVisitNoSale(authHeader, id, body); }
 
   @Post('visits/:id/check-out')
   async checkOutStoreVisit(
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { hasSale?: boolean; saleId?: number; saleAmount?: number; hasCollection?: boolean; collectionAmount?: number },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanFieldExecutionService.checkOutVisit(driver.tenantId, id, body, driver.repId);
-  }
+  ) { return this.driverField.checkOutStoreVisit(authHeader, id, body); }
 
   @Post('trade-surveys')
   async recordTradeSurvey(
     @Headers('authorization') authHeader: string,
     @Body() body: any,
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanFieldExecutionService.recordTradeSurvey(driver.tenantId, Number(driver.accountId || 0), driver.repId, body);
-  }
+  ) { return this.driverField.recordTradeSurvey(authHeader, body); }
 
   @Post('breadcrumbs')
   async recordBreadcrumb(
     @Headers('authorization') authHeader: string,
     @Body() body: { tripId: number; latitude: number; longitude: number; speedKmh?: number; batteryLevel?: number },
-  ) {
-    const driver = await this.verifyDriver(authHeader);
-    return this.vanFieldExecutionService.recordLiveBreadcrumb(driver.tenantId, Number(driver.accountId || 0), driver.repId, body);
-  }
+  ) { return this.driverField.recordBreadcrumb(authHeader, body); }
 }
 
 @Controller('api/van-sales/admin')
