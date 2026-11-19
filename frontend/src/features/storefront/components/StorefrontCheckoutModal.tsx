@@ -7,7 +7,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { CreateOnlineOrderResponse, ValidateCouponResponse, StorefrontPaymentSessionResponse, QuoteCartResponse } from '../types/storefront.types';
 import { storefrontApi } from '../api/storefront.api';
-import { StorefrontOnlinePaymentModal } from './StorefrontOnlinePaymentModal';
 import { StorefrontCheckoutShell } from './storefront-checkout/storefront-checkout-shell';
 import { CheckoutFulfillmentSection } from './storefront-checkout/checkout-fulfillment-section';
 import { CheckoutAddressSection } from './storefront-checkout/checkout-address-section';
@@ -18,6 +17,7 @@ import { saveLocalOrderRecord } from './StorefrontMyOrdersModal';
 import { calculateCartSubtotal } from '../lib/storefront-cart-pricing';
 import { getContrastTextColor } from '../lib/storefront-theme-contrast';
 import { useBodyScrollLock } from '@/shared/components/dialog-shell';
+import { CheckoutPaymentOverlay } from './storefront-checkout/checkout-payment-overlay';
 import { CheckoutFooter } from './storefront-checkout/checkout-footer';
 import { CheckoutSummarySection } from './storefront-checkout/checkout-summary-section';
 import { CheckoutShippingPromoSection } from './storefront-checkout/checkout-shipping-promo-section';
@@ -863,23 +863,15 @@ export function StorefrontCheckoutModal({
         />
       </form>
 
-    {/* Online Payment Gateway Overlay */}
-    {paymentSession && createdOrderForPayment && tenantSlug && (
-      <StorefrontOnlinePaymentModal
-        isOpen={Boolean(paymentSession)}
-        session={paymentSession}
-        orderData={createdOrderForPayment}
-        tenantSlug={tenantSlug}
-        onSuccess={handleOnlinePaymentSuccess}
-        onClose={() => {
-          if (createdOrderForPayment && onOrderSuccess) {
-            onOrderSuccess(createdOrderForPayment);
-          }
-          setPaymentSession(null);
-          setCreatedOrderForPayment(null);
-        }}
-      />
-    )}
+    <CheckoutPaymentOverlay
+      paymentSession={paymentSession}
+      createdOrderForPayment={createdOrderForPayment}
+      tenantSlug={tenantSlug}
+      handleOnlinePaymentSuccess={handleOnlinePaymentSuccess}
+      onOrderSuccess={onOrderSuccess}
+      setPaymentSession={setPaymentSession}
+      setCreatedOrderForPayment={setCreatedOrderForPayment}
+    />
     </StorefrontCheckoutShell>
 );
 
