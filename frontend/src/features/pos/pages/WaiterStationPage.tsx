@@ -1,14 +1,7 @@
-import { useTranslation } from 'react-i18next';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWaiterStation, WaiterCartItem } from '@/features/pos/hooks/useWaiterStation';
 import { useIsolatedDisplayLanguage } from '@/features/pos/hooks/useIsolatedDisplayLanguage';
-import { formatCurrency } from '@/lib/format';
-import {
-  ArrowRightIcon,
-  BellIcon,
-  ShoppingCartIcon,
-} from '@/shared/components/icons/AppIcons';
 import { WaiterStationTableHeader } from '@/features/pos/components/pos-workspace/waiter-station/WaiterStationTableHeader';
 import { WaiterStationTableKpis } from '@/features/pos/components/pos-workspace/waiter-station/WaiterStationTableKpis';
 import { WaiterStationServiceCallsBanner } from '@/features/pos/components/pos-workspace/waiter-station/WaiterStationServiceCallsBanner';
@@ -21,7 +14,6 @@ import { WaiterStationItemNoteModal } from '@/features/pos/components/pos-worksp
 
 export function WaiterStationPage() {
   const { currentLang, toggleLanguage } = useIsolatedDisplayLanguage('waiter_ui_lang');
-  const { t } = useTranslation();
   const navigate = useNavigate();
 
   // Authentication State

@@ -49,7 +49,6 @@
     "src/features/maritime-freight/pages/MaritimeCustomerPortalPage.tsx": 1686,
     "src/features/maritime-freight/utils/maritime-documents.ts": 2011,
     "src/features/pos/lib/pos.domain.ts": 1088,
-    "src/features/pos/pages/WaiterStationPage.tsx": 1141,
     "src/features/products/components/BarcodePrintDialog.tsx": 1066,
     "src/features/products/components/EditProductForm.tsx": 1043,
     "src/features/products/components/NewProductForm.tsx": 1013,
