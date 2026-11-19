@@ -17,7 +17,6 @@
     "src/features/contracting/pages/ContractingTenderPage.tsx": 2592,
     "src/features/contracting/utils/boqExcelParser.ts": 1107,
     "src/features/delivery-reps/api/van-sales.api.ts": 2443,
-    "src/features/delivery-reps/components/DriverNewLoadRequisitionView.tsx": 2873,
     "src/features/delivery-reps/components/FleetVehiclesTab.tsx": 1043,
     "src/features/delivery-reps/components/VanCollectionTab.tsx": 1461,
     "src/features/delivery-reps/components/VanFinancialLedgerAdminTab.tsx": 1776,

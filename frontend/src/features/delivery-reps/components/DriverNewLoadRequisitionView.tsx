@@ -1,13 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/shared/ui/button';
-import { CurrencySymbol } from '@/shared/ui/currency-symbol';
-import { CustomSelect } from '@/shared/ui/custom-select';
 import { matchesArabic } from '@/lib/arabic-normalization';
 import {
   useDriverLoadRequisition,
-  type DriverProductStock,
   type DriverAvailableProduct,
   type DriverWarehouse,
 } from '../hooks/useDriverLoadRequisition';
@@ -15,18 +11,8 @@ import { deliveryRepsApi, type DeliveryRep } from '@/shared/api/delivery-reps.ap
 import { vanSalesApi } from '../api/van-sales.api';
 import {
   CheckCircleIcon,
-  Trash2Icon,
-  PlusIcon,
-  MinusIcon,
-  ArrowRightIcon,
-  SearchIcon,
-  XIcon,
   BoxesIcon,
-  BuildingIcon,
-  ClockIcon,
-  RefreshCwIcon,
 } from '@/shared/components/icons/AppIcons';
-import { VanFloatingActionBar } from './VanFloatingActionBar';
 import { toast } from '@/shared/components/system-alert';
 import { useFormDraft } from '@/shared/hooks/use-form-draft';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
@@ -34,13 +20,11 @@ import { LoadRequisitionSummaryBar } from './load-requisition/LoadRequisitionSum
 import { LoadRequisitionSelectedTab } from './load-requisition/LoadRequisitionSelectedTab';
 import { LoadRequisitionCatalogTab } from './load-requisition/LoadRequisitionCatalogTab';
 import { LoadRequisitionHeader } from './load-requisition/LoadRequisitionHeader';
-import { LoadRequisitionProductList } from './load-requisition/LoadRequisitionProductList';
 import { AdminSubmitSuccessView, DriverSubmitSuccessView } from './load-requisition/RequisitionSuccessViews';
 import { useRequisitionSubmit } from './load-requisition/useRequisitionSubmit';
 import { useRequisitionCart } from './load-requisition/useRequisitionCart';
 
 import {
-  CompactStepper,
   type DriverNewLoadRequisitionViewProps,
   type RequisitionLineItem,
 } from './load-requisition/LoadRequisitionTypes';
