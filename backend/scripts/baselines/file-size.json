@@ -7,7 +7,6 @@
     "src/core/auth/services/session.service.ts": 1023,
     "src/modules/accounting/services/inventory-manufacturing-cash-posting.service.ts": 1238,
     "src/modules/accounting/services/pdc-cheques.service.ts": 1072,
-    "src/modules/accounting/services/purchases-treasury-posting.service.ts": 2068,
     "src/modules/accounting/services/van-and-delivery-posting.service.ts": 1041,
     "src/modules/ai-copilot/ai-copilot.service.ts": 1510,
     "src/modules/contracting/contracting.controller.ts": 1363,

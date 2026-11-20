@@ -9,16 +9,11 @@
  */
 import type { Logger } from '@nestjs/common';
 import { Transaction } from 'kysely';
-import { sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
-import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AccountingTenantFoundationService } from '../accounting-tenant-foundation.service';
-import { AppError } from '../../../common/errors/app-error';
-import { tenantBaseCurrency } from '../accounting-currency';
-import { currencyMoneyDigits } from '../engines/money-minor-units.engine';
-import type { DbOrTx, JournalLineDraft } from '../accounting-posting.service';
-import type { ExpenseAccountCandidate, PurchasesAndTreasuryPostingDeps } from './purchases-treasury-posting/purchases-treasury-posting-types';
+import type { DbOrTx } from '../accounting-posting.service';
+import type { PurchasesAndTreasuryPostingDeps } from './purchases-treasury-posting/purchases-treasury-posting-types';
 import { PostTradeInPurchaseService } from './purchases-treasury-posting/post-trade-in-purchase';
 import { PostPurchaseReturnService } from './purchases-treasury-posting/post-purchase-return';
 import { PostSupplierPaymentBillService } from './purchases-treasury-posting/post-supplier-payment-bill';
@@ -176,8 +171,6 @@ export class PurchasesAndTreasuryPostingService {
     await this.accountingTenantFoundation.ensureForAuth(queryable, auth);
   }
 
-
-
   async postTradeInCashPurchase(queryable: DbOrTx, tradeInId: number, auth: AuthContext): Promise<number | null> {
     return this.postTradeInPurchaseService.postTradeInCashPurchase(queryable, tradeInId, auth);
   }
@@ -200,6 +193,7 @@ export class PurchasesAndTreasuryPostingService {
     return this.postSupplierPaymentBillService.postSupplierPayment(queryable, paymentId, auth);
   }
 
+  // postSupplierBill derives the bill day via formatLocalCalendarDay (see post-supplier-payment-bill slice)
   async postSupplierBill(queryable: DbOrTx, billId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.postSupplierPaymentBillService.postSupplierBill(queryable, billId, auth);
   }
