@@ -88,6 +88,9 @@ import type {
   SetCustomerRouteSchedulePayload,
   BulkAssignCustomerRoutesPayload,
   GetSupervisorCustomerRoutesFilters,
+  RecordTripExpensePayload,
+  RecordPackagingMovementPayload,
+  CreateDriverCustomerBody,
 } from './van-sales/van-sales-types';
 import { AuthAndPinService } from './van-sales/auth-and-pin';
 import { FieldSaleService } from './van-sales/field-sale';
@@ -99,6 +102,7 @@ import { ReturnsService } from './van-sales/returns';
 import { TargetsService } from './van-sales/targets';
 import { TransfersService } from './van-sales/transfers';
 import { RoutesService } from './van-sales/routes';
+import { ExpensesPackagingCustomersService } from './van-sales/expenses-packaging-customers';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -135,6 +139,7 @@ export class VanSalesService {
   private readonly targets: TargetsService;
   private readonly transfers: TransfersService;
   private readonly routes: RoutesService;
+  private readonly expensesPackagingCustomersSlice: ExpensesPackagingCustomersService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -169,6 +174,7 @@ export class VanSalesService {
     this.targets = new TargetsService({ vanTargetsService: this.vanTargetsService });
     this.transfers = new TransfersService({ vanTransfersService: this.vanTransfersService });
     this.routes = new RoutesService({ vanRoutesService: this.vanRoutesService });
+    this.expensesPackagingCustomersSlice = new ExpensesPackagingCustomersService({ getExpensesPackagingCustomers: this.getExpensesPackagingCustomers.bind(this) });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -819,75 +825,52 @@ export class VanSalesService {
     repId: number,
     tenantId: string,
     accountId: string,
-    payload: {
-      tripId: number;
-      expenseType: 'fuel' | 'toll' | 'maintenance' | 'tips' | 'meals' | 'other' | string;
-      amount: number;
-      notes?: string;
-      receiptPhotoUrl?: string;
-      supervisorOverridePin?: string;
-    },
+    payload: RecordTripExpensePayload,
     authContext?: AuthContext,
   ): Promise<{ ok: boolean; expenseId: number; totalTripExpenses: number }> {
-    return this.getExpensesPackagingCustomers().recordTripExpense(repId, tenantId, accountId, payload, authContext);
+    return this.expensesPackagingCustomersSlice.recordTripExpense(repId, tenantId, accountId, payload, authContext);
   }
 
   async getTripExpenses(tripId: number, tenantId: string, repId?: number) {
-    return this.getExpensesPackagingCustomers().getTripExpenses(tripId, tenantId, repId);
+    return this.expensesPackagingCustomersSlice.getTripExpenses(tripId, tenantId, repId);
   }
 
   async recordPackagingMovement(
     repId: number,
     tenantId: string,
     accountId: string,
-    payload: {
-      tripId: number;
-      customerId?: number;
-      packageType: 'crate_plastic' | 'box_wooden' | 'bottle_glass' | 'cylinder_gas' | 'pallet' | string;
-      deliveredQty: number;
-      returnedQty: number;
-      notes?: string;
-    },
+    payload: RecordPackagingMovementPayload,
   ): Promise<{ ok: boolean; movementId: number }> {
-    return this.getExpensesPackagingCustomers().recordPackagingMovement(repId, tenantId, accountId, payload);
+    return this.expensesPackagingCustomersSlice.recordPackagingMovement(repId, tenantId, accountId, payload);
   }
 
   async getTripPackagingMovements(tripId: number, tenantId: string, repId?: number) {
-    return this.getExpensesPackagingCustomers().getTripPackagingMovements(tripId, tenantId, repId);
+    return this.expensesPackagingCustomersSlice.getTripPackagingMovements(tripId, tenantId, repId);
   }
 
   async getCustomerPackagingBalance(customerId: number, tenantId: string, repId?: number) {
-    return this.getExpensesPackagingCustomers().getCustomerPackagingBalance(customerId, tenantId, repId);
+    return this.expensesPackagingCustomersSlice.getCustomerPackagingBalance(customerId, tenantId, repId);
   }
 
   async createDriverCustomer(
     repId: number,
     tenantId: string,
     accountId: string,
-    body: {
-      name: string;
-      phone?: string;
-      address?: string;
-      district?: string;
-      route?: string;
-      notes?: string;
-      visitDays?: string[];
-      metadata?: any;
-    },
+    body: CreateDriverCustomerBody,
   ) {
-    return this.getExpensesPackagingCustomers().createDriverCustomer(repId, tenantId, accountId, body);
+    return this.expensesPackagingCustomersSlice.createDriverCustomer(repId, tenantId, accountId, body);
   }
 
   async getCustomerSuggestedOrder(tenantId: string, accountId: string, repId: number, customerId: number) {
-    return this.getExpensesPackagingCustomers().getCustomerSuggestedOrder(tenantId, accountId, repId, customerId);
+    return this.expensesPackagingCustomersSlice.getCustomerSuggestedOrder(tenantId, accountId, repId, customerId);
   }
 
   async getCustomerLastSoldPrices(tenantId: string, customerId: number, repId?: number) {
-    return this.getExpensesPackagingCustomers().getCustomerLastSoldPrices(tenantId, customerId, repId);
+    return this.expensesPackagingCustomersSlice.getCustomerLastSoldPrices(tenantId, customerId, repId);
   }
 
   async getCustomerFieldStatement(tenantId: string, customerId: number, repId?: number) {
-    return this.getExpensesPackagingCustomers().getCustomerFieldStatement(tenantId, customerId, repId);
+    return this.expensesPackagingCustomersSlice.getCustomerFieldStatement(tenantId, customerId, repId);
   }
 
   async getRepFinancialLedger(tenantId: string, filters: {
