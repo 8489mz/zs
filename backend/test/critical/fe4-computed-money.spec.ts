@@ -4,7 +4,7 @@
  * Scope decision (parent, 2026-11-08): the adopted FE partition is U7's
  * area partition as-is with COMPUTED-ONLY scope — display-only `toFixed(2)`
  * stays out of scope (Phase 0 §1.10). This spec pins the computed side only:
- * in the 44 FE4 files (delivery-reps + maintenance + tradein) there must be
+ * in the 52 FE4 files (delivery-reps + maintenance + tradein) there must be
  * ZERO remaining computed-money `toFixed(2)` sites, i.e. zero occurrences
  * of `.toFixed(2)` inside a `Number(...)` / `parseFloat(...)` call, which
  * is the shape that turns a formatted string back into a number and feeds
@@ -61,7 +61,6 @@ const FE4_FILES: string[] = [
   'delivery-reps/components/VanSaleTab.tsx',
   'delivery-reps/components/VanSalesHistoryTab.tsx',
   'delivery-reps/components/VanSalesReceiptModal.tsx',
-  'delivery-reps/components/VanSettleTab.tsx',
   'delivery-reps/components/VanSettlementReceiptModal.tsx',
   'delivery-reps/components/VanSignaturePadModal.tsx',
   'delivery-reps/components/VanTripsTab.tsx',
@@ -70,6 +69,15 @@ const FE4_FILES: string[] = [
   'delivery-reps/components/van-pre-sales/calculate-item-price.ts',
   'delivery-reps/components/van-pre-sales/cart-logic.ts',
   'delivery-reps/components/van-pre-sales/cart-panel.tsx',
+  'delivery-reps/components/van-settle/cash-counting.tsx',
+  'delivery-reps/components/van-settle/collections-list.tsx',
+  'delivery-reps/components/van-settle/expenses-list.tsx',
+  'delivery-reps/components/van-settle/inventory-list.tsx',
+  'delivery-reps/components/van-settle/returns-list.tsx',
+  'delivery-reps/components/van-settle/sales-list.tsx',
+  'delivery-reps/components/van-settle/settle-ledger.tsx',
+  'delivery-reps/components/van-settle/stock-audit.tsx',
+  'delivery-reps/components/van-settle/use-settle-money.ts',
   'delivery-reps/pages/VanSalesMobilePage.tsx',
   'delivery-reps/pages/van-sales-mobile/useVanCockpit.tsx',
   'delivery-reps/pages/van-sales-mobile/useVanCollection.tsx',
@@ -147,7 +155,7 @@ function shapeBViolations(source: string, file: string): ShapeBViolation[] {
 }
 
 async function main(): Promise<void> {
-  assert.equal(FE4_FILES.length, 44, 'FE4 file list must stay at 44 files');
+  assert.equal(FE4_FILES.length, 52, 'FE4 file list must stay at 52 files');
 
   // 1. The shared rounder exists, exports roundMoney, and is the single
   //    implementation site: exactly one `.toFixed(2)` in the helper.

@@ -467,7 +467,16 @@ async function main(): Promise<void> {
     const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales-driver/van-sales-driver-trips-settle.ts'), 'utf8');
     assert.ok(controllerSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'settle slice names the invariant');
     assert.ok(!controllerSource.includes('nightStockApproved: !body.unloadRemainingToWarehouse'), 'the slice no longer auto-approves night stock');
-    const tabSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/components/VanSettleTab.tsx'), 'utf8');
+    // #51 split: the facade holds 0 INV lines — the 4 SELF-SETTLE-PIN
+    // lines live in the van-settle slices (S0/S2/S6/S7). Read them.
+    const tabSource = [
+      'van-settle/van-settle-types.ts',
+      'van-settle/use-stock-audit.ts',
+      'van-settle/stock-audit.tsx',
+      'van-settle/settle-submit.tsx',
+    ]
+      .map((rel) => readFileSync(resolve(here, `../../../frontend/src/features/delivery-reps/components/${rel}`), 'utf8'))
+      .join('\n');
     assert.ok(tabSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'settle tab names the invariant');
     assert.ok(!tabSource.includes('setChargeStockVarianceToRep'), 'the rep-side charge checkbox is gone');
     const pageSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/pages/van-sales-mobile/useVanSettle.tsx'), 'utf8');
