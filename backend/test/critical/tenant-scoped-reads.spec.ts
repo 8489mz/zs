@@ -36,8 +36,11 @@ function testVanSalesReadsStayInTenant(): void {
   // same totals as the pre-split facade); S2/S7 are listed too because
   // they hold queries the regexes do not cover (customer list reads,
   // rep-scoped trip reads), so a future read there stays scanned.
+  // File #50 split: the recordFieldCollection customers reads moved into
+  // the van-sales/field-collection.ts slice (S4).
   const sources = [
     read('modules/delivery-reps/van-sales.service.ts'),
+    read('modules/delivery-reps/van-sales/field-collection.ts'),
     read('modules/delivery-reps/services/van-trip-lifecycle.service.ts'),
     read('modules/delivery-reps/services/van-trip-lifecycle/get-active-trip.service.ts'),
     read('modules/delivery-reps/services/van-trip-lifecycle/trip-open-load.service.ts'),

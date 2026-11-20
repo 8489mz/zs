@@ -431,7 +431,7 @@ async function main(): Promise<void> {
     // information_schema guard.
     {
       const here = __dirname;
-      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales/field-collection.ts'), 'utf8');
       const fnAt = vanSource.indexOf('async recordFieldCollection(');
       assert.ok(fnAt > 0, 'recordFieldCollection exists');
       const fnSlice = vanSource.slice(fnAt, vanSource.indexOf('private async recordFieldCollectionInternal'));

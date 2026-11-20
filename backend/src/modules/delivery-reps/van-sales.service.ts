@@ -1,42 +1,13 @@
-import {
-  deductVanSaleInventoryBatches as deductVanSaleInventoryBatchesHelper,
-  moveVanInventoryBatches as moveVanInventoryBatchesHelper,
-} from './services/van-inventory-batches.helper';
-import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
 import { Inject, Injectable } from '@nestjs/common';
-import { Kysely, sql } from '../../database/kysely';
+import { Kysely } from '../../database/kysely';
 import { AuditService } from '../../core/audit/audit.service';
-import { AppError } from '../../common/errors/app-error';
-import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { DeliveryRepsService } from './delivery-reps.service';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
-import {
-  reconcileTripFinancials,
-  evaluateFieldCardPayment,
-} from './van-trip-reconciliation.engine';
-import {
-  sortItemsByProductId,
-  moveVanStock,
-  getOrCreateVanLocation,
-  generateDailySequenceNumber,
-  FLEET_VEHICLE_STATUSES,
-  fieldCollectionPaymentScope,
-  resolveFieldCollectionChannel,
-  resolveRepLinkedUserId,
-} from './services/van-common.util';
-import {
-  extractCoordinatesFromCustomerLocation,
-  evaluateGeofenceCompliance,
-  isValidCoordinatePair,
-  type RepTargetCalculationResult,
-} from './rep-target.engine';
+import { FLEET_VEHICLE_STATUSES } from './services/van-common.util';
 import { VanFleetService } from './services/van-fleet.service';
-import { tenantBaseCurrency } from '../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
-import { todayLocalIsoDate } from '../sales/helpers/sales-write.helper';
 import { VanRequisitionsService } from './services/van-requisitions.service';
 import { VanReturnsService } from './services/van-returns.service';
 import { VanTargetsService } from './services/van-targets.service';
@@ -50,7 +21,6 @@ import { VanRepFinancialLedgerService } from './services/van-rep-financial-ledge
 import { VanExpensesPackagingCustomersService } from './services/van-expenses-packaging-customers.service';
 import { VanRepEmployeeLinkService } from './services/van-rep-employee-link.service';
 import { VanRequisitionDispatchService } from './services/van-requisition-dispatch.service';
-import { authorizeManagerSecret } from '../../common/utils/manager-approval';
 
 import type { VanStockItem, VanTripSummary } from './services/van-trip-lifecycle.service';
 import { StockBatchHelpersService } from './van-sales/stock-batch-helpers';
@@ -176,19 +146,19 @@ export class VanSalesService {
     this.getCollectionsAndSwaps();
     this.stockBatchHelpers = new StockBatchHelpersService({ db });
     this.authAndPin = new AuthAndPinService({ db, getTripLifecycle: this.getTripLifecycle.bind(this) });
+    this.fraudRadar = new FraudRadarService({ vanFraudRadarService: this.vanFraudRadarService });
     this.fieldSale = new FieldSaleService({ db, getFieldSales: this.getFieldSales.bind(this), inFlightSalePromises: VanSalesService.inFlightSalePromises, recentSalesCache: VanSalesService.recentSalesCache });
     this.fieldCollection = new FieldCollectionService({ db, getCollectionsAndSwaps: this.getCollectionsAndSwaps.bind(this), inFlightCollectionPromises: VanSalesService.inFlightCollectionPromises, recentCollectionsCache: VanSalesService.recentCollectionsCache });
     this.tripDelegates = new TripDelegatesService({ getTripLifecycle: this.getTripLifecycle.bind(this), getFieldSales: this.getFieldSales.bind(this) });
+    this.expensesPackagingCustomersSlice = new ExpensesPackagingCustomersService({ getExpensesPackagingCustomers: this.getExpensesPackagingCustomers.bind(this) });
+    this.repFinancialLedgerSlice = new RepFinancialLedgerService({ getRepFinancialLedgerService: this.getRepFinancialLedgerService.bind(this) });
+    this.repEmployeeLinkSlice = new RepEmployeeLinkService({ getRepEmployeeLink: this.getRepEmployeeLink.bind(this) });
     this.fleet = new FleetService({ vanFleetService: this.vanFleetService });
     this.requisitions = new RequisitionsService({ getRequisitionDispatch: this.getRequisitionDispatch.bind(this), vanRequisitionsService: this.vanRequisitionsService });
     this.returns = new ReturnsService({ vanReturnsService: this.vanReturnsService });
     this.targets = new TargetsService({ vanTargetsService: this.vanTargetsService });
     this.transfers = new TransfersService({ vanTransfersService: this.vanTransfersService });
     this.routes = new RoutesService({ vanRoutesService: this.vanRoutesService });
-    this.expensesPackagingCustomersSlice = new ExpensesPackagingCustomersService({ getExpensesPackagingCustomers: this.getExpensesPackagingCustomers.bind(this) });
-    this.repFinancialLedgerSlice = new RepFinancialLedgerService({ getRepFinancialLedgerService: this.getRepFinancialLedgerService.bind(this) });
-    this.repEmployeeLinkSlice = new RepEmployeeLinkService({ getRepEmployeeLink: this.getRepEmployeeLink.bind(this) });
-    this.fraudRadar = new FraudRadarService({ vanFraudRadarService: this.vanFraudRadarService });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
