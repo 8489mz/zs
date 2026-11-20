@@ -79,12 +79,12 @@
 | backend/src/modules/sales/services/create-sale.service.ts:1715 | insert | sale | yes | Modifier leg (was :1714 before the INV-SALE-MOVEMENT-UNIT-COST +1 line); now stores unit_cost (per-stock-unit WAC). |
 | backend/src/modules/sales/services/restaurant-food-waste.service.ts:147 | insert | damaged | yes |  |
 | backend/src/modules/sales/services/restaurant-food-waste.service.ts:243 | insert | damaged | yes |  |
-| backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:660 | insert | sale_edit_reversal | yes |  |
-| backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:699 | insert | sale_edit_reversal | yes |  |
-| backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:1375 | insert | sale_edit | yes |  |
-| backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:1509 | insert | sale_edit | yes |  |
-| backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:2156 | insert | sale_cancel | yes |  |
-| backend/src/modules/sales/services/sales-edit-and-cancel.service.ts:2189 | insert | sale_cancel | yes |  |
+| backend/src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts:413 | insert | sale_edit_reversal | yes |  |
+| backend/src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts:452 | insert | sale_edit_reversal | yes |  |
+| backend/src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts:1128 | insert | sale_edit | yes |  |
+| backend/src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts:1262 | insert | sale_edit | yes |  |
+| backend/src/modules/sales/services/sales-edit-and-cancel/cancel-sale.service.ts:173 | insert | sale_cancel | yes |  |
+| backend/src/modules/sales/services/sales-edit-and-cancel/cancel-sale.service.ts:206 | insert | sale_cancel | yes |  |
 | backend/src/modules/sales/services/sales-restaurant-and-serials.service.ts:443 | insert | manufacturing_consumption | yes |  |
 | backend/src/modules/sales/services/sales-restaurant-and-serials.service.ts:471 | insert | manufacturing_production | yes |  |
 | backend/src/modules/settings/services/settings-demo-data-wipe-tables.ts:95 | delete | (delete) | no | Tenant wipe/demo reset (deleteFrom), not a ledger movement. |
