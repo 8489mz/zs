@@ -9,7 +9,6 @@
     "src/features/ai-copilot/components/AiBusinessCopilotModal.tsx": 1129,
     "src/features/contracting/components/ClientQuotationModal.tsx": 1064,
     "src/features/contracting/components/ContractingBoqTab.tsx": 1304,
-    "src/features/contracting/components/ImportBoqModal.tsx": 1539,
     "src/features/contracting/components/ScheduleGeneratorModal.tsx": 1948,
     "src/features/contracting/components/TenderEstimatorModal.tsx": 1381,
     "src/features/contracting/contracting.types.ts": 1441,
