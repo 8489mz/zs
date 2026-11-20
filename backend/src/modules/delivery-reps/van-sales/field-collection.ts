@@ -18,6 +18,15 @@ export class FieldCollectionService {
     private readonly getCollectionsAndSwaps: () => VanCollectionsAndSwapsService,
     private readonly inFlightCollectionPromises: Map<string, Promise<any>>,
     private readonly recentCollectionsCache: Map<string, { result: any; timestamp: number }>,
+    // Lazy getter for the FACADE's recordFieldCollectionInternal (resolved
+    // at call time): specs mock that method on the facade instance after
+    // construction, and the mock must win over this slice's own method.
+    private readonly getRecordFieldCollectionInternal: () => (
+      repId: number,
+      tenantId: string,
+      accountId: string,
+      payload: RecordFieldCollectionInternalPayload,
+    ) => Promise<{ ok: boolean; receiptNo: string; amount: number; customerName: string; previousBalance: number; newBalance: number }>,
   ) {}
 
   private get anyDb(): any {
@@ -185,8 +194,9 @@ export class FieldCollectionService {
         };
       }
 
-      // 5. Execute internal collection
-      return await this.recordFieldCollectionInternal(repId, tenantId, accountId, payload);
+      // 5. Execute internal collection — through the facade method (see
+      // ctor): a spec mock on the facade instance must intercept this call.
+      return await this.getRecordFieldCollectionInternal()(repId, tenantId, accountId, payload);
     })();
 
     if (txKey) this.inFlightCollectionPromises.set(txKey, colPromise);

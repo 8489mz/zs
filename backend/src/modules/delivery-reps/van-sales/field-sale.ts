@@ -14,6 +14,15 @@ export class FieldSaleService {
     private readonly getFieldSales: () => VanFieldSalesService,
     private readonly inFlightSalePromises: Map<string, Promise<any>>,
     private readonly recentSalesCache: Map<string, { result: any; timestamp: number }>,
+    // Lazy getter for the FACADE's executeFieldSaleInternal (resolved at
+    // call time): specs mock that method on the facade instance after
+    // construction, and the mock must win over this slice's own method.
+    private readonly getExecuteFieldSaleInternal: () => (
+      repId: number,
+      tenantId: string,
+      accountId: string,
+      payload: ExecuteFieldSaleInternalPayload,
+    ) => Promise<ExecuteFieldSaleResult>,
   ) {}
 
   private get anyDb(): any {
@@ -142,8 +151,9 @@ export class FieldSaleService {
         }
       }
 
-      // 5. Execute internal sale
-      return await this.executeFieldSaleInternal(repId, tenantId, accountId, payload);
+      // 5. Execute internal sale — through the facade method (see ctor):
+      // a spec mock on the facade instance must intercept this call.
+      return await this.getExecuteFieldSaleInternal()(repId, tenantId, accountId, payload);
     })();
 
     if (txKey) this.inFlightSalePromises.set(txKey, salePromise);

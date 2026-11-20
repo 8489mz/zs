@@ -147,8 +147,8 @@ export class VanSalesService {
     this.stockBatchHelpers = new StockBatchHelpersService(db);
     this.authAndPin = new AuthAndPinService(db, this.getTripLifecycle.bind(this));
     this.fraudRadar = new FraudRadarService(this.vanFraudRadarService);
-    this.fieldSale = new FieldSaleService(db, this.getFieldSales.bind(this), VanSalesService.inFlightSalePromises, VanSalesService.recentSalesCache);
-    this.fieldCollection = new FieldCollectionService(db, this.getCollectionsAndSwaps.bind(this), VanSalesService.inFlightCollectionPromises, VanSalesService.recentCollectionsCache);
+    this.fieldSale = new FieldSaleService(db, this.getFieldSales.bind(this), VanSalesService.inFlightSalePromises, VanSalesService.recentSalesCache, () => this.executeFieldSaleInternal.bind(this));
+    this.fieldCollection = new FieldCollectionService(db, this.getCollectionsAndSwaps.bind(this), VanSalesService.inFlightCollectionPromises, VanSalesService.recentCollectionsCache, () => this.recordFieldCollectionInternal.bind(this));
     this.tripDelegates = new TripDelegatesService(this.getTripLifecycle.bind(this), this.getFieldSales.bind(this));
     this.expensesPackagingCustomersSlice = new ExpensesPackagingCustomersService(this.getExpensesPackagingCustomers.bind(this));
     this.repFinancialLedgerSlice = new RepFinancialLedgerService(this.getRepFinancialLedgerService.bind(this));
