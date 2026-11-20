@@ -246,7 +246,11 @@ console.log(out.join('\\n'));
   // ---- §F: the van-pre-sales + catalog call sites are wired to
   // the pg-aware shape (source pins; the shared function is proven
   // in §0/§A and the selector is the decision point) ----
-  const vanPreSales = readSrc('modules/delivery-reps/services/van-pre-sales.service.ts');
+  // File #53 split: the offer-date sites moved to the S1 (warehouse-catalog)
+  // + S2 (create-pre-sales-order) slices; the facade keeps only delegates.
+  const vanPreSales =
+    readSrc('modules/delivery-reps/services/van-pre-sales/warehouse-catalog.ts') +
+    readSrc('modules/delivery-reps/services/van-pre-sales/create-pre-sales-order.ts');
   assert.ok(vanPreSales.includes('normalizePgDateOnly(off.start_date)'), 'van pre-sales must use the pg-aware normalizer');
   assert.ok(!vanPreSales.includes('normalizeDateOnly(off.start_date)'), 'van pre-sales must not use the UTC slice on stored bounds');
   // The catalog offers map lives in the P4 pos slice now (catalog-product
