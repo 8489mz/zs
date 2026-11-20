@@ -84,6 +84,10 @@ import type {
   SaveCommissionConfigPayload,
   SettleRepCommissionPayload,
   CreateInterVanTransferPayload,
+  RecordFieldVisitPayload,
+  SetCustomerRouteSchedulePayload,
+  BulkAssignCustomerRoutesPayload,
+  GetSupervisorCustomerRoutesFilters,
 } from './van-sales/van-sales-types';
 import { AuthAndPinService } from './van-sales/auth-and-pin';
 import { FieldSaleService } from './van-sales/field-sale';
@@ -94,6 +98,7 @@ import { RequisitionsService } from './van-sales/requisitions';
 import { ReturnsService } from './van-sales/returns';
 import { TargetsService } from './van-sales/targets';
 import { TransfersService } from './van-sales/transfers';
+import { RoutesService } from './van-sales/routes';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -129,6 +134,7 @@ export class VanSalesService {
   private readonly returns: ReturnsService;
   private readonly targets: TargetsService;
   private readonly transfers: TransfersService;
+  private readonly routes: RoutesService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -162,6 +168,7 @@ export class VanSalesService {
     this.returns = new ReturnsService({ vanReturnsService: this.vanReturnsService });
     this.targets = new TargetsService({ vanTargetsService: this.vanTargetsService });
     this.transfers = new TransfersService({ vanTransfersService: this.vanTransfersService });
+    this.routes = new RoutesService({ vanRoutesService: this.vanRoutesService });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -762,87 +769,50 @@ export class VanSalesService {
     return this.transfers.getPeerReps(tenantId, currentRepId);
   }
 
-  // =========================================================================
-  // ROUTES, VISITS & SUPERVISOR (Delegated to VanRoutesService)
-  // =========================================================================
-
   async getDriverTodayItinerary(tenantId: string, repId: number, tripId?: number) {
-    return this.vanRoutesService.getDriverTodayItinerary(tenantId, repId, tripId);
+    return this.routes.getDriverTodayItinerary(tenantId, repId, tripId);
   }
 
   async recordFieldVisit(
     arg1: string | number,
     arg2: string,
     arg3: string | number,
-    payload: {
-      tripId: number;
-      customerId: number;
-      visitType: 'positive' | 'negative';
-      saleId?: number | null;
-      negativeReason?: 'no_cash' | 'shop_closed' | 'sufficient_stock' | 'item_unavailable' | 'postponed' | 'other';
-      postponedToDate?: string | null;
-      gpsLat?: number | null;
-      gpsLng?: number | null;
-      notes?: string;
-    },
+    payload: RecordFieldVisitPayload,
   ) {
-    return this.vanRoutesService.recordFieldVisit(arg1, arg2, arg3, payload);
+    return this.routes.recordFieldVisit(arg1, arg2, arg3, payload);
   }
 
   async listFieldVisits(
     tenantId: string,
     filters?: { repId?: number; customerId?: number; visitType?: string; dateFrom?: string; dateTo?: string },
   ) {
-    return this.vanRoutesService.listFieldVisits(tenantId, filters);
+    return this.routes.listFieldVisits(tenantId, filters);
   }
 
   async getSupervisorRouteKpis(tenantId: string, dateFrom?: string, dateTo?: string) {
-    return this.vanRoutesService.getSupervisorRouteKpis(tenantId, dateFrom, dateTo);
+    return this.routes.getSupervisorRouteKpis(tenantId, dateFrom, dateTo);
   }
 
   async setCustomerRouteSchedule(
     tenantId: string,
     customerId: number,
-    payload: {
-      route?: string;
-      routeSequence?: number;
-      visitDays?: string[];
-      customerCode?: string;
-      locationUrl?: string;
-      assignedRepId?: number | null;
-      assignedRepIds?: number[];
-      assignedRepName?: string | null;
-      repSchedules?: Array<{ repId: number; repName?: string; days: string[] }>;
-    },
+    payload: SetCustomerRouteSchedulePayload,
   ) {
-    return this.vanRoutesService.setCustomerRouteSchedule(tenantId, customerId, payload);
+    return this.routes.setCustomerRouteSchedule(tenantId, customerId, payload);
   }
 
   async bulkAssignCustomerRoutes(
     tenantId: string,
-    payload: {
-      customerIds: number[];
-      assignedRepId?: number | null;
-      assignedRepIds?: number[];
-      appendReps?: boolean;
-      assignedRepName?: string | null;
-      route?: string;
-      visitDays?: string[];
-    },
+    payload: BulkAssignCustomerRoutesPayload,
   ) {
-    return this.vanRoutesService.bulkAssignCustomerRoutes(tenantId, payload);
+    return this.routes.bulkAssignCustomerRoutes(tenantId, payload);
   }
 
   async getSupervisorCustomerRoutes(
     tenantId: string,
-    filters?: {
-      search?: string;
-      repId?: number | string;
-      route?: string;
-      unassignedOnly?: boolean;
-    },
+    filters?: GetSupervisorCustomerRoutesFilters,
   ) {
-    return this.vanRoutesService.getSupervisorCustomerRoutes(tenantId, filters);
+    return this.routes.getSupervisorCustomerRoutes(tenantId, filters);
   }
 
   async recordTripExpense(
