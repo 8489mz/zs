@@ -485,8 +485,9 @@ async function main(): Promise<void> {
       const here = __dirname;
       // Split 2 of 5 moved the sale gate to the field-sales service; split 3
       // of 5 moved the collection gate to the collections service. The facade
-      // no longer names the invariant.
-      const fieldSalesSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-field-sales.service.ts'), 'utf8');
+      // no longer names the invariant. File #52 split: the sale gate now
+      // lives in the S1 slice — read it directly.
+      const fieldSalesSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'), 'utf8');
       const collectionsSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-collections-and-swaps.service.ts'), 'utf8');
       assert.ok(collectionsSource.includes('INV-VAN-FIELD-NONCASH-EVIDENCE-GATE'), 'van-sales names the invariant');
       assert.ok(fieldSalesSource.includes('(isCard || isInstapay) && totalSale > 0'), 'the sale gate covers instapay');

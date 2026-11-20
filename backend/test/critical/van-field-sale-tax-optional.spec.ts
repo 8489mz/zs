@@ -332,12 +332,13 @@ async function main(): Promise<void> {
   // van-sales.service.ts facade into services/van-field-sales.service.ts
   // (the facade now only delegates), so the pin reads the
   // implementation file; the marker and the call shapes are unchanged.
+  // File #52 split: executeFieldSaleInternal now lives in the S1 slice —
+  // the slice file IS the method, so the pin reads it to EOF.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales.service.ts'), 'utf8');
+    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'), 'utf8');
     const start = source.indexOf('async executeFieldSaleInternal(');
-    const end = source.indexOf('async listDriverSales(');
-    assert.ok(start > 0 && end > start);
-    const body = source.slice(start, end);
+    assert.ok(start > 0);
+    const body = source.slice(start);
     assert.ok(body.includes('INV-VAN-SALE-TAX-OPTIONAL'), 'tax block marker present');
     assert.ok(body.includes("resolveSaleTaxRate(configuredTaxRate, configuredTaxRate)"), 'configured rate resolved through the canonical engine');
     assert.ok(body.includes('computeInvoiceTotals(subtotalSale, discountSale, vanTaxRate, false, 0, 0, 0)'), 'shared totals on the net base, tax added on top');

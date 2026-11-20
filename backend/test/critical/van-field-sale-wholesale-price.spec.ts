@@ -238,12 +238,13 @@ async function main(): Promise<void> {
 
   // 4. Source pin: the wholesale branch, tier and guard skip live in
   // executeFieldSaleInternal.
+  // File #52 split: executeFieldSaleInternal now lives in the S1 slice —
+  // the slice file IS the method, so the pin reads it to EOF.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales.service.ts'), 'utf8');
+    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'), 'utf8');
     const start = source.indexOf('async executeFieldSaleInternal(');
-    const end = source.indexOf('async listDriverSales(');
-    assert.ok(start > 0 && end > start);
-    const body = source.slice(start, end);
+    assert.ok(start > 0);
+    const body = source.slice(start);
     assert.ok(body.includes("customerType === 'wholesale'"), 'customer_type drives the price branch');
     assert.ok(body.includes("'wholesale'"), 'wholesale pricing tier exists');
     assert.ok(body.includes("} else if (pricingTierType === 'wholesale' || pricingTierType === 'half_wholesale' || pricingTierType === 'credit' || listApplies) {"), 'server price is authoritative for the wholesale tier');
