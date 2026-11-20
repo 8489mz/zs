@@ -79,6 +79,7 @@ import type {
   AssignVehicleDriverPayload,
   SubmitLoadRequisitionPayload,
   CreateLoadRequisitionByAdminPayload,
+  SubmitFieldReturnPayload,
 } from './van-sales/van-sales-types';
 import { AuthAndPinService } from './van-sales/auth-and-pin';
 import { FieldSaleService } from './van-sales/field-sale';
@@ -86,6 +87,7 @@ import { FieldCollectionService } from './van-sales/field-collection';
 import { TripDelegatesService } from './van-sales/trip-delegates';
 import { FleetService } from './van-sales/fleet';
 import { RequisitionsService } from './van-sales/requisitions';
+import { ReturnsService } from './van-sales/returns';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -118,6 +120,7 @@ export class VanSalesService {
   private readonly tripDelegates: TripDelegatesService;
   private readonly fleet: FleetService;
   private readonly requisitions: RequisitionsService;
+  private readonly returns: ReturnsService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -148,6 +151,7 @@ export class VanSalesService {
     this.tripDelegates = new TripDelegatesService({ getTripLifecycle: this.getTripLifecycle.bind(this), getFieldSales: this.getFieldSales.bind(this) });
     this.fleet = new FleetService({ vanFleetService: this.vanFleetService });
     this.requisitions = new RequisitionsService({ getRequisitionDispatch: this.getRequisitionDispatch.bind(this), vanRequisitionsService: this.vanRequisitionsService });
+    this.returns = new ReturnsService({ vanReturnsService: this.vanReturnsService });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -650,52 +654,32 @@ export class VanSalesService {
     return this.requisitions.getDriverAvailableProducts(tenantId, warehouseId, repId);
   }
 
-  // =========================================================================
-  // FIELD RETURNS (Delegated to VanReturnsService)
-  // =========================================================================
-
   async getCustomerEligibleSales(tenantId: string, customerId: number, repId?: number) {
-    return this.vanReturnsService.getCustomerEligibleSales(tenantId, customerId, repId);
+    return this.returns.getCustomerEligibleSales(tenantId, customerId, repId);
   }
 
   async submitFieldReturn(
     repId: number,
     tenantId: string,
     accountId: string,
-    payload: {
-      tripId: number;
-      customerId: number;
-      saleId?: number | null;
-      returnReason: 'damaged' | 'expired' | 'manufacturing_defect' | 'stagnant' | 'order_mismatch' | 'customer_request';
-      refundMethod?: 'credit' | 'cash';
-      items: {
-        productId: number;
-        qty: number;
-        unitPrice: number;
-        saleItemId?: number;
-      }[];
-      notes?: string;
-      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the return was made
-      // offline (outbox createdAt, ISO with offset).
-      offlineCreatedAt?: string;
-    },
+    payload: SubmitFieldReturnPayload,
   ) {
-    return this.vanReturnsService.submitFieldReturn(repId, tenantId, accountId, payload);
+    return this.returns.submitFieldReturn(repId, tenantId, accountId, payload);
   }
 
   async listFieldReturns(
     tenantId: string,
     filters: { status?: string; repId?: number; tripId?: number; customerId?: number } = {},
   ) {
-    return this.vanReturnsService.listFieldReturns(tenantId, filters);
+    return this.returns.listFieldReturns(tenantId, filters);
   }
 
   async approveFieldReturn(tenantId: string, accountId: string, returnId: number, approvedByUserId: number) {
-    return this.vanReturnsService.approveFieldReturn(tenantId, accountId, returnId, approvedByUserId);
+    return this.returns.approveFieldReturn(tenantId, accountId, returnId, approvedByUserId);
   }
 
   async rejectFieldReturn(tenantId: string, returnId: number, rejectionReason: string, rejectedByUserId: number) {
-    return this.vanReturnsService.rejectFieldReturn(tenantId, returnId, rejectionReason, rejectedByUserId);
+    return this.returns.rejectFieldReturn(tenantId, returnId, rejectionReason, rejectedByUserId);
   }
 
   // =========================================================================
