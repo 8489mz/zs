@@ -17,7 +17,7 @@ export const ReturnsList: React.FC<ReturnsListProps> = ({ returns, getReturnStat
   return (
     <>
           {/* 3. FIELD RETURNS */}
-            returns.length === 0 ? (
+            {returns.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8' }}>
                 <PackageIcon size={28} color="#cbd5e1" style={{ margin: '0 auto 6px', display: 'block' }} />
                 <span style={{ fontSize: '12px', fontWeight: 600 }}>{t('delivery_reps.van_settle_tab.s76', "لا توجد أذونات مرتجعات بضاعة مسجلة اليوم")}</span>
@@ -89,7 +89,7 @@ export const ReturnsList: React.FC<ReturnsListProps> = ({ returns, getReturnStat
                   );
                 })}
               </div>
-            )
+            )}
     </>
   );
 };
