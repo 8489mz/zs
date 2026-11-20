@@ -108,6 +108,7 @@ import { TransfersService } from './van-sales/transfers';
 import { RoutesService } from './van-sales/routes';
 import { ExpensesPackagingCustomersService } from './van-sales/expenses-packaging-customers';
 import { RepFinancialLedgerService } from './van-sales/rep-financial-ledger';
+import { RepEmployeeLinkService } from './van-sales/rep-employee-link';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -146,6 +147,7 @@ export class VanSalesService {
   private readonly routes: RoutesService;
   private readonly expensesPackagingCustomersSlice: ExpensesPackagingCustomersService;
   private readonly repFinancialLedgerSlice: RepFinancialLedgerService;
+  private readonly repEmployeeLinkSlice: RepEmployeeLinkService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -182,6 +184,7 @@ export class VanSalesService {
     this.routes = new RoutesService({ vanRoutesService: this.vanRoutesService });
     this.expensesPackagingCustomersSlice = new ExpensesPackagingCustomersService({ getExpensesPackagingCustomers: this.getExpensesPackagingCustomers.bind(this) });
     this.repFinancialLedgerSlice = new RepFinancialLedgerService({ getRepFinancialLedgerService: this.getRepFinancialLedgerService.bind(this) });
+    this.repEmployeeLinkSlice = new RepEmployeeLinkService({ getRepEmployeeLink: this.getRepEmployeeLink.bind(this) });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -910,34 +913,25 @@ export class VanSalesService {
     return this.repFinancialLedgerSlice.addRepBonusOrCommission(tenantId, accountId, payload, authContext);
   }
 
-  /**
-   * Link delivery representative to an HR employee.
-   */
   async linkRepToEmployee(
     tenantId: string,
     repId: number,
     employeeId: number | null,
   ) {
-    return this.getRepEmployeeLink().linkRepToEmployee(tenantId, repId, employeeId);
+    return this.repEmployeeLinkSlice.linkRepToEmployee(tenantId, repId, employeeId);
   }
 
-  /**
-   * List active candidate HR employees for linking to delivery representatives.
-   */
   async listCandidateEmployees(tenantId: string) {
-    return this.getRepEmployeeLink().listCandidateEmployees(tenantId);
+    return this.repEmployeeLinkSlice.listCandidateEmployees(tenantId);
   }
 
-  /**
-   * Automatically create an HR employee record for a delivery representative and link them.
-   */
   async autoCreateEmployeeForRep(
     tenantId: string,
     accountId: string,
     repId: number,
     authContext: AuthContext,
   ) {
-    return this.getRepEmployeeLink().autoCreateEmployeeForRep(tenantId, accountId, repId, authContext);
+    return this.repEmployeeLinkSlice.autoCreateEmployeeForRep(tenantId, accountId, repId, authContext);
   }
 }
 
