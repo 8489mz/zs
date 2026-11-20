@@ -214,16 +214,19 @@ async function main(): Promise<void> {
   // Source pin: submitTripSettlement calls the shared helper with
   // book digits and keeps no inline toFixed(2) variance form, and
   // settleTrip does the same since Slice 7 P6 converged it (the
-  // inline form is gone from both paths).
+  // inline form is gone from both paths). File #43 split: the two
+  // methods live in separate slices (S4 submit-settlement, S5
+  // settle-trip), each importing the helper on its own re-rooted path.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
-    assert.ok(source.includes("import { computeCashDrawerVariance } from '../../cash-drawer/helpers/cash-drawer.helper';"));
-    const submitStart = source.indexOf('async submitTripSettlement(');
-    const settleStart = source.indexOf('async settleTrip(');
-    const afterSettle = source.indexOf('async listTripsForAdmin(');
-    assert.ok(submitStart > 0 && settleStart > submitStart && afterSettle > settleStart);
-    const submitBody = source.slice(submitStart, settleStart);
-    const settleBody = source.slice(settleStart, afterSettle);
+    const s4Source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle/submit-settlement.service.ts'), 'utf8');
+    const s5Source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'), 'utf8');
+    assert.ok(s4Source.includes("import { computeCashDrawerVariance } from '../../../cash-drawer/helpers/cash-drawer.helper';"));
+    assert.ok(s5Source.includes("import { computeCashDrawerVariance } from '../../../cash-drawer/helpers/cash-drawer.helper';"));
+    const submitStart = s4Source.indexOf('async submitTripSettlement(');
+    const settleStart = s5Source.indexOf('async settleTrip(');
+    assert.ok(submitStart > 0 && settleStart > 0);
+    const submitBody = s4Source.slice(submitStart);
+    const settleBody = s5Source.slice(settleStart);
     assert.ok(submitBody.includes('computeCashDrawerVariance(countedCash, expectedCash, bookDigits)'));
     assert.ok(!submitBody.includes('(countedCash - expectedCash).toFixed(2)'));
     assert.ok(settleBody.includes('computeCashDrawerVariance(countedCash, expectedCash, bookDigits)'));

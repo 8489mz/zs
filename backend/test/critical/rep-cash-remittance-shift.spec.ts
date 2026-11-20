@@ -350,10 +350,15 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
-    assert.ok(serviceSource.includes('INV-REP-CASH-REMITTANCE-SHIFT'), 'settleTrip names the invariant');
-    assert.ok(serviceSource.includes('rep_cash_remittance'), 'the remittance treasury row exists in settleTrip');
-    assert.ok(serviceSource.includes('insertRepCashRemittanceRow'), 'the remittance write is a named step in settleTrip');
+    // File #43 split: the invariant + the call site live in settleTrip
+    // (S5), while the treasury row itself lives in the settlement
+    // helper (S6 insertRepCashRemittanceRow) — the only place the
+    // table name appears.
+    const s5Source = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'), 'utf8');
+    const s6Source = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settlement-helpers.service.ts'), 'utf8');
+    assert.ok(s5Source.includes('INV-REP-CASH-REMITTANCE-SHIFT'), 'settleTrip names the invariant');
+    assert.ok(s6Source.includes('rep_cash_remittance'), 'the remittance treasury row exists in the settlement helper');
+    assert.ok(s5Source.includes('insertRepCashRemittanceRow'), 'the remittance write is a named step in settleTrip');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-REP-CASH-REMITTANCE-SHIFT').length - 1, 1, 'the invariant entry must exist exactly once');
     assert.equal(invariants.split('INV-EXPECTED-CASH-SINGLE-WINDOW').length - 1, 1, 'the P8 window invariant must still exist exactly once');

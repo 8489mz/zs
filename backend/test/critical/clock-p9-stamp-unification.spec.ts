@@ -500,13 +500,23 @@ async function main(): Promise<void> {
 
     // Van trip/visit stamps stay DB-stamped (NOW()): the migration's
     // type change is the fix, and no app code may start supplying
-    // these columns as JS Dates.
-    const lifecycle = readSource(
-      '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts',
+    // these columns as JS Dates. File #43 split: the open stamp lives
+    // in the S3 trip-open-load slice; the visit stamps live in S3/S4/S5,
+    // so the negatives must hold in every slice that writes one.
+    const tripOpenLoad = readSource(
+      '../../src/modules/delivery-reps/services/van-trip-lifecycle/trip-open-load.service.ts',
     );
-    assert.ok(lifecycle.includes('opened_at: sql`NOW()`'), 'trip open stays DB-stamped');
-    assert.ok(!lifecycle.includes('opened_at: new Date()'), 'trip open is never app-stamped');
-    assert.ok(!lifecycle.includes('visited_at: new Date()'), 'visit is never app-stamped');
+    assert.ok(tripOpenLoad.includes('opened_at: sql`NOW()`'), 'trip open stays DB-stamped');
+    assert.ok(!tripOpenLoad.includes('opened_at: new Date()'), 'trip open is never app-stamped');
+    assert.ok(!tripOpenLoad.includes('visited_at: new Date()'), 'visit is never app-stamped');
+    const submitSettlement = readSource(
+      '../../src/modules/delivery-reps/services/van-trip-lifecycle/submit-settlement.service.ts',
+    );
+    assert.ok(!submitSettlement.includes('visited_at: new Date()'), 'submit visit is never app-stamped');
+    const settleTrip = readSource(
+      '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts',
+    );
+    assert.ok(!settleTrip.includes('visited_at: new Date()'), 'settle visit is never app-stamped');
     const fieldSales = readSource(
       '../../src/modules/delivery-reps/services/van-field-sales.service.ts',
     );

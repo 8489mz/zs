@@ -1,27 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Kysely, sql } from '../../../database/kysely';
-import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
-import { AppError } from '../../../common/errors/app-error';
-import { Database } from '../../../database/database.types';
-import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
-import {
-  evaluateOdometerReadings,
-} from '../van-trip-reconciliation.engine';
-import {
-  resolveVanMoneyAuditActor,
-} from './van-common.util';
-import { getTenantTimezone, normalizePgDateOnly, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
-import {
-  normalizePerDayCash,
-  sumPerDayCash,
-  type DayBucket,
-  type PerDayCashInput,
-} from '../van-settlement-split.engine';
-import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
-import { computeCashDrawerVariance } from '../../cash-drawer/helpers/cash-drawer.helper';
-import { VanFraudRadarService } from './van-fraud-radar.service';
 import { VanTripPinGatesService } from './van-trip-lifecycle/pin-gates.service';
 import { GetActiveTripService } from './van-trip-lifecycle/get-active-trip.service';
 import { TripOpenLoadService } from './van-trip-lifecycle/trip-open-load.service';
@@ -30,6 +8,11 @@ import { SettleTripService } from './van-trip-lifecycle/settle-trip.service';
 import { SettlementHelpersService } from './van-trip-lifecycle/settlement-helpers.service';
 import { TripAdminReadsService } from './van-trip-lifecycle/trip-admin-reads.service';
 import { type RepTargetCalculationResult } from '../rep-target.engine';
+import {
+  type DayBucket,
+  type PerDayCashInput,
+} from '../van-settlement-split.engine';
+import { type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import type {
   VanStockItem,
   VanTripSummary,
@@ -37,49 +20,20 @@ import type {
 } from './van-trip-lifecycle/van-trip-types';
 export type { VanStockItem, VanTripSummary };
 
-
 @Injectable()
 export class VanTripLifecycleService {
-  private readonly db: Kysely<Database>;
-  private readonly audit: AuditService;
-  private readonly accountingPosting: AccountingPostingService;
-  private readonly vanFraudRadarService: VanFraudRadarService;
-  private readonly getOrCreateVanLocation: VanTripLifecycleDeps['getOrCreateVanLocation'];
-  private readonly sortItemsByProductId: VanTripLifecycleDeps['sortItemsByProductId'];
-  private readonly moveVanStock: VanTripLifecycleDeps['moveVanStock'];
-  private readonly moveVanPharmacyBatches: VanTripLifecycleDeps['moveVanPharmacyBatches'];
-  private readonly moveVanInventoryBatches: VanTripLifecycleDeps['moveVanInventoryBatches'];
-  private readonly deductVanSalePharmacyBatches: VanTripLifecycleDeps['deductVanSalePharmacyBatches'];
-  private readonly deductVanSaleInventoryBatches: VanTripLifecycleDeps['deductVanSaleInventoryBatches'];
-  private readonly resolveSystemAuthContext: VanTripLifecycleDeps['resolveSystemAuthContext'];
-  private readonly recordSuspicionEvent: VanTripLifecycleDeps['recordSuspicionEvent'];
-  private readonly listRepServedCustomerIds: VanTripLifecycleDeps['listRepServedCustomerIds'];
-  private readonly resolveRepLinkedUserId: VanTripLifecycleDeps['resolveRepLinkedUserId'];
-  private readonly getActiveTripService: GetActiveTripService;
+  private readonly pinGates: VanTripPinGatesService;
+  private readonly settlementHelpersService: SettlementHelpersService;
+  private readonly activeTrip: GetActiveTripService;
   private readonly tripOpenLoadService: TripOpenLoadService;
   private readonly submitSettlement: SubmitSettlementService;
   private readonly settleTripService: SettleTripService;
-  private readonly settlementHelpersService: SettlementHelpersService;
   private readonly tripAdminReads: TripAdminReadsService;
-  private readonly pinGates: VanTripPinGatesService;
 
   constructor(deps: VanTripLifecycleDeps) {
-    this.db = deps.db;
-    this.audit = deps.audit;
-    this.accountingPosting = deps.accountingPosting;
-    this.vanFraudRadarService = deps.vanFraudRadarService;
-    this.getOrCreateVanLocation = deps.getOrCreateVanLocation;
-    this.sortItemsByProductId = deps.sortItemsByProductId;
-    this.moveVanStock = deps.moveVanStock;
-    this.moveVanPharmacyBatches = deps.moveVanPharmacyBatches;
-    this.moveVanInventoryBatches = deps.moveVanInventoryBatches;
-    this.deductVanSalePharmacyBatches = deps.deductVanSalePharmacyBatches;
-    this.deductVanSaleInventoryBatches = deps.deductVanSaleInventoryBatches;
-    this.resolveSystemAuthContext = deps.resolveSystemAuthContext;
-    this.recordSuspicionEvent = deps.recordSuspicionEvent;
-    this.listRepServedCustomerIds = deps.listRepServedCustomerIds;
-    this.resolveRepLinkedUserId = deps.resolveRepLinkedUserId;
-    this.getActiveTripService = new GetActiveTripService(
+    this.pinGates = new VanTripPinGatesService(deps.db, deps.vanFraudRadarService);
+    this.settlementHelpersService = new SettlementHelpersService();
+    this.activeTrip = new GetActiveTripService(
       deps.db,
       deps.getOrCreateVanLocation,
       deps.listRepServedCustomerIds,
@@ -112,13 +66,7 @@ export class VanTripLifecycleService {
       this.settlementHelpersService.computeTripDayBuckets.bind(this.settlementHelpersService),
       this.settlementHelpersService.insertRepCashRemittanceRow.bind(this.settlementHelpersService),
     );
-    this.settlementHelpersService = new SettlementHelpersService();
     this.tripAdminReads = new TripAdminReadsService(deps.db, this.settlementHelpersService.computeTripDayBuckets.bind(this.settlementHelpersService));
-    this.pinGates = new VanTripPinGatesService(deps.db, deps.vanFraudRadarService);
-  }
-
-  private get anyDb(): any {
-    return this.db as any;
   }
 
   async verifySupervisorPin(
@@ -186,7 +134,7 @@ export class VanTripLifecycleService {
     serverTimezone: string;
     discountCapPercent: number;
   }> {
-    return this.getActiveTripService.getActiveTrip(repId, tenantId, accountId);
+    return this.activeTrip.getActiveTrip(repId, tenantId, accountId);
   }
 
   async openTripAndLoad(

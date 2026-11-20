@@ -548,14 +548,14 @@ async function main(): Promise<void> {
         controllerSource.includes('supervisorApprovalMethod'),
         'the settle slice passes the approval method explicitly',
       );
-      const serviceSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
-      // Split 1 of 5 moved verifySupervisorPin + settleTrip to the lifecycle service;
-      // the field sale still lives in the facade until split 2.
-      const lifecycleSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
+      // File #43 split: verifySupervisorPin lives in the S1 pin-gates
+      // slice and settleTrip in the S5 settle-trip slice.
+      const pinGatesSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/pin-gates.service.ts'), 'utf8');
+      const settleTripSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'), 'utf8');
       // Split 2 of 5 moved the field sale to the field-sales service.
       const fieldSalesSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-field-sales.service.ts'), 'utf8');
       assert.ok(
-        lifecycleSource.includes('approvalMode'),
+        pinGatesSource.includes('approvalMode'),
         'verifySupervisorPin reports its approval mode',
       );
       assert.ok(
@@ -563,7 +563,7 @@ async function main(): Promise<void> {
         'the field sale writes its audit row',
       );
       assert.ok(
-        lifecycleSource.includes("eventCode: AUDIT_EVENT_CODES.VAN_TRIP_SETTLEMENT"),
+        settleTripSource.includes("eventCode: AUDIT_EVENT_CODES.VAN_TRIP_SETTLEMENT"),
         'the trip settlement writes its audit row',
       );
       const radarSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-fraud-radar.service.ts'), 'utf8');

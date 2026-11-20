@@ -261,11 +261,11 @@ async function main(): Promise<void> {
 
   // Source pin: settleTrip uses the shared helper and no inline
   // toFixed(2) variance/expected form; the 0.5 suspicion gate stays.
+  // File #43 split: settleTrip lives in the S5 settle-trip slice.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
+    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'), 'utf8');
     const settleStart = source.indexOf('async settleTrip(');
-    const afterSettle = source.indexOf('async listTripsForAdmin(');
-    const settleBody = source.slice(settleStart, afterSettle);
+    const settleBody = source.slice(settleStart);
     assert.ok(settleBody.includes('computeCashDrawerVariance(countedCash, expectedCash, bookDigits)'));
     assert.ok(!settleBody.includes('(countedCash - expectedCash).toFixed(2)'));
     assert.ok(!settleBody.includes('(grossCashCollected - totalTripExpenses).toFixed(2)'));

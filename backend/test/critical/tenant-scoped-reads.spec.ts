@@ -30,10 +30,20 @@ function testVanSalesReadsStayInTenant(): void {
   // services (batch 1: lifecycle, field-sales, collections-and-swaps;
   // batch 2: expenses-packaging-customers). The safety property is checked
   // over every file that can hold one; add the next split's service here
-  // when it moves a read.
+  // when it moves a read. File #43 split: the lifecycle reads moved into
+  // the van-trip-lifecycle/ slices — S3/S4/S5 are the ones these two
+  // regexes currently match (3 customer/product reads + 3 trip lookups,
+  // same totals as the pre-split facade); S2/S7 are listed too because
+  // they hold queries the regexes do not cover (customer list reads,
+  // rep-scoped trip reads), so a future read there stays scanned.
   const sources = [
     read('modules/delivery-reps/van-sales.service.ts'),
     read('modules/delivery-reps/services/van-trip-lifecycle.service.ts'),
+    read('modules/delivery-reps/services/van-trip-lifecycle/get-active-trip.service.ts'),
+    read('modules/delivery-reps/services/van-trip-lifecycle/trip-open-load.service.ts'),
+    read('modules/delivery-reps/services/van-trip-lifecycle/submit-settlement.service.ts'),
+    read('modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'),
+    read('modules/delivery-reps/services/van-trip-lifecycle/trip-admin-reads.service.ts'),
     read('modules/delivery-reps/services/van-field-sales.service.ts'),
     read('modules/delivery-reps/services/van-collections-and-swaps.service.ts'),
     read('modules/delivery-reps/services/van-expenses-packaging-customers.service.ts'),
