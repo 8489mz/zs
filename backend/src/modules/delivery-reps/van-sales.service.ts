@@ -72,11 +72,17 @@ import type {
   SettleTripPayload,
   SettleTripResult,
   ListDriverSalesFilters,
+  CreateFleetVehiclePayload,
+  UpdateFleetVehiclePayload,
+  RecordFuelLogPayload,
+  RecordOilChangePayload,
+  AssignVehicleDriverPayload,
 } from './van-sales/van-sales-types';
 import { AuthAndPinService } from './van-sales/auth-and-pin';
 import { FieldSaleService } from './van-sales/field-sale';
 import { FieldCollectionService } from './van-sales/field-collection';
 import { TripDelegatesService } from './van-sales/trip-delegates';
+import { FleetService } from './van-sales/fleet';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -107,6 +113,7 @@ export class VanSalesService {
   private readonly fieldSale: FieldSaleService;
   private readonly fieldCollection: FieldCollectionService;
   private readonly tripDelegates: TripDelegatesService;
+  private readonly fleet: FleetService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -135,6 +142,7 @@ export class VanSalesService {
     this.fieldSale = new FieldSaleService({ db, getFieldSales: this.getFieldSales.bind(this), inFlightSalePromises: VanSalesService.inFlightSalePromises, recentSalesCache: VanSalesService.recentSalesCache });
     this.fieldCollection = new FieldCollectionService({ db, getCollectionsAndSwaps: this.getCollectionsAndSwaps.bind(this), inFlightCollectionPromises: VanSalesService.inFlightCollectionPromises, recentCollectionsCache: VanSalesService.recentCollectionsCache });
     this.tripDelegates = new TripDelegatesService({ getTripLifecycle: this.getTripLifecycle.bind(this), getFieldSales: this.getFieldSales.bind(this) });
+    this.fleet = new FleetService({ vanFleetService: this.vanFleetService });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -512,130 +520,78 @@ export class VanSalesService {
     return this.tripDelegates.listDriverSales(tenantId, repId, filters);
   }
 
-  // =========================================================================
-  // FLEET MANAGEMENT (Delegated to VanFleetService)
-  // =========================================================================
-
   async listFleetVehicles(tenantId: string) {
-    return this.vanFleetService.listFleetVehicles(tenantId);
+    return this.fleet.listFleetVehicles(tenantId);
   }
 
   async createFleetVehicle(
     tenantId: string,
     accountId: string,
-    payload: {
-      plateNumber: string;
-      modelName?: string;
-      vehicleType?: string;
-      vinChassis?: string;
-      branchId?: number;
-      currentOdometer?: number;
-      fuelType?: string;
-      licenseExpiresAt?: string;
-      assignedRepId?: number;
-      notes?: string;
-    },
+    payload: CreateFleetVehiclePayload,
   ) {
-    return this.vanFleetService.createFleetVehicle(tenantId, accountId, payload);
+    return this.fleet.createFleetVehicle(tenantId, accountId, payload);
   }
 
   async updateFleetVehicle(
     tenantId: string,
     accountId: string,
     id: number,
-    payload: {
-      plateNumber?: string;
-      modelName?: string;
-      vehicleType?: string;
-      vinChassis?: string;
-      branchId?: number;
-      currentOdometer?: number;
-      fuelType?: string;
-      licenseExpiresAt?: string;
-      status?: string;
-      assignedRepId?: number | null;
-      notes?: string;
-    },
+    payload: UpdateFleetVehiclePayload,
   ) {
-    return this.vanFleetService.updateFleetVehicle(tenantId, accountId, id, payload);
+    return this.fleet.updateFleetVehicle(tenantId, accountId, id, payload);
   }
 
   async assignVehicleRep(tenantId: string, vehicleId: number, repId: number | null, shiftName?: string) {
-    return this.vanFleetService.assignVehicleRep(tenantId, vehicleId, repId, shiftName);
+    return this.fleet.assignVehicleRep(tenantId, vehicleId, repId, shiftName);
   }
 
   async recordFuelLog(
     tenantId: string,
     accountId: string,
     repId: number | null,
-    payload: {
-      vehicleId: number;
-      tripId?: number | null;
-      odometer: number;
-      liters: number;
-      pricePerLiter: number;
-      stationName?: string;
-      notes?: string;
-    },
+    payload: RecordFuelLogPayload,
   ) {
-    return this.vanFleetService.recordFuelLog(tenantId, accountId, repId, payload);
+    return this.fleet.recordFuelLog(tenantId, accountId, repId, payload);
   }
 
   async listFuelLogs(
     tenantId: string,
     filters?: { vehicleId?: number; repId?: number; dateFrom?: string; dateTo?: string },
   ) {
-    return this.vanFleetService.listFuelLogs(tenantId, filters);
+    return this.fleet.listFuelLogs(tenantId, filters);
   }
 
   async recordOilChange(
     tenantId: string,
     accountId: string,
     repId: number | null,
-    payload: {
-      vehicleId: number;
-      odometerAtChange: number;
-      oilType: string;
-      ratedKm: number;
-      withFilter: boolean;
-      alertKmBefore?: number;
-      cost?: number;
-      performedBy?: string;
-      notes?: string;
-    },
+    payload: RecordOilChangePayload,
   ) {
-    return this.vanFleetService.recordOilChange(tenantId, accountId, repId, payload);
+    return this.fleet.recordOilChange(tenantId, accountId, repId, payload);
   }
 
   async listOilChanges(tenantId: string, vehicleId?: number) {
-    return this.vanFleetService.listOilChanges(tenantId, vehicleId);
+    return this.fleet.listOilChanges(tenantId, vehicleId);
   }
 
   async getFleetMaintenanceAlerts(tenantId: string, vehicleId?: number, repId?: number) {
-    return this.vanFleetService.getFleetMaintenanceAlerts(tenantId, vehicleId, repId);
+    return this.fleet.getFleetMaintenanceAlerts(tenantId, vehicleId, repId);
   }
 
   async listVehicleDrivers(tenantId: string, vehicleId: number) {
-    return this.vanFleetService.listVehicleDrivers(tenantId, vehicleId);
+    return this.fleet.listVehicleDrivers(tenantId, vehicleId);
   }
 
   async assignVehicleDriver(
     tenantId: string,
     accountId: string,
-    payload: {
-      vehicleId: number;
-      repId: number;
-      shiftName: string;
-      shiftStartTime?: string;
-      shiftEndTime?: string;
-      notes?: string;
-    },
+    payload: AssignVehicleDriverPayload,
   ) {
-    return this.vanFleetService.assignVehicleDriver(tenantId, accountId, payload);
+    return this.fleet.assignVehicleDriver(tenantId, accountId, payload);
   }
 
   async removeVehicleDriver(tenantId: string, assignmentId: number) {
-    return this.vanFleetService.removeVehicleDriver(tenantId, assignmentId);
+    return this.fleet.removeVehicleDriver(tenantId, assignmentId);
   }
 
   // =========================================================================
