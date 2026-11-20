@@ -1,24 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CurrencySymbol } from '@/shared/ui/currency-symbol';
-import { Button } from '@/shared/ui/button';
 import { toast } from '@/shared/components/system-alert';
 import {
-  SearchIcon,
-  PlusIcon,
-  CheckCircleIcon,
-  XIcon,
-} from '@/shared/components/icons/AppIcons';
-import {
   vanSalesApi,
-  PreSalesCatalogItem,
 } from '../api/van-sales.api';
 import { VanFloatingActionBar } from './VanFloatingActionBar';
 import { SubTabsSelector, BookingHeader } from './van-pre-sales/booking-header';
 import { VanInvoiceReviewModal } from './VanInvoiceReviewModal';
-import { CompactStepper } from './van-pre-sales/compact-stepper';
-import { roundMoney } from '../utils/van-money.utils';
 import { ProductsList } from './van-pre-sales/products-list';
 import { CategoriesModal } from './van-pre-sales/categories-modal';
 import { MyOrdersView } from './van-pre-sales/my-orders-view';
@@ -26,16 +15,13 @@ import { CartPanel } from './van-pre-sales/cart-panel';
 import { SearchResults } from './van-pre-sales/search-results';
 import { CatalogSearchBar } from './van-pre-sales/catalog-search-bar';
 import { usePreSalesCartLogic } from './van-pre-sales/cart-logic';
-import { calculateItemPrice } from './van-pre-sales/calculate-item-price';
-import type { PreSalesCartLine, VanPreSalesTabProps, CompactStepperProps } from './van-pre-sales/van-pre-sales-types';
+import type { PreSalesCartLine, VanPreSalesTabProps } from './van-pre-sales/van-pre-sales-types';
 
 
 export const VanPreSalesTab: React.FC<VanPreSalesTabProps> = ({
   customers,
   selectedCustomerId,
   onSelectCustomer,
-  repId: _repId,
-  repName: _repName,
 }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -290,7 +276,7 @@ export const VanPreSalesTab: React.FC<VanPreSalesTabProps> = ({
             catalogProducts={catalogProducts}
             companies={companies}
             companyCategories={companyCategories}
-            renderProductsList={renderProductsList}
+            renderProductsList={(products) => (<ProductsList products={products} cart={cart} paymentTerms={paymentTerms} selectedCompany={selectedCompany} isCatalogLoading={isCatalogLoading} handleUpdateProductUnits={handleUpdateProductUnits} />)}
           />
 
           <CartPanel

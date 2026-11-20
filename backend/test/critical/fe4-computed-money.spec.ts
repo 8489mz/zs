@@ -4,7 +4,7 @@
  * Scope decision (parent, 2026-11-08): the adopted FE partition is U7's
  * area partition as-is with COMPUTED-ONLY scope — display-only `toFixed(2)`
  * stays out of scope (Phase 0 §1.10). This spec pins the computed side only:
- * in the 39 FE4 files (delivery-reps + maintenance + tradein) there must be
+ * in the 44 FE4 files (delivery-reps + maintenance + tradein) there must be
  * ZERO remaining computed-money `toFixed(2)` sites, i.e. zero occurrences
  * of `.toFixed(2)` inside a `Number(...)` / `parseFloat(...)` call, which
  * is the shape that turns a formatted string back into a number and feeds
@@ -13,6 +13,11 @@
  * The 17 money sites found at HEAD 30a84e93 now route through the single
  * shared `roundMoney` in `features/delivery-reps/utils/van-money.utils.ts`
  * (same `toFixed(2)` semantics, so no value changed — pure deduplication).
+ * File #45 split VanPreSalesTab.tsx into a facade + 11 slices under
+ * `components/van-pre-sales/`; the three slices that compute money
+ * (calculate-item-price, cart-logic, cart-panel) import the rounder from
+ * one level deeper (`'../../utils/van-money.utils'`) and are pinned here
+ * alongside the facade, which no longer imports it.
  *
  * Allowlist (guard precedent: single known exception, max count): exactly
  * TWO shape-B sites remain, both in
@@ -62,6 +67,9 @@ const FE4_FILES: string[] = [
   'delivery-reps/components/VanTripsTab.tsx',
   'delivery-reps/components/VanVisitsTrackingAdminTab.tsx',
   'delivery-reps/components/VehicleMaintenanceModal.tsx',
+  'delivery-reps/components/van-pre-sales/calculate-item-price.ts',
+  'delivery-reps/components/van-pre-sales/cart-logic.ts',
+  'delivery-reps/components/van-pre-sales/cart-panel.tsx',
   'delivery-reps/pages/VanSalesMobilePage.tsx',
   'delivery-reps/pages/van-sales-mobile/useVanCockpit.tsx',
   'delivery-reps/pages/van-sales-mobile/useVanCollection.tsx',
@@ -82,6 +90,9 @@ const FE4_FILES: string[] = [
 
 const HELPER_REL = 'delivery-reps/utils/van-money.utils.ts';
 const HELPER_IMPORT = "from '../utils/van-money.utils'";
+// File #45: slices under components/van-pre-sales/ sit one level deeper,
+// so their rounder import reads '../../utils/van-money.utils'.
+const HELPER_IMPORT_DEEP = "from '../../utils/van-money.utils'";
 const QUANTITY_ALLOWLIST_FILE =
   'delivery-reps/components/DriverNewLoadRequisitionView.tsx';
 const QUANTITY_ALLOWLIST_MAX = 2;
@@ -136,7 +147,7 @@ function shapeBViolations(source: string, file: string): ShapeBViolation[] {
 }
 
 async function main(): Promise<void> {
-  assert.equal(FE4_FILES.length, 41, 'FE4 file list must stay at 41 files');
+  assert.equal(FE4_FILES.length, 44, 'FE4 file list must stay at 44 files');
 
   // 1. The shared rounder exists, exports roundMoney, and is the single
   //    implementation site: exactly one `.toFixed(2)` in the helper.
@@ -175,22 +186,28 @@ async function main(): Promise<void> {
     'Vitest spec must pin the 1.005 float-boundary case',
   );
 
-  // 3. Exactly the three fixed components import the shared rounder.
+  // 3. Exactly the five fixed importers import the shared rounder: the
+  //    two untouched components (shallow import) plus the three file-#45
+  //    slices that compute money (deep import). The VanPreSalesTab facade
+  //    itself no longer imports it.
   const importers: string[] = [];
   for (const rel of FE4_FILES) {
     const full = path.join(REPO_ROOT, FE4_ROOT, rel);
     assert.ok(fs.existsSync(full), `${rel} must exist`);
     const src = fs.readFileSync(full, 'utf8');
-    if (src.includes(HELPER_IMPORT)) importers.push(rel);
+    if (src.includes(HELPER_IMPORT) || src.includes(HELPER_IMPORT_DEEP))
+      importers.push(rel);
   }
   assert.deepEqual(
     importers.sort(),
     [
       'delivery-reps/components/VanDamagedSwapModal.tsx',
-      'delivery-reps/components/VanPreSalesTab.tsx',
       'delivery-reps/components/VanSaleCheckoutModal.tsx',
+      'delivery-reps/components/van-pre-sales/calculate-item-price.ts',
+      'delivery-reps/components/van-pre-sales/cart-logic.ts',
+      'delivery-reps/components/van-pre-sales/cart-panel.tsx',
     ],
-    'exactly the three fixed components must import the shared rounder',
+    'exactly the five fixed importers must import the shared rounder',
   );
 
   // 4. Zero computed-money shape-B sites, except the quantity allowlist.
