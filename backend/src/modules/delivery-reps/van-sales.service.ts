@@ -55,8 +55,10 @@ import { authorizeManagerSecret } from '../../common/utils/manager-approval';
 import type { VanStockItem, VanTripSummary } from './services/van-trip-lifecycle.service';
 import { StockBatchHelpersService } from './van-sales/stock-batch-helpers';
 import type {
+  VerifySupervisorPinResult,
   MoveVanStockParams,
 } from './van-sales/van-sales-types';
+import { AuthAndPinService } from './van-sales/auth-and-pin';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -83,6 +85,7 @@ export class VanSalesService {
   private repEmployeeLink: VanRepEmployeeLinkService | undefined;
   private requisitionDispatch: VanRequisitionDispatchService | undefined;
   private readonly stockBatchHelpers: StockBatchHelpersService;
+  private readonly authAndPin: AuthAndPinService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -107,6 +110,7 @@ export class VanSalesService {
     this.tripLifecycle = this.getTripLifecycle();
     this.getCollectionsAndSwaps();
     this.stockBatchHelpers = new StockBatchHelpersService({ db });
+    this.authAndPin = new AuthAndPinService({ db, getTripLifecycle: this.getTripLifecycle.bind(this) });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -293,80 +297,21 @@ export class VanSalesService {
     return this.db as any;
   }
 
-  /**
-   * Van-sales endpoints are reached via the driver's portal token, not a staff session, so there is
-   * no AuthContext to post the journal under. Falls back to the tenant's earliest active user rather
-   * than a bare id — journal_entries.created_by/posted_by are FK'd to users(id), and an id that
-   * doesn't exist there fails the insert.
-   */
-  /**
-   * M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the posting identity
-   * for a driver-originated journal. When the caller names the acting
-   * rep, his linked login is the poster — the tenant's first active
-   * user never sold or collected anything, so naming him as
-   * created_by on the sale/collection/settlement journal was false
-   * attribution. When the rep has no linked login (or no rep is
-   * named) the old first-active-user fallback stays: making that
-   * honestly null needs a posting-layer decision (AuthContext.userId
-   * is number-typed and sale.created_by feeds postSale's fallback),
-   * recorded as a follow-up, not bundled here.
-   */
   private async resolveSystemAuthContext(tenantId: string, accountId: string, repId?: number | null): Promise<AuthContext> {
-    if (repId && Number(repId) > 0) {
-      const linkedUserId = await resolveRepLinkedUserId(this.anyDb, tenantId, Number(repId));
-      if (linkedUserId) {
-        return {
-          userId: linkedUserId,
-          sessionId: 'van-sales-system',
-          username: 'van-sales-system',
-          role: 'admin',
-          permissions: ['accounting'],
-          tenantId,
-          accountId,
-        };
-      }
+    return this.authAndPin.resolveSystemAuthContext(tenantId, accountId, repId);
+  }
+
+    async verifySupervisorPin(tenantId: string, pinInput?: string | null, repId?: number | null, queryable?: any, accountId?: string | null): Promise<VerifySupervisorPinResult> {
+      return this.authAndPin.verifySupervisorPin(tenantId, pinInput, repId, queryable, accountId);
     }
-    const user = await this.anyDb
-      .selectFrom('users')
-      .select(['id'])
-      .where('tenant_id', '=', tenantId)
-      .where('is_active', '=', true)
-      .orderBy('id', 'asc')
-      .executeTakeFirst();
-
-    return {
-      userId: user ? Number(user.id) : 0,
-      sessionId: 'van-sales-system',
-      username: 'van-sales-system',
-      role: 'admin',
-      permissions: ['accounting'],
-      tenantId,
-      accountId,
-    };
-  }
-
-    async verifySupervisorPin(tenantId: string, pinInput?: string | null, repId?: number | null, queryable?: any, accountId?: string | null): Promise<{
-    approved: boolean;
-    supervisorId?: number;
-    supervisorName?: string;
-    supervisorRole?: string;
-    // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): HOW the approval
-    // was given. 'pin' carries no user id (the shared PIN belongs to
-    // no single user) — callers must record supervisor_id NULL plus
-    // this mode, never fabricate an id; 'account' carries the
-    // approving login's id in supervisorId.
-    approvalMode?: 'pin' | 'account';
-  }> {
-    return this.getTripLifecycle().verifySupervisorPin(tenantId, pinInput, repId, queryable, accountId);
-  }
 
     async isSupervisorPinRequiredForSettlement(tenantId: string): Promise<boolean> {
-    return this.getTripLifecycle().isSupervisorPinRequiredForSettlement(tenantId);
-  }
+      return this.authAndPin.isSupervisorPinRequiredForSettlement(tenantId);
+    }
 
     async isBlindSettlementEnabled(tenantId: string): Promise<boolean> {
-    return this.getTripLifecycle().isBlindSettlementEnabled(tenantId);
-  }
+      return this.authAndPin.isBlindSettlementEnabled(tenantId);
+    }
 
   private sortItemsByProductId<T extends { productId: number }>(items: T[]): T[] {
     return this.stockBatchHelpers.sortItemsByProductId(items);
