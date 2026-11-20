@@ -77,12 +77,15 @@ import type {
   RecordFuelLogPayload,
   RecordOilChangePayload,
   AssignVehicleDriverPayload,
+  SubmitLoadRequisitionPayload,
+  CreateLoadRequisitionByAdminPayload,
 } from './van-sales/van-sales-types';
 import { AuthAndPinService } from './van-sales/auth-and-pin';
 import { FieldSaleService } from './van-sales/field-sale';
 import { FieldCollectionService } from './van-sales/field-collection';
 import { TripDelegatesService } from './van-sales/trip-delegates';
 import { FleetService } from './van-sales/fleet';
+import { RequisitionsService } from './van-sales/requisitions';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -114,6 +117,7 @@ export class VanSalesService {
   private readonly fieldCollection: FieldCollectionService;
   private readonly tripDelegates: TripDelegatesService;
   private readonly fleet: FleetService;
+  private readonly requisitions: RequisitionsService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -143,6 +147,7 @@ export class VanSalesService {
     this.fieldCollection = new FieldCollectionService({ db, getCollectionsAndSwaps: this.getCollectionsAndSwaps.bind(this), inFlightCollectionPromises: VanSalesService.inFlightCollectionPromises, recentCollectionsCache: VanSalesService.recentCollectionsCache });
     this.tripDelegates = new TripDelegatesService({ getTripLifecycle: this.getTripLifecycle.bind(this), getFieldSales: this.getFieldSales.bind(this) });
     this.fleet = new FleetService({ vanFleetService: this.vanFleetService });
+    this.requisitions = new RequisitionsService({ getRequisitionDispatch: this.getRequisitionDispatch.bind(this), vanRequisitionsService: this.vanRequisitionsService });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -594,36 +599,21 @@ export class VanSalesService {
     return this.fleet.removeVehicleDriver(tenantId, assignmentId);
   }
 
-  // =========================================================================
-  // LOAD REQUISITIONS (Delegated to VanRequisitionsService)
-  // =========================================================================
-
   async submitLoadRequisition(
     repId: number,
     tenantId: string,
     accountId: string,
-    payload: {
-      sourceWarehouseId?: number;
-      items: { productId: number; qty: number; sourceWarehouseId?: number; sourceWarehouseName?: string }[];
-      notes?: string;
-      allowMultiplePending?: boolean;
-    },
+    payload: SubmitLoadRequisitionPayload,
   ) {
-    return this.vanRequisitionsService.submitLoadRequisition(repId, tenantId, accountId, payload);
+    return this.requisitions.submitLoadRequisition(repId, tenantId, accountId, payload);
   }
 
-  async createLoadRequisitionByAdmin(tenantId: string, accountId: string, userId: number, payload: {
-      repId: number;
-      sourceWarehouseId?: number;
-      items: { productId: number; qty: number; sourceWarehouseId?: number; sourceWarehouseName?: string }[];
-      notes?: string;
-      dispatchImmediately?: boolean;
-    }) {
-    return this.getRequisitionDispatch().createLoadRequisitionByAdmin(tenantId, accountId, userId, payload);
+  async createLoadRequisitionByAdmin(tenantId: string, accountId: string, userId: number, payload: CreateLoadRequisitionByAdminPayload) {
+    return this.requisitions.createLoadRequisitionByAdmin(tenantId, accountId, userId, payload);
   }
 
   async listLoadRequisitions(tenantId: string, filters: { status?: string; repId?: number } = {}) {
-    return this.vanRequisitionsService.listLoadRequisitions(tenantId, filters);
+    return this.requisitions.listLoadRequisitions(tenantId, filters);
   }
 
   async reviewLoadRequisition(
@@ -633,31 +623,31 @@ export class VanSalesService {
     notes?: string,
     sourceWarehouseId?: number,
   ) {
-    return this.vanRequisitionsService.reviewLoadRequisition(tenantId, requisitionId, approvedItems, notes, sourceWarehouseId);
+    return this.requisitions.reviewLoadRequisition(tenantId, requisitionId, approvedItems, notes, sourceWarehouseId);
   }
 
   async approveAndDispatchRequisition(tenantId: string, accountId: string, requisitionId: number, reviewedByUserId: number) {
-    return this.getRequisitionDispatch().approveAndDispatchRequisition(tenantId, accountId, requisitionId, reviewedByUserId);
+    return this.requisitions.approveAndDispatchRequisition(tenantId, accountId, requisitionId, reviewedByUserId);
   }
 
   async rejectLoadRequisition(tenantId: string, requisitionId: number, rejectionReason: string, reviewedByUserId: number) {
-    return this.vanRequisitionsService.rejectLoadRequisition(tenantId, requisitionId, rejectionReason, reviewedByUserId);
+    return this.requisitions.rejectLoadRequisition(tenantId, requisitionId, rejectionReason, reviewedByUserId);
   }
 
   async deleteLoadRequisition(tenantId: string, requisitionId: number) {
-    return this.vanRequisitionsService.deleteLoadRequisition(tenantId, requisitionId);
+    return this.requisitions.deleteLoadRequisition(tenantId, requisitionId);
   }
 
   async cancelLoadRequisitionByDriver(tenantId: string, repId: number, requisitionId: number) {
-    return this.vanRequisitionsService.cancelLoadRequisitionByDriver(tenantId, repId, requisitionId);
+    return this.requisitions.cancelLoadRequisitionByDriver(tenantId, repId, requisitionId);
   }
 
   async getDriverWarehouses(tenantId: string, repId?: number) {
-    return this.vanRequisitionsService.getDriverWarehouses(tenantId, repId);
+    return this.requisitions.getDriverWarehouses(tenantId, repId);
   }
 
   async getDriverAvailableProducts(tenantId: string, warehouseId?: number, repId?: number) {
-    return this.vanRequisitionsService.getDriverAvailableProducts(tenantId, warehouseId, repId);
+    return this.requisitions.getDriverAvailableProducts(tenantId, warehouseId, repId);
   }
 
   // =========================================================================
