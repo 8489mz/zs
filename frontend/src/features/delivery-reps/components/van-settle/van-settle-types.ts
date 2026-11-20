@@ -1,5 +1,9 @@
 import type { VanActiveTripResponse, VanPackagingMovement, VanStockItem } from '../../api/van-sales.api';
 
+// Re-exported for slices: use-stock-audit imports VanStockItem from this
+// types module (merge repair — S0 as generated did not re-export it).
+export type { VanStockItem } from '../../api/van-sales.api';
+
 export interface VanSettleTabProps {
   tripData: VanActiveTripResponse['trip'];
   activeVisit?: {
