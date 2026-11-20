@@ -45,7 +45,6 @@
     "src/features/products/components/NewProductForm.tsx": 1013,
     "src/features/products/components/ProductsTableCard.tsx": 1184,
     "src/features/products/components/workspace-sections/FashionGroupEditorCard.tsx": 1681,
-    "src/features/purchases/components/new-purchase-order/useNewPurchaseOrderController.ts": 1573,
     "src/features/sales/pages/CreateQuotationPage.tsx": 1238,
     "src/features/sales/pages/CreateSalesOrderPage.tsx": 1120,
     "src/features/settings/components/forms/SettingsMainForm.tsx": 1408,
