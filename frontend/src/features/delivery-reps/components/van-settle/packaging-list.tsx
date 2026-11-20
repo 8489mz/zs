@@ -1,6 +1,6 @@
 import React from 'react';
 import { ClockIcon, PackageIcon } from '@/shared/components/icons/AppIcons';
-import type { TFunction } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { VanPackagingMovement } from '../../api/van-sales.api';
 
 export interface PackagingListProps {

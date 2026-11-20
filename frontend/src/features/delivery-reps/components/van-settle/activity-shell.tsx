@@ -1,6 +1,6 @@
 import React from 'react';
 import { FileTextIcon } from '@/shared/components/icons/AppIcons';
-import type { TFunction } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { VanPackagingMovement, VanStockItem } from '../../api/van-sales.api';
 import type { SettleSubTab, VanSettleTabProps } from './van-settle-types';
 import { SalesList } from './sales-list';

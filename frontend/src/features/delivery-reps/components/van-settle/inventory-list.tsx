@@ -1,7 +1,7 @@
 import React from 'react';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { PackageIcon } from '@/shared/components/icons/AppIcons';
-import type { TFunction } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { VanSettleTabProps } from './van-settle-types';
 
 export interface InventoryListProps {

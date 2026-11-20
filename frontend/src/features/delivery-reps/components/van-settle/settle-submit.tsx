@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/shared/ui/button';
 import { ShieldCheckIcon } from '@/shared/components/icons/AppIcons';
-import type { TFunction } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { VanSettleTabProps } from './van-settle-types';
 import type { VanStockItem } from '../../api/van-sales.api';
 

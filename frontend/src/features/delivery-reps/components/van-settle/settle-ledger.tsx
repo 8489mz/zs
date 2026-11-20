@@ -1,4 +1,4 @@
-import type { TFunction } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { LockIcon, PackageIcon, ReceiptIcon } from '@/shared/components/icons/AppIcons';
 

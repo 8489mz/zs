@@ -1,7 +1,7 @@
 import React from 'react';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { PackageIcon } from '@/shared/components/icons/AppIcons';
-import type { TFunction } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { VanSettleTabProps } from './van-settle-types';
 // formatTime is imported (not a prop): the span uses it once, prep §3 omits it
 // from the props and the S8 mount does not pass it — see build-s11-v51.cjs.

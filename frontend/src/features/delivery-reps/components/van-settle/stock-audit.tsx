@@ -1,6 +1,6 @@
 import React from 'react';
 import { PackageIcon } from '@/shared/components/icons/AppIcons';
-import type { TFunction } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { VanStockItem } from '../../api/van-sales.api';
 import type { useStockAudit } from './use-stock-audit';
 
