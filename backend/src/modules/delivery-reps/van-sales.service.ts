@@ -60,9 +60,14 @@ import type {
   ExecuteFieldSalePayload,
   ExecuteFieldSaleResult,
   ExecuteFieldSaleInternalPayload,
+  RecordFieldCollectionPayload,
+  RecordFieldCollectionInternalPayload,
+  ExecuteDamagedSwapPayload,
+  ExecuteDamagedSwapResult,
 } from './van-sales/van-sales-types';
 import { AuthAndPinService } from './van-sales/auth-and-pin';
 import { FieldSaleService } from './van-sales/field-sale';
+import { FieldCollectionService } from './van-sales/field-collection';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -91,6 +96,7 @@ export class VanSalesService {
   private readonly stockBatchHelpers: StockBatchHelpersService;
   private readonly authAndPin: AuthAndPinService;
   private readonly fieldSale: FieldSaleService;
+  private readonly fieldCollection: FieldCollectionService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -117,6 +123,7 @@ export class VanSalesService {
     this.stockBatchHelpers = new StockBatchHelpersService({ db });
     this.authAndPin = new AuthAndPinService({ db, getTripLifecycle: this.getTripLifecycle.bind(this) });
     this.fieldSale = new FieldSaleService({ db, getFieldSales: this.getFieldSales.bind(this), inFlightSalePromises: VanSalesService.inFlightSalePromises, recentSalesCache: VanSalesService.recentSalesCache });
+    this.fieldCollection = new FieldCollectionService({ db, getCollectionsAndSwaps: this.getCollectionsAndSwaps.bind(this), inFlightCollectionPromises: VanSalesService.inFlightCollectionPromises, recentCollectionsCache: VanSalesService.recentCollectionsCache });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -472,245 +479,21 @@ export class VanSalesService {
     return this.fieldSale.executeFieldSaleInternal(repId, tenantId, accountId, payload);
   }
 
-  /**
-   * Records a field debt collection from a customer in the street.
-   */
   async recordFieldCollection(
     repId: number,
     tenantId: string,
     accountId: string,
-    payload: {
-      tripId: number;
-      customerId: number;
-      amount: number;
-      paymentMethod?: 'cash' | 'instapay' | 'vodafone_cash' | 'bank_transfer';
-      transferReference?: string;
-      transferReceiptUrl?: string;
-      supervisorOverridePin?: string;
-      notes?: string;
-      gpsLat?: number;
-      gpsLng?: number;
-      clientTxId?: string;
-      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the collection was
-      // made offline (outbox createdAt, ISO with offset).
-      offlineCreatedAt?: string;
-    },
+    payload: RecordFieldCollectionPayload,
   ): Promise<{ ok: boolean; receiptNo: string; amount: number; customerName: string; previousBalance: number; newBalance: number }> {
-    const amount = Number(payload.amount || 0);
-    if (amount <= 0) throw new AppError('المبلغ المحصل يجب أن يكون أكبر من صفر', 'INVALID_AMOUNT', 400);
-
-    const txKey = payload.clientTxId ? `${tenantId}:${payload.tripId}:${payload.clientTxId}` : null;
-    // INV-REP-FIELD-COLLECTION-DEDUP-KEYS (B3): the fingerprint must
-    // include the payment channel — a cash collection then an
-    // instapay collection of the same amount within 5s are two
-    // different collections, not a retry. The channel resolves by the
-    // same rule the posting uses (omitted method counts as cash), so
-    // a true retry (same channel, same everything) still dedups.
-    const fingerprintKey = `${tenantId}:${payload.tripId}:${repId}:${payload.customerId}:${amount}:${resolveFieldCollectionChannel(payload.paymentMethod)}`;
-
-    // 1. In-flight Promise Deduplication: Await concurrent request and return its result
-    if (txKey && VanSalesService.inFlightCollectionPromises.has(txKey)) {
-      return await VanSalesService.inFlightCollectionPromises.get(txKey)!;
-    }
-    if (VanSalesService.inFlightCollectionPromises.has(fingerprintKey)) {
-      return await VanSalesService.inFlightCollectionPromises.get(fingerprintKey)!;
-    }
-
-    // 2. Recent In-Memory Cache Deduplication (< 5 seconds for fingerprint, < 30s for txKey)
-    const nowMs = Date.now();
-    if (txKey && VanSalesService.recentCollectionsCache.has(txKey)) {
-      const entry = VanSalesService.recentCollectionsCache.get(txKey)!;
-      if (nowMs - entry.timestamp < 30000) return entry.result;
-    }
-    if (VanSalesService.recentCollectionsCache.has(fingerprintKey)) {
-      const entry = VanSalesService.recentCollectionsCache.get(fingerprintKey)!;
-      if (nowMs - entry.timestamp < 5000) return entry.result;
-    }
-
-    // Register collection promise IMMEDIATELY (synchronously) before any await
-    const colPromise = (async () => {
-      // INV-REP-FIELD-COLLECTION-MONEY-PRECISION (M10/B6): REJECT — never
-      // silently round — a collection amount that does not fit the
-      // tenant's money digits, mirroring the general customer-payment
-      // path (createCustomerPayment, INVALID_PAYMENT_AMOUNT). Rounding
-      // would silently alter the cash the driver actually holds and
-      // the amount the customer actually paid, while only the journal
-      // rounds (postVanFieldCollection via toBookMoney) — so the
-      // payment row, customer balance, trip totals and ledger would
-      // disagree with the journal by fractions of a minor unit on
-      // every collection. This runs FIRST inside the closure — before
-      // the dedup reads and before recordFieldCollectionInternal — so
-      // a refused amount writes nothing: no payment row, no balance
-      // change, no JE, no trip total. It stays inside the closure
-      // (rather than above the promise registration) so concurrent
-      // identical requests still register synchronously and dedup.
-      const baseCurrency = await tenantBaseCurrency(this.anyDb, tenantId);
-      const moneyDigits = currencyMoneyDigits(baseCurrency);
-      const scale = 10 ** moneyDigits;
-      if (Math.abs(amount * scale - Math.round(amount * scale)) > 0.000001) {
-        throw new AppError(
-          `Field collection amount must have at most ${moneyDigits} decimal places for the tenant currency (${baseCurrency})`,
-          'INVALID_PAYMENT_AMOUNT',
-          400,
-        );
-      }
-
-      // 3. Database Idempotency Check via client_tx_id, falling back to
-      // the legacy [tx:clientTxId] note tag for rows written before
-      // migration 2040000000268 (whose backfill could not parse a tag).
-      if (payload.clientTxId) {
-        // INV-REP-FIELD-COLLECTION-DEDUP-KEYS (B8): the client_tx_id
-        // lookup is scoped by van_trip_id as well — a customer key
-        // reused on a different trip is a NEW collection for that
-        // trip, not a replay of the first trip's payment. The legacy
-        // note-tag fallback is scoped the same way: an unscoped tag
-        // match would leave the same hole open through the fallback.
-        const existingByColumn = await this.anyDb
-          .selectFrom('customer_payments')
-          .select(['id', 'amount', 'note'])
-          .where('tenant_id', '=', tenantId)
-          .where('customer_id', '=', payload.customerId)
-          .where('van_trip_id', '=', payload.tripId)
-          .where('client_tx_id', '=', payload.clientTxId)
-          .executeTakeFirst();
-        const existingPayment = existingByColumn ?? await this.anyDb
-          .selectFrom('customer_payments')
-          .select(['id', 'amount', 'note'])
-          .where('tenant_id', '=', tenantId)
-          .where('customer_id', '=', payload.customerId)
-          .where('van_trip_id', '=', payload.tripId)
-          .where('note', 'like', `%[tx:${payload.clientTxId}]%`)
-          .executeTakeFirst();
-
-        if (existingPayment) {
-          // INV-REP-FIELD-COLLECTION-DEDUP-KEYS (B7): a dedup replay
-          // returns the REAL balances, not 0/0. newBalance is the
-          // customer's current balance (re-read here, after the
-          // original collection posted); previousBalance is that
-          // balance plus the stored payment amount — the balance just
-          // before this collection, the same figure the receipt
-          // screen derives as newBalance + amount. Exact when no
-          // later collection intervened; always a real current
-          // balance, never 0/0.
-          const cust = await this.anyDb.selectFrom('customers').select(['name', 'balance']).where('id', '=', payload.customerId).where('tenant_id', '=', tenantId).executeTakeFirst();
-          const currentBalance = Number(cust?.balance || 0);
-          const paidAmount = Number(existingPayment.amount);
-          return {
-            ok: true,
-            receiptNo: existingPayment.note?.match(/#([A-Z0-9-]+)/)?.[1] || 'COL-SYNCED',
-            amount: paidAmount,
-            customerName: cust?.name || 'العميل',
-            previousBalance: currentBalance + paidAmount,
-            newBalance: currentBalance,
-          };
-        }
-      }
-
-      // 4. Database Rapid-Fire Duplicate Check (within last 4 seconds for
-      // the same trip, rep, customer, channel, and amount). The pre-0268
-      // check matched customer + amount only, so a second legitimate
-      // collection — another trip, another rep, another channel — inside
-      // the window was swallowed and reported as the first collection.
-      const twinScope = fieldCollectionPaymentScope({
-        tripId: payload.tripId,
-        repId,
-        paymentMethod: payload.paymentMethod,
-        clientTxId: payload.clientTxId,
-      });
-      const fourSecondsAgo = new Date(Date.now() - 4000);
-      const recentDbPayment = await this.anyDb
-        .selectFrom('customer_payments')
-        .select(['id', 'amount', 'note'])
-        .where('tenant_id', '=', tenantId)
-        .where('customer_id', '=', payload.customerId)
-        .where('van_trip_id', '=', twinScope.van_trip_id)
-        .where('rep_id', '=', twinScope.rep_id)
-        .where('payment_channel', '=', twinScope.payment_channel)
-        .where('amount', '=', amount)
-        .where('created_at', '>=', fourSecondsAgo)
-        .orderBy('id', 'desc')
-        .executeTakeFirst();
-
-      if (recentDbPayment) {
-        // INV-REP-FIELD-COLLECTION-DEDUP-KEYS (B7): same real-balance
-        // replay as the clientTxId branch above — the stored twin's
-        // amount plus the customer's current balance.
-        const cust = await this.anyDb.selectFrom('customers').select(['name', 'balance']).where('id', '=', payload.customerId).where('tenant_id', '=', tenantId).executeTakeFirst();
-        const currentBalance = Number(cust?.balance || 0);
-        const paidAmount = Number(recentDbPayment.amount);
-        return {
-          ok: true,
-          receiptNo: recentDbPayment.note?.match(/#([A-Z0-9-]+)/)?.[1] || 'COL-SYNCED',
-          amount: paidAmount,
-          customerName: cust?.name || 'العميل',
-          previousBalance: currentBalance + paidAmount,
-          newBalance: currentBalance,
-        };
-      }
-
-      // 5. Execute internal collection
-      return await this.recordFieldCollectionInternal(repId, tenantId, accountId, payload);
-    })();
-
-    if (txKey) VanSalesService.inFlightCollectionPromises.set(txKey, colPromise);
-    VanSalesService.inFlightCollectionPromises.set(fingerprintKey, colPromise);
-
-    try {
-      const result = await colPromise;
-      const ts = Date.now();
-      if (txKey) VanSalesService.recentCollectionsCache.set(txKey, { result, timestamp: ts });
-      VanSalesService.recentCollectionsCache.set(fingerprintKey, { result, timestamp: ts });
-
-      if (VanSalesService.recentCollectionsCache.size > 200) {
-        const threshold = ts - 60000;
-        for (const [k, v] of VanSalesService.recentCollectionsCache.entries()) {
-          if (v.timestamp < threshold) VanSalesService.recentCollectionsCache.delete(k);
-        }
-      }
-      return result;
-    } finally {
-      if (txKey) VanSalesService.inFlightCollectionPromises.delete(txKey);
-      VanSalesService.inFlightCollectionPromises.delete(fingerprintKey);
-    }
+    return this.fieldCollection.recordFieldCollection(repId, tenantId, accountId, payload);
   }
 
-  private async recordFieldCollectionInternal(repId: number, tenantId: string, accountId: string, payload: {
-      tripId: number;
-      customerId: number;
-      amount: number;
-      paymentMethod?: 'cash' | 'instapay' | 'vodafone_cash' | 'bank_transfer';
-      transferReference?: string;
-      transferReceiptUrl?: string;
-      supervisorOverridePin?: string;
-      notes?: string;
-      gpsLat?: number;
-      gpsLng?: number;
-      clientTxId?: string;
-    }) {
-    return this.getCollectionsAndSwaps().recordFieldCollectionInternal(repId, tenantId, accountId, payload);
+  private async recordFieldCollectionInternal(repId: number, tenantId: string, accountId: string, payload: RecordFieldCollectionInternalPayload) {
+    return this.fieldCollection.recordFieldCollectionInternal(repId, tenantId, accountId, payload);
   }
 
-  async executeDamagedSwap(repId: number, tenantId: string, accountId: string, payload: {
-      tripId: number;
-      customerId?: number;
-      damagedProductId: number;
-      damagedQty: number;
-      damageReason?: string;
-      replacementProductId: number;
-      replacementQty: number;
-      notes?: string;
-      clientTxId?: string;
-    }): Promise<{
-    ok: boolean;
-    swapId: number;
-    damagedProductName: string;
-    replacementProductName: string;
-    damagedQty: number;
-    replacementQty: number;
-    priceDifference: number;
-    messageAr: string;
-  }> {
-    return this.getCollectionsAndSwaps().executeDamagedSwap(repId, tenantId, accountId, payload);
+  async executeDamagedSwap(repId: number, tenantId: string, accountId: string, payload: ExecuteDamagedSwapPayload): Promise<ExecuteDamagedSwapResult> {
+    return this.fieldCollection.executeDamagedSwap(repId, tenantId, accountId, payload);
   }
 
 
@@ -719,23 +502,20 @@ export class VanSalesService {
 
 
 
-  /**
-   * Lists all damaged goods swaps performed on a trip.
-   */
   private async assertTripOwnedByRep(tenantId: string, tripId: number, repId: number): Promise<void> {
-    return this.getCollectionsAndSwaps().assertTripOwnedByRep(tenantId, tripId, repId);
+    return this.fieldCollection.assertTripOwnedByRep(tenantId, tripId, repId);
   }
 
   private async listRepServedCustomerIds(tenantId: string, repId: number): Promise<Set<number>> {
-    return this.getCollectionsAndSwaps().listRepServedCustomerIds(tenantId, repId);
+    return this.fieldCollection.listRepServedCustomerIds(tenantId, repId);
   }
 
   private async assertRepServedCustomer(tenantId: string, repId: number, customerId: number): Promise<void> {
-    return this.getCollectionsAndSwaps().assertRepServedCustomer(tenantId, repId, customerId);
+    return this.fieldCollection.assertRepServedCustomer(tenantId, repId, customerId);
   }
 
   async listTripDamagedSwaps(tenantId: string, tripId: number, repId?: number) {
-    return this.getCollectionsAndSwaps().listTripDamagedSwaps(tenantId, tripId, repId);
+    return this.fieldCollection.listTripDamagedSwaps(tenantId, tripId, repId);
   }
 
   // recordFieldReturn (the original immediate, unapproved return path) was removed: it wrote stock
