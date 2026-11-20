@@ -83,6 +83,7 @@ import type {
   SetRepTargetCommissionRates,
   SaveCommissionConfigPayload,
   SettleRepCommissionPayload,
+  CreateInterVanTransferPayload,
 } from './van-sales/van-sales-types';
 import { AuthAndPinService } from './van-sales/auth-and-pin';
 import { FieldSaleService } from './van-sales/field-sale';
@@ -92,6 +93,7 @@ import { FleetService } from './van-sales/fleet';
 import { RequisitionsService } from './van-sales/requisitions';
 import { ReturnsService } from './van-sales/returns';
 import { TargetsService } from './van-sales/targets';
+import { TransfersService } from './van-sales/transfers';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -126,6 +128,7 @@ export class VanSalesService {
   private readonly requisitions: RequisitionsService;
   private readonly returns: ReturnsService;
   private readonly targets: TargetsService;
+  private readonly transfers: TransfersService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -158,6 +161,7 @@ export class VanSalesService {
     this.requisitions = new RequisitionsService({ getRequisitionDispatch: this.getRequisitionDispatch.bind(this), vanRequisitionsService: this.vanRequisitionsService });
     this.returns = new ReturnsService({ vanReturnsService: this.vanReturnsService });
     this.targets = new TargetsService({ vanTargetsService: this.vanTargetsService });
+    this.transfers = new TransfersService({ vanTransfersService: this.vanTransfersService });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -730,42 +734,32 @@ export class VanSalesService {
     return this.targets.settleRepCommission(tenantId, accountId, auth, payload);
   }
 
-  // =========================================================================
-  // INTER-VAN TRANSFERS (Delegated to VanTransfersService)
-  // =========================================================================
-
   async createInterVanTransfer(
     tenantId: string,
     accountId: string,
     fromRepId: number,
-    payload: {
-      toRepId: number;
-      fromTripId?: number;
-      toTripId?: number;
-      items: { productId: number; qty: number }[];
-      notes?: string;
-    },
+    payload: CreateInterVanTransferPayload,
   ) {
-    return this.vanTransfersService.createInterVanTransfer(tenantId, accountId, fromRepId, payload);
+    return this.transfers.createInterVanTransfer(tenantId, accountId, fromRepId, payload);
   }
 
   async acceptInterVanTransfer(tenantId: string, accountId: string, toRepId: number, transferId: number) {
-    return this.vanTransfersService.acceptInterVanTransfer(tenantId, accountId, toRepId, transferId);
+    return this.transfers.acceptInterVanTransfer(tenantId, accountId, toRepId, transferId);
   }
 
   async rejectInterVanTransfer(tenantId: string, toRepId: number, transferId: number, reason?: string) {
-    return this.vanTransfersService.rejectInterVanTransfer(tenantId, toRepId, transferId, reason);
+    return this.transfers.rejectInterVanTransfer(tenantId, toRepId, transferId, reason);
   }
 
   async listInterVanTransfers(
     tenantId: string,
     filters?: { repId?: number; status?: string },
   ) {
-    return this.vanTransfersService.listInterVanTransfers(tenantId, filters);
+    return this.transfers.listInterVanTransfers(tenantId, filters);
   }
 
   async getPeerReps(tenantId: string, currentRepId: number) {
-    return this.vanTransfersService.getPeerReps(tenantId, currentRepId);
+    return this.transfers.getPeerReps(tenantId, currentRepId);
   }
 
   // =========================================================================
