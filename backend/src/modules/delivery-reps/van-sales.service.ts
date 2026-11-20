@@ -91,6 +91,10 @@ import type {
   RecordTripExpensePayload,
   RecordPackagingMovementPayload,
   CreateDriverCustomerBody,
+  GetRepFinancialLedgerFilters,
+  SettleRepFinancialItemPayload,
+  PushRepShortagesToPayrollPayload,
+  AddRepBonusOrCommissionPayload,
 } from './van-sales/van-sales-types';
 import { AuthAndPinService } from './van-sales/auth-and-pin';
 import { FieldSaleService } from './van-sales/field-sale';
@@ -103,6 +107,7 @@ import { TargetsService } from './van-sales/targets';
 import { TransfersService } from './van-sales/transfers';
 import { RoutesService } from './van-sales/routes';
 import { ExpensesPackagingCustomersService } from './van-sales/expenses-packaging-customers';
+import { RepFinancialLedgerService } from './van-sales/rep-financial-ledger';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -140,6 +145,7 @@ export class VanSalesService {
   private readonly transfers: TransfersService;
   private readonly routes: RoutesService;
   private readonly expensesPackagingCustomersSlice: ExpensesPackagingCustomersService;
+  private readonly repFinancialLedgerSlice: RepFinancialLedgerService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -175,6 +181,7 @@ export class VanSalesService {
     this.transfers = new TransfersService({ vanTransfersService: this.vanTransfersService });
     this.routes = new RoutesService({ vanRoutesService: this.vanRoutesService });
     this.expensesPackagingCustomersSlice = new ExpensesPackagingCustomersService({ getExpensesPackagingCustomers: this.getExpensesPackagingCustomers.bind(this) });
+    this.repFinancialLedgerSlice = new RepFinancialLedgerService({ getRepFinancialLedgerService: this.getRepFinancialLedgerService.bind(this) });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -873,28 +880,18 @@ export class VanSalesService {
     return this.expensesPackagingCustomersSlice.getCustomerFieldStatement(tenantId, customerId, repId);
   }
 
-  async getRepFinancialLedger(tenantId: string, filters: {
-      repId?: number;
-      status?: string;
-      dateFrom?: string;
-      dateTo?: string;
-    }) {
-    return this.getRepFinancialLedgerService().getRepFinancialLedger(tenantId, filters);
+  async getRepFinancialLedger(tenantId: string, filters: GetRepFinancialLedgerFilters) {
+    return this.repFinancialLedgerSlice.getRepFinancialLedger(tenantId, filters);
   }
 
-  async settleRepFinancialItem(tenantId: string, accountId: string, id: number, payload: {
-      method: 'cash' | 'waiver';
-      notes?: string;
-      reason?: string;
-      supervisorPin?: string;
-    }, authContext: AuthContext) {
-    return this.getRepFinancialLedgerService().settleRepFinancialItem(tenantId, accountId, id, payload, authContext);
+  async settleRepFinancialItem(tenantId: string, accountId: string, id: number, payload: SettleRepFinancialItemPayload, authContext: AuthContext) {
+    return this.repFinancialLedgerSlice.settleRepFinancialItem(tenantId, accountId, id, payload, authContext);
   }
 
 
 
   private async resolveRepLinkedUserId(dbConn: any, tenantId: string, repId: number | null): Promise<number | null> {
-    return this.getRepFinancialLedgerService().resolveRepLinkedUserId(dbConn, tenantId, repId);
+    return this.repFinancialLedgerSlice.resolveRepLinkedUserId(dbConn, tenantId, repId);
   }
 
 
@@ -905,20 +902,12 @@ export class VanSalesService {
 
 
 
-  async pushRepShortagesToPayroll(tenantId: string, accountId: string, payload: {
-      settlementIds: number[];
-      targetMonth?: string;
-    }, authContext: AuthContext) {
-    return this.getRepFinancialLedgerService().pushRepShortagesToPayroll(tenantId, accountId, payload, authContext);
+  async pushRepShortagesToPayroll(tenantId: string, accountId: string, payload: PushRepShortagesToPayrollPayload, authContext: AuthContext) {
+    return this.repFinancialLedgerSlice.pushRepShortagesToPayroll(tenantId, accountId, payload, authContext);
   }
 
-  async addRepBonusOrCommission(tenantId: string, accountId: string, payload: {
-      repId: number;
-      entryType: 'bonus' | 'commission';
-      amount: number;
-      notes: string;
-    }, authContext: AuthContext) {
-    return this.getRepFinancialLedgerService().addRepBonusOrCommission(tenantId, accountId, payload, authContext);
+  async addRepBonusOrCommission(tenantId: string, accountId: string, payload: AddRepBonusOrCommissionPayload, authContext: AuthContext) {
+    return this.repFinancialLedgerSlice.addRepBonusOrCommission(tenantId, accountId, payload, authContext);
   }
 
   /**
