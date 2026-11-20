@@ -144,21 +144,21 @@ export class VanSalesService {
     this.vanRoutesService = vanRoutesService ?? new VanRoutesService(db, this.vanFleetService, this.vanFraudRadarService);
     this.tripLifecycle = this.getTripLifecycle();
     this.getCollectionsAndSwaps();
-    this.stockBatchHelpers = new StockBatchHelpersService({ db });
-    this.authAndPin = new AuthAndPinService({ db, getTripLifecycle: this.getTripLifecycle.bind(this) });
-    this.fraudRadar = new FraudRadarService({ vanFraudRadarService: this.vanFraudRadarService });
-    this.fieldSale = new FieldSaleService({ db, getFieldSales: this.getFieldSales.bind(this), inFlightSalePromises: VanSalesService.inFlightSalePromises, recentSalesCache: VanSalesService.recentSalesCache });
-    this.fieldCollection = new FieldCollectionService({ db, getCollectionsAndSwaps: this.getCollectionsAndSwaps.bind(this), inFlightCollectionPromises: VanSalesService.inFlightCollectionPromises, recentCollectionsCache: VanSalesService.recentCollectionsCache });
-    this.tripDelegates = new TripDelegatesService({ getTripLifecycle: this.getTripLifecycle.bind(this), getFieldSales: this.getFieldSales.bind(this) });
-    this.expensesPackagingCustomersSlice = new ExpensesPackagingCustomersService({ getExpensesPackagingCustomers: this.getExpensesPackagingCustomers.bind(this) });
-    this.repFinancialLedgerSlice = new RepFinancialLedgerService({ getRepFinancialLedgerService: this.getRepFinancialLedgerService.bind(this) });
-    this.repEmployeeLinkSlice = new RepEmployeeLinkService({ getRepEmployeeLink: this.getRepEmployeeLink.bind(this) });
-    this.fleet = new FleetService({ vanFleetService: this.vanFleetService });
-    this.requisitions = new RequisitionsService({ getRequisitionDispatch: this.getRequisitionDispatch.bind(this), vanRequisitionsService: this.vanRequisitionsService });
-    this.returns = new ReturnsService({ vanReturnsService: this.vanReturnsService });
-    this.targets = new TargetsService({ vanTargetsService: this.vanTargetsService });
-    this.transfers = new TransfersService({ vanTransfersService: this.vanTransfersService });
-    this.routes = new RoutesService({ vanRoutesService: this.vanRoutesService });
+    this.stockBatchHelpers = new StockBatchHelpersService(db);
+    this.authAndPin = new AuthAndPinService(db, this.getTripLifecycle.bind(this));
+    this.fraudRadar = new FraudRadarService(this.vanFraudRadarService);
+    this.fieldSale = new FieldSaleService(db, this.getFieldSales.bind(this), VanSalesService.inFlightSalePromises, VanSalesService.recentSalesCache);
+    this.fieldCollection = new FieldCollectionService(db, this.getCollectionsAndSwaps.bind(this), VanSalesService.inFlightCollectionPromises, VanSalesService.recentCollectionsCache);
+    this.tripDelegates = new TripDelegatesService(this.getTripLifecycle.bind(this), this.getFieldSales.bind(this));
+    this.expensesPackagingCustomersSlice = new ExpensesPackagingCustomersService(this.getExpensesPackagingCustomers.bind(this));
+    this.repFinancialLedgerSlice = new RepFinancialLedgerService(this.getRepFinancialLedgerService.bind(this));
+    this.repEmployeeLinkSlice = new RepEmployeeLinkService(this.getRepEmployeeLink.bind(this));
+    this.fleet = new FleetService(this.vanFleetService);
+    this.requisitions = new RequisitionsService(this.getRequisitionDispatch.bind(this), this.vanRequisitionsService);
+    this.returns = new ReturnsService(this.vanReturnsService);
+    this.targets = new TargetsService(this.vanTargetsService);
+    this.transfers = new TransfersService(this.vanTransfersService);
+    this.routes = new RoutesService(this.vanRoutesService);
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {

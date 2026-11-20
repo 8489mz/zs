@@ -211,7 +211,7 @@ export class FieldCollectionService {
     }
   }
 
-  private async recordFieldCollectionInternal(repId: number, tenantId: string, accountId: string, payload: RecordFieldCollectionInternalPayload) {
+  async recordFieldCollectionInternal(repId: number, tenantId: string, accountId: string, payload: RecordFieldCollectionInternalPayload) {
     return this.getCollectionsAndSwaps().recordFieldCollectionInternal(repId, tenantId, accountId, payload);
   }
 
@@ -222,15 +222,15 @@ export class FieldCollectionService {
   /**
    * Lists all damaged goods swaps performed on a trip.
    */
-  private async assertTripOwnedByRep(tenantId: string, tripId: number, repId: number): Promise<void> {
+  async assertTripOwnedByRep(tenantId: string, tripId: number, repId: number): Promise<void> {
     return this.getCollectionsAndSwaps().assertTripOwnedByRep(tenantId, tripId, repId);
   }
 
-  private async listRepServedCustomerIds(tenantId: string, repId: number): Promise<Set<number>> {
+  async listRepServedCustomerIds(tenantId: string, repId: number): Promise<Set<number>> {
     return this.getCollectionsAndSwaps().listRepServedCustomerIds(tenantId, repId);
   }
 
-  private async assertRepServedCustomer(tenantId: string, repId: number, customerId: number): Promise<void> {
+  async assertRepServedCustomer(tenantId: string, repId: number, customerId: number): Promise<void> {
     return this.getCollectionsAndSwaps().assertRepServedCustomer(tenantId, repId, customerId);
   }
 

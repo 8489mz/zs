@@ -170,7 +170,7 @@ export class FieldSaleService {
     }
   }
 
-  private async executeFieldSaleInternal(
+  async executeFieldSaleInternal(
     repId: number,
     tenantId: string,
     accountId: string,

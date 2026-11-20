@@ -19,7 +19,7 @@ export class RepFinancialLedgerService {
     return this.getRepFinancialLedgerService().settleRepFinancialItem(tenantId, accountId, id, payload, authContext);
   }
 
-  private async resolveRepLinkedUserId(dbConn: any, tenantId: string, repId: number | null): Promise<number | null> {
+  async resolveRepLinkedUserId(dbConn: any, tenantId: string, repId: number | null): Promise<number | null> {
     return this.getRepFinancialLedgerService().resolveRepLinkedUserId(dbConn, tenantId, repId);
   }
 

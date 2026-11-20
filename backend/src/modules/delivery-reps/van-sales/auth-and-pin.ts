@@ -33,7 +33,7 @@ export class AuthAndPinService {
    * is number-typed and sale.created_by feeds postSale's fallback),
    * recorded as a follow-up, not bundled here.
    */
-  private async resolveSystemAuthContext(tenantId: string, accountId: string, repId?: number | null): Promise<AuthContext> {
+  async resolveSystemAuthContext(tenantId: string, accountId: string, repId?: number | null): Promise<AuthContext> {
     if (repId && Number(repId) > 0) {
       const linkedUserId = await resolveRepLinkedUserId(this.anyDb, tenantId, Number(repId));
       if (linkedUserId) {

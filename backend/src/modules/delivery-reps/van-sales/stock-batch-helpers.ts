@@ -17,11 +17,11 @@ import type { MoveVanStockParams } from './van-sales-types';
 export class StockBatchHelpersService {
   constructor(private readonly db: Kysely<Database>) {}
 
-  private sortItemsByProductId<T extends { productId: number }>(items: T[]): T[] {
+  sortItemsByProductId<T extends { productId: number }>(items: T[]): T[] {
     return sortItemsByProductId(items);
   }
 
-  private async moveVanStock(
+  async moveVanStock(
     trx: Kysely<Database>,
     params: MoveVanStockParams,
   ): Promise<{ scopeBefore: number; scopeAfter: number }> {
@@ -40,7 +40,7 @@ export class StockBatchHelpersService {
    * the unload, or the settlement. Products with no drug link and no
    * batch rows are untouched.
    */
-  private async moveVanPharmacyBatches(
+  async moveVanPharmacyBatches(
     trx: Kysely<Database>,
     scope: { tenantId: string; accountId: string },
     productId: number,
@@ -182,7 +182,7 @@ export class StockBatchHelpersService {
    * and deduct whatever cover exists. Allocation rows are written by the
    * caller once the sale items exist; this helper only returns them.
    */
-  private async deductVanSalePharmacyBatches(
+  async deductVanSalePharmacyBatches(
     trx: Kysely<Database>,
     productId: number,
     qty: number,
@@ -270,7 +270,7 @@ export class StockBatchHelpersService {
   // (van-inventory-batches.helper.ts) — the bodies live there so this
   // file (1927 lines, at its exact ratchet baseline) grows by wrappers
   // only. Signatures mirror the pharmacy twins above.
-  private async moveVanInventoryBatches(
+  async moveVanInventoryBatches(
     trx: Kysely<Database>,
     scope: { tenantId: string; accountId: string },
     productId: number,
@@ -281,7 +281,7 @@ export class StockBatchHelpersService {
     return moveVanInventoryBatchesHelper(trx, scope, productId, qty, fromLocationId, toLocationId);
   }
 
-  private async deductVanSaleInventoryBatches(
+  async deductVanSaleInventoryBatches(
     trx: Kysely<Database>,
     productId: number,
     qty: number,
@@ -296,7 +296,7 @@ export class StockBatchHelpersService {
     return getOrCreateVanLocation(this.db, repId, tenantId, accountId);
   }
 
-  private async generateDailySequenceNumber(
+  async generateDailySequenceNumber(
     trxOrDb: any,
     tableName: string,
     columnName: string,
