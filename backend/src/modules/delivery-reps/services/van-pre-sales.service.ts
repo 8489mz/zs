@@ -5,6 +5,7 @@ import { Database } from '../../../database/database.types';
 import { SalesService } from '../../sales/sales.service';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import type {
+  CreatePreSalesOrderDto,
   ListWarehouseCatalogQuery,
   ListPreSalesOrdersFilters,
   ConsolidatePreSalesOrdersPayload,
