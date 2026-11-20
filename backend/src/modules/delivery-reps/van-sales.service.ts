@@ -106,21 +106,116 @@ export class VanSalesService {
   private expensesPackagingCustomers: VanExpensesPackagingCustomersService | undefined;
   private repEmployeeLink: VanRepEmployeeLinkService | undefined;
   private requisitionDispatch: VanRequisitionDispatchService | undefined;
-  private readonly stockBatchHelpers: StockBatchHelpersService;
-  private readonly authAndPin: AuthAndPinService;
-  private readonly fieldSale: FieldSaleService;
-  private readonly fieldCollection: FieldCollectionService;
-  private readonly tripDelegates: TripDelegatesService;
-  private readonly fleet: FleetService;
-  private readonly requisitions: RequisitionsService;
-  private readonly returns: ReturnsService;
-  private readonly targets: TargetsService;
-  private readonly transfers: TransfersService;
-  private readonly routes: RoutesService;
-  private readonly expensesPackagingCustomersSlice: ExpensesPackagingCustomersService;
-  private readonly repFinancialLedgerSlice: RepFinancialLedgerService;
-  private readonly repEmployeeLinkSlice: RepEmployeeLinkService;
-  private readonly fraudRadar: FraudRadarService;
+  // Slice services are LAZY (first-call construction), like the 7 service
+  // getters above: specs build this class with Object.create (no ctor),
+  // so a delegate must still work when the ctor never ran. Eager ctor
+  // construction broke openTripAndLoad / createLoadRequisitionByAdmin /
+  // pushRepShortagesToPayroll for those specs (slice field undefined).
+  private stockBatchHelpersInstance?: StockBatchHelpersService;
+  private get stockBatchHelpers(): StockBatchHelpersService {
+    if (!this.stockBatchHelpersInstance) {
+      this.stockBatchHelpersInstance = new StockBatchHelpersService(this.db);
+    }
+    return this.stockBatchHelpersInstance;
+  }
+  private authAndPinInstance?: AuthAndPinService;
+  private get authAndPin(): AuthAndPinService {
+    if (!this.authAndPinInstance) {
+      this.authAndPinInstance = new AuthAndPinService(this.db, this.getTripLifecycle.bind(this));
+    }
+    return this.authAndPinInstance;
+  }
+  private fieldSaleInstance?: FieldSaleService;
+  private get fieldSale(): FieldSaleService {
+    if (!this.fieldSaleInstance) {
+      this.fieldSaleInstance = new FieldSaleService(this.db, this.getFieldSales.bind(this), VanSalesService.inFlightSalePromises, VanSalesService.recentSalesCache, () => this.executeFieldSaleInternal.bind(this));
+    }
+    return this.fieldSaleInstance;
+  }
+  private fieldCollectionInstance?: FieldCollectionService;
+  private get fieldCollection(): FieldCollectionService {
+    if (!this.fieldCollectionInstance) {
+      this.fieldCollectionInstance = new FieldCollectionService(this.db, this.getCollectionsAndSwaps.bind(this), VanSalesService.inFlightCollectionPromises, VanSalesService.recentCollectionsCache, () => this.recordFieldCollectionInternal.bind(this));
+    }
+    return this.fieldCollectionInstance;
+  }
+  private tripDelegatesInstance?: TripDelegatesService;
+  private get tripDelegates(): TripDelegatesService {
+    if (!this.tripDelegatesInstance) {
+      this.tripDelegatesInstance = new TripDelegatesService(this.getTripLifecycle.bind(this), this.getFieldSales.bind(this));
+    }
+    return this.tripDelegatesInstance;
+  }
+  private fleetInstance?: FleetService;
+  private get fleet(): FleetService {
+    if (!this.fleetInstance) {
+      this.fleetInstance = new FleetService(this.vanFleetService);
+    }
+    return this.fleetInstance;
+  }
+  private requisitionsInstance?: RequisitionsService;
+  private get requisitions(): RequisitionsService {
+    if (!this.requisitionsInstance) {
+      this.requisitionsInstance = new RequisitionsService(this.getRequisitionDispatch.bind(this), this.vanRequisitionsService);
+    }
+    return this.requisitionsInstance;
+  }
+  private returnsInstance?: ReturnsService;
+  private get returns(): ReturnsService {
+    if (!this.returnsInstance) {
+      this.returnsInstance = new ReturnsService(this.vanReturnsService);
+    }
+    return this.returnsInstance;
+  }
+  private targetsInstance?: TargetsService;
+  private get targets(): TargetsService {
+    if (!this.targetsInstance) {
+      this.targetsInstance = new TargetsService(this.vanTargetsService);
+    }
+    return this.targetsInstance;
+  }
+  private transfersInstance?: TransfersService;
+  private get transfers(): TransfersService {
+    if (!this.transfersInstance) {
+      this.transfersInstance = new TransfersService(this.vanTransfersService);
+    }
+    return this.transfersInstance;
+  }
+  private routesInstance?: RoutesService;
+  private get routes(): RoutesService {
+    if (!this.routesInstance) {
+      this.routesInstance = new RoutesService(this.vanRoutesService);
+    }
+    return this.routesInstance;
+  }
+  private expensesPackagingCustomersSliceInstance?: ExpensesPackagingCustomersService;
+  private get expensesPackagingCustomersSlice(): ExpensesPackagingCustomersService {
+    if (!this.expensesPackagingCustomersSliceInstance) {
+      this.expensesPackagingCustomersSliceInstance = new ExpensesPackagingCustomersService(this.getExpensesPackagingCustomers.bind(this));
+    }
+    return this.expensesPackagingCustomersSliceInstance;
+  }
+  private repFinancialLedgerSliceInstance?: RepFinancialLedgerService;
+  private get repFinancialLedgerSlice(): RepFinancialLedgerService {
+    if (!this.repFinancialLedgerSliceInstance) {
+      this.repFinancialLedgerSliceInstance = new RepFinancialLedgerService(this.getRepFinancialLedgerService.bind(this));
+    }
+    return this.repFinancialLedgerSliceInstance;
+  }
+  private repEmployeeLinkSliceInstance?: RepEmployeeLinkService;
+  private get repEmployeeLinkSlice(): RepEmployeeLinkService {
+    if (!this.repEmployeeLinkSliceInstance) {
+      this.repEmployeeLinkSliceInstance = new RepEmployeeLinkService(this.getRepEmployeeLink.bind(this));
+    }
+    return this.repEmployeeLinkSliceInstance;
+  }
+  private fraudRadarInstance?: FraudRadarService;
+  private get fraudRadar(): FraudRadarService {
+    if (!this.fraudRadarInstance) {
+      this.fraudRadarInstance = new FraudRadarService(this.vanFraudRadarService);
+    }
+    return this.fraudRadarInstance;
+  }
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -144,21 +239,6 @@ export class VanSalesService {
     this.vanRoutesService = vanRoutesService ?? new VanRoutesService(db, this.vanFleetService, this.vanFraudRadarService);
     this.tripLifecycle = this.getTripLifecycle();
     this.getCollectionsAndSwaps();
-    this.stockBatchHelpers = new StockBatchHelpersService(db);
-    this.authAndPin = new AuthAndPinService(db, this.getTripLifecycle.bind(this));
-    this.fraudRadar = new FraudRadarService(this.vanFraudRadarService);
-    this.fieldSale = new FieldSaleService(db, this.getFieldSales.bind(this), VanSalesService.inFlightSalePromises, VanSalesService.recentSalesCache, () => this.executeFieldSaleInternal.bind(this));
-    this.fieldCollection = new FieldCollectionService(db, this.getCollectionsAndSwaps.bind(this), VanSalesService.inFlightCollectionPromises, VanSalesService.recentCollectionsCache, () => this.recordFieldCollectionInternal.bind(this));
-    this.tripDelegates = new TripDelegatesService(this.getTripLifecycle.bind(this), this.getFieldSales.bind(this));
-    this.expensesPackagingCustomersSlice = new ExpensesPackagingCustomersService(this.getExpensesPackagingCustomers.bind(this));
-    this.repFinancialLedgerSlice = new RepFinancialLedgerService(this.getRepFinancialLedgerService.bind(this));
-    this.repEmployeeLinkSlice = new RepEmployeeLinkService(this.getRepEmployeeLink.bind(this));
-    this.fleet = new FleetService(this.vanFleetService);
-    this.requisitions = new RequisitionsService(this.getRequisitionDispatch.bind(this), this.vanRequisitionsService);
-    this.returns = new ReturnsService(this.vanReturnsService);
-    this.targets = new TargetsService(this.vanTargetsService);
-    this.transfers = new TransfersService(this.vanTransfersService);
-    this.routes = new RoutesService(this.vanRoutesService);
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
