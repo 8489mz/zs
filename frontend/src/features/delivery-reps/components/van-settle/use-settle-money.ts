@@ -21,7 +21,7 @@ export function useSettleMoney({
   | 'perDayDue'
   | 'countedCash'
 >): {
-  safeExpenses: VanSettleTabProps['expenses'];
+  safeExpenses: NonNullable<VanSettleTabProps['expenses']>;
   safePackaging: NonNullable<VanSettleTabProps['packagingMovements']>;
   salesAmount: number;
   creditSales: number;

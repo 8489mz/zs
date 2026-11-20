@@ -16,10 +16,10 @@ export interface ActivityShellProps {
   // Declared for the facade mount; unused inside this slice (grep: 0 uses
   // in the whole activity branch L1279-1752) — the merge may drop it.
   totalActivities?: number;
-  sales: VanSettleTabProps['sales'];
-  collections: VanSettleTabProps['collections'];
-  returns: VanSettleTabProps['returns'];
-  safeExpenses: VanSettleTabProps['expenses'];
+  sales: NonNullable<VanSettleTabProps['sales']>;
+  collections: NonNullable<VanSettleTabProps['collections']>;
+  returns: NonNullable<VanSettleTabProps['returns']>;
+  safeExpenses: NonNullable<VanSettleTabProps['expenses']>;
   safePackaging: VanPackagingMovement[];
   inventory: VanStockItem[];
   formatTime: (iso?: string) => string;
