@@ -517,8 +517,9 @@ async function main(): Promise<void> {
       '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts',
     );
     assert.ok(!settleTrip.includes('visited_at: new Date()'), 'settle visit is never app-stamped');
+    // File #52 split: the field-visit insert now lives in the S1 slice.
     const fieldSales = readSource(
-      '../../src/modules/delivery-reps/services/van-field-sales.service.ts',
+      '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts',
     );
     assert.ok(fieldSales.includes('visited_at: sql`NOW()`'), 'field-visit stamp stays DB-stamped');
   }

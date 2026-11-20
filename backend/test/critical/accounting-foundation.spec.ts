@@ -162,7 +162,8 @@ function testForbiddenPatternsAreGone(): void {
     assert.ok(!/recordPostingFailure\(/.test(salesWrite),
       'new sale transactions must propagate journal errors, not commit an unposted invoice into the recovery queue');
   }
-  for (const path of ['modules/sales/services/create-sale/finalize-sale.ts', 'modules/delivery-reps/services/van-field-sales.service.ts']) {
+  // File #52 split: the field-sale posting now lives in the S1 slice — read it directly.
+  for (const path of ['modules/sales/services/create-sale/finalize-sale.ts', 'modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts']) {
     const salesWrite = read(path);
     assert.ok(/await this\.accountingPosting\.postSale\(trx,/.test(salesWrite));
     assert.ok(/clearPostingFailure\(trx,/.test(salesWrite),

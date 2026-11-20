@@ -38,6 +38,8 @@ function testVanSalesReadsStayInTenant(): void {
   // rep-scoped trip reads), so a future read there stays scanned.
   // File #50 split: the recordFieldCollection customers reads moved into
   // the van-sales/field-collection.ts slice (S4).
+  // File #52 split: the executeFieldSaleInternal reads (4 customer/product
+  // reads + 2 trip lookups) moved into the van-field-sales/ S1 slice.
   const sources = [
     read('modules/delivery-reps/van-sales.service.ts'),
     read('modules/delivery-reps/van-sales/field-collection.ts'),
@@ -48,6 +50,7 @@ function testVanSalesReadsStayInTenant(): void {
     read('modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'),
     read('modules/delivery-reps/services/van-trip-lifecycle/trip-admin-reads.service.ts'),
     read('modules/delivery-reps/services/van-field-sales.service.ts'),
+    read('modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'),
     read('modules/delivery-reps/services/van-collections-and-swaps.service.ts'),
     read('modules/delivery-reps/services/van-expenses-packaging-customers.service.ts'),
   ];
