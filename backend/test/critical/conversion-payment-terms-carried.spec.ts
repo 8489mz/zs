@@ -254,7 +254,7 @@ async function main() {
     // check consumes exactly this shape.
     {
       const writer = readFileSync(
-        resolve(__dirname, '../../src/modules/sales/services/create-sale.service.ts'),
+        resolve(__dirname, '../../src/modules/sales/services/create-sale/allocate-tenders-and-delivery.ts'),
         'utf8',
       ) + readFileSync(
         resolve(__dirname, '../../src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts'),

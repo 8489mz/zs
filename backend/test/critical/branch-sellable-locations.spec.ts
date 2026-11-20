@@ -127,10 +127,10 @@ function testSingleLocationPick(): void {
 
 /** كلا المسارين يمرّان بالمحرك — وهذا هو جوهر الإصلاح. */
 function testBothPathsUseTheEngine(): void {
-  const pos = codeOf(read('modules/sales/services/create-sale.service.ts'));
+  const pos = codeOf(read('modules/sales/services/create-sale/load-sale-context.ts'));
   const storefront = codeOf(readStorefront());
 
-  for (const [name, source] of [['create-sale.service.ts', pos], ['storefront.service.ts', storefront]] as const) {
+  for (const [name, source] of [['load-sale-context.ts', pos], ['storefront.service.ts', storefront]] as const) {
     assert.ok(
       /resolveBranchSellableLocations\(/.test(source),
       `${name} must resolve sellable warehouses through the shared engine, not its own copy of the rule`,

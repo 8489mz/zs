@@ -366,13 +366,13 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const writeSource = readFileSync(resolve(here, '../../src/modules/sales/services/create-sale.service.ts'), 'utf8');
+    const writeSource = readFileSync(resolve(here, '../../src/modules/sales/services/create-sale/allocate-tenders-and-delivery.ts'), 'utf8');
     const financeSource = readFileSync(resolve(here, '../../src/modules/sales/services/sales-finance.service.ts'), 'utf8');
     assert.ok(!writeSource.includes("throw new AppError('Customer credit limit exceeded'"), 'no bare English throw may remain in sales-write');
     assert.ok(!financeSource.includes("throw new AppError('Customer credit limit exceeded'"), 'no bare English throw may remain in sales-finance');
     assert.ok(writeSource.includes('formatCreditLimitExceededMessage'), 'sales-write must use the shared helper');
     assert.ok(financeSource.includes('formatCreditLimitExceededMessage'), 'sales-finance must use the shared helper');
-    assert.ok(writeSource.includes("import { formatCreditLimitExceededMessage } from './credit-limit-message'"), 'sales-write must import the helper');
+    assert.ok(writeSource.includes("import { formatCreditLimitExceededMessage } from '../credit-limit-message'"), 'sales-write must import the helper');
     assert.ok(financeSource.includes("import { formatCreditLimitExceededMessage } from './credit-limit-message'"), 'sales-finance must import the helper');
     console.log('  source pins passed');
   }

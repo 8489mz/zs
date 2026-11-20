@@ -14,7 +14,7 @@
  * profile in backend/src/core/tenant/industry-profiles.ts
  * (defaultFeatures + subVertical/pillar):
  *   1. the backend sale gate: PlanFeatureService.hasFeature('pos')
- *      (the exact call at create-sale.service.ts:481),
+ *      (the exact call at load-sale-context.ts:166),
  *   2. the page decision: the real frontend getPosAvailability on the
  *      real SettingsService.getSettings output (what PosPage reads),
  *   3. the sidebar input: the real tenant.features from
@@ -608,7 +608,7 @@ async function main(): Promise<void> {
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale/load-sale-context.ts'), 'utf8');
     assert.ok(serviceSource.includes('POS_FEATURE_NOT_AVAILABLE'), 'create-sale carries the POS feature gate');
     const settingsSource = readFileSync(resolve(__dirname, '../../src/modules/settings/settings.service.ts'), 'utf8');
     assert.ok(!settingsSource.includes("primaryActivity = 'retail_general';\n      } else if ((primaryActivity === 'services'"), 'no services->retail_general rewrite left in getSettings');

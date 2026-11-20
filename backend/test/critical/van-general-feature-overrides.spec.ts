@@ -551,7 +551,7 @@ async function main(): Promise<void> {
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale/load-sale-context.ts'), 'utf8');
     assert.ok(serviceSource.includes('POS_FEATURE_NOT_AVAILABLE'), 'create-sale carries the POS feature gate');
     const guardSource = readFileSync(resolve(__dirname, '../../src/modules/cash-drawer/cash-drawer.controller.ts'), 'utf8');
     assert.ok(guardSource.includes("@RequireFeature('cashDrawer')"), 'drawer controller declares the feature gate');

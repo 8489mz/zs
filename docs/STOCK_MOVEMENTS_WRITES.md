@@ -75,8 +75,8 @@
 | backend/src/modules/returns/returns-purchase-return.service.ts:256 | insert | purchase_return | yes |  |
 | backend/src/modules/returns/returns-sale-return.service.ts:367 | insert | sale_return | yes |  |
 | backend/src/modules/returns/returns-sale-return.service.ts:380 | insert | sale_return | yes |  |
-| backend/src/modules/sales/services/create-sale.service.ts:1572 | insert | sale | yes |  |
-| backend/src/modules/sales/services/create-sale.service.ts:1715 | insert | sale | yes | Modifier leg (was :1714 before the INV-SALE-MOVEMENT-UNIT-COST +1 line); now stores unit_cost (per-stock-unit WAC). |
+| backend/src/modules/sales/services/create-sale/insert-sale-and-stock.ts:313 | insert | sale | yes |  |
+| backend/src/modules/sales/services/create-sale/insert-sale-and-stock.ts:456 | insert | sale | yes | Modifier leg (was :1714 before the INV-SALE-MOVEMENT-UNIT-COST +1 line); now stores unit_cost (per-stock-unit WAC). |
 | backend/src/modules/sales/services/restaurant-food-waste.service.ts:147 | insert | damaged | yes |  |
 | backend/src/modules/sales/services/restaurant-food-waste.service.ts:243 | insert | damaged | yes |  |
 | backend/src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts:413 | insert | sale_edit_reversal | yes |  |

@@ -535,7 +535,7 @@ async function main(): Promise<void> {
     assert.ok(qaSource.includes('relocateStockBetweenLocations'), 'the release routes through the canonical transfer primitive');
     const engineSource = readFileSync(resolve(here, '../../src/common/engines/branch-sellable-locations.engine.ts'), 'utf8');
     assert.ok(engineSource.includes("'quarantine'"), 'the sellable-locations engine excludes quarantine');
-    const createSaleSource = readFileSync(resolve(here, '../../src/modules/sales/services/create-sale.service.ts'), 'utf8');
+    const createSaleSource = readFileSync(resolve(here, '../../src/modules/sales/services/create-sale/load-sale-context.ts'), 'utf8');
     assert.ok(createSaleSource.includes("'damaged', 'in_transit', 'quarantine'"), 'the sale guards exclude quarantine');
     const settingsSource = readFileSync(resolve(here, '../../src/modules/settings/settings.service.ts'), 'utf8');
     assert.ok(settingsSource.includes("'damaged', 'quarantine'"), 'location creation accepts the quarantine type');
