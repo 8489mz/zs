@@ -57,6 +57,9 @@ import { StockBatchHelpersService } from './van-sales/stock-batch-helpers';
 import type {
   VerifySupervisorPinResult,
   MoveVanStockParams,
+  GetActiveTripResult,
+  OpenTripAndLoadPayload,
+  LoadSupplementaryStockToActiveTripPayload,
   ExecuteFieldSalePayload,
   ExecuteFieldSaleResult,
   ExecuteFieldSaleInternalPayload,
@@ -64,10 +67,16 @@ import type {
   RecordFieldCollectionInternalPayload,
   ExecuteDamagedSwapPayload,
   ExecuteDamagedSwapResult,
+  SubmitTripSettlementPayload,
+  SubmitTripSettlementResult,
+  SettleTripPayload,
+  SettleTripResult,
+  ListDriverSalesFilters,
 } from './van-sales/van-sales-types';
 import { AuthAndPinService } from './van-sales/auth-and-pin';
 import { FieldSaleService } from './van-sales/field-sale';
 import { FieldCollectionService } from './van-sales/field-collection';
+import { TripDelegatesService } from './van-sales/trip-delegates';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -97,6 +106,7 @@ export class VanSalesService {
   private readonly authAndPin: AuthAndPinService;
   private readonly fieldSale: FieldSaleService;
   private readonly fieldCollection: FieldCollectionService;
+  private readonly tripDelegates: TripDelegatesService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -124,6 +134,7 @@ export class VanSalesService {
     this.authAndPin = new AuthAndPinService({ db, getTripLifecycle: this.getTripLifecycle.bind(this) });
     this.fieldSale = new FieldSaleService({ db, getFieldSales: this.getFieldSales.bind(this), inFlightSalePromises: VanSalesService.inFlightSalePromises, recentSalesCache: VanSalesService.recentSalesCache });
     this.fieldCollection = new FieldCollectionService({ db, getCollectionsAndSwaps: this.getCollectionsAndSwaps.bind(this), inFlightCollectionPromises: VanSalesService.inFlightCollectionPromises, recentCollectionsCache: VanSalesService.recentCollectionsCache });
+    this.tripDelegates = new TripDelegatesService({ getTripLifecycle: this.getTripLifecycle.bind(this), getFieldSales: this.getFieldSales.bind(this) });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -396,70 +407,17 @@ export class VanSalesService {
     return this.stockBatchHelpers.generateDailySequenceNumber(trxOrDb, tableName, columnName, prefix, tenantId, date);
   }
 
-    async getActiveTrip(repId: number, tenantId: string, accountId: string): Promise<{
-    hasActiveTrip: boolean;
-    trip?: VanTripSummary;
-    assignedVehicle?: {
-      id: number;
-      plateNumber: string;
-      modelName?: string;
-      vehicleType: string;
-      currentOdometer: number;
-      fuelType: string;
-      licenseExpiresAt?: string;
-      status: string;
-    } | null;
-    vanLocation?: { id: number; name: string };
-    inventory: VanStockItem[];
-    customers: {
-      id: number;
-      name: string;
-      phone?: string;
-      address?: string;
-      balance: number;
-      otherRepsBalance?: number;
-      totalCompanyBalance?: number;
-      creditLimit?: number;
-      customerCode?: string;
-      route?: string;
-      assignedRepIds?: number[];
-      locationUrl?: string;
-    }[];
-    recentSales: any[];
-    sales?: any[];
-    collections?: any[];
-    returns?: any[];
-    swaps?: any[];
-    targetMetrics?: RepTargetCalculationResult;
-    requireSupervisorPinForSettlement?: boolean;
-    isBlindSettlement?: boolean;
-    // INV-VAN-OFFLINE-TIMESTAMPS: the server clock anchor for the
-    // van page (useServerClock).
-    serverTime: string;
-    serverTimezone: string;
-    // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the tenant rep
-    // discount cap % (default 5).
-    discountCapPercent: number;
-  }> {
-    return this.getTripLifecycle().getActiveTrip(repId, tenantId, accountId);
-  }
+    async getActiveTrip(repId: number, tenantId: string, accountId: string): Promise<GetActiveTripResult> {
+      return this.tripDelegates.getActiveTrip(repId, tenantId, accountId);
+    }
 
-    async openTripAndLoad(repId: number, tenantId: string, accountId: string, payload: {
-      sourceWarehouseId?: number;
-      startOdometer?: number;
-      items?: { productId: number; qty: number }[];
-      notes?: string;
-    }): Promise<{ ok: boolean; tripId: number; totalLoadedValue: number; itemsCount: number }> {
-    return this.getTripLifecycle().openTripAndLoad(repId, tenantId, accountId, payload);
-  }
+    async openTripAndLoad(repId: number, tenantId: string, accountId: string, payload: OpenTripAndLoadPayload): Promise<{ ok: boolean; tripId: number; totalLoadedValue: number; itemsCount: number }> {
+      return this.tripDelegates.openTripAndLoad(repId, tenantId, accountId, payload);
+    }
 
-    async loadSupplementaryStockToActiveTrip(repId: number, tenantId: string, accountId: string, tripId: number, payload: {
-      sourceWarehouseId?: number;
-      items: { productId: number; qty: number; sourceWarehouseId?: number }[];
-      notes?: string;
-    }): Promise<{ ok: boolean; tripId: number; totalLoadedValue: number; itemsCount: number }> {
-    return this.getTripLifecycle().loadSupplementaryStockToActiveTrip(repId, tenantId, accountId, tripId, payload);
-  }
+    async loadSupplementaryStockToActiveTrip(repId: number, tenantId: string, accountId: string, tripId: number, payload: LoadSupplementaryStockToActiveTripPayload): Promise<{ ok: boolean; tripId: number; totalLoadedValue: number; itemsCount: number }> {
+      return this.tripDelegates.loadSupplementaryStockToActiveTrip(repId, tenantId, accountId, tripId, payload);
+    }
 
   async executeFieldSale(
     repId: number,
@@ -525,123 +483,33 @@ export class VanSalesService {
   // so a driver (or a stale app build) could still skip it completely. Removed rather than kept
   // alongside, since the whole point of the approval workflow is that no return posts unreviewed.
 
-    async submitTripSettlement(repId: number, tenantId: string, accountId: string, payload: {
-      tripId: number;
-      countedCash: number;
-      // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day counted cash; stored
-      // on the trip and used by the settle step when it sends none.
-      perDayCash?: { businessDay: string; countedCash: number }[];
-      endOdometer?: number;
-      unloadRemainingToWarehouse: boolean;
-      activeVisitCustomerId?: number;
-      notes?: string;
-    }): Promise<{
-    ok: boolean;
-    tripId: number;
-    expectedCash: number;
-    countedCash: number;
-    perDayCash?: { businessDay: string; countedCash: number }[];
-    variance: number;
-    distanceKm: number;
-    status: 'submitted_by_rep';
-    message: string;
-  }> {
-    return this.getTripLifecycle().submitTripSettlement(repId, tenantId, accountId, payload);
-  }
+    async submitTripSettlement(repId: number, tenantId: string, accountId: string, payload: SubmitTripSettlementPayload): Promise<SubmitTripSettlementResult> {
+      return this.tripDelegates.submitTripSettlement(repId, tenantId, accountId, payload);
+    }
 
-    async settleTrip(repId: number, tenantId: string, accountId: string, payload: {
-      tripId: number;
-      countedCash: number;
-      // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day counted cash (see the
-      // lifecycle service for the fallback + refusal rules).
-      perDayCash?: { businessDay: string; countedCash: number }[];
-      unloadRemainingToWarehouse: boolean;
-      countedStock?: { productId: number; countedQty: number }[];
-      nightStockApproved?: boolean;
-      nightStockNotes?: string;
-      endOdometer?: number;
-      chargeStockVarianceToRep?: boolean;
-      // INV-VAN-SELF-SETTLE-PIN-REQUIRED: whether the charge/waive
-      // flag above was decided by a supervisor (admin settle path).
-      // The driver path passes false: the rep's phone never decides
-      // whether his own shortage is charged or waived. Callers that
-      // pass neither (legacy direct callers) keep the old behavior.
-      chargeStockVarianceDecidedBySupervisor?: boolean;
-      activeVisitCustomerId?: number;
-      notes?: string;
-      // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): HOW the
-      // settlement was approved, and by WHOM when the approver is
-      // identified. The driver controller passes both: 'account' +
-      // the supervisor's user id when approval came from a login
-      // password, 'shared_manager_pin' + null when it came from the
-      // shared manager PIN (which belongs to no single user — the
-      // trip then records supervisor_id NULL plus this method, never
-      // a fabricated id). The admin console passes 'account' + its
-      // own user id. Legacy direct callers pass neither: the method
-      // is then 'unrecorded' and settled_by stays null.
-      supervisorApprovalMethod?: 'shared_manager_pin' | 'account' | 'unrecorded';
-      supervisorId?: number | null;
-    }, authContext?: AuthContext): Promise<{
-    ok: boolean;
-    tripId: number;
-    expectedCash: number;
-    countedCash: number;
-    dailySplit?: Array<{ businessDay: string; due: number; countedCash: number; remittedCash: number }>;
-    tripExpenses?: number;
-    variance: number;
-    stockVarianceAmount: number;
-    stockOverageAmount?: number;
-    unloadedItemsCount: number;
-    distanceKm: number;
-    status: 'settled';
-    cashierName?: string;
-    cashierId?: number | null;
-    repName?: string;
-    settledAt?: string;
-    salesAmount?: number;
-    cashSales?: number;
-    creditSales?: number;
-    collectionsTotal?: number;
-    returnsAmount?: number;
-    cashRefunds?: number;
-    creditReturns?: number;
-    totalInstapaySales?: number;
-    totalInstapayCollections?: number;
-    expectedBankTransfers?: number;
-    stockVariances?: any[];
-  }> {
-    return this.getTripLifecycle().settleTrip(repId, tenantId, accountId, payload, authContext);
-  }
+    async settleTrip(repId: number, tenantId: string, accountId: string, payload: SettleTripPayload, authContext?: AuthContext): Promise<SettleTripResult> {
+      return this.tripDelegates.settleTrip(repId, tenantId, accountId, payload, authContext);
+    }
 
-  // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day cash due for one trip
-  // (same buckets the settle step settles from).
   async getTripDueByDay(repId: number, tenantId: string, tripId: number) {
-    return this.getTripLifecycle().getTripDueByDay(repId, tenantId, tripId);
+    return this.tripDelegates.getTripDueByDay(repId, tenantId, tripId);
   }
 
   
     async listTripsForAdmin(tenantId: string, filters?: { repId?: number; status?: string; dateFrom?: string; dateTo?: string }): Promise<VanTripSummary[]> {
-    return this.getTripLifecycle().listTripsForAdmin(tenantId, filters);
-  }
+      return this.tripDelegates.listTripsForAdmin(tenantId, filters);
+    }
 
     async getTripDetailsForAdmin(tenantId: string, tripId: number, pagination?: { page?: number; pageSize?: number }) {
-    return this.getTripLifecycle().getTripDetailsForAdmin(tenantId, tripId, pagination);
-  }
+      return this.tripDelegates.getTripDetailsForAdmin(tenantId, tripId, pagination);
+    }
 
   async listDriverSales(
     tenantId: string,
     repId: number,
-    filters?: {
-      dateScope?: 'today' | 'yesterday' | 'week' | 'all';
-      customerId?: number;
-      paymentMethod?: string;
-      search?: string;
-      tripId?: number;
-      discountedOnly?: boolean;
-      limit?: number;
-    },
+    filters?: ListDriverSalesFilters,
   ) {
-    return this.getFieldSales().listDriverSales(tenantId, repId, filters);
+    return this.tripDelegates.listDriverSales(tenantId, repId, filters);
   }
 
   // =========================================================================
