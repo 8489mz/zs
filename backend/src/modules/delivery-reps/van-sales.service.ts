@@ -55,6 +55,7 @@ import { authorizeManagerSecret } from '../../common/utils/manager-approval';
 import type { VanStockItem, VanTripSummary } from './services/van-trip-lifecycle.service';
 import { StockBatchHelpersService } from './van-sales/stock-batch-helpers';
 import type {
+  GetFraudRadarEventsOptions,
   VerifySupervisorPinResult,
   MoveVanStockParams,
   GetActiveTripResult,
@@ -109,6 +110,7 @@ import { RoutesService } from './van-sales/routes';
 import { ExpensesPackagingCustomersService } from './van-sales/expenses-packaging-customers';
 import { RepFinancialLedgerService } from './van-sales/rep-financial-ledger';
 import { RepEmployeeLinkService } from './van-sales/rep-employee-link';
+import { FraudRadarService } from './van-sales/fraud-radar';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -148,6 +150,7 @@ export class VanSalesService {
   private readonly expensesPackagingCustomersSlice: ExpensesPackagingCustomersService;
   private readonly repFinancialLedgerSlice: RepFinancialLedgerService;
   private readonly repEmployeeLinkSlice: RepEmployeeLinkService;
+  private readonly fraudRadar: FraudRadarService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -185,6 +188,7 @@ export class VanSalesService {
     this.expensesPackagingCustomersSlice = new ExpensesPackagingCustomersService({ getExpensesPackagingCustomers: this.getExpensesPackagingCustomers.bind(this) });
     this.repFinancialLedgerSlice = new RepFinancialLedgerService({ getRepFinancialLedgerService: this.getRepFinancialLedgerService.bind(this) });
     this.repEmployeeLinkSlice = new RepEmployeeLinkService({ getRepEmployeeLink: this.getRepEmployeeLink.bind(this) });
+    this.fraudRadar = new FraudRadarService({ vanFraudRadarService: this.vanFraudRadarService });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -348,23 +352,18 @@ export class VanSalesService {
   }
 
   async recordSuspicionEvent(params: RecordVanSuspicionParams) {
-    return this.vanFraudRadarService.recordSuspicionEvent(params);
+    return this.fraudRadar.recordSuspicionEvent(params);
   }
 
   async getFraudRadarSummary(tenantId: string, options?: { days?: number; repId?: number }) {
-    return this.vanFraudRadarService.getSummary(tenantId, options);
+    return this.fraudRadar.getFraudRadarSummary(tenantId, options);
   }
 
   async getFraudRadarEvents(
     tenantId: string,
-    options?: {
-      days?: number;
-      repId?: number;
-      eventCode?: string;
-      limit?: number;
-    },
+    options?: GetFraudRadarEventsOptions,
   ) {
-    return this.vanFraudRadarService.getEvents(tenantId, options);
+    return this.fraudRadar.getFraudRadarEvents(tenantId, options);
   }
 
   private get anyDb(): any {
