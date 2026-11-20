@@ -25,6 +25,7 @@ import { VanFloatingActionBar } from './VanFloatingActionBar';
 import { VanInvoiceReviewModal } from './VanInvoiceReviewModal';
 import { CompactStepper } from './van-pre-sales/compact-stepper';
 import { roundMoney } from '../utils/van-money.utils';
+import { usePreSalesCartLogic } from './van-pre-sales/cart-logic';
 import { calculateItemPrice } from './van-pre-sales/calculate-item-price';
 import type { PreSalesCartLine, VanPreSalesTabProps, CompactStepperProps } from './van-pre-sales/van-pre-sales-types';
 
@@ -231,135 +232,15 @@ export const VanPreSalesTab: React.FC<VanPreSalesTabProps> = ({
   }, [customers, selectedCustomerId]);
 
 
-  // Update Carton and Piece Quantities for an item
-  const handleUpdateProductUnits = (
-    product: PreSalesCatalogItem,
-    targetCartons: number,
-    targetPieces: number,
-  ) => {
-    const mult = product.packagingUnit?.multiplier || 1;
-    const isCartonItem = Boolean(product.packagingUnit && mult > 1);
-    const safeCartons = isCartonItem ? Math.max(0, targetCartons) : 0;
-    const safePieces = Math.max(0, targetPieces);
-    const totalBaseQty = safeCartons * mult + safePieces;
-
-    if (totalBaseQty > product.warehouseAvailable) {
-      toast.warning(`أقصى رصيد متاح للحجز من "${product.name}" بالمخزن هو ${product.warehouseAvailable} قطعة`);
-      return;
-    }
-
-    setCart((prev) => {
-      const existingIdx = prev.findIndex((l) => l.productId === product.id);
-
-      if (totalBaseQty <= 0) {
-        if (existingIdx >= 0) {
-          return prev.filter((l) => l.productId !== product.id);
-        }
-        return prev;
-      }
-
-      const piecePricing = calculateItemPrice(product, paymentTerms, totalBaseQty, 1);
-      const cartonPricing = isCartonItem ? calculateItemPrice(product, paymentTerms, totalBaseQty, mult) : null;
-
-      const newCartLine: PreSalesCartLine = {
-        productId: product.id,
-        productName: product.name,
-        unitName: isCartonItem ? (safeCartons > 0 ? (product.packagingUnit?.name || 'كرتونة') : 'قطعة') : 'قطعة',
-        unitMultiplier: mult,
-        quantity: totalBaseQty,
-        cartons: safeCartons,
-        pieces: safePieces,
-        packagingUnitName: product.packagingUnit?.name || 'كرتونة',
-        cartonMultiplier: mult,
-        pieceListPrice: piecePricing.listPrice,
-        cartonListPrice: cartonPricing ? cartonPricing.listPrice : piecePricing.listPrice * mult,
-        pieceCashDiscount: piecePricing.cashDiscountPerUnit,
-        cartonCashDiscount: cartonPricing ? cartonPricing.cashDiscountPerUnit : piecePricing.cashDiscountPerUnit * mult,
-        pieceUnitPrice: piecePricing.effectivePrice,
-        cartonUnitPrice: cartonPricing ? cartonPricing.effectivePrice : piecePricing.effectivePrice * mult,
-        unitPrice: piecePricing.effectivePrice,
-        consumerPrice: piecePricing.consumerPrice,
-        pricingTierType: piecePricing.tierType,
-        unitOfferSavings: piecePricing.savings,
-        warehouseAvailable: product.warehouseAvailable,
-      };
-
-      if (existingIdx >= 0) {
-        const next = [...prev];
-        next[existingIdx] = newCartLine;
-        return next;
-      } else {
-        return [...prev, newCartLine];
-      }
-    });
-  };
-
-  // Quick increment/decrement from Cart
-  const handleCartDelta = (productId: number, unitType: 'carton' | 'piece', delta: number) => {
-    const line = cart.find((l) => l.productId === productId);
-    if (!line) return;
-    const prod = catalogProducts.find((p) => p.id === productId);
-    if (!prod) return;
-
-    if (unitType === 'carton') {
-      handleUpdateProductUnits(prod, line.cartons + delta, line.pieces);
-    } else {
-      handleUpdateProductUnits(prod, line.cartons, line.pieces + delta);
-    }
-  };
-
-  // Change payment terms (Cash / Credit) & refresh cart prices immediately
-  const handlePaymentTermsChange = (newTerms: 'cash' | 'credit') => {
-    setPaymentTerms(newTerms);
-    setCart((prev) =>
-      prev.map((line) => {
-        const catItem = catalogProducts.find((p) => p.id === line.productId);
-        if (!catItem) return line;
-        const totalBase = line.quantity;
-        const piecePricing = calculateItemPrice(catItem, newTerms, totalBase, 1);
-        const cartonPricing = line.cartonMultiplier > 1 ? calculateItemPrice(catItem, newTerms, totalBase, line.cartonMultiplier) : null;
-        return {
-          ...line,
-          pieceListPrice: piecePricing.listPrice,
-          cartonListPrice: cartonPricing ? cartonPricing.listPrice : piecePricing.listPrice * line.cartonMultiplier,
-          pieceCashDiscount: piecePricing.cashDiscountPerUnit,
-          cartonCashDiscount: cartonPricing ? cartonPricing.cashDiscountPerUnit : piecePricing.cashDiscountPerUnit * line.cartonMultiplier,
-          pieceUnitPrice: piecePricing.effectivePrice,
-          cartonUnitPrice: cartonPricing ? cartonPricing.effectivePrice : piecePricing.effectivePrice * line.cartonMultiplier,
-          unitPrice: piecePricing.effectivePrice,
-          pricingTierType: piecePricing.tierType,
-          unitOfferSavings: piecePricing.savings,
-        };
-      }),
-    );
-  };
-
-  // Cart totals: Gross (Credit), Cash Discount, and Net Payable
-  const cartGrossSubtotal = useMemo(() => {
-    return cart.reduce((sum, line) => {
-      if (line.cartonMultiplier > 1 && (line.cartons > 0 || line.pieces > 0)) {
-        return sum + (line.cartons * line.cartonListPrice + line.pieces * line.pieceListPrice);
-      }
-      return sum + line.quantity * line.pieceListPrice;
-    }, 0);
-  }, [cart]);
-
-  const cartNetTotal = useMemo(() => {
-    return cart.reduce((sum, line) => {
-      if (line.cartonMultiplier > 1 && (line.cartons > 0 || line.pieces > 0)) {
-        return sum + (line.cartons * line.cartonUnitPrice + line.pieces * line.pieceUnitPrice);
-      }
-      return sum + line.quantity * line.pieceUnitPrice;
-    }, 0);
-  }, [cart]);
-
-  const cartDiscountAmount = useMemo(() => {
-    return Math.max(0, roundMoney(cartGrossSubtotal - cartNetTotal));
-  }, [cartGrossSubtotal, cartNetTotal]);
-
-  const totalPieces = useMemo(() => {
-    return cart.reduce((sum, line) => sum + line.quantity, 0);
-  }, [cart]);
+  const {
+    handleUpdateProductUnits,
+    handleCartDelta,
+    handlePaymentTermsChange,
+    cartGrossSubtotal,
+    cartNetTotal,
+    cartDiscountAmount,
+    totalPieces,
+  } = usePreSalesCartLogic({ cart, setCart, paymentTerms, setPaymentTerms, catalogProducts });
 
   // Submit Pre-Sales Booking Mutation
   const createOrderMutation = useMutation({
