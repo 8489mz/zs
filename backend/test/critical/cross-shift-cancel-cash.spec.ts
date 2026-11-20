@@ -350,7 +350,7 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/sales/services/sales-edit-and-cancel.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(here, '../../src/modules/sales/services/sales-edit-and-cancel/cancel-sale.service.ts'), 'utf8');
     assert.ok(serviceSource.includes('INV-CROSS-SHIFT-CANCEL-CASH-ATTRIBUTION'), 'cancelSale names the invariant');
     assert.ok(serviceSource.includes('originalCashShift'), 'the original-shift lookup exists in cancelSale');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');

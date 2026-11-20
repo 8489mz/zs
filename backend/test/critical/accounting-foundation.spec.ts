@@ -169,10 +169,10 @@ function testForbiddenPatternsAreGone(): void {
       'a successful posting must still resolve a historical failure');
   }
 
-  const salesWriteSrc = read('modules/sales/services/sales-edit-and-cancel.service.ts');
-  const updateSaleBody = salesWriteSrc.slice(
-    salesWriteSrc.indexOf('async updateSale('),
-    salesWriteSrc.indexOf('async cancelSale('));
+  // File #44 split: updateSale now lives in the S1 slice — read it directly
+  // (the old slice() from 'async updateSale(' to 'async cancelSale(' broke
+  // once cancelSale left the facade file).
+  const updateSaleBody = read('modules/sales/services/sales-edit-and-cancel/update-sale.service.ts');
   assert.ok(/postSaleEdit\(trx,/.test(updateSaleBody),
     'updateSale must post the edit via postSaleEdit in the same transaction');
   assert.ok(!/reverseSaleJournal\(trx,/.test(updateSaleBody),
