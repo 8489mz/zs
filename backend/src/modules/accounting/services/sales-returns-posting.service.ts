@@ -15,18 +15,14 @@
  * passes and no outside caller changes.)
  */
 import { Transaction } from 'kysely';
-import { sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
-import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AccountingTenantFoundationService } from '../accounting-tenant-foundation.service';
-import { AppError } from '../../../common/errors/app-error';
-import { cogsResidualAmount, type CogsResidualGroup } from '../engines/cogs-residual.engine';
-import { currencyMoneyDigits, MoneyDigits } from '../engines/money-minor-units.engine';
+import { type CogsResidualGroup } from '../engines/cogs-residual.engine';
+import { MoneyDigits } from '../engines/money-minor-units.engine';
 import { Logger } from '@nestjs/common';
-import { tenantBaseCurrency } from '../accounting-currency';
 import type { DbOrTx, JournalLineDraft } from '../accounting-posting.service';
-import { residualModifierList, residualSoldUnitRemaining, type SalesAndReturnsPostingDeps } from './sales-returns-posting/sales-returns-posting-types';
+import { type SalesAndReturnsPostingDeps } from './sales-returns-posting/sales-returns-posting-types';
 import { SaleCogsResidualService } from './sales-returns-posting/sale-cogs-residual';
 import { PostSaleService } from './sales-returns-posting/post-sale';
 import { PostSaleEditService } from './sales-returns-posting/post-sale-edit';
@@ -75,6 +71,43 @@ export class SalesAndReturnsPostingService {
     this.getActiveAccountMap = deps.getActiveAccountMap;
     this.assertTransaction = deps.assertTransaction;
     this.logger = deps.logger;
+    this.salesReturnReliefService = new SalesReturnReliefService(this.toMoney);
+    this.deliveryCustodyService = new DeliveryCustodyService(
+      this.assertTransaction,
+      this.toMoney,
+      this.resolveAccountWithFallback,
+      this.addLine,
+      this.insertPostedJournal,
+      this.deliverySettlementBasis.bind(this),
+      this.ensureTenantFoundation.bind(this),
+    );
+    this.postSalesReturnService = new PostSalesReturnService(
+      this.assertTransaction,
+      this.toMoney,
+      this.getExistingSalesReturnJournal,
+      this.logger,
+      this.getTenantAccountingSettings,
+      this.resolveAccountWithFallback,
+      this.addLine,
+      this.resolveSystemAccountByCode,
+      this.maxAllowedDifference,
+      this.getActiveAccountMap,
+      this.insertPostedJournal,
+      this.salesReturnCogsAmount.bind(this),
+      this.computeSalesReturnRelief.bind(this),
+      this.hasDeliveryCustodyReclassification.bind(this),
+      this.deliveryCustodyPartner.bind(this),
+      this.ensureTenantFoundation.bind(this),
+    );
+    this.reverseSaleJournalService = new ReverseSaleJournalService(
+      this.toMoney,
+      this.getExistingSaleReversalJournal,
+      this.logger,
+      this.resolveAccountWithFallback,
+      this.maxAllowedDifference,
+      this.insertPostedJournal,
+      this.ensureTenantFoundation.bind(this),
+    );
     this.postSaleService = new PostSaleService(
       this.toMoney,
       this.resolveSystemAccountByCode,
@@ -104,43 +137,6 @@ export class SalesAndReturnsPostingService {
       this.addSaleRevenueCreditLegs.bind(this),
       this.reverseSaleJournal.bind(this),
       this.postSalesReturn.bind(this),
-      this.ensureTenantFoundation.bind(this),
-    );
-    this.reverseSaleJournalService = new ReverseSaleJournalService(
-      this.toMoney,
-      this.getExistingSaleReversalJournal,
-      this.logger,
-      this.resolveAccountWithFallback,
-      this.maxAllowedDifference,
-      this.insertPostedJournal,
-      this.ensureTenantFoundation.bind(this),
-    );
-    this.salesReturnReliefService = new SalesReturnReliefService(this.toMoney);
-    this.deliveryCustodyService = new DeliveryCustodyService(
-      this.assertTransaction,
-      this.toMoney,
-      this.resolveAccountWithFallback,
-      this.addLine,
-      this.insertPostedJournal,
-      this.deliverySettlementBasis.bind(this),
-      this.ensureTenantFoundation.bind(this),
-    );
-    this.postSalesReturnService = new PostSalesReturnService(
-      this.assertTransaction,
-      this.toMoney,
-      this.getExistingSalesReturnJournal,
-      this.logger,
-      this.getTenantAccountingSettings,
-      this.resolveAccountWithFallback,
-      this.addLine,
-      this.resolveSystemAccountByCode,
-      this.maxAllowedDifference,
-      this.getActiveAccountMap,
-      this.insertPostedJournal,
-      this.salesReturnCogsAmount.bind(this),
-      this.computeSalesReturnRelief.bind(this),
-      this.hasDeliveryCustodyReclassification.bind(this),
-      this.deliveryCustodyPartner.bind(this),
       this.ensureTenantFoundation.bind(this),
     );
   }
@@ -185,6 +181,7 @@ export class SalesAndReturnsPostingService {
     return this.saleCogsResidualService.salesReturnCogsResidual(queryable, tenantId, saleId, bookDigits, returnedQtyBySaleItemId);
   }
 
+  // resolveSalesReturnCostLines lives in sales-returns-posting/sale-cogs-residual.ts (S1 slice).
   async salesReturnCogsAmount(
     queryable: Transaction<Database>,
     tenantId: string,
