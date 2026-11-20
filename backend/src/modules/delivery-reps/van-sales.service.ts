@@ -57,8 +57,12 @@ import { StockBatchHelpersService } from './van-sales/stock-batch-helpers';
 import type {
   VerifySupervisorPinResult,
   MoveVanStockParams,
+  ExecuteFieldSalePayload,
+  ExecuteFieldSaleResult,
+  ExecuteFieldSaleInternalPayload,
 } from './van-sales/van-sales-types';
 import { AuthAndPinService } from './van-sales/auth-and-pin';
+import { FieldSaleService } from './van-sales/field-sale';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -86,6 +90,7 @@ export class VanSalesService {
   private requisitionDispatch: VanRequisitionDispatchService | undefined;
   private readonly stockBatchHelpers: StockBatchHelpersService;
   private readonly authAndPin: AuthAndPinService;
+  private readonly fieldSale: FieldSaleService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -111,6 +116,7 @@ export class VanSalesService {
     this.getCollectionsAndSwaps();
     this.stockBatchHelpers = new StockBatchHelpersService({ db });
     this.authAndPin = new AuthAndPinService({ db, getTripLifecycle: this.getTripLifecycle.bind(this) });
+    this.fieldSale = new FieldSaleService({ db, getFieldSales: this.getFieldSales.bind(this), inFlightSalePromises: VanSalesService.inFlightSalePromises, recentSalesCache: VanSalesService.recentSalesCache });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -448,255 +454,22 @@ export class VanSalesService {
     return this.getTripLifecycle().loadSupplementaryStockToActiveTrip(repId, tenantId, accountId, tripId, payload);
   }
 
-  /**
-   * Executes a direct field sale in the street from van stock (Cash or Credit).
-   */
   async executeFieldSale(
     repId: number,
     tenantId: string,
     accountId: string,
-    payload: {
-      tripId: number;
-      customerId?: number;
-      customerName?: string;
-      customerPhone?: string;
-      paymentMethod: 'cash' | 'credit' | 'card' | 'split' | 'instapay' | 'vodafone_cash';
-      paidAmount?: number;
-      transferReference?: string;
-      transferReceiptUrl?: string;
-      recipientName?: string;
-      recipientPhone?: string;
-      recipientRole?: string;
-      recipientSignature?: string;
-      items: {
-        productId: number;
-        qty: number;
-        unitPrice?: number;
-        unitName?: string;
-        unitMultiplier?: number;
-        isBonus?: boolean;
-        bonusReason?: string;
-        originalPrice?: number;
-        // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: per-line TOTAL
-        // discount amount (POS lineDiscount semantics).
-        lineDiscount?: number;
-      }[];
-      notes?: string;
-      deliveryGpsLat?: number;
-      deliveryGpsLng?: number;
-      // INV-VAN-OFFLINE-TIMESTAMPS: why no GPS fix was captured at
-      // submit time ('timeout' | 'denied' | 'unavailable').
-      gpsMissingReason?: 'timeout' | 'denied' | 'unavailable';
-      deliveryProofPhoto?: string;
-      packagingBreakdown?: { cartonsCount?: number; piecesCount?: number; itemsCount?: number };
-      clientTxId?: string;
-      supervisorOverridePin?: string;
-      supervisorOverrideReason?: string;
-      cashDiscountAmount?: number;
-      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the sale was made
-      // offline (outbox createdAt, ISO with offset).
-      offlineCreatedAt?: string;
-    },
-  ): Promise<{
-    ok: boolean;
-    saleId: number;
-    docNo: string;
-    total: number;
-    subtotal?: number;
-    discount?: number;
-    // INV-VAN-PRICE-LIST-WIRING: the system cash discount for this
-    // sale (server-computed from the tenant setting, after the
-    // rep-cap check). Included in `discount` above.
-    systemCashDiscountAmount?: number;
-    paymentMethod: string;
-    customerName: string;
-    itemsCount: number;
-    cashPaid?: number;
-    creditOwed?: number;
-  }> {
-    if (!payload.items || !payload.items.length) {
-      throw new AppError('يجب تحديد صنف واحد على الأقل لإصدار الفاتورة', 'EMPTY_SALE_ITEMS', 400);
-    }
-
-    const txKey = payload.clientTxId ? `${tenantId}:${payload.tripId}:${payload.clientTxId}` : null;
-    const sortedItems = [...payload.items].sort((a, b) => a.productId - b.productId);
-    const itemsSig = sortedItems.map((it) => `${it.productId}:${it.qty}:${it.unitPrice ?? 0}`).join('|');
-    const fingerprintKey = `${tenantId}:${payload.tripId}:${repId}:${payload.customerId || 'walkin'}:${itemsSig}`;
-
-    // 1. In-flight Promise Deduplication: Await concurrent request and return its result
-    if (txKey && VanSalesService.inFlightSalePromises.has(txKey)) {
-      return await VanSalesService.inFlightSalePromises.get(txKey)!;
-    }
-    if (VanSalesService.inFlightSalePromises.has(fingerprintKey)) {
-      return await VanSalesService.inFlightSalePromises.get(fingerprintKey)!;
-    }
-
-    // 2. Recent In-Memory Cache Deduplication (< 30s for txKey only).
-    // INV-VAN-DEDUP-DISTINGUISHING-KEY: a COMPLETED sale is never
-    // returned from a fingerprint-keyed cache. The fingerprint
-    // (tenant+trip+rep+customer+items signature) identifies a basket,
-    // not a submission: two genuinely identical baskets sold seconds
-    // apart are two sales. Only the client-supplied clientTxId key
-    // (txKey) caches a completed result, backed by the durable
-    // [tx:clientTxId] database check below. Concurrent keyless
-    // duplicates are still collapsed by the in-flight promise map
-    // (step 1), and the 4-second multiset database backstop (step 4)
-    // is unchanged.
-    const nowMs = Date.now();
-    if (txKey && VanSalesService.recentSalesCache.has(txKey)) {
-      const entry = VanSalesService.recentSalesCache.get(txKey)!;
-      if (nowMs - entry.timestamp < 30000) return entry.result;
-    }
-
-    // Register promise IMMEDIATELY (synchronously) before any await call
-    const salePromise = (async () => {
-      // 3. Database Idempotency Check via [tx:clientTxId]
-      if (payload.clientTxId) {
-        const existingSale = await this.anyDb
-          .selectFrom('sales')
-          .select(['id', 'doc_no', 'total', 'payment_type'])
-          .where('tenant_id', '=', tenantId)
-          .where('van_trip_id', '=', payload.tripId)
-          .where('note', 'like', `%[tx:${payload.clientTxId}]%`)
-          .executeTakeFirst();
-
-        if (existingSale) {
-          return {
-            ok: true,
-            saleId: Number(existingSale.id),
-            docNo: existingSale.doc_no,
-            total: Number(existingSale.total),
-            paymentMethod: existingSale.payment_type || payload.paymentMethod,
-            customerName: payload.customerName || 'عميل نقدي ميداني',
-            itemsCount: payload.items.length,
-            cashPaid: 0,
-            creditOwed: 0,
-          };
-        }
-      }
-
-      // 4. Database Rapid-Fire Duplicate Check (within last 4 seconds for identical trip, rep, customer, and items count)
-      const fourSecondsAgo = new Date(Date.now() - 4000);
-      const recentDbSale = await this.anyDb
-        .selectFrom('sales')
-        .select(['id', 'doc_no', 'total', 'payment_type'])
-        .where('tenant_id', '=', tenantId)
-        .where('van_trip_id', '=', payload.tripId)
-        .where('delivery_rep_id', '=', repId)
-        .where('customer_id', payload.customerId ? '=' : 'is', payload.customerId ? Number(payload.customerId) : null)
-        .where('created_at', '>=', fourSecondsAgo)
-        .orderBy('id', 'desc')
-        .executeTakeFirst();
-
-      if (recentDbSale) {
-        // The backstop must match the fingerprint, not just the line
-        // count: comparing only the count merged a genuinely different
-        // sale (different products, same number of lines) into the
-        // recent one and reported it as created with cashPaid 0. Compare
-        // the product/quantity multiset instead. Prices are deliberately
-        // excluded: the server may adjust stored unit prices (tiers,
-        // offers), so comparing stored prices against raw payload prices
-        // would miss true double-taps whose prices were adjusted on the
-        // first write; the in-process fingerprint layers already cover
-        // the price dimension.
-        const dbItems = await this.anyDb
-          .selectFrom('sale_items')
-          .select(['product_id', 'qty'])
-          .where('sale_id', '=', Number(recentDbSale.id))
-          .where('tenant_id', '=', tenantId)
-          .execute();
-        const dbItemsSig = [...dbItems]
-          .sort((a: any, b: any) => Number(a.product_id) - Number(b.product_id))
-          .map((row: any) => `${Number(row.product_id)}:${Number(row.qty)}`)
-          .join('|');
-        const payloadItemsSig = sortedItems
-          .map((it) => `${Number(it.productId)}:${Number(it.qty)}`)
-          .join('|');
-        if (dbItemsSig === payloadItemsSig) {
-          return {
-            ok: true,
-            saleId: Number(recentDbSale.id),
-            docNo: recentDbSale.doc_no,
-            total: Number(recentDbSale.total),
-            paymentMethod: recentDbSale.payment_type || payload.paymentMethod,
-            customerName: payload.customerName || 'عميل نقدي ميداني',
-            itemsCount: payload.items.length,
-            cashPaid: 0,
-            creditOwed: 0,
-          };
-        }
-      }
-
-      // 5. Execute internal sale
-      return await this.executeFieldSaleInternal(repId, tenantId, accountId, payload);
-    })();
-
-    if (txKey) VanSalesService.inFlightSalePromises.set(txKey, salePromise);
-    VanSalesService.inFlightSalePromises.set(fingerprintKey, salePromise);
-
-    try {
-      const result = await salePromise;
-      const ts = Date.now();
-      // INV-VAN-DEDUP-DISTINGUISHING-KEY: cache the completed result
-      // under the clientTxId key only — never under the fingerprint
-      // key (see step 2 above).
-      if (txKey) VanSalesService.recentSalesCache.set(txKey, { result, timestamp: ts });
-
-      if (VanSalesService.recentSalesCache.size > 200) {
-        const threshold = ts - 60000;
-        for (const [k, v] of VanSalesService.recentSalesCache.entries()) {
-          if (v.timestamp < threshold) VanSalesService.recentSalesCache.delete(k);
-        }
-      }
-      return result;
-    } finally {
-      if (txKey) VanSalesService.inFlightSalePromises.delete(txKey);
-      VanSalesService.inFlightSalePromises.delete(fingerprintKey);
-    }
+    payload: ExecuteFieldSalePayload,
+  ): Promise<ExecuteFieldSaleResult> {
+    return this.fieldSale.executeFieldSale(repId, tenantId, accountId, payload);
   }
 
   private async executeFieldSaleInternal(
     repId: number,
     tenantId: string,
     accountId: string,
-    payload: {
-      tripId: number;
-      customerId?: number;
-      customerName?: string;
-      customerPhone?: string;
-      paymentMethod: 'cash' | 'credit' | 'card' | 'split' | 'instapay' | 'vodafone_cash';
-      paidAmount?: number;
-      transferReference?: string;
-      transferReceiptUrl?: string;
-      recipientName?: string;
-      recipientPhone?: string;
-      recipientRole?: string;
-      recipientSignature?: string;
-      items: {
-        productId: number;
-        qty: number;
-        unitPrice?: number;
-        unitName?: string;
-        unitMultiplier?: number;
-        isBonus?: boolean;
-        bonusReason?: string;
-        originalPrice?: number;
-        // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: per-line TOTAL
-        // discount amount (POS lineDiscount semantics).
-        lineDiscount?: number;
-      }[];
-      notes?: string;
-      deliveryGpsLat?: number;
-      deliveryGpsLng?: number;
-      deliveryProofPhoto?: string;
-      packagingBreakdown?: { cartonsCount?: number; piecesCount?: number; itemsCount?: number };
-      clientTxId?: string;
-      supervisorOverridePin?: string;
-      supervisorOverrideReason?: string;
-      cashDiscountAmount?: number;
-    },
+    payload: ExecuteFieldSaleInternalPayload,
   ) {
-    return this.getFieldSales().executeFieldSaleInternal(repId, tenantId, accountId, payload);
+    return this.fieldSale.executeFieldSaleInternal(repId, tenantId, accountId, payload);
   }
 
   /**
