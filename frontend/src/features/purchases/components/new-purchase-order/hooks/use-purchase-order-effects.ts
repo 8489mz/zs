@@ -25,7 +25,7 @@ export interface UsePurchaseOrderEffectsArgs {
   hasLoadedDraftRef: { current: boolean };
   restoreDraftFromStorage: (payload: PurchasePrototypeDraft, catalogSetters: DraftCatalogSetters) => void;
   computeHasMeaningfulData: () => boolean;
-  lastSavedSnapshotRef: { current: string };
+  lastSavedSnapshotRef: { current: string | null };
   buildDraftPayload: (status: DocumentStatus, catalog: DraftCatalog) => PurchasePrototypeDraft;
   documentStatus: DocumentStatus;
   inlineMessage: { tone: InlineMessageTone; text: string } | null;
