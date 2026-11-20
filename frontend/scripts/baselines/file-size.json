@@ -19,7 +19,6 @@
     "src/features/delivery-reps/components/VanCollectionTab.tsx": 1461,
     "src/features/delivery-reps/components/VanFinancialLedgerAdminTab.tsx": 1776,
     "src/features/delivery-reps/components/VanFraudRadarAdminTab.tsx": 1030,
-    "src/features/delivery-reps/components/VanLoadRequisitionsAdminTab.tsx": 2142,
     "src/features/delivery-reps/components/VanPreSalesAdminTab.tsx": 1140,
     "src/features/delivery-reps/components/VanPromotionsAdminTab.tsx": 1134,
     "src/features/delivery-reps/components/VanRoutesKpiAdminTab.tsx": 1710,

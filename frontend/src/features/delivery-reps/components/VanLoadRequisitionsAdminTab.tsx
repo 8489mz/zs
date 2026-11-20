@@ -1,16 +1,7 @@
-import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/shared/ui/button';
-import { StandardDialog } from '@/shared/components/StandardDialog';
 import { toast } from '@/shared/components/system-alert';
 import { vanSalesApi, type VanLoadRequisitionRecord, type DriverAvailableProduct, type DriverWarehouse } from '../api/van-sales.api';
-import {
-  TruckIcon,
-  PlusIcon,
-  Trash2Icon,
-  PrinterIcon,
-} from '@/shared/components/icons/AppIcons';
 import { DriverNewLoadRequisitionView } from './DriverNewLoadRequisitionView';
 import { RequisitionsKpiCards } from './van-load-requisitions/requisitions-kpi-cards';
 import { RequisitionsFilterBar } from './van-load-requisitions/requisitions-filter-bar';
@@ -21,11 +12,8 @@ import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { printRequisition } from './van-load-requisitions/print-requisition';
 import { useAdminRequisitionReview } from './van-load-requisitions/use-admin-requisition-review';
 import { useRequisitionMutations } from './van-load-requisitions/use-requisition-mutations';
-import type { AdminReviewLine } from './van-load-requisitions/van-load-requisitions-admin-types';
-
 
 export function VanLoadRequisitionsAdminTab() {
-  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -142,8 +130,6 @@ export function VanLoadRequisitionsAdminTab() {
     setRejectModalReq,
     setRejectReasonInput,
   });
-  };
-
 
   if (viewMode === 'create') {
     return (
@@ -177,7 +163,6 @@ export function VanLoadRequisitionsAdminTab() {
         pendingCount={pendingReqs.length}
         totalCount={requisitions.length}
       />
-      </div>
 
       <RequisitionsTable
         requisitions={requisitions}
