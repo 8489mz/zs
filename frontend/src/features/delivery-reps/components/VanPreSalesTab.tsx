@@ -24,61 +24,8 @@ import {
 import { VanFloatingActionBar } from './VanFloatingActionBar';
 import { VanInvoiceReviewModal } from './VanInvoiceReviewModal';
 import { roundMoney } from '../utils/van-money.utils';
+import type { PreSalesCartLine, VanPreSalesTabProps, CompactStepperProps } from './van-pre-sales/van-pre-sales-types';
 
-interface CustomerOption {
-  id: number;
-  name: string;
-  phone?: string;
-  balance: number;
-  creditLimit?: number;
-  customerCode?: string;
-}
-
-interface PreSalesCartLine {
-  productId: number;
-  productName: string;
-  unitName: string;
-  unitMultiplier: number;
-  quantity: number; // Total base pieces
-  cartons: number;
-  pieces: number;
-  packagingUnitName?: string;
-  cartonMultiplier: number;
-  pieceListPrice: number;
-  cartonListPrice: number;
-  pieceCashDiscount: number;
-  cartonCashDiscount: number;
-  pieceUnitPrice: number;
-  cartonUnitPrice: number;
-  unitPrice: number;
-  consumerPrice?: number | null;
-  pricingTierType: 'cash' | 'credit' | 'offer';
-  unitOfferSavings?: number | null;
-  warehouseAvailable: number;
-}
-
-interface VanPreSalesTabProps {
-  customers: CustomerOption[];
-  selectedCustomerId: number | '';
-  onSelectCustomer: (val: number | '') => void;
-  repId: number;
-  repName?: string;
-}
-
-interface CompactStepperProps {
-  value: number;
-  min?: number;
-  max?: number;
-  step?: number;
-  unitLabel: string;
-  onIncrement: () => void;
-  onDecrement: () => void;
-  onChange: (val: number) => void;
-  disabledIncrement?: boolean;
-  disabledDecrement?: boolean;
-  inputWidth?: string;
-  height?: string;
-}
 
 /**
  * Strict RTL Stepper: [+] first in DOM (physically on the RIGHT), [-] last in DOM (physically on the LEFT).
