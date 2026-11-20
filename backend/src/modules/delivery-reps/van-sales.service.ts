@@ -80,6 +80,9 @@ import type {
   SubmitLoadRequisitionPayload,
   CreateLoadRequisitionByAdminPayload,
   SubmitFieldReturnPayload,
+  SetRepTargetCommissionRates,
+  SaveCommissionConfigPayload,
+  SettleRepCommissionPayload,
 } from './van-sales/van-sales-types';
 import { AuthAndPinService } from './van-sales/auth-and-pin';
 import { FieldSaleService } from './van-sales/field-sale';
@@ -88,6 +91,7 @@ import { TripDelegatesService } from './van-sales/trip-delegates';
 import { FleetService } from './van-sales/fleet';
 import { RequisitionsService } from './van-sales/requisitions';
 import { ReturnsService } from './van-sales/returns';
+import { TargetsService } from './van-sales/targets';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -121,6 +125,7 @@ export class VanSalesService {
   private readonly fleet: FleetService;
   private readonly requisitions: RequisitionsService;
   private readonly returns: ReturnsService;
+  private readonly targets: TargetsService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -152,6 +157,7 @@ export class VanSalesService {
     this.fleet = new FleetService({ vanFleetService: this.vanFleetService });
     this.requisitions = new RequisitionsService({ getRequisitionDispatch: this.getRequisitionDispatch.bind(this), vanRequisitionsService: this.vanRequisitionsService });
     this.returns = new ReturnsService({ vanReturnsService: this.vanReturnsService });
+    this.targets = new TargetsService({ vanTargetsService: this.vanTargetsService });
   }
 
   private getCollectionsAndSwaps(): VanCollectionsAndSwapsService {
@@ -682,10 +688,6 @@ export class VanSalesService {
     return this.returns.rejectFieldReturn(tenantId, returnId, rejectionReason, rejectedByUserId);
   }
 
-  // =========================================================================
-  // REP TARGETS & PERFORMANCE (Delegated to VanTargetsService)
-  // =========================================================================
-
   async setRepTarget(
     tenantId: string,
     accountId: string,
@@ -694,61 +696,38 @@ export class VanSalesService {
     targetAmount: number,
     collectionTarget?: number | null,
     visitsTarget?: number | null,
-    commissionRates?: {
-      salesCommissionRatePercent?: number;
-      collectionCommissionRatePercent?: number;
-      targetBonusRatePercent?: number;
-    },
+    commissionRates?: SetRepTargetCommissionRates,
   ) {
-    return this.vanTargetsService.setRepTarget(
-      tenantId,
-      accountId,
-      repId,
-      periodMonth,
-      targetAmount,
-      collectionTarget,
-      visitsTarget,
-      commissionRates,
-    );
+    return this.targets.setRepTarget(tenantId, accountId, repId, periodMonth, targetAmount, collectionTarget, visitsTarget, commissionRates);
   }
 
   async getRepTarget(tenantId: string, repId: number, periodMonth?: string) {
-    return this.vanTargetsService.getRepTarget(tenantId, repId, periodMonth);
+    return this.targets.getRepTarget(tenantId, repId, periodMonth);
   }
 
   async listAllRepTargets(tenantId: string, periodMonth?: string) {
-    return this.vanTargetsService.listAllRepTargets(tenantId, periodMonth);
+    return this.targets.listAllRepTargets(tenantId, periodMonth);
   }
 
   async getCommissionConfig(tenantId: string) {
-    return this.vanTargetsService.getCommissionConfig(tenantId);
+    return this.targets.getCommissionConfig(tenantId);
   }
 
   async saveCommissionConfig(
     tenantId: string,
     accountId: string,
-    payload: {
-      salesCommissionRatePercent?: number;
-      collectionCommissionRatePercent?: number;
-      targetBonusRatePercent?: number;
-      repId?: number;
-    },
+    payload: SaveCommissionConfigPayload,
   ) {
-    return this.vanTargetsService.saveCommissionConfig(tenantId, accountId, payload);
+    return this.targets.saveCommissionConfig(tenantId, accountId, payload);
   }
 
   async settleRepCommission(
     tenantId: string,
     accountId: string,
     auth: AuthContext,
-    payload: {
-      repId: number;
-      periodMonth: string;
-      amount?: number;
-      notes?: string;
-    },
+    payload: SettleRepCommissionPayload,
   ) {
-    return this.vanTargetsService.settleRepCommission(tenantId, accountId, auth, payload);
+    return this.targets.settleRepCommission(tenantId, accountId, auth, payload);
   }
 
   // =========================================================================
