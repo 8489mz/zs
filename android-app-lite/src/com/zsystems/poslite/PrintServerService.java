@@ -7,12 +7,15 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.PowerManager;
 import android.util.Log;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Locale;
@@ -27,12 +30,38 @@ public class PrintServerService extends Service {
     private ServerSocket tcp9100Server;
     private Thread httpThread;
     private Thread tcp9100Thread;
+    private PowerManager.WakeLock wakeLock;
+    private WifiManager.WifiLock wifiLock;
 
     @Override
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
         startForeground(NOTIF_ID, buildForegroundNotification());
+
+        // 1. Partial WakeLock: Keeps CPU alive so incoming print requests are never dropped
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ZSystemsPOS:PrintWakeLock");
+                wakeLock.acquire();
+                Log.i(TAG, "Print WakeLock acquired successfully");
+            }
+        } catch (Exception ex) {
+            Log.w(TAG, "WakeLock acquire error: " + ex.getMessage());
+        }
+
+        // 2. High-Performance WifiLock: Prevents Android from putting Wi-Fi chip into sleep mode
+        try {
+            WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wm != null) {
+                wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "ZSystemsPOS:PrintWifiLock");
+                wifiLock.acquire();
+                Log.i(TAG, "Print WifiLock acquired successfully");
+            }
+        } catch (Exception ex) {
+            Log.w(TAG, "WifiLock acquire error: " + ex.getMessage());
+        }
 
         // Initialize Sunmi hardware printer helper
         SunmiPrinterHelper.init(this);
@@ -57,6 +86,12 @@ public class PrintServerService extends Service {
     public void onDestroy() {
         isRunning = false;
         closeServers();
+        if (wakeLock != null && wakeLock.isHeld()) {
+            try { wakeLock.release(); } catch (Exception ignored) {}
+        }
+        if (wifiLock != null && wifiLock.isHeld()) {
+            try { wifiLock.release(); } catch (Exception ignored) {}
+        }
         super.onDestroy();
     }
 
@@ -105,23 +140,30 @@ public class PrintServerService extends Service {
         if (isRunning) return;
         isRunning = true;
 
-        // 1. HTTP Server on Port 8080 (handles /print-pdf and /print)
+        // 1. HTTP Server on Port 8080 (handles /print-pdf, /print, /health)
         httpThread = new Thread(new Runnable() {
             @Override
             public void run() {
-                try {
-                    http8080Server = new ServerSocket(8080);
-                    Log.i(TAG, "HTTP Print Server listening on 0.0.0.0:8080");
-                    while (isRunning && !http8080Server.isClosed()) {
-                        try {
-                            Socket client = http8080Server.accept();
-                            handleHttpClientAsync(client);
-                        } catch (Exception e) {
-                            if (!isRunning) break;
+                while (isRunning) {
+                    try {
+                        http8080Server = new ServerSocket();
+                        http8080Server.setReuseAddress(true);
+                        http8080Server.bind(new InetSocketAddress(8080), 50);
+                        Log.i(TAG, "HTTP Print Server listening on 0.0.0.0:8080");
+
+                        while (isRunning && !http8080Server.isClosed()) {
+                            try {
+                                Socket client = http8080Server.accept();
+                                handleHttpClientAsync(client);
+                            } catch (Exception e) {
+                                if (!isRunning) break;
+                                try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+                            }
                         }
+                    } catch (Exception ex) {
+                        Log.e(TAG, "HTTP Print Server 8080 bind error: " + ex.getMessage());
+                        try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
                     }
-                } catch (Exception ex) {
-                    Log.e(TAG, "HTTP Print Server 8080 error: " + ex.getMessage());
                 }
             }
         }, "PrintHttp8080Thread");
@@ -132,19 +174,26 @@ public class PrintServerService extends Service {
         tcp9100Thread = new Thread(new Runnable() {
             @Override
             public void run() {
-                try {
-                    tcp9100Server = new ServerSocket(9100);
-                    Log.i(TAG, "RAW ESC/POS Server listening on 0.0.0.0:9100");
-                    while (isRunning && !tcp9100Server.isClosed()) {
-                        try {
-                            Socket client = tcp9100Server.accept();
-                            handlePort9100ClientAsync(client);
-                        } catch (Exception e) {
-                            if (!isRunning) break;
+                while (isRunning) {
+                    try {
+                        tcp9100Server = new ServerSocket();
+                        tcp9100Server.setReuseAddress(true);
+                        tcp9100Server.bind(new InetSocketAddress(9100), 50);
+                        Log.i(TAG, "RAW ESC/POS Server listening on 0.0.0.0:9100");
+
+                        while (isRunning && !tcp9100Server.isClosed()) {
+                            try {
+                                Socket client = tcp9100Server.accept();
+                                handlePort9100ClientAsync(client);
+                            } catch (Exception e) {
+                                if (!isRunning) break;
+                                try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+                            }
                         }
+                    } catch (Exception ex) {
+                        Log.e(TAG, "RAW Port 9100 Server bind error: " + ex.getMessage());
+                        try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
                     }
-                } catch (Exception ex) {
-                    Log.e(TAG, "RAW Port 9100 Server error: " + ex.getMessage());
                 }
             }
         }, "PrintRaw9100Thread");
@@ -157,7 +206,7 @@ public class PrintServerService extends Service {
             @Override
             public void run() {
                 try {
-                    socket.setSoTimeout(70000);
+                    socket.setSoTimeout(30000);
                     InputStream in = socket.getInputStream();
                     OutputStream out = socket.getOutputStream();
 

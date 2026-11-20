@@ -24,6 +24,7 @@ import java.util.Locale;
 
 public class SunmiPrinterHelper {
     private static final String TAG = "SunmiPrinterHelper";
+    private static final Object PDF_LOCK = new Object();
     private static volatile IWoyouService woyouService = null;
     private static volatile boolean isBound = false;
 
@@ -310,67 +311,81 @@ public class SunmiPrinterHelper {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                File tempFile = null;
-                ParcelFileDescriptor pfd = null;
-                PdfRenderer renderer = null;
-                try {
-                    long waitStart = System.currentTimeMillis();
-                    while (woyouService == null && (System.currentTimeMillis() - waitStart) < 2500) {
+                synchronized (PDF_LOCK) {
+                    File tempFile = null;
+                    ParcelFileDescriptor pfd = null;
+                    PdfRenderer renderer = null;
+                    try {
+                        long waitStart = System.currentTimeMillis();
+                        while (woyouService == null && (System.currentTimeMillis() - waitStart) < 3000) {
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException ignored) {}
+                        }
+
+                        if (woyouService == null) {
+                            Log.e(TAG, "Cannot print PDF: woyouService is not bound");
+                            return;
+                        }
+
+                        tempFile = File.createTempFile("print_", ".pdf", context.getCacheDir());
+                        FileOutputStream fos = new FileOutputStream(tempFile);
+                        fos.write(pdfBytes);
+                        fos.flush();
+                        fos.close();
+
+                        pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY);
+                        renderer = new PdfRenderer(pfd);
+                        int pageCount = renderer.getPageCount();
+                        Log.i(TAG, "Rendering PDF pages: " + pageCount);
+
+                        woyouService.printerInit(null);
+
+                        for (int i = 0; i < pageCount; i++) {
+                            PdfRenderer.Page page = renderer.openPage(i);
+                            int targetWidth = 384; // 58mm printable width in pixels
+                            int targetHeight = (int) ((float) targetWidth / page.getWidth() * page.getHeight());
+
+                            Bitmap bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
+                            Canvas canvas = new Canvas(bitmap);
+                            canvas.drawColor(Color.WHITE);
+                            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
+                            page.close();
+
+                            // Split tall receipts into strips of max 300px to strictly respect Android 1MB Binder limit
+                            int maxStripHeight = 300;
+                            if (targetHeight <= maxStripHeight) {
+                                woyouService.printBitmap(bitmap, null);
+                            } else {
+                                for (int y = 0; y < targetHeight; y += maxStripHeight) {
+                                    int stripH = Math.min(maxStripHeight, targetHeight - y);
+                                    Bitmap strip = Bitmap.createBitmap(bitmap, 0, y, targetWidth, stripH);
+                                    woyouService.printBitmap(strip, null);
+                                    strip.recycle();
+                                }
+                            }
+                            bitmap.recycle();
+                            woyouService.lineWrap(1, null);
+                        }
+
+                        woyouService.lineWrap(3, null);
                         try {
-                            Thread.sleep(100);
-                        } catch (InterruptedException ignored) {}
-                    }
+                            woyouService.cutPaper(null);
+                        } catch (Exception ignored) {}
+                        Log.i(TAG, "PDF print completed successfully: " + pageCount + " pages");
 
-                    if (woyouService == null) {
-                        Log.e(TAG, "Cannot print PDF: woyouService is not bound");
-                        return;
-                    }
-
-                    tempFile = File.createTempFile("print_", ".pdf", context.getCacheDir());
-                    FileOutputStream fos = new FileOutputStream(tempFile);
-                    fos.write(pdfBytes);
-                    fos.flush();
-                    fos.close();
-
-                    pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY);
-                    renderer = new PdfRenderer(pfd);
-                    int pageCount = renderer.getPageCount();
-                    Log.i(TAG, "Rendering PDF pages: " + pageCount);
-
-                    woyouService.printerInit(null);
-
-                    for (int i = 0; i < pageCount; i++) {
-                        PdfRenderer.Page page = renderer.openPage(i);
-                        int targetWidth = 384; // 58mm printable width in pixels
-                        int targetHeight = (int) ((float) targetWidth / page.getWidth() * page.getHeight());
-
-                        Bitmap bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
-                        Canvas canvas = new Canvas(bitmap);
-                        canvas.drawColor(Color.WHITE);
-                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
-                        page.close();
-
-                        woyouService.printBitmap(bitmap, null);
-                        woyouService.lineWrap(1, null);
-                    }
-
-                    woyouService.lineWrap(3, null);
-                    try {
-                        woyouService.cutPaper(null);
-                    } catch (Exception ignored) {}
-                    Log.i(TAG, "PDF print completed successfully: " + pageCount + " pages");
-
-                } catch (Exception e) {
-                    Log.e(TAG, "printPdfBytes error: " + e.getMessage(), e);
-                } finally {
-                    try {
-                        if (renderer != null) renderer.close();
-                    } catch (Exception ignored) {}
-                    try {
-                        if (pfd != null) pfd.close();
-                    } catch (Exception ignored) {}
-                    if (tempFile != null && tempFile.exists()) {
-                        try { tempFile.delete(); } catch (Exception ignored) {}
+                    } catch (Exception e) {
+                        Log.e(TAG, "printPdfBytes error: " + e.getMessage(), e);
+                    } finally {
+                        try {
+                            if (renderer != null) renderer.close();
+                        } catch (Exception ignored) {}
+                        try {
+                            if (pfd != null) pfd.close();
+                        } catch (Exception ignored) {}
+                        if (tempFile != null && tempFile.exists()) {
+                            try { tempFile.delete(); } catch (Exception ignored) {}
+                        }
                     }
                 }
             }
