@@ -384,7 +384,8 @@ async function main(): Promise<void> {
       // File #63 split: the journal source type moved to the S1 slice.
       const s1Source = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-van-damaged-swap.slice.ts'), 'utf8');
       assert.ok(s1Source.includes("'van_damaged_swap'"), 'the journal source is van_damaged_swap');
-      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-collections-and-swaps.service.ts'), 'utf8');
+      // File #67 split: the swap source moved to the S2 slice.
+      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-collections-and-swaps/execute-damaged-swap.slice.ts'), 'utf8');
       assert.ok(vanSource.includes('postVanDamagedSwap'), 'executeDamagedSwap posts through postVanDamagedSwap');
       assert.ok(vanSource.includes("'swap_price_adjustment'"), 'the ledger row uses swap_price_adjustment');
       assert.ok(vanSource.includes("location_type', '=', 'damaged'"), 'the damaged qty is routed to the damaged location');

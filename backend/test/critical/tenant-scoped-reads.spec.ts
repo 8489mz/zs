@@ -52,6 +52,9 @@ function testVanSalesReadsStayInTenant(): void {
     read('modules/delivery-reps/services/van-field-sales.service.ts'),
     read('modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'),
     read('modules/delivery-reps/services/van-collections-and-swaps.service.ts'),
+    // File #67 split: the collections reads moved into the S1 + S2 slices.
+    read('modules/delivery-reps/services/van-collections-and-swaps/record-field-collection.slice.ts'),
+    read('modules/delivery-reps/services/van-collections-and-swaps/execute-damaged-swap.slice.ts'),
     read('modules/delivery-reps/services/van-expenses-packaging-customers.service.ts'),
   ];
 
