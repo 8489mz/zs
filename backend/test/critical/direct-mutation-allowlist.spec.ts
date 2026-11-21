@@ -6,8 +6,9 @@
  * directMutationAllowList of 5 files allowed to write
  * products.stock_qty outside the ledger. Four of those entries were
  * dead or misplaced:
- * - maintenance.service.ts: no direct products update at all — its
- *   stock moves go through applyStockDelta (3 calls).
+ * - maintenance.service.ts (facade): no direct products update at all —
+ *   its stock moves live in its slices (ticket-parts, delete-ticket),
+ *   which call applyStockDelta (3 calls).
  * - tradein.service.ts: its only products update sets
  *   track_serials, and its stock_qty: 0 is a product-creation
  *   INSERT; the stock move goes through applyStockDelta.
