@@ -3,7 +3,7 @@ import { Kysely } from '../../../database/kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
-import { VanFraudRadarService } from '../van-fraud-radar.service';
+import { VanFraudRadarService } from './van-fraud-radar.service';
 import { AuditService } from '../../../core/audit/audit.service';
 import { ComputeAlreadyReturnedQtyBySaleItemSlice } from './van-returns/compute-already-returned-qty.slice';
 import { RefundLegsClusterSlice } from './van-returns/refund-legs-cluster.slice';
