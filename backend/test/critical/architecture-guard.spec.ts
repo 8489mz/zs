@@ -265,7 +265,7 @@ async function main(): Promise<void> {
     { file: 'backend/src/modules/maritime-freight/engines/road-freight.engine.ts', reason: 'maritime freight, set aside (freight/detention/fees; not retail posting)', toFixed2: 0, inlineRound: 11 },
     { file: 'backend/src/modules/maritime-freight/maritime-freight.service.ts', reason: 'maritime freight, set aside (round3 3dp helper; not retail posting)', toFixed2: 0, inlineRound: 0 },
     { file: 'backend/src/modules/maritime-freight/maritime-freight-jobs-core.service.ts', reason: 'maritime freight, set aside (round3 3dp helper; not retail posting)', toFixed2: 0, inlineRound: 1 },
-    { file: 'backend/src/modules/partners/partners.service.ts', reason: 'loyalty-points balance, not money', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/partners/partners/partner-contacts-loyalty.slice.ts', reason: 'loyalty-points balance, not money', toFixed2: 1, inlineRound: 0 },
     { file: 'backend/src/modules/pricing/pricing.service.ts', reason: 'pricing preview (inventory/margin summary, display) + user-selected price rounding (commercial price endings, not book-digits postings)', toFixed2: 7, inlineRound: 0 },
     { file: 'backend/src/modules/purchases/engines/duplicate-bill-detector.engine.ts', reason: 'duplicate-bill comparison normalization (equality check only; no value is stored or posted from it)', toFixed2: 0, inlineRound: 2 },
     { file: 'backend/src/modules/purchases/three-way-match.engine.ts', reason: 'price-delta percentage, not money', toFixed2: 1, inlineRound: 0 },
