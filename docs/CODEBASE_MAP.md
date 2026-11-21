@@ -271,13 +271,13 @@ canonical money engines.
 - Engines: (none)
 - Subdirectories: `dto`, `helpers`
 
-### `backend/src/modules/pharmacy/` (12 files)
+### `backend/src/modules/pharmacy/` (21 files)
 
 - Module: `pharmacy.module.ts`
 - Controllers: `pharmacy.controller.ts`
 - Services: `pharmacy.service.ts`
 - Engines: `engines/distributor-invoice-validation.engine.ts`, `engines/distributor-purchase.engine.ts`
-- Subdirectories: `data`, `dto`, `engines`
+- Subdirectories: `data`, `dto`, `engines`, `pharmacy`
 
 ### `backend/src/modules/pricing/` (4 files)
 
