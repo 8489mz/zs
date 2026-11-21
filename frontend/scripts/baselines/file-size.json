@@ -5,7 +5,6 @@
   "note": "Ratchet baseline: files over the 1000-line cap at the base commit. A file fails the check only if it is over the cap and NOT listed here, or if it GREW past its recorded line count. Shrinkage (including partial splits) passes. Remove an entry when its file drops to <= 1000 lines. Regenerate with --update-baseline only after a reviewed change.",
   "entries": {
     "src/features/accounting/api/accounting.api.ts": 1009,
-    "src/features/accounts/components/SupplierBalanceScheduleCard.tsx": 1074,
     "src/features/ai-copilot/components/AiBusinessCopilotModal.tsx": 1129,
     "src/features/contracting/components/ClientQuotationModal.tsx": 1064,
     "src/features/contracting/components/ContractingBoqTab.tsx": 1304,
