@@ -21,7 +21,6 @@
     "src/features/delivery-reps/components/VanPreSalesAdminTab.tsx": 1140,
     "src/features/delivery-reps/components/VanPromotionsAdminTab.tsx": 1134,
     "src/features/delivery-reps/components/VanRoutesKpiAdminTab.tsx": 1710,
-    "src/features/delivery-reps/components/VanSaleCheckoutModal.tsx": 1485,
     "src/features/delivery-reps/components/VanSaleTab.tsx": 1260,
     "src/features/delivery-reps/components/VanSettleTab.tsx": 1756,
     "src/features/delivery-reps/pages/VanSalesAdminManagementPage.tsx": 1001,
