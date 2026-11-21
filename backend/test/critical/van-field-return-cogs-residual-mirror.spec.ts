@@ -544,10 +544,14 @@ async function main(): Promise<void> {
   // Case 11: source + invariant pins.
   {
     const here = __dirname;
+    // File #63 split: the mirror helper and the fail-closed error moved to
+    // the S8 slice; the shared residual grouping stays via the S8
+    // lazy-getter arrow on the facade.
+    const s8Source = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-van-field-return.slice.ts'), 'utf8');
+    assert.ok(s8Source.includes('vanFieldReturnCogsAmount'), 'the van field-return mirror must exist');
     const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
-    assert.ok(postingSource.includes('vanFieldReturnCogsAmount'), 'the van field-return mirror must exist');
     assert.ok(postingSource.includes('salesReturnCogsResidual'), 'the mirror must reuse the shared residual grouping');
-    assert.ok(postingSource.includes('VAN_FIELD_RETURN_FROZEN_COST_INVALID'), 'the named fail-closed error must exist');
+    assert.ok(s8Source.includes('VAN_FIELD_RETURN_FROZEN_COST_INVALID'), 'the named fail-closed error must exist');
     const returnsSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/approve-field-return.slice.ts'), 'utf8');
     assert.ok(returnsSource.includes('saleId:'), 'approval must pass the sale link to the posting method');
     assert.ok(returnsSource.includes('isDamaged'), 'approval must pass the damaged flag to the posting method');

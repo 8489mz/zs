@@ -493,8 +493,11 @@ async function main(): Promise<void> {
       assert.ok(fieldSalesSource.includes('(isCard || isInstapay) && totalSale > 0'), 'the sale gate covers instapay');
       assert.ok(collectionsSource.includes('isNonCashCollection'), 'the collection gate exists');
       assert.ok(collectionsSource.includes('transferReference: payload.transferReference'), 'the posting call hands the reference over');
+      // File #63 split: the invariant moved to the S7 slice; the transfer
+      // reference stays via the S7 delegate signature on the facade.
+      const s7Source = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-van-field-collection.slice.ts'), 'utf8');
+      assert.ok(s7Source.includes('INV-VAN-FIELD-NONCASH-EVIDENCE-GATE'), 'the posting service names the invariant');
       const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
-      assert.ok(postingSource.includes('INV-VAN-FIELD-NONCASH-EVIDENCE-GATE'), 'the posting service names the invariant');
       assert.ok(postingSource.includes('transferReference?: string'), 'the posting takes a transfer reference');
       const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.controller.ts'), 'utf8');
       const collectionsAt = controllerSource.indexOf("@Post('collections')");

@@ -585,7 +585,8 @@ async function main(): Promise<void> {
     assert.ok(legsSource.includes('REFUND_SALE_LEGS_UNVERIFIABLE'), 'the fail-closed unverifiable-legs refusal must exist');
     const approveSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/approve-field-return.slice.ts'), 'utf8');
     assert.ok(approveSource.includes('REFUND_EXCEEDS_CUSTOMER_BALANCE'), 'the named balance-floor refusal must exist');
-    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
+    // File #63 split: the refund-method guard moved to the S8 slice.
+    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-van-field-return.slice.ts'), 'utf8');
     assert.ok(postingSource.includes('REFUND_METHOD_MISMATCH'), 'the posting boundary must refuse a mismatched refund');
     assert.ok(postingSource.includes('INV-VAN-RETURN-METHOD-MATCH'), 'the posting guard must be marked with the invariant id');
   }

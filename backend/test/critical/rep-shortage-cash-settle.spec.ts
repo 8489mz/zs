@@ -572,7 +572,11 @@ async function main(): Promise<void> {
     assert.ok(vanSource.includes('postRepShortageCashCollection'), 'the settle calls the collection posting');
     assert.ok(vanSource.includes('postRepShortageWaiver'), 'the waiver calls the waiver reversal posting');
     assert.ok(vanSource.includes('rep-shortage-cash:'), 'the deterministic treasury request key exists');
-    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
+    // File #63 split: the collection posting moved to the S3 slice and the
+    // waiver posting to the S4 slice; the facade keeps only thin delegates.
+    const collectionSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-rep-shortage-cash-collection.slice.ts'), 'utf8');
+    const waiverSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-rep-shortage-waiver.slice.ts'), 'utf8');
+    const postingSource = collectionSource + waiverSource;
     assert.ok(postingSource.includes('rep_shortage_cash_collection'), 'the collection journal source type exists');
     assert.ok(postingSource.includes('rep_shortage_waiver'), 'the waiver journal source type exists');
     assert.ok(postingSource.includes('INV-VAN-REP-SHORTAGE-WAIVER-REVERSAL'), 'the waiver posting names the invariant');

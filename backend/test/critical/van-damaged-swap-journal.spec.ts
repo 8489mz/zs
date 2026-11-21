@@ -381,7 +381,9 @@ async function main(): Promise<void> {
       const here = __dirname;
       const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
       assert.ok(postingSource.includes('postVanDamagedSwap'), 'the swap journal is posted by postVanDamagedSwap');
-      assert.ok(postingSource.includes("'van_damaged_swap'"), 'the journal source is van_damaged_swap');
+      // File #63 split: the journal source type moved to the S1 slice.
+      const s1Source = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-van-damaged-swap.slice.ts'), 'utf8');
+      assert.ok(s1Source.includes("'van_damaged_swap'"), 'the journal source is van_damaged_swap');
       const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-collections-and-swaps.service.ts'), 'utf8');
       assert.ok(vanSource.includes('postVanDamagedSwap'), 'executeDamagedSwap posts through postVanDamagedSwap');
       assert.ok(vanSource.includes("'swap_price_adjustment'"), 'the ledger row uses swap_price_adjustment');
