@@ -111,15 +111,19 @@ async function main(): Promise<void> {
 
   // 3. The reset calls the ledger helper, and the three dead files
   //    keep their applyStockDelta path (maintenance, tradein) or
-  //    their slices do (import-sales).
+  //    their slices do (import-sales, maintenance — #66 split).
   const demoSrc = fs.readFileSync(DEMO_DATA, 'utf8');
   assert.ok(
     demoSrc.includes('resetTenantStockToZero(trx, tenantId)'),
     'resetStockBalances must call the ledger reset helper',
   );
   assert.ok(
-    read('backend/src/modules/maintenance/maintenance.service.ts').includes('applyStockDelta(trx,'),
-    'maintenance must still route stock through applyStockDelta',
+    read('backend/src/modules/maintenance/maintenance/ticket-parts.slice.ts').includes('applyStockDelta(trx,'),
+    'maintenance ticket parts must still route stock through applyStockDelta',
+  );
+  assert.ok(
+    read('backend/src/modules/maintenance/maintenance/delete-ticket.slice.ts').includes('applyStockDelta(trx,'),
+    'maintenance delete ticket must still route stock through applyStockDelta',
   );
   assert.ok(
     read('backend/src/modules/tradein/tradein.service.ts').includes('applyStockDelta(trx,'),

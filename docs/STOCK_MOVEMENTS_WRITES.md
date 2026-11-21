@@ -5,7 +5,7 @@
 - The ledger (`applyStockDelta` in `backend/src/common/utils/location-stock-ledger.ts`) updates balances; each caller still writes its own `stock_movements` row. That split is the risk this inventory exists to close in Phase 1 (single writer).
 - `paired` below is file-level (YES if the same file calls `applyStockDelta` anywhere) — deterministic and reproducible. It does NOT prove the ledger call and the row happen in the same branch: see the notes, especially the archive residual.
 - FIXED ASYMMETRY (catalog archive, INV-STOCK-MOVEMENTS-ARCHIVE-ROW): `toggleProductArchive` used to call `applyStockDelta` for the residual global stock (`-remainingGlobal`) with NO `stock_movements` row for it. It now writes the row at line 331, mirroring the sibling deduct rows (same type, reason, reference, cost, posting call) — before_qty remainingGlobal, after_qty 0, qty -remainingGlobal. A zero residual writes no row.
-- Resolves the map's UNVERIFIED maintenance path: `maintenance/maintenance.service.ts:992,1116,1218` are all real inserts (maintenance_consumption / maintenance_return), listed below.
+- Resolves the map's UNVERIFIED maintenance path: `maintenance/maintenance/ticket-parts.slice.ts:144,268` and `maintenance/maintenance/delete-ticket.slice.ts:95` are all real inserts (maintenance_consumption / maintenance_return), listed below.
 - This document is pinned by `backend/test/critical/stock-movements-writes.spec.ts` (INV-STOCK-MOVEMENTS-WRITE-INVENTORY): the scanned write count must equal 68 and every `file:line` below must be listed.
 
 ## Per-module totals
@@ -58,9 +58,9 @@
 | backend/src/modules/inventory/services/quality-assurance.service.ts:340 | insert | transfer_send | no | File never calls applyStockDelta — balances for QA moves are not routed through the ledger. Phase 1: verify per caller. |
 | backend/src/modules/inventory/services/quality-assurance.service.ts:349 | insert | transfer_receive | no | File never calls applyStockDelta — see above. |
 | backend/src/modules/inventory/services/warehouse-bins.service.ts:111 | insert | expr: args.movementType | no | Shared writer helper (takes movement args, writes one row); the ledger call lives with the caller. Phase 1: verify per caller. |
-| backend/src/modules/maintenance/maintenance.service.ts:992 | insert | maintenance_consumption | yes |  |
-| backend/src/modules/maintenance/maintenance.service.ts:1116 | insert | maintenance_return | yes |  |
-| backend/src/modules/maintenance/maintenance.service.ts:1218 | insert | maintenance_return | yes |  |
+| backend/src/modules/maintenance/maintenance/ticket-parts.slice.ts:144 | insert | maintenance_consumption | yes |  |
+| backend/src/modules/maintenance/maintenance/ticket-parts.slice.ts:268 | insert | maintenance_return | yes |  |
+| backend/src/modules/maintenance/maintenance/delete-ticket.slice.ts:95 | insert | maintenance_return | yes |  |
 | backend/src/modules/manufacturing/services/manufacturing.service.ts:415 | insert | manufacturing_consumption | yes |  |
 | backend/src/modules/manufacturing/services/manufacturing.service.ts:487 | insert | manufacturing_production | yes |  |
 | backend/src/modules/manufacturing/services/manufacturing.service.ts:516 | insert | manufacturing_byproduct | yes |  |
