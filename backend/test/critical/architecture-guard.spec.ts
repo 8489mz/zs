@@ -226,7 +226,7 @@ async function main(): Promise<void> {
     { file: 'backend/src/modules/delivery-reps/route-optimization.engine.ts', reason: 'route distances in km, not money', toFixed2: 5, inlineRound: 0 },
     { file: 'backend/src/modules/delivery-reps/services/van-fleet/van-fleet-fuel.slice.ts', reason: 'fuel consumption rate km/litre, not money', toFixed2: 1, inlineRound: 0 },
     { file: 'backend/src/modules/delivery-reps/services/van-fraud-radar.service.ts', reason: 'message text (amount formatted into a fraud alert), display only', toFixed2: 1, inlineRound: 0 },
-    { file: 'backend/src/modules/delivery-reps/services/van-routes.service.ts', reason: 'fuel efficiency km/litre, not money', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/delivery-reps/services/van-routes/van-routes-supervisor.slice.ts', reason: 'fuel efficiency km/litre, not money', toFixed2: 1, inlineRound: 0 },
     { file: 'backend/src/modules/delivery-reps/services/van-transfers.service.ts', reason: 'van transfer retail value adjusting the sender trip loaded_amount (operational; transfers post no journal — stock movement only); the value now rounds through roundMoney at tenant book digits (INV-VAN-TRANSFER-LOADED-AMOUNT-3DP), zero hardcoded 2dp sites', toFixed2: 0, inlineRound: 0 },
     { file: 'backend/src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts', reason: 'message text (invoice notes / discount percentage in refusal messages), display only', toFixed2: 4, inlineRound: 0 },
     { file: 'backend/src/modules/delivery-reps/services/van-collections-and-swaps/execute-damaged-swap.slice.ts', reason: 'message text (damaged-swap price difference in the Arabic success message), display only', toFixed2: 2, inlineRound: 0 },
