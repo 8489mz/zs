@@ -116,6 +116,57 @@ export async function parseImportFile(file: File): Promise<Record<string, string
 
 export function parseCsvRows(text: string) {
   const lines = text.replace(/^\ufeff/, '').split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length === 0) return [];
+
+  // Auto-detect headerless ZKTeco / Realand raw attendance log (.dat / _attlog.dat / .txt)
+  const zkRegex = /^\s*([A-Za-z0-9_-]+)\s+(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})\s+(\d{1,2}:\d{2}(?::\d{2})?)(?:\s+(\d+))?(?:\s+(\d+))?/;
+  if (zkRegex.test(lines[0])) {
+    const grouped = new Map<string, Array<{ time: string; sec: number; dir: string }>>();
+    for (const rawLine of lines) {
+      const m = rawLine.match(zkRegex);
+      if (!m) continue;
+      const pin = m[1].trim();
+      const dateParts = m[2].split(/[-/.]/);
+      const workDate = `${dateParts[0]}-${dateParts[1].padStart(2, '0')}-${dateParts[2].padStart(2, '0')}`;
+      const timeTokens = m[3].split(':');
+      const hh = timeTokens[0].padStart(2, '0');
+      const mm = (timeTokens[1] || '00').padStart(2, '0');
+      const ss = (timeTokens[2] || '00').padStart(2, '0');
+      const time = `${hh}:${mm}:${ss}`;
+      const sec = Number(hh) * 3600 + Number(mm) * 60 + Number(ss);
+      const dir = m[5] || '0';
+      const key = `${pin}__${workDate}`;
+      const arr = grouped.get(key);
+      if (arr) arr.push({ time, sec, dir });
+      else grouped.set(key, [{ time, sec, dir }]);
+    }
+
+    const aggregatedRows: Record<string, string>[] = [];
+    for (const [key, punches] of grouped.entries()) {
+      const [pin, workDate] = key.split('__');
+      punches.sort((a, b) => a.sec - b.sec);
+      const effective: typeof punches = [];
+      for (const p of punches) {
+        if (!effective.length || Math.abs(p.sec - effective[effective.length - 1].sec) > 180) {
+          effective.push(p);
+        }
+      }
+      const checkIn = effective[0]?.time.slice(0, 5) || '';
+      const last = effective.length >= 2 ? effective[effective.length - 1] : null;
+      const checkOut =
+        last && (last.sec - effective[0].sec >= 600 || last.dir === '1' || last.dir === '5')
+          ? last.time.slice(0, 5)
+          : '';
+      aggregatedRows.push({
+        'كود الموظف': pin,
+        'التاريخ': workDate,
+        'وقت الحضور': checkIn,
+        'وقت الانصراف': checkOut,
+      });
+    }
+    return aggregatedRows.sort((a, b) => b['التاريخ'].localeCompare(a['التاريخ']));
+  }
+
   if (lines.length < 2) return [];
   const parseLine = (line: string) => {
     const values: string[] = [];

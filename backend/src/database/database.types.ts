@@ -1929,11 +1929,33 @@ export interface HrPositionTable extends HrDepartmentTable {
   location_id: number | null;
 }
 
+export interface HrBiometricDeviceTable {
+  id: Generated<number>;
+  tenant_id: ColumnType<string, string | undefined, string | undefined>;
+  account_id: ColumnType<string, string | undefined, string | undefined>;
+  device_name: string;
+  serial_number: string;
+  device_brand: string;
+  device_model: string | null;
+  ip_address: string | null;
+  port: number;
+  comm_key: string | null;
+  branch_name: string | null;
+  status: 'active' | 'inactive';
+  last_sync_at: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;
+  total_punches_received: ColumnType<number, number | undefined, number | undefined>;
+  notes: string | null;
+  created_by: number | null;
+  created_at: ColumnType<Date, string | undefined, never>;
+  updated_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
+}
+
 export interface HrEmployeeTable {
   tenant_id: ColumnType<string, string | undefined, string | undefined>;
   account_id: ColumnType<string, string | undefined, string | undefined>;
   id: Generated<number>;
   employee_no: string;
+  biometric_pin?: string | null;
   pin_hash?: string | null;
   pin_salt?: string | null;
   national_id: string | null;
@@ -2652,6 +2674,7 @@ export interface Database {
   hr_employee_loan_installments: HrEmployeeLoanInstallmentTable;
   hr_employee_ledger: HrEmployeeLedgerTable;
   hr_attendance_records: HrAttendanceRecordTable;
+  hr_biometric_devices: HrBiometricDeviceTable;
   hr_attendance_exceptions: HrAttendanceExceptionTable;
   hr_leave_types: HrLeaveTypeTable;
   hr_leave_requests: HrLeaveRequestTable;
@@ -2923,6 +2946,7 @@ export interface Database {
   hr_employee_loan_installments: HrEmployeeLoanInstallmentTable;
   hr_employee_ledger: HrEmployeeLedgerTable;
   hr_attendance_records: HrAttendanceRecordTable;
+  hr_biometric_devices: HrBiometricDeviceTable;
   hr_attendance_exceptions: HrAttendanceExceptionTable;
   hr_leave_types: HrLeaveTypeTable;
   hr_leave_requests: HrLeaveRequestTable;

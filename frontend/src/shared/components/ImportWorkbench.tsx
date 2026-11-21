@@ -336,7 +336,7 @@ export function ImportWorkbench({
               <input
                 type="file"
                 style={{ display: 'none' }}
-                accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                accept=".csv,text/csv,.xlsx,.xls,.dat,.txt,.log,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 onChange={async (event) => {
                   const input = event.currentTarget;
                   await handleFileSelect(input.files?.[0]);

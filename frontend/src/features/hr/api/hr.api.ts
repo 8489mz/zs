@@ -192,6 +192,93 @@ export const hrApi = {
   deleteHoliday: (id: string) => http(`/api/hr/holidays/${id}`, { method: 'DELETE' }),
   financialStatement: (employeeId: string | number, params: { from?: string; to?: string; month?: string } = {}) =>
     http<any>(`/api/hr/employees/${employeeId}/financial-statement${buildQueryString(params)}`),
+  biometricDevices: () =>
+    http<{
+      devices: Array<{
+        id: number;
+        deviceName: string;
+        serialNumber: string;
+        deviceBrand: string;
+        deviceModel: string | null;
+        ipAddress: string | null;
+        port: number;
+        commKey: string;
+        branchName: string | null;
+        status: 'active' | 'inactive';
+        lastSyncAt: string | null;
+        totalPunchesReceived: number;
+        notes: string | null;
+      }>;
+      employeePins: Array<{
+        id: number;
+        employeeNo: string;
+        biometricPin: string | null;
+        displayName: string;
+      }>;
+      admsPushPath: string;
+    }>('/api/hr/biometric/devices'),
+  saveBiometricDevice: (payload: Record<string, unknown>, id?: number | null) =>
+    http<any>(`/api/hr/biometric/devices${id ? `/${id}` : ''}`, {
+      method: id ? 'PUT' : 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deleteBiometricDevice: (id: number) =>
+    http<any>(`/api/hr/biometric/devices/${id}`, { method: 'DELETE' }),
+  testBiometricDeviceLan: (id: number) =>
+    http<{
+      reachable: boolean;
+      ip: string;
+      port: number;
+      responseCode?: number;
+      requiresCommKey?: boolean;
+      latencyMs?: number;
+      message: string;
+    }>(`/api/hr/biometric/devices/${id}/test-lan`, { method: 'POST' }),
+  pullBiometricDeviceLan: (id: number) =>
+    http<{
+      pulledPunchesCount: number;
+      deviceUsersCount: number;
+      deviceUsers?: any[];
+      imported: number;
+      skipped: number;
+      message: string;
+      errors?: string[];
+    }>(`/api/hr/biometric/devices/${id}/pull-lan`, { method: 'POST' }),
+  assignEmployeeBiometricPin: (employeeId: number, biometricPin: string | null) =>
+    http<any>(`/api/hr/biometric/employee-pin/${employeeId}`, {
+      method: 'POST',
+      body: JSON.stringify({ biometricPin }),
+    }),
+  previewBiometricLog: (payload: {
+    rawText?: string;
+    base64UserDat?: string;
+    debounceMinutes?: number;
+    columnMapping?: Record<string, unknown>;
+  }) =>
+    http<any>('/api/hr/biometric/preview-log', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  importBiometricLog: (payload: {
+    rawText: string;
+    debounceMinutes?: number;
+    onlyOpenPayrollMonth?: boolean;
+    columnMapping?: Record<string, unknown>;
+  }) =>
+    http<{
+      imported: number;
+      skipped: number;
+      historicalSkipped: number;
+      unmatchedSkipped: number;
+      unmatchedPins: string[];
+      totalRawPunches: number;
+      deduplicatedTaps: number;
+      errors: string[];
+    }>('/api/hr/biometric/import-log', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      timeoutMs: CSV_IMPORT_TIMEOUT_MS,
+    }),
 };
 
 

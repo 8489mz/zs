@@ -34,6 +34,8 @@ import { DailyAttendanceTable } from '../components/attendance/DailyAttendanceTa
 import { AttendanceRangeTable } from '../components/attendance/AttendanceRangeTable';
 import { EmployeePeriodSummaryCard } from '../components/attendance/EmployeePeriodSummaryCard';
 import { ManualAttendanceModal } from '../components/attendance/ManualAttendanceModal';
+import { BiometricIntegrationModal } from '../components/attendance/BiometricIntegrationModal';
+import { AttendancePageToolbar } from '../components/attendance/AttendancePageToolbar';
 
 type PeriodMode = 'day' | 'week' | 'last_week' | 'month' | 'last_month' | 'custom';
 
@@ -158,6 +160,7 @@ export function HrAttendancePage() {
   const [draftByEmployeeId, setDraftByEmployeeId] = useState<Record<string, DraftRow>>({});
   const [modifiedEmployeeIds, setModifiedEmployeeIds] = useState<Set<string>>(new Set());
   const [importOpen, setImportOpen] = useState(false);
+  const [biometricModalOpen, setBiometricModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'attendance' | 'exceptions'>('attendance');
   const [manualPrompt, setManualPrompt] = useState<ManualAttendancePrompt>(null);
   const [manualTimeInput, setManualTimeInput] = useState('');
@@ -569,8 +572,15 @@ export function HrAttendancePage() {
           description={t('hr.hr_attendance_page.s1', "تسجيل الحضور اليومي، مراجعة الاستثناءات والتأخير والأوفر تايم في شاشة واحدة.")}
           actions={
             <div className="actions compact-actions no-print">
+              <Button
+                variant="primary"
+                onClick={() => setBiometricModalOpen(true)}
+                style={{ backgroundColor: '#170e5e', color: '#ffffff' }}
+              >
+                {t('hr.hr_attendance_page.biometric_hub', "أجهزة البصمة والربط السحابي")}
+              </Button>
               <Button variant={importOpen ? 'primary' : 'secondary'} onClick={() => setImportOpen(!importOpen)}>
-                {t('hr.hr_attendance_page.s2', "استيراد")}
+                {t('hr.hr_attendance_page.s2', "استيراد إكسيل")}
               </Button>
               {canViewPayroll && <Button variant="secondary" onClick={() => navigate('/hr/payroll')}>{t('hr.hr_attendance_page.s3', "المرتبات")}</Button>}
               {canViewEmployees && <Button variant="secondary" onClick={() => navigate('/hr/employees')}>{t('hr.hr_attendance_page.s4', "الموظفون")}</Button>}
@@ -620,372 +630,41 @@ export function HrAttendancePage() {
           )}
 
           {/* Unified Anti-Clutter Toolbar */}
-          <div
-            className="no-print"
-            style={{
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
-              borderRadius: '10px',
-              padding: '12px 14px',
-              marginBottom: '14px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px',
-            }}
-          >
-            {/* Row 1: Periods & Dates */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-              {/* Presets Pills */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                <Button
-                  type="button"
-                  variant={viewMode === 'day' ? 'primary' : 'secondary'}
-                  onClick={() => selectPeriod('day')}
-                  style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                >
-                  اليوم
-                </Button>
-                <Button
-                  type="button"
-                  variant={viewMode === 'week' ? 'primary' : 'secondary'}
-                  onClick={() => selectPeriod('week')}
-                  style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                >
-                  الأسبوع الحالي
-                </Button>
-                <Button
-                  type="button"
-                  variant={viewMode === 'last_week' ? 'primary' : 'secondary'}
-                  onClick={() => selectPeriod('last_week')}
-                  style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                >
-                  الأسبوع الماضي
-                </Button>
-                <Button
-                  type="button"
-                  variant={viewMode === 'month' ? 'primary' : 'secondary'}
-                  onClick={() => selectPeriod('month')}
-                  style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                >
-                  الشهر الحالي
-                </Button>
-                <Button
-                  type="button"
-                  variant={viewMode === 'last_month' ? 'primary' : 'secondary'}
-                  onClick={() => selectPeriod('last_month')}
-                  style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                >
-                  الشهر الماضي
-                </Button>
-                <Button
-                  type="button"
-                  variant={viewMode === 'custom' ? 'primary' : 'secondary'}
-                  onClick={() => selectPeriod('custom')}
-                  style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                >
-                  فترة مخصصة
-                </Button>
-              </div>
-
-              {/* Date pickers with quick Day Stepper */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                {viewMode === 'day' ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                    <button
-                      type="button"
-                      onClick={() => stepDay(-1)}
-                      title="اليوم السابق"
-                      style={{
-                        background: '#ffffff',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '5px',
-                        padding: '4px 8px',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        color: '#334155',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      › السابق
-                    </button>
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e) => {
-                        const v = normalizeArabicDigits(e.target.value || todayDate());
-                        setDate(v);
-                        setRangeFrom(v);
-                        setRangeTo(v);
-                      }}
-                      style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', background: '#fff' }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => stepDay(1)}
-                      title="اليوم التالي"
-                      style={{
-                        background: '#ffffff',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '5px',
-                        padding: '4px 8px',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        color: '#334155',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      التالي ‹
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>من:</span>
-                      <input
-                        type="date"
-                        value={rangeFrom}
-                        max={rangeTo}
-                        onChange={(e) => {
-                          setRangeFrom(e.target.value);
-                          setViewMode('custom');
-                          setRangePage(1);
-                        }}
-                        style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', background: '#fff' }}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>إلى:</span>
-                      <input
-                        type="date"
-                        value={rangeTo}
-                        min={rangeFrom}
-                        onChange={(e) => {
-                          setRangeTo(e.target.value);
-                          setViewMode('custom');
-                          setRangePage(1);
-                        }}
-                        style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', background: '#fff' }}
-                      />
-                    </div>
-                  </>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => selectPeriod('day')}
-                  style={{
-                    background: '#e0e7ff',
-                    border: 'none',
-                    color: '#170e5e',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    borderRadius: '4px',
-                    padding: '4px 8px',
-                    cursor: 'pointer',
-                  }}
-                  title="العودة لليوم الحالي"
-                >
-                  اليوم
-                </button>
-              </div>
-            </div>
-
-            {/* Row 2: Selectors & Actions (Optimized for 14" to 32" screens) */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '8px',
-                borderTop: '1px solid #e2e8f0',
-                paddingTop: '8px',
-              }}
-            >
-              {/* Employee Combobox & Department Select */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                <div style={{ width: '235px' }}>
-                  <CustomSelect
-                    value={selectedEmployeeId}
-                    onChange={(val) => {
-                      setSelectedEmployeeId(val);
-                      setRangePage(1);
-                    }}
-                    options={[
-                      { value: '', label: 'جميع الموظفين النشطين' },
-                      ...activeEmployees.map((emp) => ({
-                        value: emp.id,
-                        label: emp.displayName || emp.firstName || 'موظف',
-                        hint: emp.employeeNo ? `#${emp.employeeNo}` : '',
-                        code: String(emp.employeeNo || emp.id || ''),
-                      })),
-                    ]}
-                    placeholder="ابحث أو اختر الموظف..."
-                  />
-                </div>
-
-                <div style={{ width: '140px' }}>
-                  <CustomSelect
-                    value={selectedDepartmentId}
-                    onChange={(val) => {
-                      setSelectedDepartmentId(val);
-                      setRangePage(1);
-                    }}
-                    options={[
-                      { value: '', label: 'كافة الأقسام' },
-                      ...departments.map((d) => ({ value: d.id, label: d.name })),
-                    ]}
-                    placeholder="كافة الأقسام"
-                  />
-                </div>
-
-                {/* Sub Tab Buttons: Attendance vs Exceptions */}
-                <div style={{ display: 'flex', gap: '2px', background: '#e2e8f0', padding: '2px', borderRadius: '6px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('attendance')}
-                    style={{
-                      border: 'none',
-                      background: activeTab === 'attendance' ? '#ffffff' : 'transparent',
-                      color: activeTab === 'attendance' ? '#170e5e' : '#64748b',
-                      fontWeight: activeTab === 'attendance' ? 700 : 500,
-                      padding: '4px 8px',
-                      borderRadius: '5px',
-                      fontSize: '0.78rem',
-                      cursor: 'pointer',
-                      boxShadow: activeTab === 'attendance' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    سجل الحضور
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('exceptions')}
-                    style={{
-                      border: 'none',
-                      background: activeTab === 'exceptions' ? '#ffffff' : 'transparent',
-                      color: activeTab === 'exceptions' ? '#170e5e' : '#64748b',
-                      fontWeight: activeTab === 'exceptions' ? 700 : 500,
-                      padding: '4px 8px',
-                      borderRadius: '5px',
-                      fontSize: '0.78rem',
-                      cursor: 'pointer',
-                      boxShadow: activeTab === 'exceptions' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <span>استثناءات الشهر</span>
-                    {summary.needsAction > 0 && (
-                      <span style={{ background: '#dc2626', color: '#ffffff', borderRadius: '10px', padding: '0 5px', fontSize: '0.68rem', fontWeight: 800 }}>
-                        {summary.needsAction}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Actions Right/Left */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                {activeTab === 'attendance' && !isRange && (
-                  <>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={handleMarkAllPresentByShift}
-                      style={{ padding: '4px 8px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
-                      title="تسجيل حضور الموظفين غير المسجلين بالوردية المحددة لهم"
-                    >
-                      تسجيل حضور الكل بالوردية
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={handleSaveAllChanges}
-                      disabled={isSavingBatch || dirtyRows.length === 0}
-                      style={{
-                        padding: '4px 10px',
-                        fontSize: '0.8rem',
-                        fontWeight: 700,
-                        background: dirtyRows.length > 0 ? '#170e5e' : '#f1f5f9',
-                        color: dirtyRows.length > 0 ? '#ffffff' : '#94a3b8',
-                        border: dirtyRows.length > 0 ? 'none' : '1px solid #cbd5e1',
-                        cursor: dirtyRows.length > 0 ? 'pointer' : 'default',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {isSavingBatch ? 'جاري الحفظ...' : `حفظ كافة التعديلات (${dirtyRows.length})`}
-                    </Button>
-                  </>
-                )}
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleExportCsv}
-                  style={{ padding: '4px 8px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
-                >
-                  تصدير إكسيل
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => window.print()}
-                  style={{ padding: '4px 8px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
-                >
-                  طباعة الكشف
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Exceptions Toolbar (when in exceptions tab) */}
-          {activeTab === 'exceptions' && (
-            <div
-              className="no-print"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                flexWrap: 'wrap',
-                background: '#f8fafc',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                marginBottom: '14px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>الشهر:</span>
-                <input
-                  type="month"
-                  value={exceptionMonth}
-                  onChange={(e) => setExceptionMonth(normalizeArabicDigits(e.target.value || todayDate().slice(0, 7)))}
-                  style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', background: '#fff' }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: '4px' }}>
-                <Button type="button" variant={exceptionFilter === 'needs_action' ? 'primary' : 'secondary'} onClick={() => setExceptionFilter('needs_action')} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>يحتاج إجراء</Button>
-                <Button type="button" variant={exceptionFilter === 'overtime' ? 'primary' : 'secondary'} onClick={() => setExceptionFilter('overtime')} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>إضافي</Button>
-                <Button type="button" variant={exceptionFilter === 'deduction' ? 'primary' : 'secondary'} onClick={() => setExceptionFilter('deduction')} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>خصم</Button>
-                <Button type="button" variant={exceptionFilter === 'all' ? 'primary' : 'secondary'} onClick={() => setExceptionFilter('all')} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>الكل</Button>
-              </div>
-            </div>
-          )}
-
-          {/* Daily Status Filter Pills (when in Daily mode) */}
-          {activeTab === 'attendance' && !isRange && (
-            <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569' }}>تصفية الحالة:</span>
-              <div style={{ display: 'flex', gap: '4px' }}>
-                <Button type="button" variant={attendanceFilter === 'all' ? 'primary' : 'secondary'} onClick={() => setAttendanceFilter('all')} style={{ padding: '3px 10px', fontSize: '0.78rem' }}>الكل ({rows.length})</Button>
-                <Button type="button" variant={attendanceFilter === 'unmarked' ? 'primary' : 'secondary'} onClick={() => setAttendanceFilter('unmarked')} style={{ padding: '3px 10px', fontSize: '0.78rem' }}>لم يسجل ({summary.unmarked})</Button>
-                <Button type="button" variant={attendanceFilter === 'recorded' ? 'primary' : 'secondary'} onClick={() => setAttendanceFilter('recorded')} style={{ padding: '3px 10px', fontSize: '0.78rem' }}>مسجل ({summary.present + summary.absent + summary.late})</Button>
-              </div>
-            </div>
-          )}
+          <AttendancePageToolbar
+            viewMode={viewMode}
+            selectPeriod={selectPeriod}
+            stepDay={stepDay}
+            date={date}
+            setDate={setDate}
+            rangeFrom={rangeFrom}
+            setRangeFrom={setRangeFrom}
+            rangeTo={rangeTo}
+            setRangeTo={setRangeTo}
+            setViewMode={setViewMode}
+            setRangePage={setRangePage}
+            selectedEmployeeId={selectedEmployeeId}
+            setSelectedEmployeeId={setSelectedEmployeeId}
+            activeEmployees={activeEmployees}
+            selectedDepartmentId={selectedDepartmentId}
+            setSelectedDepartmentId={setSelectedDepartmentId}
+            departments={departments}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            summary={summary}
+            isRange={isRange}
+            handleMarkAllPresentByShift={handleMarkAllPresentByShift}
+            handleSaveAllChanges={handleSaveAllChanges}
+            isSavingBatch={isSavingBatch}
+            dirtyRowsCount={dirtyRows.length}
+            handleExportCsv={handleExportCsv}
+            exceptionMonth={exceptionMonth}
+            setExceptionMonth={setExceptionMonth}
+            exceptionFilter={exceptionFilter}
+            setExceptionFilter={setExceptionFilter}
+            attendanceFilter={attendanceFilter}
+            setAttendanceFilter={setAttendanceFilter}
+            totalRowsCount={rows.length}
+          />
 
           {/* KPI Summary Banner */}
           <div className="no-print">
@@ -1117,6 +796,15 @@ export function HrAttendancePage() {
             }}
             serverTime={attendance.data?.serverTime}
             serverTimezone={attendance.data?.serverTimezone}
+          />
+
+          <BiometricIntegrationModal
+            open={biometricModalOpen}
+            onClose={() => setBiometricModalOpen(false)}
+            onImported={() => {
+              void attendance.refetch();
+              void exceptions.refetch();
+            }}
           />
         </div>
       </main>

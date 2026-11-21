@@ -15,6 +15,11 @@ import { EndOfServiceService } from './services/end-of-service.service';
 import { EndOfServiceController } from './controllers/end-of-service.controller';
 import { RecruitmentAtsController } from './controllers/recruitment-ats.controller';
 import { RecruitmentAtsService } from './services/recruitment-ats.service';
+import {
+  BiometricAdmsWebhookController,
+  BiometricAttendanceController,
+} from './controllers/biometric-attendance.controller';
+import { BiometricAttendanceService } from './services/biometric-attendance.service';
 
 @Module({
   imports: [DatabaseModule, AuditModule, AuthFoundationModule, AccountingModule, CashDrawerModule],
@@ -24,6 +29,8 @@ import { RecruitmentAtsService } from './services/recruitment-ats.service';
     EmployeePortalController,
     EndOfServiceController,
     RecruitmentAtsController,
+    BiometricAttendanceController,
+    BiometricAdmsWebhookController,
   ],
   providers: [
     HrService,
@@ -32,12 +39,14 @@ import { RecruitmentAtsService } from './services/recruitment-ats.service';
     EmployeePortalService,
     EndOfServiceService,
     RecruitmentAtsService,
+    BiometricAttendanceService,
   ],
   exports: [
     MobileAttendanceService,
     EmployeePortalService,
     EndOfServiceService,
     RecruitmentAtsService,
+    BiometricAttendanceService,
   ],
 })
 export class HrModule {}

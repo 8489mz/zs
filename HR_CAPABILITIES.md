@@ -345,4 +345,25 @@
     5. Double-entry accounting GL balance reconciliation (total debit = total credit, discrepancy = 0.00).
 <!-- migrated:cap-237:end -->
 
+## Universal Biometric Attendance Integration: Raw File Parser, Binary `user.dat` Decoder, Cloud ADMS Push & LAN Sync (21 November 2026)
+
+- **Pure Biometric Log Parser & Daily Punch Aggregator (`backend/src/modules/hr/engines/biometric-log-parser.engine.ts`):**
+  - Directly parses headerless ZKTeco / Realand / ZK-OEM USB attendance files (`attlog.dat`, `.dat`, `.txt`), Hikvision / Dahua / Anviz single-punch CSV/Excel logs, and pre-paired attendance tables in **any column order** without requiring intermediate Excel formatting.
+  - **Content-Based Heuristic Column Auto-Detector & Explicit Mapping Override (`autoDetectBiometricColumns`):** Scans sample rows and headers against temporal patterns (`YYYY-MM-DD HH:MM:SS`, `DD/MM/YYYY`, `HH:MM AM/PM`) and tenant employee PINs (`knownEmployeePins`) to automatically identify `pinColIndex`, `dateTimeColIndex`, `dateColIndex`, `checkInTimeColIndex`, `checkOutTimeColIndex`, and `directionColIndex` regardless of column order, while exposing `columnMapping` overrides for interactive UI customization.
+  - **Smart Daily First-In / Last-Out Pairing & Debounce:** Groups punches per `(pin, workDate)`, deduplicates accidental consecutive double-taps within a configurable debounce window (`debounceMinutes`, default 3 minutes), assigns earliest punch to `checkInAt` and latest punch (if session span >= 10 minutes or explicit check-out status) to `checkOutAt`, and leaves single-punch days with `checkOutAt = null` so they surface in `HrAttendanceExceptionsService` (`missing_check_out`).
+  - **ZKTeco 72-Byte Binary `user.dat` Decoder (`parseZkUserDatBuffer`):** Decodes raw binary `user.dat` dumps from ZKTeco TFT terminals (such as IN01-A, K40, F18) to extract `uid`, `userId`, `name`, `privilegeRole` (`super_admin` code 14, `admin`, `usb_manager` code 8, `user` code 0), and registered plaintext PIN/password.
+  - **3-Tier Employee PIN Resolver (`buildBiometricEmployeeResolver`):** Maps numeric hardware PINs to active HR employees in $O(1)$ via: (1) explicit `hr_employees.biometric_pin`, (2) exact `employee_no`, or (3) unambiguous numeric core (`4645` -> `EMP-04645`).
+- **Backend Biometric Service, ADMS Webhook & LAN UDP Tester (`backend/src/modules/hr/services/biometric-attendance.service.ts`, `backend/src/modules/hr/controllers/biometric-attendance.controller.ts`):**
+  - Migration `2040000000341_hr_biometric_devices_and_logs.ts`: created `hr_biometric_devices` (unique `serial_number` for tenant-isolated ADMS routing, `ip_address`, `port`, `comm_key`, `last_sync_at`, `total_punches_received`) and added `biometric_pin` to `hr_employees`.
+  - **ZKTeco ADMS / iClock Cloud Push Protocol (`GET / POST /api/hr/biometric/iclock/cdata` & `/iclock/cdata`):** Authenticates hardware terminals strictly by active registered `serial_number`, resolves `tenant_id`, pairs live incoming `ATTLOG` punches against existing same-day `hr_attendance_records`, and routes writes through `HrService.bulkImportAttendanceRecords` (preserving open-payroll-month bounds, advisory lock, and exception refresh).
+  - **Direct LAN UDP Connectivity Probe & Live Attendance Pull (`POST /api/hr/biometric/devices/:id/test-lan` & `POST /api/hr/biometric/devices/:id/pull-lan`):** Sends 8-byte ZKTeco `CMD_CONNECT` (`1000`) UDP packets to `ip_address:port` (default `4370`), authenticates via `CMD_AUTH` (`1102` / `makeZkCommKeyPayload`) when `2005` is returned, and pulls device users (`CMD_USERTEMP_RRQ = 9`) and buffered attendance logs (`CMD_ATTLOG_RRQ = 13` / `decodeZkPackedTimestamp`) directly over the local network without a USB flash drive.
+  - **Self-Healing Schema Guard (`ensureBiometricSchema`):** Guarantees `hr_biometric_devices` and `hr_employees.biometric_pin` exist idempotently on first access even before a full migration restart.
+- **Frontend Biometric Hub Modal (`frontend/src/features/hr/components/attendance/BiometricIntegrationModal.tsx`, `HrAttendancePage.tsx`, `frontend/src/lib/browser.ts`):**
+  - 3-tab `StandardDialog` (file upload & `user.dat` decoder + 1-click CSV converter + unmatched PIN quick-linker; Cloud ADMS / LAN devices manager; employee biometric PIN directory).
+  - Also upgraded `parseCsvRows` in `frontend/src/lib/browser.ts` and `ImportWorkbench.tsx` to accept `.dat` / `.txt` files directly.
+- **Limitations:** Direct UDP LAN test requires the backend runtime to be on the same local subnet as the biometric terminal (e.g. `SELF_CONTAINED` desktop or local server); cloud deployments receive real-time punches via the HTTP ADMS Push endpoint (`/api/hr/biometric/iclock/cdata`) or USB `.dat` file upload.
+- **Verification Evidence (2026-11-21):**
+  - `npx --prefix backend ts-node backend/src/modules/hr/engines/biometric-log-parser.engine.spec.ts` — passed all assertions (ZKTeco `attlog.dat` 6-second double-tap debounce, First-In/Last-Out pairing, single-punch handling, CSV parsing, 3-tier PIN resolution, and 72-byte binary `user.dat` Super Admin extraction).
+
+
 
