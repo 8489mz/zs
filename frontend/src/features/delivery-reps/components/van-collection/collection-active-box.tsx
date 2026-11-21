@@ -12,7 +12,7 @@ export interface CollectionActiveBoxProps {
   onColAmountChange: (val: string) => void;
   onColCustomerChange: (val: number | '') => void;
   onSubmitCollection: () => void;
-  selectedCustomer: CustomerOption | null;
+  selectedCustomer: CustomerOption;
 }
 
 export function CollectionActiveBox({
