@@ -279,7 +279,9 @@ async function main(): Promise<void> {
   // ARCHITECTURE_INVARIANTS.md entry itself is owned by the
   // coordinator and is not pinned here.)
   {
-    const vanSource = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'), 'utf8');
+    // File #59 split: pushRepShortagesToPayroll moved to the S5 slice; the
+    // facade keeps only a thin delegate.
+    const vanSource = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/push-rep-shortages-to-payroll.slice.ts'), 'utf8');
     assert.ok(vanSource.includes('INV-PAYROLL-PUSH-FAIL-CLOSED'), 'van-sales names the invariant');
     assert.ok(vanSource.includes("amount_type: 'money'"), 'the push writes the money unit');
     assert.ok(!vanSource.includes("amount_type: 'fixed'"), 'the push no longer writes the fixed unit');

@@ -226,7 +226,8 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     assert.notDeepEqual(oldIds, newIds, `OLD (CURRENT_DATE) and NEW (tenant day) period-passed sets must differ (old=${JSON.stringify(oldIds)} new=${JSON.stringify(newIds)})`);
     const expectedNew = tenantDay > utcDay ? [2] : [];
     assert.deepEqual(newIds, expectedNew, `NEW set must be the tenant-day expectation ${JSON.stringify(expectedNew)}, got ${JSON.stringify(newIds)}`);
-    const ledger = read('modules/delivery-reps/services/van-rep-financial-ledger.service.ts');
+    // File #59 split: pushRepShortagesToPayroll moved to the S5 slice.
+    const ledger = read('modules/delivery-reps/services/van-rep-financial-ledger/push-rep-shortages-to-payroll.slice.ts');
     const pushShortages = fnSlice(ledger, 'async pushRepShortagesToPayroll(', 8000);
     assert.ok(pushShortages.includes('end_date < ${todayKey}'), 'periodPassed must compare end_date against the tenant-day bound');
     assert.ok(!pushShortages.includes('end_date < CURRENT_DATE'), 'periodPassed must no longer use CURRENT_DATE');

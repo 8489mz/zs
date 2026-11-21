@@ -643,7 +643,12 @@ async function main(): Promise<void> {
   // after the gate (the waiver branch still calls it).
   {
     const here = __dirname;
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'), 'utf8');
+    // File #59 split: the waiver gate is defined in the S3 slice and called
+    // from the waiver branch of settleRepFinancialItem in the S2 slice; the
+    // facade keeps only thin delegates.
+    const s2Source = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/settle-rep-financial-item.slice.ts'), 'utf8');
+    const s3Source = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/rep-waiver-cluster.slice.ts'), 'utf8');
+    const vanSource = s2Source + s3Source;
     assert.ok(vanSource.includes('INV-REP-WAIVER-APPROVAL-RULE'), 'the settle names the waiver-approval invariant');
     assert.ok(vanSource.includes('REP_WAIVER_REASON_REQUIRED'), 'the reason-required code is named');
     assert.ok(vanSource.includes('REP_WAIVER_SUPERVISOR_PIN_REQUIRED'), 'the PIN-required code is named');
@@ -652,9 +657,10 @@ async function main(): Promise<void> {
     assert.ok(vanSource.includes('verifySupervisorPin'), 'the waiver gate verifies via the shared supervisor PIN');
     assert.ok(vanSource.includes('assertRepStockShortageCustodyLeg'), 'the M4 custody guard is still called');
     assert.equal(
-      vanSource.split('assertRepWaiverApproval(').length - 1,
+      s3Source.split('assertRepWaiverApproval(').length - 1 +
+        s2Source.split('this.assertRepWaiverApproval(').length - 1,
       2,
-      'the gate is defined once and called from the waiver branch',
+      'the gate is defined once (S3) and called from the waiver branch (S2)',
     );
     // File #30 split: settleRepFinancialItem moved to the S10
     // promotions-ledger slice; the admin facade keeps only a thin

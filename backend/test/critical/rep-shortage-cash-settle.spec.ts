@@ -562,7 +562,12 @@ async function main(): Promise<void> {
   // invariant method appends it wherever the file ends).
   {
     const here = __dirname;
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'), 'utf8');
+    // File #59 split: settleRepFinancialItem moved to the S2 slice and
+    // insertRepShortageCashRow to the S4 slice; the facade keeps only thin
+    // delegates. The pins below span both slices.
+    const s2Source = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/settle-rep-financial-item.slice.ts'), 'utf8');
+    const s4Source = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/rep-shortage-custody.slice.ts'), 'utf8');
+    const vanSource = s2Source + s4Source;
     assert.ok(vanSource.includes('INV-REP-SHORTAGE-CASH-SETTLE'), 'settleRepFinancialItem names the invariant');
     assert.ok(vanSource.includes('postRepShortageCashCollection'), 'the settle calls the collection posting');
     assert.ok(vanSource.includes('postRepShortageWaiver'), 'the waiver calls the waiver reversal posting');

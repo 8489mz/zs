@@ -341,7 +341,9 @@ async function main(): Promise<void> {
   // in the service, and the controller forwards the real auth context.
   {
     const here = __dirname;
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'), 'utf8');
+    // File #59 split: getRepFinancialLedger moved to the S1 slice; the
+    // facade keeps only a thin delegate.
+    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/get-rep-financial-ledger.slice.ts'), 'utf8');
     assert.ok(vanSource.includes('INV-REP-LEDGER-SUMMARY-BALANCE'), 'the ledger-summary invariant is named');
     assert.ok(vanSource.includes('totalOverages'), 'overages are totalled');
     assert.ok(vanSource.includes("['cash_overage', 'stock_overage']"), 'both overage types are recognised');

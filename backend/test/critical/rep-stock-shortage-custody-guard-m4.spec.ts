@@ -529,14 +529,20 @@ async function main(): Promise<void> {
   // the cash/waiver postings are still the ones being called.
   {
     const here = __dirname;
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'), 'utf8');
+    // File #59 split: the guard is defined in the S4 slice and called from
+    // both branches of settleRepFinancialItem in the S2 slice; the facade
+    // keeps only thin delegates.
+    const s2Source = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/settle-rep-financial-item.slice.ts'), 'utf8');
+    const s4Source = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/rep-shortage-custody.slice.ts'), 'utf8');
+    const vanSource = s2Source + s4Source;
     assert.ok(vanSource.includes('INV-REP-SHORTAGE-CUSTODY-GUARD'), 'the settle names the guard invariant');
     assert.ok(vanSource.includes('REP_SHORTAGE_NO_CUSTODY_LEG'), 'the specific error code is named');
     assert.ok(vanSource.includes('van_trip_settlement'), 'the guard reads the trip-settlement journal');
     assert.equal(
-      vanSource.split('assertRepStockShortageCustodyLeg(').length - 1,
+      s4Source.split('assertRepStockShortageCustodyLeg(').length - 1 +
+        s2Source.split('this.assertRepStockShortageCustodyLeg(').length - 1,
       3,
-      'the guard is defined once and called from both branches',
+      'the guard is defined once (S4) and called from both branches (S2)',
     );
     assert.ok(vanSource.includes('postRepShortageCashCollection'), 'the cash branch still calls the collection posting');
     assert.ok(vanSource.includes('postRepShortageWaiver'), 'the waiver branch still calls the waiver reversal posting');
