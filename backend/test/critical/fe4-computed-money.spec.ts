@@ -51,6 +51,12 @@ const FE4_FILES: string[] = [
   'delivery-reps/components/VanDamagedSwapModal.tsx',
   'delivery-reps/components/VanFieldReturnsAdminTab.tsx',
   'delivery-reps/components/VanFinancialLedgerAdminTab.tsx',
+  'delivery-reps/components/van-collection/collection-active-box.tsx',
+  'delivery-reps/components/van-collection/collection-customers-grid.tsx',
+  'delivery-reps/components/van-collection/collection-header.tsx',
+  'delivery-reps/components/van-collection/collection-return-form.tsx',
+  'delivery-reps/components/van-collection/collection-return-result.tsx',
+  'delivery-reps/components/van-collection/van-collection-types.ts',
   'delivery-reps/components/van-financial-ledger/ledger-add-bonus-modal.tsx',
   'delivery-reps/components/van-financial-ledger/ledger-badges.ts',
   'delivery-reps/components/van-financial-ledger/ledger-filter-bar.tsx',
@@ -165,7 +171,7 @@ function shapeBViolations(source: string, file: string): ShapeBViolation[] {
 }
 
 async function main(): Promise<void> {
-  assert.equal(FE4_FILES.length, 62, 'FE4 file list must stay at 62 files');
+  assert.equal(FE4_FILES.length, 68, 'FE4 file list must stay at 68 files');
 
   // 1. The shared rounder exists, exports roundMoney, and is the single
   //    implementation site: exactly one `.toFixed(2)` in the helper.
