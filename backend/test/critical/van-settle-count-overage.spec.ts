@@ -435,7 +435,7 @@ async function main(): Promise<void> {
       const { readFileSync } = await import('node:fs');
       const { resolve } = await import('node:path');
       const here = __dirname;
-      const engineSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-trip-reconciliation.engine.ts'), 'utf8');
+      const engineSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-trip-reconciliation/van-trip-reconciliation.types.ts'), 'utf8');
       assert.ok(engineSource.includes('hasUncountedItems'), 'the engine surfaces uncounted items');
       assert.ok(engineSource.includes('uncountedItems'), 'the engine lists the uncounted items');
       const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'), 'utf8');
