@@ -363,22 +363,47 @@ async function main(): Promise<void> {
   // The default `= 2` on three of the known rounders (trial-balance,
   // reports-math, purchases-write) is an accepted D1/D3 decision: the
   // parameter exists and every live caller passes book digits.
+  // Bound-dep forwarders (#61 split pattern) are NOT second
+  // implementations: `private toMoney(...) { return
+  // this.bound.toMoney(...); }` delegates to the canonical rounder
+  // (AccountingPostingService.toMoney -> roundMoney) through the
+  // slice's bound deps. A file passes when it calls roundMoney( or
+  // toFixed(digits), or when EVERY rounder def in it is such a pure
+  // delegation. Any other rounder body still needs the file-level
+  // roundMoney( / toFixed(digits) evidence.
+  function isBoundDelegation(stripped: string, matchIndex: number, matchEnd: number): boolean {
+    const open = stripped.indexOf('{', matchEnd);
+    if (open < 0) return false;
+    let depth = 0;
+    for (let i = open; i < stripped.length; i++) {
+      if (stripped[i] === '{') depth++;
+      else if (stripped[i] === '}') {
+        depth--;
+        if (depth === 0) {
+          const body = stripped.slice(open + 1, i);
+          return /^\s*return this\.bound\.(toMoney|money|roundMoney|roundCurrency)\([^)]*\);\s*$/.test(body);
+        }
+      }
+    }
+    return false;
+  }
   const ROUNDER_DEF =
     /(?:private\s+(?:toMoney|money|roundMoney|roundCurrency)|(?:export\s+)?function\s+toMoney)\s*\([^)]*\)/g;
   let rounderFiles = 0;
   for (const file of srcFiles) {
     const stripped = stripComments(fs.readFileSync(file, 'utf8'));
-    const defs = stripped.match(ROUNDER_DEF) || [];
+    const defs = [...stripped.matchAll(ROUNDER_DEF)];
     if (defs.length > 0) rounderFiles += 1;
-    for (const def of defs) {
+    for (const m of defs) {
       assert.ok(
-        def.includes('digits'),
-        `${file}: private money rounder must take a digits parameter (found: ${def})`,
+        m[0].includes('digits'),
+        `${file}: private money rounder must take a digits parameter (found: ${m[0]})`,
       );
     }
     if (defs.length > 0) {
+      const allBound = defs.every((m) => isBoundDelegation(stripped, m.index || 0, (m.index || 0) + m[0].length));
       assert.ok(
-        stripped.includes('roundMoney(') || stripped.includes('toFixed(digits)'),
+        stripped.includes('roundMoney(') || stripped.includes('toFixed(digits)') || allBound,
         `${file}: private money rounder must delegate to roundMoney or toFixed(digits)`,
       );
     }
@@ -400,6 +425,32 @@ async function main(): Promise<void> {
   assert.ok(
     !'return this.toMoney(total, digits);'.match(ROUNDER_DEF),
     'a toMoney call is not a definition',
+  );
+  // Bound-delegation self-checks: a pure `return this.bound.toMoney(...)`
+  // body is a delegation; a real body is not, even when it calls toMoney.
+  assert.ok(
+    isBoundDelegation(
+      'private toMoney(value: unknown, digits: MoneyDigits): number { return this.bound.toMoney(value, digits); }',
+      0,
+      'private toMoney(value: unknown, digits: MoneyDigits)'.length,
+    ),
+    'a pure bound-dep toMoney forwarder must count as a delegation',
+  );
+  assert.ok(
+    !isBoundDelegation(
+      'private toMoney(value: unknown, digits: MoneyDigits): number { return roundMoney(value, digits); }',
+      0,
+      'private toMoney(value: unknown, digits: MoneyDigits)'.length,
+    ),
+    'a rounder body calling roundMoney directly is not a bound delegation',
+  );
+  assert.ok(
+    !isBoundDelegation(
+      'private toMoney(value: unknown, digits: MoneyDigits): number { return value as number; }',
+      0,
+      'private toMoney(value: unknown, digits: MoneyDigits)'.length,
+    ),
+    'a rounder body returning its input is not a bound delegation',
   );
 
   // 11. Canonical wiring pins: the U1–U4 unifications stay wired.
