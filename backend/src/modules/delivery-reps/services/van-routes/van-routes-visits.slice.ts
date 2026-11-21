@@ -12,7 +12,7 @@ import { VanFraudRadarService } from '../van-fraud-radar.service';
 export class VanRoutesVisitsSlice {
   constructor(
     private readonly db: Kysely<Database>,
-    private readonly fraudRadar: VanFraudRadarService,
+    private readonly fraudRadar?: VanFraudRadarService,
   ) {}
 
   private get anyDb(): any {
