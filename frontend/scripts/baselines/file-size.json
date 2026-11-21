@@ -15,7 +15,6 @@
     "src/features/contracting/utils/boqExcelParser.ts": 1107,
     "src/features/delivery-reps/components/FleetVehiclesTab.tsx": 1043,
     "src/features/delivery-reps/components/VanCollectionTab.tsx": 1461,
-    "src/features/delivery-reps/components/VanFinancialLedgerAdminTab.tsx": 1776,
     "src/features/delivery-reps/components/VanFraudRadarAdminTab.tsx": 1030,
     "src/features/delivery-reps/components/VanPreSalesAdminTab.tsx": 1140,
     "src/features/delivery-reps/components/VanPromotionsAdminTab.tsx": 1134,
