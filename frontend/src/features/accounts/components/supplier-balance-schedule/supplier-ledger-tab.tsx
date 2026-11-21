@@ -7,6 +7,7 @@ import { Field } from '@/shared/ui/field';
 import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { extractPurchaseId, formatLedgerDate, EyeIcon, ChevronDownIcon, ChevronUpIcon } from './supplier-schedule-helpers';
 import { PurchaseItemsExpandable } from './purchase-items-expandable';
+import type { LedgerFilter } from './supplier-schedule-types';
 import type { SupplierLedgerEntry } from '@/types/domain';
 
 export interface SupplierLedgerTabProps {
@@ -20,13 +21,13 @@ export interface SupplierLedgerTabProps {
   filteredLedgerEntries: SupplierLedgerEntry[];
   handleSelectInvoiceAmount: (amount: number, invoiceDocNo?: string) => void;
   ledgerEntries: SupplierLedgerEntry[];
-  ledgerFilter: 'all' | 'purchases' | 'payments';
+  ledgerFilter: LedgerFilter;
   ledgerQuery: { isLoading: boolean };
   setDirectPaymentAmount: Dispatch<SetStateAction<string>>;
   setDirectPaymentChannel: Dispatch<SetStateAction<'cash' | 'bank' | 'card' | 'wallet' | 'instapay'>>;
   setDirectPaymentInstapayAddress: Dispatch<SetStateAction<string>>;
   setDirectPaymentNote: Dispatch<SetStateAction<string>>;
-  setLedgerFilter: Dispatch<SetStateAction<'all' | 'purchases' | 'payments'>>;
+  setLedgerFilter: Dispatch<SetStateAction<LedgerFilter>>;
   supplierBalance: number;
   supplierName: string;
   togglePurchaseDetails: (purchaseId: string) => void;
