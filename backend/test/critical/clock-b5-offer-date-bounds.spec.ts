@@ -190,7 +190,7 @@ console.log(out.join('\\n'));
   // exists on this host; the mechanism is proven in §0 and the
   // posting method still runs -- see posting-book-precision.spec.ts
   // in the related run) ----
-  const cashPosting = readSrc('modules/accounting/services/inventory-manufacturing-cash-posting.service.ts');
+  const cashPosting = readSrc('modules/accounting/services/inventory-manufacturing-cash-posting/installment-interest.slice.ts');
   assert.ok(
     cashPosting.includes('formatLocalCalendarDay(item.due_date)'),
     'dueDay must key from local calendar parts',

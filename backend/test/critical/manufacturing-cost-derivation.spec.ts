@@ -208,13 +208,15 @@ async function main(): Promise<void> {
 
     // Case 9: source pin -- no residual derivation, both new reads present.
     const source = fs.readFileSync(
-      path.resolve(__dirname, '../../src/modules/accounting/services/inventory-manufacturing-cash-posting.service.ts'),
+      path.resolve(__dirname, '../../src/modules/accounting/services/inventory-manufacturing-cash-posting/post-manufacturing-work-order.slice.ts'),
       'utf8',
     );
     const start = source.indexOf('async postManufacturingWorkOrder(');
-    const end = source.indexOf('async postManufacturingUnbuildOrder(');
-    assert.ok(start > -1 && end > start);
-    const body = source.slice(start, end);
+    assert.ok(start > -1);
+    // The S6 slice file contains only postManufacturingWorkOrder, so the
+    // whole file from the start marker IS the body (the old end marker,
+    // postManufacturingUnbuildOrder, now lives in the S7 slice).
+    const body = source.slice(start);
     assert.ok(!body.includes('fgCost - rmCost'), 'residual derivation must be gone');
     assert.ok(body.includes('manufacturing_wo_operations'), 'operations must be read');
     assert.ok(body.includes('manufacturing_byproduct'), 'by-product movements must be read');

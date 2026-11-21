@@ -155,11 +155,13 @@ async function main(): Promise<void> {
     const completion = readSrc('../../src/modules/manufacturing/services/manufacturing.service.ts');
     assert.ok(completion.includes('scaledBomOverhead('), 'completion must call scaledBomOverhead');
     assert.ok(!completion.includes('overheadCost * (qtyToProduce / bomQuantity)'), 'inline formula must be gone from completion');
-    const posterSource = readSrc('../../src/modules/accounting/services/inventory-manufacturing-cash-posting.service.ts');
+    const posterSource = readSrc('../../src/modules/accounting/services/inventory-manufacturing-cash-posting/post-manufacturing-work-order.slice.ts');
     const posterStart = posterSource.indexOf('async postManufacturingWorkOrder(');
-    const posterEnd = posterSource.indexOf('async postManufacturingUnbuildOrder(');
-    assert.ok(posterStart > -1 && posterEnd > posterStart);
-    const posterBody = posterSource.slice(posterStart, posterEnd);
+    assert.ok(posterStart > -1);
+    // The S6 slice file contains only postManufacturingWorkOrder, so the
+    // whole file from the start marker IS the body (the old end marker,
+    // postManufacturingUnbuildOrder, now lives in the S7 slice).
+    const posterBody = posterSource.slice(posterStart);
     assert.ok(posterBody.includes('scaledBomOverhead('), 'poster must call scaledBomOverhead');
     assert.ok(!posterBody.includes('overhead_cost || 0) * ('), 'inline formula must be gone from poster');
     const salesWrite = readSrc('../../src/modules/sales/services/sales-write.service.ts');
