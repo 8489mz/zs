@@ -213,7 +213,7 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
 
 const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|hr', 'accounting|manufacturing', 'accounting|purchases', 'delivery-reps|sales', 'returns|sales', 'sales|settings', 'sales|storefront'];
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|treasury', 'accounts|purchases', 'audit|settings', 'cash-drawer|pos', 'customers|sales', 'inventory|products', 'maintenance|products', 'pos|products', 'pos|sales', 'pos|settings', 'pos|storefront', 'products|settings'];
-const PINNED_POSTING_EXTERNAL = 96;
+const PINNED_POSTING_EXTERNAL = 97;
 const PINNED_FOUNDATION_EXTERNAL = 20;
 const PINNED_BACKEND_TOTAL = 743;
 const PINNED_FRONTEND_TOTAL = 135;
