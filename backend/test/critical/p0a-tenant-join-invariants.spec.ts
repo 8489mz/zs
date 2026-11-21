@@ -28,8 +28,12 @@ function run(): void {
     "join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id')",
     "join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id')",
   ]);
-  check('partners/partners.service.ts', [
+  // Partners split (#65): the two joins live in two slices — the sales join in
+  // S3 (getCustomerPosSummary), the branch join in S4 (getCustomerDeliveryProfile).
+  check('partners/partners/customer-addresses-pos.slice.ts', [
     "join.onRef('s.id', '=', 'rd.invoice_id').onRef('s.tenant_id', '=', 'rd.tenant_id')",
+  ]);
+  check('partners/partners/customer-delivery-profile.slice.ts', [
     "join.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id')",
   ]);
   // Maritime split: the tenant-aware journal join lives in three slices

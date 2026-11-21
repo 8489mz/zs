@@ -166,8 +166,8 @@ async function main(): Promise<void> {
     const here = __dirname;
     const helperSource = readFileSync(resolve(here, '../../src/modules/partners/helpers/partners-listing.helper.ts'), 'utf8');
     assert.ok(helperSource.includes('unassignedBalance'), 'mapCustomerRow must carry unassignedBalance');
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/partners/partners.service.ts'), 'utf8');
-    assert.ok(serviceSource.includes('unassignedBalance'), 'partners.service must pass unassignedBalance into mapCustomerRow');
+    const serviceSource = readFileSync(resolve(here, '../../src/modules/partners/partners/customer-listing.slice.ts'), 'utf8');
+    assert.ok(serviceSource.includes('unassignedBalance'), 'customer-listing slice must pass unassignedBalance into mapCustomerRow');
     const editorSource = readFileSync(resolve(here, '../../../frontend/src/features/customers/components/CustomerEditorCard.tsx'), 'utf8');
     assert.ok(editorSource.includes('unassignedBalance'), 'the editor card must render the unassigned chip');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
