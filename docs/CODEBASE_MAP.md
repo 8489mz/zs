@@ -500,7 +500,7 @@ financial logic.
 - Files in this directory: `index.ts`, `routes.tsx`
 - Subdirectories: `api`, `components`, `hooks`, `lib`, `pages`
 
-### `frontend/src/features/delivery-reps/` (76 files)
+### `frontend/src/features/delivery-reps/` (82 files)
 
 - Files in this directory: `routes.tsx`
 - Subdirectories: `api`, `components`, `hooks`, `offline`, `pages`, `utils`
