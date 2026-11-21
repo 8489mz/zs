@@ -212,9 +212,9 @@ console.log(out.join('\\n'));
     !pharmacy.includes('if (value instanceof Date) return value.toISOString().slice(0, 10);'),
     'the UTC-sliced pharmacy expiry must be gone',
   );
-  const importSales = readSrc('modules/import-sales/import-sales.service.ts');
+  const importSales = readSrc('modules/import-sales/import-container-helpers/import-container-helpers.ts');
   assert.ok(
-    /private dateKey[\s\S]{0,900}formatLocalCalendarDay\(value\)/.test(importSales),
+    /dateKey[\s\S]{0,900}formatLocalCalendarDay\(value\)/.test(importSales),
     'dateKey must key stored return dates from local parts',
   );
   console.log('✓ §D passed: pharmacy expiry + deposit dateKey key stored days from local parts');
