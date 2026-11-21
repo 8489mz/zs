@@ -47,6 +47,14 @@
  * reports exactly 658: pristine total was exactly 652, +6 = the
  * edge delta, no other growth).
  *
+ * File #69 (rep-target.engine.ts split, 1,020L -> barrel 72L + 7 slices):
+ * delivery-reps->accounting 101 -> 103: the engine's single money-engine
+ * import is now stated once per money slice (S-target, S-commission,
+ * S-balances) instead of once for the whole file. Backend total 732 -> 734
+ * (= the edge delta, no other growth); posting 94 / foundation 18 unchanged.
+ * Pure-move consequence, no new coupling: every added statement is an import
+ * the pre-split engine already had.
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -81,7 +89,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'catalog->inventory': 7,
   'catalog->storefront': 9,
   'contracting->accounting': 21,
-  'delivery-reps->accounting': 101,
+  'delivery-reps->accounting': 103,
   'delivery-reps->cash-drawer': 6,
   'delivery-reps->reports': 1,
   'delivery-reps->sales': 11,
@@ -207,7 +215,7 @@ const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|hr', 'accounti
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|treasury', 'accounts|purchases', 'audit|settings', 'cash-drawer|pos', 'customers|sales', 'inventory|products', 'maintenance|products', 'pos|products', 'pos|sales', 'pos|settings', 'pos|storefront', 'products|settings'];
 const PINNED_POSTING_EXTERNAL = 94;
 const PINNED_FOUNDATION_EXTERNAL = 18;
-const PINNED_BACKEND_TOTAL = 732;
+const PINNED_BACKEND_TOTAL = 734;
 const PINNED_FRONTEND_TOTAL = 135;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
