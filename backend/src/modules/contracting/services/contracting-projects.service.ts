@@ -35,7 +35,9 @@ import { ContractingProjectSummary } from '../contracting.types';
  * resolves businessTz through getTenantTimezone (tenant day); the two
  * p.created_at?.toISOString?.() reads in enrichProjectMetrics are
  * value reads, not date keys. The core spec's :77 stub targets this
- * slice: (service as any).projectsService.enrichProjectMetrics.
+ * slice: (service as any).projectsSlice.projectsService.enrichProjectMetrics
+ * (the facade constructs slices lazily; the stub goes through the
+ * projects slice getter so it lands on the instance serving createProject).
  */
 
 export interface ContractingProjectsDeps {

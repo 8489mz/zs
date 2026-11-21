@@ -74,7 +74,7 @@ async function main(): Promise<void> {
     `);
 
     const service = new ContractingService(db as never, {} as never);
-    (service as any).projectsService.enrichProjectMetrics = async (_tenantId: string, row: any) => row;
+    (service as any).projectsSlice.projectsService.enrichProjectMetrics = async (_tenantId: string, row: any) => row;
 
     // 1. Projects: id-derived codes, no reuse, cost center on the final code.
     const p1: any = await service.createProject(AUTH, { name: 'Tower A' } as any);
