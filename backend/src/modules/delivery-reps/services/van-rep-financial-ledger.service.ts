@@ -57,10 +57,14 @@ export class VanRepFinancialLedgerService {
   private settleRepFinancialItemInstance?: SettleRepFinancialItemSlice;
   private get settleRepFinancialItemSlice(): SettleRepFinancialItemSlice {
     return (this.settleRepFinancialItemInstance ??= new SettleRepFinancialItemSlice(this.ledgerDeps, {
-      assertRepWaiverApproval: (...args: any[]) => this.waiverClusterSlice.assertRepWaiverApproval(...args),
-      assertRepStockShortageCustodyLeg: (...args: any[]) => this.shortageCustodySlice.assertRepStockShortageCustodyLeg(...args),
-      resolveRepShortageReceivingShift: (...args: any[]) => this.shortageCustodySlice.resolveRepShortageReceivingShift(...args),
-      insertRepShortageCashRow: (...args: any[]) => this.shortageCustodySlice.insertRepShortageCashRow(...args),
+      assertRepWaiverApproval: (trxAny, tenantId, accountId, item, payload, actorUserId) =>
+        this.waiverClusterSlice.assertRepWaiverApproval(trxAny, tenantId, accountId, item, payload, actorUserId),
+      assertRepStockShortageCustodyLeg: (trx, tenantId, item, amount, bookDigits) =>
+        this.shortageCustodySlice.assertRepStockShortageCustodyLeg(trx, tenantId, item, amount, bookDigits),
+      resolveRepShortageReceivingShift: (trx, params) =>
+        this.shortageCustodySlice.resolveRepShortageReceivingShift(trx, params),
+      insertRepShortageCashRow: (trx, params) =>
+        this.shortageCustodySlice.insertRepShortageCashRow(trx, params),
     }));
   }
 

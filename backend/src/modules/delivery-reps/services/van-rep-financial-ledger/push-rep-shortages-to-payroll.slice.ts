@@ -73,7 +73,7 @@ export class PushRepShortagesToPayrollSlice {
     // (INV-BUSINESS-DATE-TENANT-LOCAL): on the 1st of a month around
     // local midnight the UTC month is still the previous month, so the
     // shortage would be pushed to the wrong payroll run.
-    const targetMonth = payload.targetMonth || (await resolveBusinessDateKey(this.db, tenantId, new Date())).slice(0, 7);
+    const targetMonth = payload.targetMonth || (await resolveBusinessDateKey(this.deps.db, tenantId, new Date())).slice(0, 7);
     const results: Array<{ id: number; repName: string; amount: number; success: boolean; message: string }> = [];
     // INV-REP-PAYROLL-TARGET-MONTH (M2, PD2): resolved inside the
     // transaction below — the run the deduction is targeted at.
@@ -81,7 +81,7 @@ export class PushRepShortagesToPayrollSlice {
     let effectiveRunId: number | null = null;
     let rolledForward = false;
 
-    await this.db.transaction().execute(async (trx) => {
+    await this.deps.db.transaction().execute(async (trx) => {
       const trxAny = trx as any;
 
       // INV-REP-PAYROLL-TARGET-MONTH (M2, PD2): targetMonth is the
