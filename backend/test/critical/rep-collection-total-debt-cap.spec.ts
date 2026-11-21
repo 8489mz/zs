@@ -236,7 +236,7 @@ async function main(): Promise<void> {
       assert.ok(payloadAt > 0, 'recordFieldCollection exists');
       const payloadSlice = vanSource.slice(payloadAt, payloadAt + 1200);
       assert.ok(!/advance/i.test(payloadSlice), 'the collection payload carries no advance flag');
-      const engineSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/rep-target.engine.ts'), 'utf8');
+      const engineSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/rep-target/rep-balances.slice.ts'), 'utf8');
       assert.ok(engineSource.includes('INV-REP-COLLECTION-TOTAL-BALANCE-CAP'), 'the engine names the invariant');
       const v = validateIsolatedRepCollection({
         repId: 1, collectionAmount: 150, repBalance: 100, otherRepsBalance: 0, totalCustomerBalance: 100, moneyDigits: 2,
