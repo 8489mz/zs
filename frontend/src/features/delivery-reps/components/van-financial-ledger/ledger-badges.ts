@@ -17,7 +17,7 @@ export const getEntryTypeBadge = (type: string) => {
   }
 };
 
-export const getStatusBadge = (status: string, _method?: string | null, voucher?: string | null, isEn: boolean) => {
+export const getStatusBadge = (status: string, _method?: string | null, voucher?: string | null, isEn?: boolean) => {
   switch (status) {
     case 'pending':
       return { label: isEn ? 'Pending & Unsettled' : 'معلق وغير مسدد', bg: '#fef2f2', color: '#991b1b', border: '#fecaca' };
