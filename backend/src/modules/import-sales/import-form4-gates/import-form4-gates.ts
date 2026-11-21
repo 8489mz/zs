@@ -5,7 +5,7 @@ import { Database, ImportShipmentTable } from '../../../database/database.types'
 import { evaluateForm4Gate, FORM4_REQUIRED_THRESHOLD_USD } from '../engines/import-form4-gate.engine';
 
 export class ImportForm4GatesSlice {
-  constructor(private readonly db: Kysely<any>) {}
+  constructor(private readonly db: Kysely<Database>) {}
 
   /**
    * Form 4 gate on the GRN (receiving) approval path
