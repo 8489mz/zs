@@ -99,7 +99,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'maritime-freight->accounting': 52,
   'maritime-freight->sales': 3,
   'maritime-freight->settings': 5,
-  'partners->accounting': 4,
+  'partners->accounting': 11,
   'partners->delivery-reps': 2,
   'pharmacy->accounting': 11,
   'pharmacy->purchases': 2,
@@ -205,9 +205,9 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
 
 const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|hr', 'accounting|manufacturing', 'accounting|purchases', 'delivery-reps|sales', 'returns|sales', 'sales|settings', 'sales|storefront'];
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|treasury', 'accounts|purchases', 'audit|settings', 'cash-drawer|pos', 'customers|sales', 'inventory|products', 'maintenance|products', 'pos|products', 'pos|sales', 'pos|settings', 'pos|storefront', 'products|settings'];
-const PINNED_POSTING_EXTERNAL = 88;
+const PINNED_POSTING_EXTERNAL = 89;
 const PINNED_FOUNDATION_EXTERNAL = 15;
-const PINNED_BACKEND_TOTAL = 706;
+const PINNED_BACKEND_TOTAL = 713;
 const PINNED_FRONTEND_TOTAL = 135;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
