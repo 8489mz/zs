@@ -337,9 +337,10 @@ async function main(): Promise<void> {
   // Case 4: source + invariant pins.
   {
     const here = __dirname;
-    const returnsSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns.service.ts'), 'utf8');
-    assert.ok(returnsSource.includes('unit_multiplier'), 'approval must read the sale-line multiplier');
-    assert.ok(returnsSource.includes('unitMultiplier'), 'eligible-sales items must carry the multiplier');
+    const eligibleSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/get-customer-eligible-sales.slice.ts'), 'utf8');
+    assert.ok(eligibleSource.includes('unitMultiplier'), 'eligible-sales items must carry the multiplier');
+    const approveSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/approve-field-return.slice.ts'), 'utf8');
+    assert.ok(approveSource.includes('unit_multiplier'), 'approval must read the sale-line multiplier');
     const apiSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/api/van-sales.api.ts'), 'utf8');
     assert.ok(apiSource.includes('unitMultiplier'), 'CustomerEligibleSaleItem must carry unitMultiplier');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');

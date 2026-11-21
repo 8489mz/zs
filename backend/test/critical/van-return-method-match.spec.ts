@@ -578,12 +578,13 @@ async function main(): Promise<void> {
   // Case 10: source pins.
   {
     const here = __dirname;
-    const returnsSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns.service.ts'), 'utf8');
-    assert.ok(returnsSource.includes('resolveSaleRefundLegs'), 'the leg resolution must exist');
-    assert.ok(returnsSource.includes('assertRefundMethodCoveredByLegs'), 'the leg assertion must exist');
-    assert.ok(returnsSource.includes('REFUND_METHOD_MISMATCH'), 'the named mismatch refusal must exist');
-    assert.ok(returnsSource.includes('REFUND_EXCEEDS_CUSTOMER_BALANCE'), 'the named balance-floor refusal must exist');
-    assert.ok(returnsSource.includes('REFUND_SALE_LEGS_UNVERIFIABLE'), 'the fail-closed unverifiable-legs refusal must exist');
+    const legsSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/refund-legs-cluster.slice.ts'), 'utf8');
+    assert.ok(legsSource.includes('resolveSaleRefundLegs'), 'the leg resolution must exist');
+    assert.ok(legsSource.includes('assertRefundMethodCoveredByLegs'), 'the leg assertion must exist');
+    assert.ok(legsSource.includes('REFUND_METHOD_MISMATCH'), 'the named mismatch refusal must exist');
+    assert.ok(legsSource.includes('REFUND_SALE_LEGS_UNVERIFIABLE'), 'the fail-closed unverifiable-legs refusal must exist');
+    const approveSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/approve-field-return.slice.ts'), 'utf8');
+    assert.ok(approveSource.includes('REFUND_EXCEEDS_CUSTOMER_BALANCE'), 'the named balance-floor refusal must exist');
     const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
     assert.ok(postingSource.includes('REFUND_METHOD_MISMATCH'), 'the posting boundary must refuse a mismatched refund');
     assert.ok(postingSource.includes('INV-VAN-RETURN-METHOD-MATCH'), 'the posting guard must be marked with the invariant id');

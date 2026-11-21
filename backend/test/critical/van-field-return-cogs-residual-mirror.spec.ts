@@ -548,7 +548,7 @@ async function main(): Promise<void> {
     assert.ok(postingSource.includes('vanFieldReturnCogsAmount'), 'the van field-return mirror must exist');
     assert.ok(postingSource.includes('salesReturnCogsResidual'), 'the mirror must reuse the shared residual grouping');
     assert.ok(postingSource.includes('VAN_FIELD_RETURN_FROZEN_COST_INVALID'), 'the named fail-closed error must exist');
-    const returnsSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns.service.ts'), 'utf8');
+    const returnsSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/approve-field-return.slice.ts'), 'utf8');
     assert.ok(returnsSource.includes('saleId:'), 'approval must pass the sale link to the posting method');
     assert.ok(returnsSource.includes('isDamaged'), 'approval must pass the damaged flag to the posting method');
     assert.ok(returnsSource.includes('saleItemId'), 'approval must pass the per-item sale-line link');
