@@ -26,7 +26,7 @@ export type SubmitFieldReturnBoundDeps = {
     opts: {
       excludeReturnId?: number | null;
       priorReturns?: Array<{ id?: unknown; refund_method?: string | null; total_amount?: unknown }> | null;
-    } = {},
+    },
   ): Promise<{ paymentMethod: string; cashRemaining: number; creditRemaining: number }>;
   assertRefundMethodCoveredByLegs(
     legs: { paymentMethod: string; cashRemaining: number; creditRemaining: number },
