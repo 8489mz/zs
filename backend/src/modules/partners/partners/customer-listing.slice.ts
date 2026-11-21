@@ -5,9 +5,10 @@ import { buildCustomerSearchPredicate, calculatePagination, mapCustomerRow, pars
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { getCustomerRepBalancesMap } from '../../delivery-reps/services/van-common.util';
+import type { RawBuilder } from 'kysely';
 
 export interface CustomerListingSliceBoundDeps {
-  tenantPredicate(actor: AuthContext, alias?: string);
+  tenantPredicate: (actor: AuthContext, alias?: string) => RawBuilder<boolean>;
   tenantId(actor: AuthContext): string;
 }
 
