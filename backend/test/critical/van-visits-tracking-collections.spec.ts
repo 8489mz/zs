@@ -307,11 +307,12 @@ async function main(): Promise<void> {
   // as a collection, and the metric is sourced from the collection
   // vouchers (customer_payments) in getVisitsHistory.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-execution.service.ts'), 'utf8');
+    // getVisitsHistory moved to the history slice in the #74 split; the slice holds
+    // only that one method, so the body runs to the end of the file.
+    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-execution/van-field-execution-history.slice.ts'), 'utf8');
     const start = source.indexOf('async getVisitsHistory(');
-    const end = source.indexOf('async getTradeSurveys(');
-    assert.ok(start > 0 && end > start);
-    const body = source.slice(start, end);
+    assert.ok(start > 0);
+    const body = source.slice(start);
     assert.ok(body.includes('has_collection: false'), 'synthetic cash-sale rows carry no collection');
     assert.ok(body.includes("selectFrom('customer_payments')"), 'real collections are sourced from the voucher rows');
     assert.ok(body.includes('totalCollectionsAmount'), 'the metric is overridden with the voucher sum');
