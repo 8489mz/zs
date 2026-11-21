@@ -64,6 +64,14 @@
  * new coupling: every added statement is an import the pre-split facade
  * already had.
  *
+ * File #79 (VanSalesAdminManagementPage.tsx split, 1,001L -> facade 292L + 5 slices):
+ * delivery-reps->settings 1 -> 2: the facade's `settingsApi` import is now
+ * stated once per file that uses it (facade + S4 settings dialog) instead of
+ * once for the whole file. Frontend total pin 135 -> 136 (= the edge delta,
+ * no other growth); posting 97 / foundation 20 unchanged. Pure-move
+ * consequence, no new coupling: every added statement is an import the
+ * pre-split facade already had.
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -178,7 +186,7 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
   'delivery-reps->customers': 1,
   'delivery-reps->products': 1,
   'delivery-reps->sales': 2,
-  'delivery-reps->settings': 1,
+  'delivery-reps->settings': 2,
   'import-sales->accounting': 4,
   'inventory->pharmacy': 2,
   'inventory->products': 6,
@@ -225,7 +233,7 @@ const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|treasury', 'a
 const PINNED_POSTING_EXTERNAL = 97;
 const PINNED_FOUNDATION_EXTERNAL = 20;
 const PINNED_BACKEND_TOTAL = 745;
-const PINNED_FRONTEND_TOTAL = 135;
+const PINNED_FRONTEND_TOTAL = 136;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
 const BACKEND_EDGE_FLOOR = 60;
