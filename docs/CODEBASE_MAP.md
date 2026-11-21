@@ -175,13 +175,13 @@ canonical money engines.
 - Engines: `engines/fashion-stock-safety.engine.ts`, `engines/pos-catalog-version.engine.ts`, `engines/stock-movement-total.engine.ts`
 - Subdirectories: `dto`, `engines`, `services`
 
-### `backend/src/modules/contracting/` (8 files)
+### `backend/src/modules/contracting/` (47 files)
 
 - Module: `contracting.module.ts`
 - Controllers: `contracting.controller.ts`
 - Services: `contracting.service.ts`
 - Engines: (none)
-- Subdirectories: `dto`
+- Subdirectories: `contracting`, `dto`
 
 ### `backend/src/modules/crm/` (4 files)
 
@@ -658,7 +658,7 @@ financial logic.
   import-sales modules (for example
   `backend/src/modules/accounting/accounting.service.ts`,
   `backend/src/modules/catalog/services/catalog-product.service.ts`,
-  `backend/src/modules/contracting/contracting.service.ts`, and
+  `backend/src/modules/contracting/services/contracting-posting.service.ts`, and
   `backend/src/modules/import-sales/import-sales.service.ts`). The
   list above is illustrative, not exhaustive: re-run the grep before
   claiming a complete caller list.
