@@ -1,62 +1,25 @@
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { StandardDialog } from '@/shared/components/StandardDialog';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
-import { CustomSelect } from '@/shared/ui/custom-select';
 import { contractingApi } from '../api/contracting.api';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
 import { ImportBoqModal } from './LazyImportBoqModal';
 import { ImportMasterBoqModal } from './ImportMasterBoqModal';
-
-interface TenderItemComponent {
-  componentCode: string;
-  componentName: string;
-  unit: string;
-  qtyPerUnit: number;
-  unitRate: number;
-  componentType: 'material' | 'labor' | 'equipment' | 'subcontractor';
-}
-
-interface TenderItem {
-  id: string;
-  itemCode: string;
-  description: string;
-  unit: string;
-  estimatedQty: number;
-  trade: string;
-  components: TenderItemComponent[];
-  wastePercent: number;
-  overheadPercent: number;
-  profitMarkupPercent: number;
-  notes?: string;
-  // Dimensions for CAD takeoff mode
-  drawingLength?: number;
-  drawingWidth?: number;
-  drawingHeight?: number;
-  drawingCount?: number;
-}
+import type { TenderItem, BrickPreset } from './tender-estimator/tender-estimator.types';
+import { TenderGeneralSettings } from './tender-estimator/TenderGeneralSettings';
+import { TenderItemsToolbar } from './tender-estimator/TenderItemsToolbar';
+import { TenderCadTakeoffPopup } from './tender-estimator/TenderCadTakeoffPopup';
+import { TenderItemsTable } from './tender-estimator/TenderItemsTable';
+import { TenderMrpSummary } from './tender-estimator/TenderMrpSummary';
 
 interface TenderEstimatorModalProps {
   isOpen: boolean;
   onClose: () => void;
   onProjectCreated?: (projectId: string) => void;
   initialProjectId?: string;
-}
-
-export interface BrickPreset {
-  id: string;
-  name: string;
-  lengthCm: number;
-  widthCm: number;
-  heightCm: number;
-  tradeType: 'masonry_m2' | 'masonry_m3';
-  unit: string;
-  ratePerM2OrM3: number;
-  sandPerUnit: number;
-  cementPerUnit: number;
-  description: string;
 }
 
 export const BRICK_SIZE_PRESETS: BrickPreset[] = [
@@ -701,616 +664,81 @@ export function TenderEstimatorModal({
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }} dir="rtl">
         {/* إعدادات العطاء العامة والتسعيرية */}
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px' }}>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(200px, 2.2fr) minmax(170px, 1.8fr) minmax(75px, 0.75fr) minmax(75px, 0.75fr) minmax(75px, 0.75fr) auto',
-            gap: '10px',
-            alignItems: 'end',
-          }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--font-micro)', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
-                {t('contracting.tender_estimator_modal.s7', "اسم المشروع / العطاء المقترح")}
-              </label>
-              <input
-                type="text"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                style={{ width: '100%', height: '32px', padding: '0 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: 'var(--font-body)', fontWeight: 600, color: '#1e293b' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--font-micro)', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
-                {t('contracting.tender_estimator_modal.s8', "العميل / جهة الإسناد المستهدفة")}
-              </label>
-              <input
-                type="text"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                style={{ width: '100%', height: '32px', padding: '0 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: 'var(--font-body)', color: '#1e293b' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--font-micro)', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
-                {t('contracting.tender_estimator_modal.s9', "هامش الربح %")}
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={globalProfitMargin}
-                onChange={(e) => setGlobalProfitMargin(Number(e.target.value))}
-                style={{ width: '100%', height: '32px', padding: '0 6px', textAlign: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: 'var(--font-body)', fontWeight: 700, color: '#15803d' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--font-micro)', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
-                {t('contracting.tender_estimator_modal.s10', "المصاريف الإدارية %")}
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={globalOverhead}
-                onChange={(e) => setGlobalOverhead(Number(e.target.value))}
-                style={{ width: '100%', height: '32px', padding: '0 6px', textAlign: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: 'var(--font-body)', color: '#475569' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--font-micro)', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
-                {t('contracting.tender_estimator_modal.s11', "الهالك العام %")}
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={globalWaste}
-                onChange={(e) => setGlobalWaste(Number(e.target.value))}
-                style={{ width: '100%', height: '32px', padding: '0 6px', textAlign: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: 'var(--font-body)', color: '#475569' }}
-              />
-            </div>
-            <div>
-              <button
-                type="button"
-                onClick={handleApplyGlobalMargins}
-                title={t('contracting.tender_estimator_modal.s12', "تعميم نسب الربح والمصاريف والهالك على كافة البنود")}
-                style={{
-                  height: '32px',
-                  padding: '0 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  color: '#170e5e',
-                  fontSize: 'var(--font-micro)',
-                  fontWeight: 700,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <AppIcons.Sliders size={13} />
-                <span>{t('contracting.tender_estimator_modal.s13', "تعميم النسب للكل")}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <TenderGeneralSettings
+          t={t}
+          projectName={projectName}
+          setProjectName={setProjectName}
+          clientName={clientName}
+          setClientName={setClientName}
+          globalProfitMargin={globalProfitMargin}
+          setGlobalProfitMargin={setGlobalProfitMargin}
+          globalOverhead={globalOverhead}
+          setGlobalOverhead={setGlobalOverhead}
+          globalWaste={globalWaste}
+          setGlobalWaste={setGlobalWaste}
+          handleApplyGlobalMargins={handleApplyGlobalMargins}
+        />
 
         {/* شريط أدوات إضافة البنود والحصر */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: 'var(--font-section-title)', fontWeight: 800, color: '#1e293b' }}>
-              {t('contracting.tender_estimator_modal.s14', "بنود العطاء ومقايسة المشروع (")}{items.length} {t('contracting.tender_estimator_modal.s15', "بند)")}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => setIsImportBoqOpen(true)}
-              style={{
-                height: '32px',
-                padding: '0 12px',
-                borderRadius: '6px',
-                border: '1px solid #cbd5e1',
-                background: '#f8fafc',
-                color: '#170e5e',
-                fontSize: 'var(--font-subtitle)',
-                fontWeight: 700,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                cursor: 'pointer',
-              }}
-            >
-              <AppIcons.FileSpreadsheet size={14} />
-              <span>{t('contracting.tender_estimator_modal.s16', "استيراد مقايسة Excel (BOQ)")}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsImportMasterOpen(true)}
-              style={{
-                height: '32px',
-                padding: '0 12px',
-                borderRadius: '6px',
-                border: '1px solid #170e5e',
-                background: '#eef2ff',
-                color: '#170e5e',
-                fontSize: 'var(--font-subtitle)',
-                fontWeight: 700,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                cursor: 'pointer',
-              }}
-            >
-              <AppIcons.Layers size={14} />
-              <span>{t('contracting.tender_estimator_modal.s17', "سحب من المقايسة المرجعية (124 بند)")}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsCadTakeoffFormOpen(!isCadTakeoffFormOpen)}
-              style={{
-                height: '32px',
-                padding: '0 12px',
-                borderRadius: '6px',
-                border: '1px solid #0284c7',
-                background: '#f0f9ff',
-                color: '#0369a1',
-                fontSize: 'var(--font-subtitle)',
-                fontWeight: 700,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                cursor: 'pointer',
-              }}
-            >
-              <AppIcons.PlusCircle size={14} />
-              <span>{t('contracting.tender_estimator_modal.s18', "حصر سريع من أبعاد الرسومات (CAD Takeoff)")}</span>
-            </button>
-          </div>
-        </div>
+        <TenderItemsToolbar
+          t={t}
+          items={items}
+          setIsImportBoqOpen={setIsImportBoqOpen}
+          setIsImportMasterOpen={setIsImportMasterOpen}
+          setIsCadTakeoffFormOpen={setIsCadTakeoffFormOpen}
+          isCadTakeoffFormOpen={isCadTakeoffFormOpen}
+        />
 
         {/* حاسبة الحصر السريع المنبثقة من الرسومات */}
-        {isCadTakeoffFormOpen && (
-          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '10px', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ fontSize: 'var(--font-body)', fontWeight: 700, color: '#0369a1', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <AppIcons.CheckShield size={16} />
-              <span>{t('contracting.tender_estimator_modal.s19', "حاسبة الحصر الهندسي السريع من واقع اللوحات والمخططات المعمارية والإنشائية")}</span>
-            </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(320px, 1fr) 85px 85px 85px 75px 105px',
-              gap: '8px',
-              alignItems: 'end',
-            }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--font-micro)', fontWeight: 600, color: '#0369a1', marginBottom: '2px' }}>{t('contracting.tender_estimator_modal.s20', "نوع البند الهندسي")}</label>
-                <CustomSelect
-                  value={cadItemCode}
-                  onChange={(val) => setCadItemCode(String(val))}
-                  options={engineeringConstants.map((c) => ({
-                    value: c.itemCode,
-                    label: `${c.itemName} (${c.unit})`,
-                    hint: c.itemCode,
-                  }))}
-                  placeholder={t('contracting.tender_estimator_modal.s21', "اختر كود البند...")}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--font-micro)', fontWeight: 600, color: '#0369a1', marginBottom: '2px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s22', "الطول (م)")}</label>
-                <input
-                  type="number"
-                  value={cadLength}
-                  onChange={(e) => setCadLength(Number(e.target.value))}
-                  style={{ width: '100%', height: '32px', padding: '0 4px', textAlign: 'center', borderRadius: '6px', border: '1px solid #7dd3fc', fontSize: 'var(--font-body)', fontWeight: 600 }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--font-micro)', fontWeight: 600, color: '#0369a1', marginBottom: '2px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s23', "العرض (م)")}</label>
-                <input
-                  type="number"
-                  value={cadWidth}
-                  onChange={(e) => setCadWidth(Number(e.target.value))}
-                  style={{ width: '100%', height: '32px', padding: '0 4px', textAlign: 'center', borderRadius: '6px', border: '1px solid #7dd3fc', fontSize: 'var(--font-body)', fontWeight: 600 }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--font-micro)', fontWeight: 600, color: '#0369a1', marginBottom: '2px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s24', "الارتفاع (م)")}</label>
-                <input
-                  type="number"
-                  value={cadHeight}
-                  onChange={(e) => setCadHeight(Number(e.target.value))}
-                  style={{ width: '100%', height: '32px', padding: '0 4px', textAlign: 'center', borderRadius: '6px', border: '1px solid #7dd3fc', fontSize: 'var(--font-body)', fontWeight: 600 }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--font-micro)', fontWeight: 600, color: '#0369a1', marginBottom: '2px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s25', "التكرار")}</label>
-                <input
-                  type="number"
-                  value={cadCount}
-                  onChange={(e) => setCadCount(Number(e.target.value))}
-                  style={{ width: '100%', height: '32px', padding: '0 4px', textAlign: 'center', borderRadius: '6px', border: '1px solid #7dd3fc', fontSize: 'var(--font-body)', fontWeight: 600 }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--font-micro)', fontWeight: 600, color: '#0369a1', marginBottom: '2px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s26', "خصومات الفتحات")}</label>
-                <input
-                  type="number"
-                  value={cadDeductions}
-                  onChange={(e) => setCadDeductions(Number(e.target.value))}
-                  style={{ width: '100%', height: '32px', padding: '0 4px', textAlign: 'center', borderRadius: '6px', border: '1px solid #7dd3fc', fontSize: 'var(--font-body)', fontWeight: 600 }}
-                />
-              </div>
-            </div>
-
-            {/* محدد ومحرك مقاسات الطوب والبلوك الديناميكي */}
-            {(cadItemCode.startsWith('BRK') || cadItemCode.startsWith('BLK') || cadItemCode.startsWith('AAC')) && (
-              <div style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '2px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-                  <span style={{ fontSize: 'var(--font-micro)', fontWeight: 700, color: '#0369a1', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <AppIcons.Sliders size={13} />
-                    <span>{t('contracting.tender_estimator_modal.s27', "مواصفات وأبعاد الطوبة / البلوك المستخدم (Brick & Block Dimensions):")}</span>
-                  </span>
-                  <span style={{ fontSize: '11px', color: '#166534', background: '#dcfce7', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
-                    {t('contracting.tender_estimator_modal.s28', "المعدل الهندسي المحسوب:")} {calculatedBrickRate.ratePerM2} {t('contracting.tender_estimator_modal.s29', "طوبة/م² | رمل:")} {calculatedBrickRate.sandPerM2} {t('contracting.tender_estimator_modal.s30', "م³ | أسمنت:")} {calculatedBrickRate.cementPerM2} {t('contracting.tender_estimator_modal.s31', "طن")}
-                  </span>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: cadBrickPreset === 'CUSTOM' ? 'minmax(260px, 1.4fr) 85px 85px 85px 95px' : '1fr', gap: '8px', alignItems: 'end' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#64748b', marginBottom: '2px' }}>{t('contracting.tender_estimator_modal.s32', "اختر مقاس الطوب أو البلوك الشائع:")}</label>
-                    <CustomSelect
-                      value={cadBrickPreset}
-                      onChange={(val) => setCadBrickPreset(String(val))}
-                      options={BRICK_SIZE_PRESETS.map((p) => ({
-                        value: p.id,
-                        label: p.name,
-                        hint: `${p.ratePerM2OrM3} ${p.unit === 'm3' ? t('contracting.tender_estimator_modal.s33', "طوبة/م³") : t('contracting.tender_estimator_modal.s34', "طوبة/م²")}`,
-                      }))}
-                      placeholder={t('contracting.tender_estimator_modal.s35', "اختر مقاس الطوب...")}
-                    />
-                  </div>
-
-                  {cadBrickPreset === 'CUSTOM' && (
-                    <>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#0369a1', textAlign: 'center', marginBottom: '2px' }}>{t('contracting.tender_estimator_modal.s36', "طول الطوبة (سم)")}</label>
-                        <input
-                          type="number"
-                          value={customBrickLength}
-                          onChange={(e) => setCustomBrickLength(Number(e.target.value))}
-                          style={{ width: '100%', height: '30px', padding: '0 4px', textAlign: 'center', borderRadius: '5px', border: '1px solid #7dd3fc', fontSize: 'var(--font-micro)', fontWeight: 700 }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#0369a1', textAlign: 'center', marginBottom: '2px' }}>{t('contracting.tender_estimator_modal.s37', "عرض/سمك (سم)")}</label>
-                        <input
-                          type="number"
-                          value={customBrickWidth}
-                          onChange={(e) => setCustomBrickWidth(Number(e.target.value))}
-                          style={{ width: '100%', height: '30px', padding: '0 4px', textAlign: 'center', borderRadius: '5px', border: '1px solid #7dd3fc', fontSize: 'var(--font-micro)', fontWeight: 700 }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#0369a1', textAlign: 'center', marginBottom: '2px' }}>{t('contracting.tender_estimator_modal.s38', "ارتفاع (سم)")}</label>
-                        <input
-                          type="number"
-                          value={customBrickHeight}
-                          onChange={(e) => setCustomBrickHeight(Number(e.target.value))}
-                          style={{ width: '100%', height: '30px', padding: '0 4px', textAlign: 'center', borderRadius: '5px', border: '1px solid #7dd3fc', fontSize: 'var(--font-micro)', fontWeight: 700 }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#0369a1', textAlign: 'center', marginBottom: '2px' }}>{t('contracting.tender_estimator_modal.s39', "عرموس مونة (سم)")}</label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={mortarJoint}
-                          onChange={(e) => setMortarJoint(Number(e.target.value))}
-                          style={{ width: '100%', height: '30px', padding: '0 4px', textAlign: 'center', borderRadius: '5px', border: '1px solid #7dd3fc', fontSize: 'var(--font-micro)', fontWeight: 700 }}
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
-              <button
-                type="button"
-                onClick={() => setIsCadTakeoffFormOpen(false)}
-                style={{ height: '30px', padding: '0 12px', borderRadius: '6px', border: '1px solid #bae6fd', background: '#ffffff', color: '#0369a1', fontSize: 'var(--font-micro)', fontWeight: 600, cursor: 'pointer' }}
-              >
-                {t('contracting.tender_estimator_modal.s40', "إغلاق")}
-              </button>
-              <button
-                type="button"
-                onClick={handleAddFromCadTakeoff}
-                style={{ height: '30px', padding: '0 16px', borderRadius: '6px', border: 'none', background: '#0284c7', color: '#ffffff', fontSize: 'var(--font-micro)', fontWeight: 700, cursor: 'pointer' }}
-              >
-                {t('contracting.tender_estimator_modal.s41', "إضافة البند المحصور للعطاء")}
-              </button>
-            </div>
-          </div>
-        )}
+        <TenderCadTakeoffPopup
+          isCadTakeoffFormOpen={isCadTakeoffFormOpen}
+          t={t}
+          cadItemCode={cadItemCode}
+          setCadItemCode={setCadItemCode}
+          engineeringConstants={engineeringConstants}
+          cadLength={cadLength}
+          setCadLength={setCadLength}
+          cadWidth={cadWidth}
+          setCadWidth={setCadWidth}
+          cadHeight={cadHeight}
+          setCadHeight={setCadHeight}
+          cadCount={cadCount}
+          setCadCount={setCadCount}
+          cadDeductions={cadDeductions}
+          setCadDeductions={setCadDeductions}
+          calculatedBrickRate={calculatedBrickRate}
+          cadBrickPreset={cadBrickPreset}
+          setCadBrickPreset={setCadBrickPreset}
+          customBrickLength={customBrickLength}
+          setCustomBrickLength={setCustomBrickLength}
+          customBrickWidth={customBrickWidth}
+          setCustomBrickWidth={setCustomBrickWidth}
+          customBrickHeight={customBrickHeight}
+          setCustomBrickHeight={setCustomBrickHeight}
+          mortarJoint={mortarJoint}
+          setMortarJoint={setMortarJoint}
+          setIsCadTakeoffFormOpen={setIsCadTakeoffFormOpen}
+          handleAddFromCadTakeoff={handleAddFromCadTakeoff}
+          brickPresets={BRICK_SIZE_PRESETS}
+        />
 
         {/* جدول بنود العطاء والتفكيك الهندسي */}
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {items.length === 0 ? (
-            <div style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
-              {t('contracting.tender_estimator_modal.s42', "لا توجد بنود مضافة للعطاء حتى الآن. انقر على")} <strong>{t('contracting.tender_estimator_modal.s43', "استيراد مقايسة Excel")}</strong> {t('contracting.tender_estimator_modal.s44', "أو")} <strong>{t('contracting.tender_estimator_modal.s45', "سحب من المقايسة المرجعية")}</strong> {t('contracting.tender_estimator_modal.s46', "أو")} <strong>{t('contracting.tender_estimator_modal.s47', "حصر سريع من الرسومات")}</strong> {t('contracting.tender_estimator_modal.s48', "لبدء التسعير والتفكيك الهندسي.")}
-            </div>
-          ) : (
-            <div
-              className="thin-scrollbar"
-              style={{
-                maxHeight: '380px',
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                position: 'relative',
-              }}
-            >
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--font-body)', tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: 'auto' }} />
-                  <col style={{ width: '55px' }} />
-                  <col style={{ width: '90px' }} />
-                  <col style={{ width: '105px' }} />
-                  <col style={{ width: '80px' }} />
-                  <col style={{ width: '105px' }} />
-                  <col style={{ width: '125px' }} />
-                  <col style={{ width: '95px' }} />
-                  <col style={{ width: '45px' }} />
-                </colgroup>
-                <thead>
-                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontSize: 'var(--font-table-head)', position: 'sticky', top: 0, zIndex: 2 }}>
-                    <th style={{ padding: '8px 12px', textAlign: 'start' }}>{t('contracting.tender_estimator_modal.s49', "البند والوصف الهندسي")}</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s50', "الوحدة")}</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s51', "الكمية")}</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s52', "ت. الوحدة (BOM)")}</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s53', "هامش الربح")}</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s54', "سعر البيع")}</th>
-                    <th style={{ padding: '8px 8px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s55', "إجمالي القيمة للعميل")}</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s56', "تفكيك الكود")}</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'center' }}>{t('contracting.tender_estimator_modal.s57', "حذف")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, idx) => {
-                    const calc = calculateItemRates(item);
-                    const isExpanded = expandedItemId === item.id;
-
-                    return (
-                      <React.Fragment key={item.id}>
-                        <tr style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#ffffff' : '#fafafa' }}>
-                          <td style={{ padding: '8px 12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                              <span style={{ padding: '2px 5px', borderRadius: '4px', background: '#e0e7ff', color: '#3730a3', fontSize: '11px', fontWeight: 700, flexShrink: 0, marginTop: '2px' }}>
-                                {item.itemCode}
-                              </span>
-                              <strong style={{ color: '#1e293b', fontSize: 'var(--font-body)', lineHeight: 1.35 }} title={item.description}>
-                                {item.description}
-                              </strong>
-                            </div>
-                            {item.notes && (
-                              <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#64748b', lineHeight: 1.3 }}>{item.notes}</p>
-                            )}
-                          </td>
-                          <td style={{ padding: '8px 4px', textAlign: 'center', color: '#475569', fontWeight: 600, fontSize: 'var(--font-micro)' }}>
-                            {item.unit}
-                          </td>
-                          <td style={{ padding: '8px 4px', textAlign: 'center' }}>
-                            <input
-                              type="number"
-                              min="0"
-                              value={item.estimatedQty}
-                              onChange={(e) => {
-                                const val = Number(e.target.value);
-                                setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, estimatedQty: val } : it)));
-                              }}
-                              style={{ width: '100%', maxWidth: '75px', height: '28px', padding: '0 4px', textAlign: 'center', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: 'var(--font-body)', fontWeight: 700, color: '#170e5e' }}
-                            />
-                          </td>
-                          <td style={{ padding: '8px 4px', textAlign: 'center', fontWeight: 600, color: '#475569', fontSize: 'var(--font-micro)', whiteSpace: 'nowrap' }}>
-                            {formatCurrency(calc.totalCostPerUnit)}
-                          </td>
-                          <td style={{ padding: '8px 4px', textAlign: 'center' }}>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={item.profitMarkupPercent}
-                                onChange={(e) => {
-                                  const val = Number(e.target.value);
-                                  setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, profitMarkupPercent: val } : it)));
-                                }}
-                                style={{ width: '46px', height: '28px', padding: '0 2px', textAlign: 'center', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: 'var(--font-micro)', fontWeight: 700, color: '#15803d' }}
-                              />
-                              <span style={{ fontSize: '10px', color: '#64748b' }}>%</span>
-                            </div>
-                          </td>
-                          <td style={{ padding: '8px 4px', textAlign: 'center', fontWeight: 700, color: '#170e5e', fontSize: 'var(--font-micro)', whiteSpace: 'nowrap' }}>
-                            {formatCurrency(calc.sellingPricePerUnit)}
-                          </td>
-                          <td style={{ padding: '8px 8px', textAlign: 'center', fontWeight: 800, color: '#0f172a', fontSize: 'var(--font-body)', whiteSpace: 'nowrap' }}>
-                            {formatCurrency(calc.totalSellingPrice)}
-                          </td>
-                          <td style={{ padding: '8px 4px', textAlign: 'center' }}>
-                            <button
-                              type="button"
-                              onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
-                              style={{
-                                padding: '3px 8px',
-                                borderRadius: '5px',
-                                border: '1px solid #cbd5e1',
-                                background: isExpanded ? '#170e5e' : '#ffffff',
-                                color: isExpanded ? '#ffffff' : '#170e5e',
-                                fontSize: '11px',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '3px',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              <AppIcons.Sliders size={11} />
-                              <span>{isExpanded ? t('contracting.tender_estimator_modal.s58', "إخفاء") : 'BOM'}</span>
-                            </button>
-                          </td>
-                          <td style={{ padding: '8px 4px', textAlign: 'center' }}>
-                            <button
-                              type="button"
-                              onClick={() => setItems((prev) => prev.filter((it) => it.id !== item.id))}
-                              title={t('contracting.tender_estimator_modal.s59', "حذف البند من العطاء")}
-                              style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', padding: '2px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                            >
-                              <AppIcons.Trash2 size={15} />
-                            </button>
-                          </td>
-                        </tr>
-
-                        {/* لوحة تفكيك الكود الهندسي القياسي (BOM Exploder) */}
-                        {isExpanded && (
-                          <tr style={{ background: '#f8fafc' }}>
-                            <td colSpan={9} style={{ padding: '10px 14px', borderBottom: '2px solid #cbd5e1' }}>
-                              <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 14px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
-                                  <strong style={{ fontSize: 'var(--font-subtitle)', color: '#170e5e', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <AppIcons.CheckShield size={14} />
-                                    <span>{t('contracting.tender_estimator_modal.s60', "مكونات واستهلاكات الكود الهندسي للبند:")} {item.description} {t('contracting.tender_estimator_modal.s61', "(إجمالي كمية البند:")} {item.estimatedQty} {item.unit})</span>
-                                  </strong>
-                                  <span style={{ fontSize: 'var(--font-micro)', color: '#64748b' }}>
-                                    {t('contracting.tender_estimator_modal.s62', "هالك:")} {item.wastePercent}{t('contracting.tender_estimator_modal.s63', "% | إداريات:")} {item.overheadPercent}{t('contracting.tender_estimator_modal.s64', "% | ربح:")} {item.profitMarkupPercent}%
-                                  </span>
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '8px', marginBottom: '8px' }}>
-                                  {calc.componentsDetail.map((comp) => (
-                                    <div key={comp.componentCode} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '6px 10px' }}>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={comp.componentName}>
-                                          {comp.componentName}
-                                        </span>
-                                        <span style={{ fontSize: '10px', color: '#64748b' }}>({comp.unit})</span>
-                                      </div>
-
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '4px' }}>
-                                        <strong style={{ fontSize: 'var(--font-body)', color: '#1e293b' }} dir="ltr">
-                                          {comp.totalQtyForTender} {comp.unit}
-                                        </strong>
-                                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#170e5e' }}>
-                                          {formatCurrency(comp.totalCostForTender)}
-                                        </span>
-                                      </div>
-
-                                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginTop: '6px', paddingTop: '4px', borderTop: '1px dashed #e2e8f0' }}>
-                                        <div>
-                                          <label style={{ display: 'block', fontSize: '9.5px', color: '#64748b', marginBottom: '1px' }}>{t('contracting.tender_estimator_modal.s65', "المعدل/")}{item.unit}:</label>
-                                          <input
-                                            type="number"
-                                            step="any"
-                                            min="0"
-                                            value={comp.qtyPerUnit}
-                                            onChange={(e) => {
-                                              const val = Number(e.target.value);
-                                              setItems((prev) =>
-                                                prev.map((it) => {
-                                                  if (it.id !== item.id) return it;
-                                                  const newComps = (it.components || []).map((c) =>
-                                                    c.componentCode === comp.componentCode ? { ...c, qtyPerUnit: val } : c
-                                                  );
-                                                  return { ...it, components: newComps };
-                                                })
-                                              );
-                                            }}
-                                            style={{ width: '100%', height: '24px', padding: '0 2px', textAlign: 'center', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px', fontWeight: 700, color: '#170e5e' }}
-                                          />
-                                        </div>
-                                        <div>
-                                          <label style={{ display: 'block', fontSize: '9.5px', color: '#64748b', marginBottom: '1px' }}>{t('contracting.tender_estimator_modal.s66', "سعر الوحدة:")}</label>
-                                          <input
-                                            type="number"
-                                            step="any"
-                                            min="0"
-                                            value={comp.unitRate}
-                                            onChange={(e) => {
-                                              const val = Number(e.target.value);
-                                              setItems((prev) =>
-                                                prev.map((it) => {
-                                                  if (it.id !== item.id) return it;
-                                                  const newComps = (it.components || []).map((c) =>
-                                                    c.componentCode === comp.componentCode ? { ...c, unitRate: val } : c
-                                                  );
-                                                  return { ...it, components: newComps };
-                                                })
-                                              );
-                                            }}
-                                            style={{ width: '100%', height: '24px', padding: '0 2px', textAlign: 'center', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px', fontWeight: 700, color: '#0369a1' }}
-                                          />
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px', fontSize: 'var(--font-micro)', borderTop: '1px solid #e2e8f0', paddingTop: '6px', flexWrap: 'wrap' }}>
-                                  <span>{t('contracting.tender_estimator_modal.s67', "التكلفة المباشرة:")} <strong>{formatCurrency(calc.totalDirectCost)}</strong></span>
-                                  <span>{t('contracting.tender_estimator_modal.s68', "التكلفة الشاملة بالإداريات:")} <strong>{formatCurrency(calc.totalTenderCost)}</strong></span>
-                                  <span style={{ color: '#15803d' }}>{t('contracting.tender_estimator_modal.s69', "صافي ربح البند:")} <strong>{formatCurrency(calc.totalProfit)}</strong></span>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <TenderItemsTable
+          items={items}
+          t={t}
+          calculateItemRates={calculateItemRates}
+          expandedItemId={expandedItemId}
+          setItems={setItems}
+          formatCurrency={formatCurrency}
+          setExpandedItemId={setExpandedItemId}
+        />
 
         {/* ملخص إجمالي الموارد والمواد المطلوبة للعطاء (Rollup Materials MRP) */}
-        {tenderSummary.resources.length > 0 && (
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px' }}>
-            <h4 style={{ margin: '0 0 8px', fontSize: 'var(--font-table-head)', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <AppIcons.Layers size={15} />
-              <span>{t('contracting.tender_estimator_modal.s70', "إجمالي الموارد والخامات التقديرية لتنفيذ العطاء بالكامل (Pre-Procurement Materials Takeoff)")}</span>
-            </h4>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
-                gap: '8px',
-                padding: '2px',
-              }}
-            >
-              {tenderSummary.resources.map((res) => (
-                <div key={res.name} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '6px 10px' }}>
-                  <div style={{ fontSize: 'var(--font-micro)', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={res.name}>
-                    {res.name}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: '2px' }}>
-                    <strong style={{ fontSize: 'var(--font-body)', color: '#170e5e', fontWeight: 800 }} dir="ltr">
-                      {res.totalQty.toLocaleString()} <span style={{ fontSize: 'var(--font-micro)', fontWeight: 600, color: '#64748b' }}>{res.unit}</span>
-                    </strong>
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px' }}>
-                    {t('contracting.tender_estimator_modal.s71', "تقديري:")} <strong>{formatCurrency(res.totalCost)}</strong>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <TenderMrpSummary
+          tenderSummary={tenderSummary}
+          t={t}
+          formatCurrency={formatCurrency}
+        />
       </div>
 
       {/* نافذة استيراد مقايسة العطاء من Excel */}

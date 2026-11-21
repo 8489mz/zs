@@ -25,3 +25,17 @@ export interface TenderItem {
   drawingHeight?: number;
   drawingCount?: number;
 }
+
+export interface BrickPreset {
+  id: string;
+  name: string;
+  lengthCm: number;
+  widthCm: number;
+  heightCm: number;
+  tradeType: 'masonry_m2' | 'masonry_m3';
+  unit: string;
+  ratePerM2OrM3: number;
+  sandPerUnit: number;
+  cementPerUnit: number;
+  description: string;
+}

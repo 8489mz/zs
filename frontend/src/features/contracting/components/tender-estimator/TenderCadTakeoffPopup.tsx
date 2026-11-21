@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { TFunction } from 'i18next';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { CustomSelect } from '@/shared/ui/custom-select';
-import type { BrickPreset } from '../TenderEstimatorModal';
+import type { BrickPreset } from './tender-estimator.types';
 
 export interface TenderCadTakeoffPopupProps {
   isCadTakeoffFormOpen: boolean;
