@@ -203,7 +203,7 @@ console.log(out.join('\\n'));
   // comparison is proven by the §0 mechanism: a DTO day string
   // keys to the written day while a stored local-midnight Date
   // UTC-sliced to the previous day) ----
-  const pharmacy = readSrc('modules/pharmacy/pharmacy.service.ts');
+  const pharmacy = readSrc('modules/pharmacy/pharmacy/pharmacy-helpers.slice.ts');
   assert.ok(
     pharmacy.includes('if (value instanceof Date) return formatLocalCalendarDay(value);'),
     'pharmacyExpiryText must key stored expiries from local parts',
