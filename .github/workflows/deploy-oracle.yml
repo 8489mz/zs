@@ -180,7 +180,14 @@ jobs:
           echo "Pre-deploy applied migrations: $PRE_MIGRATION_COUNT"
           # The step-4 backup is the restore source of last resort. It must be
           # the file this deploy just took, not an older one.
-          HOURLY_BACKUP=$(find /var/backups/zsystems -maxdepth 1 -type f -name 'zsystems_hourly_*.sql.gz.enc' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
+          # sort must not write into a pipe read by `head -1`: head exits
+          # after the first line, sort gets SIGPIPE on its next write, and
+          # under `set -euo pipefail` the deploy dies with 141 (deploy #186).
+          # sort writes to a file instead; head reads the file.
+          HOURLY_BACKUP_LIST=$(mktemp /tmp/zs-hourly-backup-list-XXXXXX)
+          find /var/backups/zsystems -maxdepth 1 -type f -name 'zsystems_hourly_*.sql.gz.enc' -printf '%T@ %p\n' 2>/dev/null | sort -nr > "$HOURLY_BACKUP_LIST"
+          HOURLY_BACKUP=$(head -1 "$HOURLY_BACKUP_LIST" | cut -d' ' -f2-)
+          rm -f "$HOURLY_BACKUP_LIST"
           if [ -z "$HOURLY_BACKUP" ] || [ ! -r "$HOURLY_BACKUP" ]; then
             echo "No readable hourly backup from step 4 - refusing to deploy without a restore source"
             exit 1
