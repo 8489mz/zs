@@ -641,18 +641,18 @@ async function main(): Promise<void> {
     console.log('  source pins passed');
   }
 
-  // Wiring: this spec is in both critical lists (308 specs, identical
+  // Wiring: this spec is in both critical lists (309 specs, identical
   // order) — the suite count moves 297 -> 300 with this batch (F7c + F3 + F8).
   {
     const specs = JSON.parse(readFileSync(join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
     const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 308);
-    assert.equal(chain.length, 308);
+    assert.equal(specs.length, 309);
+    assert.equal(chain.length, 309);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/van-route-sale-gate.spec.ts'));
-    console.log('  wiring (308 specs, identical order) passed');
+    console.log('  wiring (309 specs, identical order) passed');
   }
 
   console.log('van-route-sale-gate: OK');

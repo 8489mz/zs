@@ -335,21 +335,18 @@ async function main(): Promise<void> {
       console.log('  (S4) damaged-swap caller passes repId passed');
     }
 
-    // S5. F20 spec wired into both critical lists (308 specs,
+    // S5. F20 spec wired into both critical lists (309 specs,
     // identical order) and green (proven by its standalone run).
     {
       const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 308);
-      assert.equal(chain.length, 308);
+      assert.equal(specs.length, 309);
+      assert.equal(chain.length, 309);
       assert.deepEqual(chain, specs);
       assert.ok(specs.includes('test/critical/van-portal-sale-rep-attribution-f20.spec.ts'));
-      assert.equal(
-        specs[specs.length - 1],
-        'test/critical/van-portal-sale-rep-attribution-f20.spec.ts',
-      );
+      // No last-entry assertion: the last slot belongs to whichever spec was wired most recently (P3 appended migration-0339-idempotent after F20); presence above + count + order already prove the wiring.
       assert.equal(
         specs[specs.indexOf('test/critical/van-portal-sale-rep-attribution-f20.spec.ts') - 1],
         'test/critical/van-presales-order-details-line-total.spec.ts',
