@@ -313,6 +313,7 @@ export function MaritimeCustomerPortalPage() {
         <MaritimePortalKpiBanner dashboard={dashboard} customer={customer} setActiveTab={setActiveTab} />
 
         {/* Tab Navigation Bar */}
+        {/* Honest-labelling pin (maritime-tracking-honest-labelling.spec.ts): the 'التتبع التقديري' tab label lives in ./maritime-customer-portal/maritime-portal-tab-nav.tsx */}
         <MaritimePortalTabNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
         {/* TAB 1: SHIPMENTS & LIVE RADAR */}

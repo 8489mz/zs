@@ -530,7 +530,7 @@ financial logic.
 - Files in this directory: `routes.tsx`
 - Subdirectories: `api`, `components`, `pages`, `utils`
 
-### `frontend/src/features/maritime-freight/` (72 files)
+### `frontend/src/features/maritime-freight/` (84 files)
 
 - Files in this directory: `index.ts`, `maritime-freight.types.ts`, `routes.tsx`
 - Subdirectories: `api`, `components`, `context`, `hooks`, `pages`, `utils`
