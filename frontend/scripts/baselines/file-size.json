@@ -12,7 +12,6 @@
     "src/features/contracting/contracting.types.ts": 1441,
     "src/features/contracting/pages/ContractingMasterBoqPage.tsx": 1206,
     "src/features/contracting/utils/boqExcelParser.ts": 1107,
-    "src/features/delivery-reps/components/FleetVehiclesTab.tsx": 1043,
     "src/features/delivery-reps/components/VanSettleTab.tsx": 1756,
     "src/features/hr/components/QuickCashAdvanceModal.tsx": 1159,
     "src/features/hr/components/payroll/PayrollReviewItemModal.tsx": 1293,
