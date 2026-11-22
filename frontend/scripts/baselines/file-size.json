@@ -14,7 +14,6 @@
     "src/features/contracting/utils/boqExcelParser.ts": 1107,
     "src/features/delivery-reps/components/FleetVehiclesTab.tsx": 1043,
     "src/features/delivery-reps/components/VanFraudRadarAdminTab.tsx": 1030,
-    "src/features/delivery-reps/components/VanPromotionsAdminTab.tsx": 1134,
     "src/features/delivery-reps/components/VanSettleTab.tsx": 1756,
     "src/features/hr/components/QuickCashAdvanceModal.tsx": 1159,
     "src/features/hr/components/payroll/PayrollReviewItemModal.tsx": 1293,
