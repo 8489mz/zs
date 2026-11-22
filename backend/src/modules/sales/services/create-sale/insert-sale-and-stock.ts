@@ -5,6 +5,8 @@ import { roundMoney } from '../../../accounting/engines/money-minor-units.engine
 import { allocateSaleFromImportLots } from '../../../import-sales/helpers/import-lot-allocation.helper';
 import { offlineSaleTimestamps } from '../../../cash-drawer/helpers/cash-drawer.helper';
 import { computeSaleAllocationLegs, resolvePostedSalePaymentChannel } from '../../helpers/sales-write.helper';
+import { tripSaleContribution } from '../../../delivery-reps/van-trip-counters.engine';
+import { applyTripCounterDelta, lockOpenTripRow } from '../sales-edit-and-cancel/sales-edit-and-cancel-types';
 import type { CreateSaleContext, CreateSaleDeps } from './create-sale-types';
 
 export class InsertSaleAndStockService {
@@ -29,7 +31,7 @@ export class InsertSaleAndStockService {
    * deduct stock. Facade L1414-1867.
    */
   async insertSaleAndStock(ctx: CreateSaleContext): Promise<void> {
-    const { trx, scope, normalized, payload, auth, floorApproval, belowFloorItems, payments, paidAmount, total, moneyDigits, effectiveDiscount, taxAmount, allocationByItem, preparedItems, autoProduceItems, eligibleLocations, allowNegativeStockSales, customer, exchange, effectiveTerms, offlineDocNo, effectivePaymentType, subtotal, resolvedDeliveryFeeMode, finalTenderedAmount, changeAmount, deliveryRepId, deliveryStatus, collectionStatus, posTerminalCode, offlineCreatedAt } = ctx;
+    const { trx, scope, normalized, payload, auth, floorApproval, belowFloorItems, payments, paidAmount, total, moneyDigits, effectiveDiscount, taxAmount, allocationByItem, preparedItems, autoProduceItems, eligibleLocations, allowNegativeStockSales, customer, exchange, effectiveTerms, offlineDocNo, effectivePaymentType, subtotal, resolvedDeliveryFeeMode, finalTenderedAmount, changeAmount, deliveryRepId, deliveryStatus, collectionStatus, posTerminalCode, offlineCreatedAt, vanTripAttribution } = ctx;
       let saleNote = normalized.note;
       if (offlineDocNo && !saleNote.includes(offlineDocNo)) {
         const offlineTag = `[إيصال أوفلاين: ${offlineDocNo}]`;
@@ -43,6 +45,25 @@ export class InsertSaleAndStockService {
       if (normalized.terminalAuthCode) {
         const terminalTag = `[تفويض شبكة: ${normalized.cardScheme || 'بطاقة'} | ${normalized.terminalAuthCode}${normalized.terminalRrn ? ` | مرجع: ${normalized.terminalRrn}` : ''}]`;
         saleNote = saleNote ? `${saleNote} | ${terminalTag}` : terminalTag;
+      }
+
+      // F7 (POS-to-trip attribution): the pre-transaction candidate
+      // is re-checked inside this transaction — the trip row is
+      // locked and only a still-OPEN trip accepts the stamp and its
+      // counters (a trip settled between resolution and insert
+      // receives neither; the sale still posts). A delivery already
+      // stamped its rep in Phase 4; a counter sale gains both the
+      // trip and the rep. Anything else posts exactly as before,
+      // with both columns NULL.
+      let vanTripId: number | null = null;
+      let attributedRepId: number | null = deliveryRepId;
+      const tripCandidate = vanTripAttribution;
+      if (tripCandidate) {
+        const tripOpen = await lockOpenTripRow(trx, scope.tenantId, tripCandidate.tripId);
+        if (tripOpen) {
+          vanTripId = tripCandidate.tripId;
+          if (!attributedRepId) attributedRepId = tripCandidate.repId;
+        }
       }
 
       const saleInsert = await trx
@@ -78,7 +99,8 @@ export class InsertSaleAndStockService {
           service_charge: normalized.serviceCharge || 0,
           tip_amount: Number((normalized as any).tipAmount || 0),
           guest_count: normalized.guestCount || 1,
-          delivery_rep_id: deliveryRepId,
+          delivery_rep_id: attributedRepId,
+          van_trip_id: vanTripId,
           delivery_status: deliveryStatus,
           collection_status: collectionStatus,
           created_by: auth.userId,
@@ -110,6 +132,23 @@ export class InsertSaleAndStockService {
       }
       const docNo = await this.generateSaleDocNo(trx, id, scope.tenantId, offlineCreatedAt ?? undefined);
       await trx.updateTable('sales').set({ doc_no: docNo, updated_at: sql`NOW()` }).where('id', '=', id).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+
+      // F7: the trip counters move by the same contribution the
+      // field flow applies at creation (tripSaleContribution mirrors
+      // its five payment branches exactly), so the trip reads the
+      // sale the moment it posts — and the edit/cancel paths, which
+      // already reverse a sale's contribution from its stored
+      // van_trip_id, stay exactly balanced. A zero contribution
+      // applies nothing (applyTripCounterDelta early-returns).
+      if (vanTripId) {
+        const contribution = tripSaleContribution({
+          total,
+          paidAmount,
+          paymentChannel: resolvePostedSalePaymentChannel(effectivePaymentType, payments),
+          payments: payments.map((payment) => ({ amount: payment.amount, payment_channel: payment.paymentChannel })),
+        });
+        await applyTripCounterDelta(trx, scope.tenantId, vanTripId, contribution);
+      }
 
       if (payments.length > 0) {
         await trx.insertInto('sale_payments').values(

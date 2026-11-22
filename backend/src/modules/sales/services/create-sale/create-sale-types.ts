@@ -20,6 +20,7 @@ import { type IdempotencyContext } from '../../../../core/idempotency/idempotenc
 import { SalesQueryService } from '../sales-query.service';
 import { WhatsAppGatewayService } from '../../../settings/services/whatsapp-gateway.service';
 import type { SystemApprovedSaleTerms } from '../sales-write.service';
+import type { PosTripAttribution } from './resolve-pos-trip-attribution';
 
 export type CreateSaleDeps = {
   db: Kysely<Database>;
@@ -70,6 +71,11 @@ export interface CreateSaleContext {
   effectiveTerms?: SystemApprovedSaleTerms;
   returnedItems: UpsertSaleDto['items'];
   isExchange: boolean;
+  // F7 (POS-to-trip attribution): the pre-transaction rep + active
+  // trip candidate resolved by the orchestrator (null when the
+  // seller is no rep or has no open trip). Phase 5 re-checks the
+  // trip row under lock before stamping.
+  vanTripAttribution: PosTripAttribution | null;
   // Phase 1 outputs (loadSaleContext).
   moneyDigits: MoneyDigits;
   exchange?: ExchangeReturnContext;

@@ -176,6 +176,15 @@ export class InventoryController {
     return this.inventoryService.cancelStockTransfer(id, req.authContext!);
   }
 
+  // F19: reverse a received final issue prospectively (stock back to the
+  // source at the frozen cost + a correcting journal that flips the
+  // original expense journal; the original rows are never touched).
+  @Post('stock-transfers/:id/reverse-final-issue')
+  @RequirePermissions('canAdjustInventory')
+  reverseFinalIssue(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.inventoryService.reverseFinalIssue(id, req.authContext!);
+  }
+
   @Get('stock-count-sessions')
   @RequirePermissions('inventory')
   listStockCountSessions(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {

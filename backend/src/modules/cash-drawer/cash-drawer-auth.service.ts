@@ -80,6 +80,30 @@ export class CashDrawerAuthService {
     }
   }
 
+  // F5 (trial problem 5, 2026-11-21, test10k): the STRICT variant for
+  // shift open/close ONLY. The close dialog asks for the CURRENT
+  // user's password, but the fallback above accepted any active
+  // admin login password (via authorizeManagerSecret), so the trial's
+  // admin password closed a cashier's shift — password identity was
+  // never verified. Strict verifies ONLY the signed-in user's own
+  // password: no manager-PIN fallback, no admin-password fallback.
+  // The shared assertManagerPin / authorizeManagerSecret stay
+  // untouched for their legitimate paths (drawer money-out approvals
+  // via assertCashDrawerApproval, open-tables override, second
+  // approver) — only the shift open/close assertion is strict.
+  async assertCurrentUserPasswordStrict(password: string, auth: AuthContext): Promise<void> {
+    const providedPassword = String(password || '').trim();
+    if (!providedPassword) throw new AppError('أدخل كلمة مرور المستخدم الحالي', 'CURRENT_USER_PASSWORD_REQUIRED', 400);
+    const scope = this.scope(auth);
+    const result = await sql<UserPasswordRow>`select id, is_active, password_hash, password_salt from users where id = ${auth.userId} and tenant_id = ${scope.tenantId} limit 1`.execute(this.db);
+    const user = result.rows?.[0] || null;
+    if (!user || user.is_active === false || user.is_active === 0 || user.is_active === 'false') throw new AppError('المستخدم الحالي غير متاح', 'CURRENT_USER_NOT_FOUND', 400);
+    const passwordCheck = await verifyPassword(providedPassword, String(user.password_hash || ''), String(user.password_salt || ''));
+    if (!passwordCheck.valid) {
+      throw new AppError('كلمة مرور المستخدم الحالي غير صحيحة', 'CURRENT_USER_PASSWORD_INVALID', 400);
+    }
+  }
+
   async isPasswordRequiredOnShiftOpen(auth: AuthContext): Promise<boolean> {
     const scope = this.scope(auth);
     const result = await sql<SettingsRow>`select key, value from settings where tenant_id = ${scope.tenantId} and key = 'requirePasswordOnShiftOpen' limit 1`.execute(this.db);

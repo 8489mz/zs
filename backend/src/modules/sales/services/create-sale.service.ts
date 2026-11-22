@@ -37,6 +37,7 @@ import { ComputeTotalsAndGatesService } from './create-sale/compute-totals-and-g
 import { AllocateTendersAndDeliveryService } from './create-sale/allocate-tenders-and-delivery';
 import { InsertSaleAndStockService } from './create-sale/insert-sale-and-stock';
 import { FinalizeSaleService } from './create-sale/finalize-sale';
+import { resolvePosTripAttribution, type PosTripAttribution } from './create-sale/resolve-pos-trip-attribution';
 
 export class CreateSaleService {
   private readonly db: CreateSaleDeps['db'];
@@ -203,6 +204,27 @@ export class CreateSaleService {
     if (!normalized.items.length) throw new AppError('Sale must include at least one item', 'SALE_ITEMS_REQUIRED', 400);
     ensureUniqueFlowItems(normalized.items, 'SALE_DUPLICATE_PRODUCT', 'Sale must not contain duplicate product rows with the same unit and price');
 
+    // F7 (POS-to-trip attribution): resolve the acting rep + active
+    // trip BEFORE the transaction opens. A lookup that fails inside
+    // the transaction would abort the whole sale (25P02), and the
+    // portal hoists such reads for exactly that reason — so any
+    // failure here leaves the sale unattributed instead of unposted.
+    // For a delivery the explicit payload rep wins (Phase 4 still
+    // validates that the rep exists); for a counter sale the acting
+    // user's linked rep row is resolved.
+    let vanTripAttribution: PosTripAttribution | null = null;
+    try {
+      vanTripAttribution = await resolvePosTripAttribution(this.db, {
+        tenantId: scope.tenantId,
+        auth,
+        explicitRepId: String(normalized.orderType || '').trim() === 'delivery'
+          ? (Number((payload as any).deliveryRepId || 0) || null)
+          : null,
+      });
+    } catch {
+      vanTripAttribution = null;
+    }
+
     const txStartedAt = Date.now();
     const saleId = await this.tx.runInTransaction(this.db, async (trx) => {
       const ctx = {
@@ -217,6 +239,7 @@ export class CreateSaleService {
         effectiveTerms,
         returnedItems,
         isExchange,
+        vanTripAttribution,
       } as CreateSaleContext;
       await this.loadSaleContext(ctx);
       await this.prepareSaleItems(ctx);

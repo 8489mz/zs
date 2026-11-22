@@ -11,6 +11,7 @@ import { TransactionHelper } from '../../database/helpers/transaction.helper';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
+import { AuditService } from '../../core/audit/audit.service';
 import { CashDrawerAuthService } from './cash-drawer-auth.service';
 import { CashDrawerComputeService } from './cash-drawer-compute.service';
 import { CashDrawerReadsService } from './cash-drawer-reads.service';
@@ -32,6 +33,9 @@ export class CashDrawerService {
     private readonly tx: TransactionHelper,
     private readonly accountingPosting: AccountingPostingService,
     @Optional() private readonly whatsappService?: WhatsAppGatewayService,
+    // F5: optional so specs that construct the service directly keep
+    // working without an audit dep; the write slice guards the call.
+    @Optional() private readonly audit?: AuditService,
   ) {
     this.auth = new CashDrawerAuthService({
       db: this.db,
@@ -63,6 +67,7 @@ export class CashDrawerService {
       tx: this.tx,
       accountingPosting: this.accountingPosting,
       whatsappService: this.whatsappService,
+      audit: this.audit,
       scope: this.scope.bind(this),
       toBookMoney: this.toBookMoney.bind(this),
       serializeBlindCloseNote: this.serializeBlindCloseNote.bind(this),
@@ -71,6 +76,9 @@ export class CashDrawerService {
       normalizeOperationDetails: this.normalizeOperationDetails.bind(this),
       isPasswordRequiredOnShiftOpen: this.isPasswordRequiredOnShiftOpen.bind(this),
       assertCurrentUserPassword: this.assertCurrentUserPassword.bind(this),
+      // F5: shift open/close verify the signed-in user's own password
+      // only — no manager fallback (see CashDrawerAuthService).
+      assertCurrentUserPasswordStrict: this.assertCurrentUserPasswordStrict.bind(this),
       assertCashDrawerApproval: this.assertCashDrawerApproval.bind(this),
       canReviewPendingShift: this.canReviewPendingShift.bind(this),
       computeShiftExpectedCashFromShift: this.computeShiftExpectedCashFromShift.bind(this),
@@ -126,6 +134,10 @@ export class CashDrawerService {
 
   private async assertCurrentUserPassword(password: string, auth: AuthContext): Promise<void> {
     return this.auth.assertCurrentUserPassword(password, auth);
+  }
+
+  private async assertCurrentUserPasswordStrict(password: string, auth: AuthContext): Promise<void> {
+    return this.auth.assertCurrentUserPasswordStrict(password, auth);
   }
 
   private async isPasswordRequiredOnShiftOpen(auth: AuthContext): Promise<boolean> {

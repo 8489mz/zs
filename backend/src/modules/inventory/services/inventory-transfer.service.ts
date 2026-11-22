@@ -116,6 +116,11 @@ export class InventoryTransferService {
         .where('id', '=', payload.toBranchId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
       if (!branch) throw new AppError('Destination branch not found', 'DESTINATION_BRANCH_NOT_FOUND', 404);
     }
+    // F19: final issue to a van_stock location is never a consumption — vans load via requisition/dispatch; refuse before anything is written.
+    const issueMode = payload.issueMode || 'transfer_to_branch_stock';
+    if (issueMode === 'final_issue' && to && to.locationType === 'van_stock') {
+      throw new AppError('الصرف النهائي إلى مخزن سيارة غير مسموح؛ تحميل السيارة يتم عبر إذن التحميل فقط', 'FINAL_ISSUE_TO_VAN_NOT_ALLOWED', 400);
+    }
     if (!(payload.items || []).length || payload.items.some((item) =>
       !Number.isSafeInteger(Number(item.productId)) || Number(item.productId) <= 0 ||
       !Number.isFinite(Number(item.qty)) || Number(item.qty) <= 0 ||
@@ -124,7 +129,6 @@ export class InventoryTransferService {
     }
 
     const transferId = await this.tx.runInTransaction(this.db, async (trx) => {
-      const issueMode = payload.issueMode || 'transfer_to_branch_stock';
       // INV-TRANSFER-RECEIPT-PINNED: the dispatch cost is frozen on the
       // transfer_send movement at the tenant's book digits, so a later
       // receipt values any shrinkage at this cost, never at the
@@ -154,6 +158,10 @@ export class InventoryTransferService {
       }
 
       await lockStockProducts(trx, { ...scope, productIds: payload.items.map((item) => item.productId) });
+      // F19: a final issue to a stock-holding location is a MOVE, not a
+      // consumption. `to` can only be one here (in_transit refused by
+      // assertLocationScope, van_stock refused above); null `to` stays the sink.
+      const finalIssueDest = issueMode === 'final_issue' ? to : null;
       for (const item of [...payload.items].sort((a, b) => Number(a.productId) - Number(b.productId))) {
         const product = await trx.selectFrom('products').select(['id', 'name', 'cost_price']).where('id', '=', item.productId).where('is_active', '=', true).where(this.tenantPredicate(auth)).executeTakeFirst();
         if (!product) throw new AppError(`Product #${item.productId} not found`, 'PRODUCT_NOT_FOUND', 404);
@@ -164,7 +172,8 @@ export class InventoryTransferService {
         ensureNonNegativeStock(Number(availableAtSource || 0) - Number(item.qty || 0), 'INSUFFICIENT_LOCATION_STOCK', `الكمية غير كافية في مخزن ${from.name} للصنف ${product.name}. المتاح: ${availableAtSource || 0}`);
 
         const isFinalIssue = issueMode === 'final_issue';
-        const trace = await dispatchTrackedStock(trx, scope, item, from.id, from.branchId, inTransitLocationId, id);
+        const isFinalIssueToLocation = finalIssueDest !== null;
+        const trace = await dispatchTrackedStock(trx, scope, item, from.id, from.branchId, finalIssueDest ? finalIssueDest.id : inTransitLocationId, id);
         await trx.insertInto('stock_transfer_items').values({
           transfer_id: id, product_id: item.productId, product_name: product.name || '', qty: item.qty,
           // PostgreSQL NUMERIC values are returned as strings. A default
@@ -177,18 +186,21 @@ export class InventoryTransferService {
           ...this.tenantFields(auth),
         } as any).execute();
 
-        // Deduct from source. Only reduce global stock if final_issue (inTransitLocationId is null)
-        const stockChange = await applyStockDelta(trx, { ...stockScope, delta: -Number(item.qty || 0), skipGlobalUpdate: inTransitLocationId !== null, disableAutoDrain: true, errorCode: 'INSUFFICIENT_LOCATION_STOCK', errorMessage: `Insufficient stock at ${from.name} for ${product.name}` });
+        // Deduct from source. Only reduce global stock if final_issue to a
+        // consumption sink (inTransitLocationId is null and there is no
+        // destination location). A final issue to a warehouse keeps the
+        // global counter: the paired IN leg below credits the same qty.
+        const stockChange = await applyStockDelta(trx, { ...stockScope, delta: -Number(item.qty || 0), skipGlobalUpdate: inTransitLocationId !== null || isFinalIssueToLocation, disableAutoDrain: true, errorCode: 'INSUFFICIENT_LOCATION_STOCK', errorMessage: `Insufficient stock at ${from.name} for ${product.name}` });
         const originalUnitCost = Number(product.cost_price || 0);
         const unitCost = Number.isFinite(originalUnitCost) && originalUnitCost > 0 ? originalUnitCost : 0;
         const movement = await trx.insertInto('stock_movements').values({
           product_id: item.productId,
-          movement_type: isFinalIssue ? 'transfer_final_issue' : 'transfer_send',
+          movement_type: (isFinalIssue && !isFinalIssueToLocation) ? 'transfer_final_issue' : 'transfer_send',
           qty: -Number(item.qty || 0),
           before_qty: stockChange.scopeBefore,
           after_qty: stockChange.scopeAfter,
-          reason: isFinalIssue ? 'final_issue' : 'transfer_send',
-          note: isFinalIssue ? `صرف نهائي TR-${id}` : `Sent transfer TR-${id}`,
+          reason: (isFinalIssue && !isFinalIssueToLocation) ? 'final_issue' : 'transfer_send',
+          note: (isFinalIssue && !isFinalIssueToLocation) ? `صرف نهائي TR-${id}` : (isFinalIssueToLocation ? `صرف نهائي إلى ${finalIssueDest.name} TR-${id}` : `Sent transfer TR-${id}`),
           reference_type: 'transfer', reference_id: id, created_by: auth.userId,
           branch_id: from.branchId, location_id: from.id,
           // The dispatch cost is frozen on every send movement, not only
@@ -197,9 +209,11 @@ export class InventoryTransferService {
           total_cost: roundMoney(Number(item.qty || 0) * unitCost, moneyDigits),
           ...this.tenantFields(auth),
         }).returning('id').executeTakeFirstOrThrow();
-        if (isFinalIssue) {
+        if (isFinalIssue && !isFinalIssueToLocation) {
           // Unlike a transfer-in-transit this immediately removes a company
           // asset, so it needs an expense journal in the SAME transaction.
+          // A final issue to a warehouse posts no journal: the goods still
+          // exist, in another warehouse (F19).
           const posting = await this.accountingPosting.postInventoryAdjustment(trx, Number(movement.id), auth);
           if (posting.hasFinancialImpact && !posting.journalEntryId) {
             throw new AppError('صرف المخزون النهائي يحتاج قيداً محاسبياً متوازناً', 'FINAL_ISSUE_JOURNAL_MISSING', 500);
@@ -211,6 +225,41 @@ export class InventoryTransferService {
           const transitChange = await applyStockDelta(trx, { ...transitScope, delta: Number(item.qty || 0), skipGlobalUpdate: true, disableAutoDrain: true, errorCode: 'TRANSIT_STOCK_ERROR', errorMessage: 'Transit error' });
           await trx.insertInto('stock_movements').values({ product_id: item.productId, movement_type: 'transfer_transit_in', qty: Number(item.qty || 0), before_qty: transitChange.scopeBefore, after_qty: transitChange.scopeAfter, reason: 'transfer_send', note: `In-transit for TR-${id}`, reference_type: 'transfer', reference_id: id, created_by: auth.userId, location_id: inTransitLocationId, ...this.tenantFields(auth) }).execute();
           await syncImportLotsOnLocationTransfer(trx, { tenantId: scope.tenantId, productId: Number(item.productId), fromLocationId: from.id, toLocationId: inTransitLocationId, qty: Number(item.qty || 0) });
+        } else if (finalIssueDest) {
+          // F19 paired IN leg: credit the destination with exactly what the
+          // source lost, at the same frozen cost, so the stock is never
+          // lost. No expense journal (see above): the goods still exist.
+          const toScope = { tenantId: scope.tenantId, accountId: scope.accountId, productId: item.productId, branchId: finalIssueDest.branchId, locationId: finalIssueDest.id };
+          const toChange = await applyStockDelta(trx, { ...toScope, delta: Number(item.qty || 0), skipGlobalUpdate: true, disableAutoDrain: true, errorCode: 'TRANSFER_RECEIVE_ERROR', errorMessage: `Error receiving final issue at ${finalIssueDest.name}` });
+          await trx.insertInto('stock_movements').values({
+            product_id: item.productId,
+            movement_type: 'transfer_receive',
+            qty: Number(item.qty || 0),
+            before_qty: toChange.scopeBefore,
+            after_qty: toChange.scopeAfter,
+            reason: 'final_issue',
+            note: `Received final issue TR-${id} at ${finalIssueDest.name}`,
+            reference_type: 'transfer', reference_id: id, created_by: auth.userId,
+            branch_id: finalIssueDest.branchId, location_id: finalIssueDest.id,
+            unit_cost: unitCost,
+            total_cost: roundMoney(Number(item.qty || 0) * unitCost, moneyDigits),
+            ...this.tenantFields(auth),
+          }).execute();
+          // Tracked stock was dispatched "via" the destination: serials
+          // already sit there in_stock but with a null branch, and
+          // batches were created there as in_transit. Settle both to the
+          // destination's real state so the units stay dispatchable.
+          if (trace.serialTracking.length && finalIssueDest.branchId != null) {
+            await trx.updateTable('product_serials').set({ branch_id: finalIssueDest.branchId, updated_at: sql`NOW()` })
+              .where('tenant_id', '=', scope.tenantId)
+              .where('id', 'in', trace.serialTracking.map((entry) => entry.id)).execute();
+          }
+          const destBatchIds = trace.batchTracking.map((entry) => entry.transitBatchId).filter((entryId): entryId is number => entryId != null);
+          if (destBatchIds.length) {
+            await trx.updateTable('pharmacy_batches').set({ status: 'active', updated_at: sql`NOW()` })
+              .where('tenant_id', '=', scope.tenantId).where('id', 'in', destBatchIds).execute();
+          }
+          await syncImportLotsOnLocationTransfer(trx, { tenantId: scope.tenantId, productId: Number(item.productId), fromLocationId: from.id, toLocationId: finalIssueDest.id, qty: Number(item.qty || 0) });
         } else if (isFinalIssue) {
           await syncImportLotsOnStockDeduction(trx, { tenantId: scope.tenantId, productId: Number(item.productId), locationId: from.id, qty: Number(item.qty || 0), reason: 'transfer_final_issue' });
         }
@@ -517,6 +566,120 @@ export class InventoryTransferService {
       await this.audit.logWithExecutor(trx, 'إلغاء تحويل مخزون', `تم إلغاء التحويل TR-${transferId}`, auth);
 
       const responsePayload = { ok: true, stockTransfers: (await this.listStockTransfers({}, auth, trx)).stockTransfers };
+
+      const idemCtx = idempotencyStorage.getStore();
+      if (idemCtx && idemCtx.idempotencyKey && idemCtx.operationType) {
+        await this.idempotency.commitOperation(
+          trx,
+          { tenantId: scope.tenantId, accountId: idemCtx.accountId || scope.accountId, idempotencyKey: idemCtx.idempotencyKey, operationType: idemCtx.operationType },
+          responsePayload,
+          String(transferId)
+        );
+      }
+      return responsePayload;
+    });
+    return result as Record<string, unknown>;
+  }
+
+  // F19: reverse a RECEIVED final issue prospectively (correction path for
+  // e.g. ZTR-261121-2620): credit the source back at the frozen OUT cost and
+  // post a correcting journal flipping the original lines (Dr 1140 / Cr 6900,
+  // reversal_of_entry_id). Original rows are never edited. Transfer closes as
+  // 'cancelled'; second reversal refused. NOTE: serial/batch ledgers are NOT
+  // restored (follow-up); quantity + GL are restored exactly.
+  async reverseFinalIssue(transferId: number, auth: AuthContext): Promise<Record<string, unknown>> {
+    const scope = this.tenantScope(auth);
+    const result = await this.tx.runInTransaction(this.db, async (trx) => {
+      const transfer = await trx.selectFrom('stock_transfers').selectAll().where('id', '=', transferId).where(this.tenantPredicate(auth)).forUpdate().executeTakeFirst();
+      if (!transfer) throw new AppError('Transfer not found', 'TRANSFER_NOT_FOUND', 404);
+      // 'cancelled' is let through so a second reversal hits the already-reversed check, not the status gate.
+      if (!['received', 'cancelled'].includes(transfer.status || 'sent')) throw new AppError('Only a received final issue can be reversed', 'FINAL_ISSUE_REVERSAL_STATUS_INVALID', 400);
+      const outMovements = await trx.selectFrom('stock_movements')
+        .select(['id', 'product_id', 'qty', 'unit_cost', 'total_cost'])
+        .where('reference_type', '=', 'transfer').where('reference_id', '=', transferId)
+        .where('movement_type', '=', 'transfer_final_issue').where('tenant_id', '=', scope.tenantId)
+        .orderBy('product_id', 'asc').execute();
+      if (!outMovements.length) throw new AppError('Only a final issue can be reversed with this endpoint', 'FINAL_ISSUE_NOT_FOUND', 400);
+      const alreadyReversed = await trx.selectFrom('stock_movements').select('id')
+        .where('reference_type', '=', 'transfer').where('reference_id', '=', transferId)
+        .where('movement_type', '=', 'transfer_final_issue_reversal').where('tenant_id', '=', scope.tenantId)
+        .executeTakeFirst();
+      if (alreadyReversed) throw new AppError('This final issue was already reversed', 'FINAL_ISSUE_ALREADY_REVERSED', 409);
+      await this.scope.assertLocationScope(Number(transfer.from_location_id), auth, true, 'write', trx);
+      const items = await trx.selectFrom('stock_transfer_items').select(['product_id', 'qty']).where('transfer_id', '=', transferId).where(this.tenantPredicate(auth)).orderBy('product_id', 'asc').execute();
+      await lockStockProducts(trx, { ...scope, productIds: items.map((item) => Number(item.product_id)) });
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+      const reversalJournalIds: number[] = [];
+
+      for (const item of items) {
+        const out = outMovements.find((entry) => Number(entry.product_id) === Number(item.product_id));
+        if (!out) throw new AppError(`Final issue movement missing for product #${item.product_id}`, 'FINAL_ISSUE_MOVEMENT_MISSING', 409);
+        const qty = Math.abs(Number(out.qty || 0));
+        if (!(qty > 0)) continue;
+        const unitCost = Number(out.unit_cost || 0);
+        const totalCost = out.total_cost != null ? Number(out.total_cost) : roundMoney(qty * unitCost, moneyDigits);
+
+        const stockScope = { tenantId: scope.tenantId, accountId: scope.accountId, productId: Number(item.product_id), branchId: transfer.from_branch_id, locationId: transfer.from_location_id };
+        const stockChange = await applyStockDelta(trx, { ...stockScope, delta: qty, disableAutoDrain: true, errorCode: 'FINAL_ISSUE_REVERSAL_ERROR', errorMessage: `Final issue TR-${transferId} cannot be reversed` });
+        const reversalMovement = await trx.insertInto('stock_movements').values({
+          product_id: Number(item.product_id),
+          movement_type: 'transfer_final_issue_reversal',
+          qty,
+          before_qty: stockChange.scopeBefore,
+          after_qty: stockChange.scopeAfter,
+          reason: 'final_issue_reversal',
+          note: `عكس صرف نهائي TR-${transferId}`,
+          reference_type: 'transfer', reference_id: transferId, created_by: auth.userId,
+          branch_id: transfer.from_branch_id, location_id: transfer.from_location_id,
+          unit_cost: unitCost,
+          total_cost: roundMoney(totalCost, moneyDigits),
+          ...this.tenantFields(auth),
+        }).returning('id').executeTakeFirstOrThrow();
+
+        const originalJournal = await trx.selectFrom('journal_entries').select('id')
+          .where('source_type', '=', 'inventory_adjustment').where('source_id', '=', Number(out.id))
+          .where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+        if (originalJournal) {
+          const originalLines = await trx.selectFrom('journal_entry_lines')
+            .select(['account_id', 'description', 'debit', 'credit', 'partner_type', 'partner_id', 'branch_id', 'location_id', 'cost_center_id'])
+            .where('journal_entry_id', '=', Number(originalJournal.id)).where('tenant_id', '=', scope.tenantId)
+            .orderBy('id', 'asc').execute();
+          if (originalLines.length) {
+            const reversedLines = originalLines.map((line) => ({
+              accountId: Number(line.account_id),
+              description: `عكس: ${line.description || ''}`,
+              debit: Number(line.credit || 0),
+              credit: Number(line.debit || 0),
+              partnerType: (line.partner_type || 'none') as 'none' | 'customer' | 'supplier' | 'employee' | 'rep',
+              partnerId: line.partner_id ? Number(line.partner_id) : null,
+              branchId: line.branch_id ? Number(line.branch_id) : null,
+              locationId: line.location_id ? Number(line.location_id) : null,
+              costCenterId: line.cost_center_id ? Number(line.cost_center_id) : null,
+            }));
+            const entryId = await this.accountingPosting.postDomainJournal(trx, {
+              sourceType: 'inventory_adjustment',
+              sourceId: Number(reversalMovement.id),
+              tenantId: scope.tenantId,
+              accountId: scope.accountId,
+              entryDate: new Date(),
+              description: `قيد عكس صرف نهائي TR-${transferId} - حركة #${reversalMovement.id}`,
+              branchId: transfer.from_branch_id ? Number(transfer.from_branch_id) : null,
+              locationId: transfer.from_location_id ? Number(transfer.from_location_id) : null,
+              createdBy: auth.userId,
+              postedBy: auth.userId,
+              reversalOfEntryId: Number(originalJournal.id),
+              lines: reversedLines,
+            });
+            reversalJournalIds.push(entryId);
+          }
+        }
+      }
+
+      await trx.updateTable('stock_transfers').set({ status: 'cancelled', cancelled_by: auth.userId, cancelled_at: sql`NOW()`, updated_at: sql`NOW()` }).where('id', '=', transferId).where(this.tenantPredicate(auth)).execute();
+
+      await this.audit.logWithExecutor(trx, 'عكس صرف نهائي', `تم عكس الصرف النهائي TR-${transferId}`, auth);
+
+      const responsePayload = { ok: true, transferId: String(transferId), reversalJournalIds, stockTransfers: (await this.listStockTransfers({}, auth, trx)).stockTransfers };
 
       const idemCtx = idempotencyStorage.getStore();
       if (idemCtx && idemCtx.idempotencyKey && idemCtx.operationType) {

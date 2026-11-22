@@ -182,10 +182,17 @@ export function filterCashDrawerRows(rows: CashDrawerMappedRow[], query: CashDra
   return rows.filter((row) => {
     const status = String(row.status || '');
     const variance = Number(row.variance || 0);
+    // F5: the differences filter keys off hasVariance as well as the
+    // amount. For a cashier viewer the amounts are blinded to 0, so
+    // the amount alone could never match — the trial's filter
+    // returned zero shifts for the closer although the shift was
+    // 100.00 short. hasVariance is set from the STORED variance
+    // before blinding, so the flag survives without revealing the
+    // expected cash or the amount to the cashier.
     if (filter === 'open' && status !== 'open') return false;
     if (filter === 'closed' && status !== 'closed') return false;
     if (filter === 'pending_review' && status !== 'pending_review') return false;
-    if (filter === 'variance' && Math.abs(variance) <= 0) return false;
+    if (filter === 'variance' && !(Math.abs(variance) > 0 || row.hasVariance === true)) return false;
     if (filter === 'today' && cashDrawerDateKey(row.openedAt || row.createdAt, timeZone) !== today) return false;
     if (!search) return true;
     return [row.docNo, row.status, row.branchName, row.locationName, row.openedByName, row.openingNote, row.closeNote].some((value) => String(value || '').toLowerCase().includes(search));
@@ -245,6 +252,10 @@ export function summarizeCashDrawerRows(rows: CashDrawerMappedRow[], moneyDigits
     pendingReviewCount: pendingReviewRows.length,
     openShiftDocNo: openRows[0] ? String(openRows[0].docNo || openRows[0].id || '') : '',
     totalVariance: roundMoney(rows.reduce((sum, row) => sum + Number(row.variance || 0), 0), moneyDigits),
+    // F5: how many shifts differ, by flag rather than by amount — for
+    // a cashier viewer the amounts are blinded to 0 (totalVariance
+    // reads 0), but the count still says a shift differs.
+    differingShiftCount: rows.filter((row) => Number(row.variance || 0) !== 0 || row.hasVariance === true).length,
   };
 }
 
@@ -314,6 +325,11 @@ export function mapCashDrawerShiftRow(row: CashDrawerShiftSource): CashDrawerMap
     expectedCash: Number(row.expected_cash || 0),
     countedCash: row.counted_cash == null ? null : Number(row.counted_cash || 0),
     variance: row.variance == null ? 0 : Number(row.variance || 0),
+    // F5: difference flag, set from the STORED variance here — before
+    // the cashier-view blinding in rawList zeroes the amount. The
+    // flag (not the amount) is what the differences filter and the
+    // summary count on for a cashier viewer.
+    hasVariance: row.variance == null ? false : Number(row.variance || 0) !== 0,
     closeNote: parsedClose.note,
     closeNoteRaw: parsedClose.raw,
     blindCloseMode: Boolean(parsedClose.blindClose?.blindClose),

@@ -82,6 +82,16 @@
  * the sales module now reads the delivery-reps cap, which is the
  * point of the package (one cap, two sale paths).
  *
+ * F7 (pos-sale-trip-attribution): sales->delivery-reps 6 -> 7: the POS
+ * create-sale attribution resolver (resolve-pos-trip-attribution.ts)
+ * now reads the rep link + active trip from the delivery-reps tables,
+ * reusing the ONE rep/trip resolution instead of re-deriving it —
+ * the portal path's attribution, applied to POS for the first time.
+ * Backend total pin 746 -> 747 (= the edge delta, no other growth);
+ * posting 97 / foundation 20 unchanged. Deliberate new coupling, not
+ * a pure move: the sales module now reads delivery-reps trip state,
+ * which is the point of the package (one attribution, two sale paths).
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -155,7 +165,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'saas-admin->storefront': 2,
   'sales->accounting': 67,
   'sales->cash-drawer': 5,
-  'sales->delivery-reps': 6,
+  'sales->delivery-reps': 7,
   'sales->import-sales': 4,
   'sales->manufacturing': 1,
   'sales->reports': 1,
@@ -242,7 +252,7 @@ const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|hr', 'accounti
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|treasury', 'accounts|purchases', 'audit|settings', 'cash-drawer|pos', 'customers|sales', 'inventory|products', 'maintenance|products', 'pos|products', 'pos|sales', 'pos|settings', 'pos|storefront', 'products|settings'];
 const PINNED_POSTING_EXTERNAL = 97;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 746;
+const PINNED_BACKEND_TOTAL = 747;
 const PINNED_FRONTEND_TOTAL = 136;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;

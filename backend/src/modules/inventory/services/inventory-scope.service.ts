@@ -52,7 +52,7 @@ export class InventoryScopeService {
     return Array.from(new Set(ids));
   }
 
-  async assertLocationScope(locationId: number, auth: AuthContext, allowInactive = false, action: 'read' | 'write' = 'read', executor: Kysely<Database> = this.db): Promise<{ id: number; name: string; branchId: number | null }> {
+  async assertLocationScope(locationId: number, auth: AuthContext, allowInactive = false, action: 'read' | 'write' = 'read', executor: Kysely<Database> = this.db): Promise<{ id: number; name: string; branchId: number | null; locationType: string }> {
     const tenantId = this.tenantId(auth);
     const location = await executor
       .selectFrom('stock_locations')
@@ -92,7 +92,7 @@ export class InventoryScopeService {
       throw new AppError('Location is outside assigned branches', 'LOCATION_SCOPE_FORBIDDEN', 403);
     }
 
-    return { id: location.id, name: location.name || '', branchId: location.branch_id || null };
+    return { id: location.id, name: location.name || '', branchId: location.branch_id || null, locationType: location.location_type || '' };
   }
 
   async filterByScope<T extends { branchId?: string; fromBranchId?: string; toBranchId?: string }>(rows: T[], auth: AuthContext, executor: Kysely<Database> = this.db): Promise<T[]> {

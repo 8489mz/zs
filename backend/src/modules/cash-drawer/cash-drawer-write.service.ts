@@ -26,6 +26,7 @@ import { AccountingPostingService } from '../accounting/accounting-posting.servi
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
+import { AUDIT_EVENT_CODES, type AuditService } from '../../core/audit/audit.service';
 import type {
   ShiftRow,
   BlindCloseMetadata,
@@ -50,6 +51,9 @@ export interface CashDrawerWriteDeps {
   tx: TransactionHelper;
   accountingPosting: AccountingPostingService;
   whatsappService?: WhatsAppGatewayService;
+  // F5: shift open/close/review audit. Optional — specs that build the
+  // service without an audit dep keep working; the calls guard it.
+  audit?: AuditService;
   // Bound kernel helpers (stay in the facade; passed bound so the moved
   // bodies stay byte-identical).
   scope: (auth: AuthContext) => TenantScope;
@@ -62,6 +66,8 @@ export interface CashDrawerWriteDeps {
   // own methods so the moved bodies stay byte-identical).
   isPasswordRequiredOnShiftOpen: (auth: AuthContext) => Promise<boolean>;
   assertCurrentUserPassword: (password: string, auth: AuthContext) => Promise<void>;
+  // F5: strict (own-password-only) assertion for shift open/close.
+  assertCurrentUserPasswordStrict: (password: string, auth: AuthContext) => Promise<void>;
   assertCashDrawerApproval: (movementType: CashDrawerMovementType, approvalSecret: string, auth: AuthContext) => Promise<void>;
   canReviewPendingShift: (auth: AuthContext) => boolean;
   computeShiftExpectedCashFromShift: (shift: ShiftRow, auth: AuthContext, salesBreakdown?: ShiftSalesBreakdown, serviceBreakdown?: ShiftServiceBreakdown, queryable?: Kysely<Database>, digits?: MoneyDigits) => Promise<number>;
@@ -81,6 +87,7 @@ export class CashDrawerWriteService {
   private readonly tx: TransactionHelper;
   private readonly accountingPosting: AccountingPostingService;
   private readonly whatsappService?: WhatsAppGatewayService;
+  private readonly audit?: AuditService;
   private readonly scope: (auth: AuthContext) => TenantScope;
   private readonly toBookMoney: (value: unknown, digits: MoneyDigits) => number;
   private readonly serializeBlindCloseNote: (meta: BlindCloseMetadata) => string;
@@ -89,6 +96,7 @@ export class CashDrawerWriteService {
   private readonly normalizeOperationDetails: (details: unknown, maxCount: number, digits: MoneyDigits) => Array<{ amount: number; reference?: string }>;
   private readonly isPasswordRequiredOnShiftOpen: (auth: AuthContext) => Promise<boolean>;
   private readonly assertCurrentUserPassword: (password: string, auth: AuthContext) => Promise<void>;
+  private readonly assertCurrentUserPasswordStrict: (password: string, auth: AuthContext) => Promise<void>;
   private readonly assertCashDrawerApproval: (movementType: CashDrawerMovementType, approvalSecret: string, auth: AuthContext) => Promise<void>;
   private readonly canReviewPendingShift: (auth: AuthContext) => boolean;
   private readonly computeShiftExpectedCashFromShift: (shift: ShiftRow, auth: AuthContext, salesBreakdown?: ShiftSalesBreakdown, serviceBreakdown?: ShiftServiceBreakdown, queryable?: Kysely<Database>, digits?: MoneyDigits) => Promise<number>;
@@ -106,6 +114,7 @@ export class CashDrawerWriteService {
     this.tx = deps.tx;
     this.accountingPosting = deps.accountingPosting;
     this.whatsappService = deps.whatsappService;
+    this.audit = deps.audit;
     this.scope = deps.scope;
     this.toBookMoney = deps.toBookMoney;
     this.serializeBlindCloseNote = deps.serializeBlindCloseNote;
@@ -114,6 +123,7 @@ export class CashDrawerWriteService {
     this.normalizeOperationDetails = deps.normalizeOperationDetails;
     this.isPasswordRequiredOnShiftOpen = deps.isPasswordRequiredOnShiftOpen;
     this.assertCurrentUserPassword = deps.assertCurrentUserPassword;
+    this.assertCurrentUserPasswordStrict = deps.assertCurrentUserPasswordStrict;
     this.assertCashDrawerApproval = deps.assertCashDrawerApproval;
     this.canReviewPendingShift = deps.canReviewPendingShift;
     this.computeShiftExpectedCashFromShift = deps.computeShiftExpectedCashFromShift;
@@ -142,11 +152,11 @@ export class CashDrawerWriteService {
       if (!password) {
         throw new AppError('أدخل كلمة المرور لتأكيد فتح الوردية', 'CURRENT_USER_PASSWORD_REQUIRED', 400);
       }
-      await this.assertCurrentUserPassword(password, auth);
+      await this.assertCurrentUserPasswordStrict(password, auth);
     } else if (password) {
       // A supplied password is never silently ignored: the shift-open modal
       // always shows the confirmation field, so a typed password must verify.
-      await this.assertCurrentUserPassword(password, auth);
+      await this.assertCurrentUserPasswordStrict(password, auth);
     }
 
     await this.tx.runInTransaction(this.db, async (trx) => {
@@ -203,7 +213,22 @@ export class CashDrawerWriteService {
       const shiftId = Number(inserted.rows?.[0]?.id || 0);
       if (!shiftId) throw new AppError('Could not open cashier shift', 'SHIFT_OPEN_FAILED', 400);
       const businessTz = await getTenantTimezone(trx, scope.tenantId);
-      await sql`update cashier_shifts set doc_no = ${buildCashDrawerShiftDocNo(shiftId, undefined, businessTz)} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
+      const docNo = buildCashDrawerShiftDocNo(shiftId, undefined, businessTz);
+      await sql`update cashier_shifts set doc_no = ${docNo} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
+      // F5: one audit row per shift open, in this same transaction —
+      // a rolled-back open leaves no audit trace, and a committed
+      // open always has one. The function check guards harnesses
+      // that pass no audit dep; in production Nest injects the real
+      // AuditService (cf. INV-VAN-TRIP-STARTED-AUDIT).
+      if (this.audit && typeof this.audit.logWithExecutor === 'function') {
+        await this.audit.logWithExecutor(
+          trx,
+          'فتح وردية',
+          `فتح ${String(auth.username || '')} وردية #${shiftId} (${docNo}) — رصيد افتتاح ${openingCash}`,
+          auth,
+          { eventCode: AUDIT_EVENT_CODES.CASHIER_SHIFT_OPENED },
+        );
+      }
     });
     const listing = await this.listCashierShifts({}, auth);
     return { ok: true, cashierShifts: listing.cashierShifts, pagination: listing.pagination, summary: listing.summary };
@@ -388,7 +413,9 @@ export class CashDrawerWriteService {
     const countedCash = Number(payload.countedCash || 0);
     const note = String(payload.note || '').trim();
     assertCashDrawerCountedCash(countedCash);
-    await this.assertCurrentUserPassword(String(payload.managerPin || '').trim(), auth);
+    // F5: strict — only the signed-in user's own password closes a
+    // shift. The old fallback accepted an admin's password here.
+    await this.assertCurrentUserPasswordStrict(String(payload.managerPin || '').trim(), auth);
     const cardOperationCount = this.normalizeOperationCount(payload.cardOperationCount);
     const walletOperationCount = this.normalizeOperationCount(payload.walletOperationCount);
     const instapayOperationCount = this.normalizeOperationCount(payload.instapayOperationCount);
@@ -409,6 +436,18 @@ export class CashDrawerWriteService {
     // is identical to within milliseconds, and the variance journal
     // reads closed_at as its entry date (day unchanged).
     const closeNow = new Date();
+
+    // F5: the close result returned to the caller (see the update
+    // inside the transaction below).
+    let closedShiftResult: {
+      id: number;
+      docNo: string;
+      status: string;
+      countedCash: number;
+      hasVariance: boolean;
+      expectedCash: number | null;
+      variance: number | null;
+    } | null = null;
 
     await this.tx.runInTransaction(this.db, async (trx) => {
       const lockedShift = await trx
@@ -552,6 +591,30 @@ export class CashDrawerWriteService {
       const closeNoteValue = blindCloseMeta ? this.serializeBlindCloseNote({ ...blindCloseMeta, note: stampedNote }) : stampedNote;
 
       await sql`update cashier_shifts set status = ${closeStatus}, expected_cash = ${expectedCash}, counted_cash = ${countedCash}, variance = ${variance}, close_note = ${closeNoteValue}, closed_by = ${auth.userId}, closed_at = ${closeNow} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
+      // F5: the close result the caller can show AFTER submitting.
+      // Blind close: the closer never sees expected/variance amounts
+      // (blind semantics — only the flag travels back); non-blind
+      // close: the figures were visible in the form already, so the
+      // response carries them. The audit row carries the full figures
+      // either way — the reviewer reads them from the log.
+      closedShiftResult = {
+        id: shiftId,
+        docNo: String(lockedShift.doc_no || ''),
+        status: closeStatus,
+        countedCash,
+        hasVariance: variance !== 0,
+        expectedCash: isBlindClose ? null : expectedCash,
+        variance: isBlindClose ? null : variance,
+      };
+      if (this.audit && typeof this.audit.logWithExecutor === 'function') {
+        await this.audit.logWithExecutor(
+          trx,
+          'إغلاق وردية',
+          `أغلق ${String(auth.username || '')} وردية #${shiftId} — المتوقع ${expectedCash}، المعدود ${countedCash}، الفرق ${variance} — الحالة ${closeStatus}`,
+          auth,
+          { eventCode: AUDIT_EVENT_CODES.CASHIER_SHIFT_CLOSED },
+        );
+      }
       if (closeStatus === 'closed') {
         await this.accountingPosting.postCashierShiftVariance(trx, shiftId, postingAuth);
       }
@@ -562,7 +625,7 @@ export class CashDrawerWriteService {
     }
 
     const listing = await this.listCashierShifts({}, auth);
-    return { ok: true, cashierShifts: listing.cashierShifts, pagination: listing.pagination, summary: listing.summary };
+    return { ok: true, closedShift: closedShiftResult, cashierShifts: listing.cashierShifts, pagination: listing.pagination, summary: listing.summary };
   }
 
   /**
@@ -659,6 +722,16 @@ export class CashDrawerWriteService {
           closeNoteValue = rawCloseNote ? `${rawCloseNote}\n\n${line}` : line;
         }
         await sql`update cashier_shifts set status = 'open', counted_cash = null, variance = null, close_note = ${closeNoteValue}, closed_by = null, closed_at = null, updated_at = ${reviewNow} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
+        // F5: the rejection is audited with the figures it rejects.
+        if (this.audit && typeof this.audit.logWithExecutor === 'function') {
+          await this.audit.logWithExecutor(
+            trx,
+            'مراجعة إغلاق وردية',
+            `رفض ${String(auth.username || '')} إغلاق وردية #${shiftId} — ${managerNote} — المتوقع ${Number((lockedShift as ShiftRow).expected_cash || 0)}، المعدود ${Number((lockedShift as ShiftRow).counted_cash || 0)}، الفرق ${Number((lockedShift as ShiftRow).variance || 0)}`,
+            auth,
+            { eventCode: AUDIT_EVENT_CODES.CASHIER_SHIFT_REVIEWED },
+          );
+        }
         return;
       }
 
@@ -699,6 +772,16 @@ export class CashDrawerWriteService {
 
       await sql`update cashier_shifts set status = 'closed', close_note = ${closeNoteValue}, closed_by = coalesce(closed_by, ${auth.userId}), closed_at = coalesce(closed_at, ${reviewNow}), updated_at = ${reviewNow} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
       await this.accountingPosting.postCashierShiftVariance(trx, shiftId, auth);
+      // F5: the approval is audited with the figures it approves.
+      if (this.audit && typeof this.audit.logWithExecutor === 'function') {
+        await this.audit.logWithExecutor(
+          trx,
+          'مراجعة إغلاق وردية',
+          `اعتمد ${String(auth.username || '')} إغلاق وردية #${shiftId} — المتوقع ${Number((lockedShift as ShiftRow).expected_cash || 0)}، المعدود ${Number((lockedShift as ShiftRow).counted_cash || 0)}، الفرق ${Number((lockedShift as ShiftRow).variance || 0)}`,
+          auth,
+          { eventCode: AUDIT_EVENT_CODES.CASHIER_SHIFT_REVIEWED },
+        );
+      }
     });
     const listing = await this.listCashierShifts({}, auth);
     return { ok: true, cashierShifts: listing.cashierShifts, pagination: listing.pagination, summary: listing.summary, reconciliation };

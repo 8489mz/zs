@@ -59,6 +59,14 @@ export const AUDIT_EVENT_CODES = {
   // INV-VAN-TRIP-STARTED-AUDIT: the trip start is a lifecycle event
   // (not a money action), audited so the admin log shows the trip
   // opening, not just its settlement.
+  // F5 (trial problems 5/6, 2026-11-21): shift lifecycle events. The
+  // trial's audit log contained ZERO shift records — open/close/review
+  // wrote nothing. One row per event, in the same transaction as the
+  // shift write, naming the real actor and the declared/counted/
+  // variance figures.
+  CASHIER_SHIFT_OPENED: 'CASHIER_SHIFT_OPENED',
+  CASHIER_SHIFT_CLOSED: 'CASHIER_SHIFT_CLOSED',
+  CASHIER_SHIFT_REVIEWED: 'CASHIER_SHIFT_REVIEWED',
   VAN_TRIP_STARTED: 'VAN_TRIP_STARTED',
   VAN_TRIP_EXPENSE: 'VAN_TRIP_EXPENSE',
   VAN_INTER_VAN_TRANSFER: 'VAN_INTER_VAN_TRANSFER',

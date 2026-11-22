@@ -93,6 +93,10 @@ export class InventoryService {
     return this.transferService.cancelStockTransfer(transferId, auth);
   }
 
+  reverseFinalIssue(transferId: number, auth: AuthContext): Promise<Record<string, unknown>> {
+    return this.transferService.reverseFinalIssue(transferId, auth);
+  }
+
   listStockCountSessions(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
     return this.countService.listStockCountSessions(query, auth);
   }

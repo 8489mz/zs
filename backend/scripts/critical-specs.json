@@ -293,6 +293,9 @@
     "test/critical/restaurant-manager-comp-gate.spec.ts",
     "test/critical/restaurant-86-enforcement.spec.ts",
     "test/critical/van-pos-discount-cap.spec.ts",
-    "test/critical/pos-collection-balance-cap.spec.ts"
+    "test/critical/pos-collection-balance-cap.spec.ts",
+    "test/critical/shift-close-password-identity.spec.ts",
+    "test/critical/final-issue-paired-movement.spec.ts",
+    "test/critical/pos-sale-trip-attribution.spec.ts"
   ]
 }
