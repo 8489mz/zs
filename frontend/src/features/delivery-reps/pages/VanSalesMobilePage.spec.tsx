@@ -61,40 +61,57 @@ vi.mock('@/shared/api/delivery-reps.api', () => ({
   },
 }));
 
-vi.mock('../api/van-sales.api', () => ({
-  vanSalesApi: {
-    getActiveTrip: mockGetActiveTrip,
-    listMyRequisitions: vi.fn().mockResolvedValue([]),
-    getMyItinerary: vi.fn().mockResolvedValue([]),
-    getDriverFuelLogs: vi.fn().mockResolvedValue([]),
-    getDriverMaintenanceAlerts: vi.fn().mockResolvedValue([]),
-    getWarehouses: vi.fn().mockResolvedValue([]),
-    getAvailableProducts: vi.fn().mockResolvedValue([]),
-    getTripExpenses: vi.fn().mockResolvedValue({ expenses: [], totalExpenses: 0 }),
-    getTripPackagingMovements: vi.fn().mockResolvedValue([]),
-    getPeerReps: vi.fn().mockResolvedValue([]),
-    getDriverTransfers: vi.fn().mockResolvedValue([]),
-    getCustomerLastSoldPrices: vi.fn().mockResolvedValue({ lastPrices: {} }),
-    getCustomerSuggestedOrder: vi.fn().mockResolvedValue({ items: [] }),
-    checkInVisit: mockCheckInVisit,
-    checkOutVisit: mockCheckOutVisit,
-    openTrip: vi.fn(),
-    settleTrip: vi.fn(),
-    recordCollection: mockRecordCollection,
-    executeSale: mockExecuteSale,
-    cancelMyRequisition: vi.fn(),
-    // INV-VAN-SALES-MOCK-EVALUATE-PROMOTIONS: the tab calls this 250ms
-    // after a non-empty cart renders; the stub matches the real return
-    // shape (van-sales-fraud-promotions.ts:124).
-    evaluateCartPromotions: vi.fn().mockResolvedValue({
-      ok: true,
-      appliedPromotions: [],
-      bonusItemsToAdd: [],
-      totalPromotionalDiscount: 0,
-      upsellNudges: [],
-    }),
-  },
-}));
+vi.mock('../api/van-sales.api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api/van-sales.api')>();
+  return {
+    ...actual,
+    vanSalesApi: {
+      ...actual.vanSalesApi,
+      getActiveTrip: mockGetActiveTrip,
+      listMyRequisitions: vi.fn().mockResolvedValue([]),
+      getMyItinerary: vi.fn().mockResolvedValue([]),
+      getDriverFuelLogs: vi.fn().mockResolvedValue([]),
+      getDriverMaintenanceAlerts: vi.fn().mockResolvedValue([]),
+      getWarehouses: vi.fn().mockResolvedValue([]),
+      getAvailableProducts: vi.fn().mockResolvedValue([]),
+      getTripExpenses: vi.fn().mockResolvedValue({ expenses: [], totalExpenses: 0 }),
+      getTripPackagingMovements: vi.fn().mockResolvedValue([]),
+      getPeerReps: vi.fn().mockResolvedValue([]),
+      getDriverTransfers: vi.fn().mockResolvedValue([]),
+      getCustomerLastSoldPrices: vi.fn().mockResolvedValue({ lastPrices: {} }),
+      getCustomerSuggestedOrder: vi.fn().mockResolvedValue({ items: [] }),
+      checkInVisit: mockCheckInVisit,
+      checkOutVisit: mockCheckOutVisit,
+      openTrip: vi.fn(),
+      settleTrip: vi.fn(),
+      recordCollection: mockRecordCollection,
+      executeSale: mockExecuteSale,
+      cancelMyRequisition: vi.fn(),
+      // INV-VAN-SALES-MOCK-IMPORT-ORIGINAL: the page renders VanSaleTab,
+      // whose 250ms promo timer calls this whenever the cart is
+      // non-empty; the stub matches the real return shape
+      // (van-sales-fraud-promotions.ts:124) and keeps the path hermetic.
+      evaluateCartPromotions: vi.fn().mockResolvedValue({
+        ok: true,
+        appliedPromotions: [],
+        bonusItemsToAdd: [],
+        totalPromotionalDiscount: 0,
+        upsellNudges: [],
+      }),
+      // INV-VAN-SALES-MOCK-IMPORT-ORIGINAL: useVanSettle's per-day due
+      // query calls this whenever a trip is open; without the override
+      // the spread would leave the real network call in place.
+      getTripDueByDay: vi.fn().mockResolvedValue({
+        ok: true,
+        tripId: 0,
+        businessDay: null,
+        timezone: '',
+        days: [],
+        totalDue: 0,
+      }),
+    },
+  };
+});
 
 vi.mock('../offline/van-sales-offline.db', () => ({
   vanOfflineDb: {

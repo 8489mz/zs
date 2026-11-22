@@ -116,8 +116,13 @@ export const VanSaleTab: React.FC<VanSaleTabProps> = ({
       return;
     }
     const timer = setTimeout(() => {
-      vanSalesApi
-        .evaluateCartPromotions({
+      // INV-VAN-SALES-MOCK-IMPORT-ORIGINAL: promo evaluation is
+      // non-critical — a missing function (stale or partial API) must
+      // degrade silently, never throw synchronously inside the timer,
+      // where the chained .catch cannot reach it.
+      const evaluate = vanSalesApi.evaluateCartPromotions;
+      if (typeof evaluate !== 'function') return;
+      evaluate({
           cartItems: cart.map((c) => ({
             productId: c.productId,
             productName: c.name,

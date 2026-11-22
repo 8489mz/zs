@@ -39,21 +39,16 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../api/van-sales.api', () => ({
-  vanSalesApi: {
-    recordDriverFuelLog: mockRecordFuelLog,
-    // INV-VAN-SALES-MOCK-EVALUATE-PROMOTIONS: VanSaleTab calls this
-    // 250ms after a non-empty cart renders; the stub matches the real
-    // return shape (van-sales-fraud-promotions.ts:124).
-    evaluateCartPromotions: vi.fn().mockResolvedValue({
-      ok: true,
-      appliedPromotions: [],
-      bonusItemsToAdd: [],
-      totalPromotionalDiscount: 0,
-      upsellNudges: [],
-    }),
-  },
-}));
+vi.mock('../api/van-sales.api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api/van-sales.api')>();
+  return {
+    ...actual,
+    vanSalesApi: {
+      ...actual.vanSalesApi,
+      recordDriverFuelLog: mockRecordFuelLog,
+    },
+  };
+});
 
 vi.mock('@/shared/components/system-alert', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },

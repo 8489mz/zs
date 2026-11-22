@@ -7,8 +7,11 @@
  * of `undefined is not a function` can never be caught by the chained
  * .catch (no promise exists yet). This spec renders the real tab with
  * a one-item cart and waits past the timer, so it fails while the mock
- * lacks the function and passes once the stub is present. The stub
- * below matches the real return shape
+ * lacks the function and passes once the stub is present. The mock
+ * uses the importOriginal pattern (INV-VAN-SALES-MOCK-IMPORT-ORIGINAL):
+ * it spreads the real API and overrides only the two functions this
+ * test drives — getCustomerLastSoldPrices and evaluateCartPromotions —
+ * with the stub matching the real return shape
  * (van-sales-fraud-promotions.ts:124).
  */
 import { act, render } from '@testing-library/react';
@@ -37,12 +40,17 @@ vi.mock('@/shared/components/system-alert', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
-vi.mock('../api/van-sales.api', () => ({
-  vanSalesApi: {
-    getCustomerLastSoldPrices: mockGetCustomerLastSoldPrices,
-    evaluateCartPromotions: mockEvaluateCartPromotions,
-  },
-}));
+vi.mock('../api/van-sales.api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api/van-sales.api')>();
+  return {
+    ...actual,
+    vanSalesApi: {
+      ...actual.vanSalesApi,
+      getCustomerLastSoldPrices: mockGetCustomerLastSoldPrices,
+      evaluateCartPromotions: mockEvaluateCartPromotions,
+    },
+  };
+});
 
 const CUSTOMERS = [{ id: 7, name: 'محل اختبار', balance: 0 }];
 const CART = [
