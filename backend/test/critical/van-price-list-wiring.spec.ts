@@ -696,6 +696,8 @@ async function main(): Promise<void> {
   }
 
   // 11. Assignment validation through the real PartnersService:
+  // the payloads carry a valid phone (F4 gate) so the call reaches
+  // the price-list check instead of stopping at CUSTOMER_PHONE_REQUIRED;
   // an unknown list id is refused (400, nothing written); a real
   // list id is stored; clearing with null works; an unknown id on
   // update is refused too.
@@ -707,24 +709,24 @@ async function main(): Promise<void> {
       const partners = new PartnersService(db as any, { log: async () => {} } as never, {} as never);
       let thrown: unknown = null;
       try {
-        await partners.createCustomer({ name: 'Bad', creditLimit: 0, priceListId: 999 } as never, ADMIN as never);
+        await partners.createCustomer({ name: 'Bad', creditLimit: 0, priceListId: 999, phone: '01012345678' } as never, ADMIN as never);
       } catch (e) { thrown = e; }
       assert.ok(thrown, 'an unknown list id must throw');
       assert.equal(errorCode(thrown), 'PRICE_LIST_NOT_FOUND');
       const before = await (db as any).selectFrom('customers').selectAll().where('tenant_id', '=', TENANT).execute();
       assert.equal(before.length, 1);
-      const created = await partners.createCustomer({ name: 'Good', creditLimit: 0, priceListId: 1 } as never, ADMIN as never);
+      const created = await partners.createCustomer({ name: 'Good', creditLimit: 0, priceListId: 1, phone: '01012345678' } as never, ADMIN as never);
       assert.equal(created.ok, true);
       const goodId = Number((created as any).id);
       const goodRow = await (db as any).selectFrom('customers').selectAll().where('id', '=', goodId).executeTakeFirstOrThrow();
       assert.equal(Number(goodRow.price_list_id), 1);
       thrown = null;
       try {
-        await partners.updateCustomer(goodId, { name: 'Good', creditLimit: 0, priceListId: 999 } as never, ADMIN as never);
+        await partners.updateCustomer(goodId, { name: 'Good', creditLimit: 0, priceListId: 999, phone: '01012345678' } as never, ADMIN as never);
       } catch (e) { thrown = e; }
       assert.ok(thrown, 'an unknown list id on update must throw');
       assert.equal(errorCode(thrown), 'PRICE_LIST_NOT_FOUND');
-      await partners.updateCustomer(goodId, { name: 'Good', creditLimit: 0, priceListId: null } as never, ADMIN as never);
+      await partners.updateCustomer(goodId, { name: 'Good', creditLimit: 0, priceListId: null, phone: '01012345678' } as never, ADMIN as never);
       const cleared = await (db as any).selectFrom('customers').selectAll().where('id', '=', goodId).executeTakeFirstOrThrow();
       assert.equal(cleared.price_list_id, null);
       console.log('11. assignment validation passed');
@@ -740,7 +742,7 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedList(db, 1, {});
       const partners = new PartnersService(db as any, { log: async () => {} } as never, {} as never);
-      const created = await partners.createCustomer({ name: 'Listed', creditLimit: 0, priceListId: 1 } as never, ADMIN as never);
+      const created = await partners.createCustomer({ name: 'Listed', creditLimit: 0, priceListId: 1, phone: '01012345678' } as never, ADMIN as never);
       const custId = Number((created as any).id);
       const lists = new PriceListsService(db as any);
       await lists.deletePriceList(ADMIN as never, 1);

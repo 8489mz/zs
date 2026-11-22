@@ -1,5 +1,5 @@
-import { Type } from 'class-transformer';
-import { IsDateString, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsDateString, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ReportRangeQueryDto {
   @IsOptional()
@@ -55,12 +55,23 @@ export class ReportRangeQueryDto {
   // COGS and top products filter to the rep; sale returns filter to
   // the rep's invoices; purchases, services, expenses and treasury
   // are not rep-attributable and stay tenant-wide. employeeSummary
-  // stays per-user (created_by) and is unaffected.
+  // stays per-user (created_by); F13 adds its per-user profit column
+  // (salesProfit = sales - returns - net COGS) on that same grouping.
   @Type(() => Number)
   @IsOptional()
   @IsNumber()
   @Min(1)
   deliveryRepId?: number;
+
+  // F13 (trial problem 18): discounted-invoices-only filter for the sales
+  // report. A sale is discounted when its invoice discount is > 0 OR any
+  // line carries a line discount > 0 — the shared discountedSaleSql
+  // predicate; the query string 'true' is the only truthy spelling
+  // (Boolean('false') would be true, so the transform is explicit).
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsOptional()
+  @IsBoolean()
+  discountedOnly?: boolean;
 
   @IsOptional()
   @IsString()

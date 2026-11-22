@@ -6,7 +6,7 @@
  * subtotal, matching the backend exactly. */
 
 import { describe, expect, it } from 'vitest';
-import { calcInvoiceDiscountAmountFromPercent, calcInvoiceDiscountPercent, computePosCartTotals } from './pos-cart-totals';
+import { calcInvoiceDiscountAmountFromPercent, calcInvoiceDiscountPercent, calcMaxLoyaltyPointsToRedeem, computePosCartTotals } from './pos-cart-totals';
 import type { PosItem } from '@/features/pos/types/pos.types';
 
 function line(overrides: Partial<PosItem> = {}): PosItem {
@@ -160,5 +160,49 @@ describe('invoice discount percent (F1b)', () => {
       expect(calcInvoiceDiscountPercent(0, 96)).toBe(0);
       expect(calcInvoiceDiscountPercent(4, 0)).toBe(0);
     });
+  });
+});
+
+/* F14 (van trial, F1b loyalty item): the checkout "redeem all"
+ * button capped the points from the GROSS subtotal while the backend
+ * caps the loyalty discount at the NET subtotal (gross minus line
+ * discounts) — compute-totals-and-gates caps at subtotal x maxPct
+ * where its subtotal is already net of line discounts, and it
+ * deducts the FULL redeemed points count even when the money is
+ * capped. Trial pin: gross 250.00 with a 30.00 line discount nets
+ * to 220.00; at a 10% cap and 0.10 per point the button may redeem at
+ * most 220 points (22.00) — the gross base redeemed 250 points
+ * (25.00), 30 points the customer never got value for. */
+describe('redeem-all loyalty points cap (F14)', () => {
+  it('caps the redeemed points at the NET subtotal, not the gross', () => {
+    // 10% of net 220.00 is 22.00 = 220 points; 10% of the gross
+    // 250.00 would be 25.00 = 250 points.
+    expect(calcMaxLoyaltyPointsToRedeem(1000, 0.1, 220, 10, 2)).toBe(220);
+  });
+
+  it('redeems the whole balance when the balance is below the cap', () => {
+    expect(calcMaxLoyaltyPointsToRedeem(100, 0.1, 220, 10, 2)).toBe(100);
+  });
+
+  it('redeems the whole balance at the default 100% cap', () => {
+    expect(calcMaxLoyaltyPointsToRedeem(1000, 0.1, 220, 100, 2)).toBe(1000);
+  });
+
+  it('redeems nothing on a zero net subtotal', () => {
+    expect(calcMaxLoyaltyPointsToRedeem(1000, 0.1, 0, 10, 2)).toBe(0);
+  });
+
+  it('redeems nothing when the point has no value', () => {
+    expect(calcMaxLoyaltyPointsToRedeem(1000, 0, 220, 10, 2)).toBe(0);
+  });
+
+  it('rounds the money cap at book digits before dividing by the point value', () => {
+    // 5% of net 96.00 is 4.80 = 48 points, at both 2dp and 3dp.
+    expect(calcMaxLoyaltyPointsToRedeem(1000, 0.1, 96, 5, 2)).toBe(48);
+    expect(calcMaxLoyaltyPointsToRedeem(1000, 0.1, 96, 5, 3)).toBe(48);
+  });
+
+  it('never goes below zero on a negative net base', () => {
+    expect(calcMaxLoyaltyPointsToRedeem(1000, 0.1, -5, 10, 2)).toBe(0);
   });
 });

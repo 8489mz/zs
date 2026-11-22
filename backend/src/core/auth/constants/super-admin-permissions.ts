@@ -45,5 +45,11 @@ export const SUPER_ADMIN_PERMISSIONS = [
   'canManageBranchStock',
   'cashDrawer',
   'deliveryReps',
+  // F12 (trial problem 15): supervisor-only van-admin key. A rep
+  // holds 'deliveryReps' (his own portal flows); only a holder of
+  // this key may read other reps' trips, settings, targets, ledger
+  // and fraud data through the van-sales-admin controller. Existing
+  // admin holders of 'deliveryReps' gain it via migration 0340.
+  'deliveryRepsAdmin',
   'crm',
 ];

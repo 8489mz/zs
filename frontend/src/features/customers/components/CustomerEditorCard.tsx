@@ -13,6 +13,7 @@ import { DraftStateNotice } from '@/shared/components/draft-state-notice';
 import { useUnsavedChangesGuard } from '@/shared/hooks/use-unsaved-changes-guard';
 import { useUpdateCustomerMutation } from '@/features/customers/hooks/useCustomerActions';
 import { customerFormSchema, type CustomerFormInput, type CustomerFormOutput } from '@/features/customers/schemas/customer.schema';
+import { z } from 'zod';
 import type { Customer } from '@/types/domain';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { useCustomerProfile } from '@/features/customers/constants/customer-profiles';
@@ -44,6 +45,17 @@ interface RepScheduleItem {
   repName: string;
   days: string[];
 }
+
+/* F14 (van trial problem 16): the opening-balance input below is
+ * DISABLED — it only displays the stored customers.balance column,
+ * and the backend update refuses any CHANGED balance
+ * (CUSTOMER_BALANCE_EDIT_FORBIDDEN) while its DTO carries no Min(0)
+ * on it. A stored negative balance (C-1057 at -50.00, over-collected
+ * before F2 closed the hole) is a real book value the form must
+ * round-trip, so the EDIT form accepts any stored balance here. The
+ * shared create schema keeps its min(0): a human typing an opening
+ * balance on a NEW customer still may not open with a negative one. */
+const customerEditSchema = customerFormSchema.extend({ balance: z.coerce.number() });
 
 export function CustomerEditorCard({
   customer,
@@ -95,7 +107,7 @@ export function CustomerEditorCard({
   const [repSchedulesState, setRepSchedulesState] = useState<RepScheduleItem[]>([]);
 
   const form = useForm<CustomerFormInput, undefined, CustomerFormOutput>({
-    resolver: zodResolver(customerFormSchema),
+    resolver: zodResolver(customerEditSchema),
     defaultValues: { name: '', phone: '', address: '', balance: 0, type: 'cash', creditLimit: 0 },
   });
 

@@ -10,6 +10,10 @@ export function useReportsWorkspaceState() {
   const [submittedLocationId, setSubmittedLocationId] = useState<'all' | string>('all');
   const [userId, setUserId] = useState<'all' | string>('all');
   const [submittedUserId, setSubmittedUserId] = useState<'all' | string>('all');
+  // F13 (trial problem 18): discounted-invoices-only filter for the sales
+  // report. Draft until applied, like location/user above.
+  const [discountedOnly, setDiscountedOnly] = useState(false);
+  const [submittedDiscountedOnly, setSubmittedDiscountedOnly] = useState(false);
   const [inventoryPage, setInventoryPage] = useState(1);
   const [inventoryPageSize, setInventoryPageSize] = useState(10);
   const [inventorySearch, setInventorySearch] = useState('');
@@ -32,6 +36,7 @@ export function useReportsWorkspaceState() {
     setSubmittedRange(range);
     setSubmittedLocationId(locationId);
     setSubmittedUserId(userId);
+    setSubmittedDiscountedOnly(discountedOnly);
     setInventoryPage(1);
     setBalancesPage(1);
     setEmployeesPage(1);
@@ -41,6 +46,7 @@ export function useReportsWorkspaceState() {
     setSubmittedRange({ from, to });
     setSubmittedLocationId(locationId);
     setSubmittedUserId(userId);
+    setSubmittedDiscountedOnly(discountedOnly);
     setInventoryPage(1);
     setBalancesPage(1);
     setEmployeesPage(1);
@@ -51,8 +57,12 @@ export function useReportsWorkspaceState() {
     setUserId('all');
     setSubmittedLocationId('all');
     setSubmittedUserId('all');
+    setDiscountedOnly(false);
     setSelectedEmployeeId('');
     applyPresetRange(defaultRange);
+    // After applyPresetRange: it submits the still-stale draft value, so
+    // the submitted flag is cleared explicitly here (last setter wins).
+    setSubmittedDiscountedOnly(false);
   };
 
   return {
@@ -64,6 +74,8 @@ export function useReportsWorkspaceState() {
     submittedLocationId,
     userId,
     submittedUserId,
+    discountedOnly,
+    submittedDiscountedOnly,
     inventoryPage,
     inventoryPageSize,
     inventorySearch,
@@ -86,6 +98,8 @@ export function useReportsWorkspaceState() {
     setSubmittedLocationId,
     setUserId,
     setSubmittedUserId,
+    setDiscountedOnly,
+    setSubmittedDiscountedOnly,
     setInventoryPage,
     setInventoryPageSize,
     setInventorySearch,

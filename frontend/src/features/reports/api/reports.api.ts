@@ -139,6 +139,11 @@ export interface EmployeeReportRow {
   isActive: boolean;
   salesCount: number;
   salesTotal: number;
+  // F13 (trial problem 18): per-user sales profit (Staff Report column).
+  // salesCogs is net COGS (posted sales minus returned-items COGS);
+  // salesProfit is (salesTotal - returnsTotal) - salesCogs.
+  salesCogs?: number;
+  salesProfit?: number;
   purchasesCount: number;
   purchasesTotal: number;
   returnsCount: number;
@@ -161,6 +166,9 @@ export interface EmployeeReportsSummary {
   totalExpenses: number;
   totalAuditEvents: number;
   totalShifts: number;
+  // F13 (trial problem 18): summary totals of the per-user profit columns.
+  totalSalesCogs?: number;
+  totalSalesProfit?: number;
 }
 
 export interface EmployeeReportsQueryParams {
@@ -216,11 +224,13 @@ async function listAllPages<T>(fetchPage: (page: number) => Promise<PagedResult<
 }
 
 export const reportsApi = {
-  summary: (from: string, to: string, options?: { branchId?: string; locationId?: string; userId?: string }) => {
+  summary: (from: string, to: string, options?: { branchId?: string; locationId?: string; userId?: string; discountedOnly?: boolean }) => {
     const params: Record<string, string | number | undefined | null> = { from, to };
     if (options?.branchId && options.branchId !== 'all') params.branchId = options.branchId;
     if (options?.locationId && options.locationId !== 'all') params.locationId = options.locationId;
     if (options?.userId && options.userId !== 'all') params.userId = options.userId;
+    // F13 (trial problem 18): discounted-invoices-only filter.
+    if (options?.discountedOnly) params.discountedOnly = 'true';
     return http<ReportSummary>(`/api/reports/summary${buildQueryString(params)}`);
   },
   // INV-VAN-PROFIT-REP-REPORTING: standalone net-profit view.
@@ -311,6 +321,8 @@ export const reportsApi = {
       isActive: row.isActive !== false,
       salesCount: Number(row.salesCount || 0),
       salesTotal: Number(row.salesTotal || 0),
+      salesCogs: Number(row.salesCogs || 0),
+      salesProfit: Number(row.salesProfit || 0),
       purchasesCount: Number(row.purchasesCount || 0),
       purchasesTotal: Number(row.purchasesTotal || 0),
       returnsCount: Number(row.returnsCount || 0),
@@ -341,6 +353,8 @@ export const reportsApi = {
         totalExpenses: rows.reduce((sum, row) => sum + Number(row.expensesTotal || 0), 0),
         totalAuditEvents: rows.reduce((sum, row) => sum + Number(row.auditCount || 0), 0),
         totalShifts: rows.reduce((sum, row) => sum + Number(row.shiftsCount || 0), 0),
+        totalSalesCogs: rows.reduce((sum, row) => sum + Number(row.salesCogs || 0), 0),
+        totalSalesProfit: rows.reduce((sum, row) => sum + Number(row.salesProfit || 0), 0),
       },
     };
   },

@@ -155,3 +155,38 @@ export function calcInvoiceDiscountPercent(discount: number, netSubTotal: number
   if (base <= 0 || amount <= 0) return 0;
   return (amount / base) * 100;
 }
+
+/* F14 (van trial, F1b loyalty item): the checkout "redeem all"
+ * button capped the points from the GROSS subtotal while the backend
+ * caps the loyalty discount at the NET subtotal (gross minus line
+ * discounts) — compute-totals-and-gates caps at subtotal x maxPct
+ * where its subtotal is already net of line discounts, and the
+ * totals engine above caps the money the same way. The money clamp
+ * in the totals bounded the discount, but the backend deducts the
+ * FULL redeemed points count, so the gross base silently burned
+ * points the customer never got value for (250 points for 25.00 of
+ * value on a 220.00 net base capped at 22.00). The money cap is
+ * rounded at book digits first, exactly like the backend and the
+ * totals engine, then divided by the point value and floored — a
+ * point is only redeemed when its full value fits under the cap.
+ * The division carries a +1e-9 hair guard: in binary float
+ * 4.80 / 0.10 reads 47.99999999999999, and a bare floor would burn
+ * a point the cap actually allows (47 instead of 48). Genuine
+ * quotients sit at most 5 decimal places out (book digits plus a
+ * 2dp point value), so a quotient that is truly below an integer is
+ * at least 1e-5 away from it and the hair guard cannot lift it. */
+export function calcMaxLoyaltyPointsToRedeem(
+  loyaltyPoints: number,
+  pointValue: number,
+  netSubTotal: number,
+  maxDiscountPercentage: number,
+  digits: MoneyDigits = 2,
+): number {
+  const balance = Math.max(0, Math.floor(Number(loyaltyPoints || 0)));
+  const value = Number(pointValue || 0);
+  if (balance <= 0 || value <= 0) return 0;
+  const base = Math.max(0, Number(netSubTotal || 0));
+  if (base <= 0) return 0;
+  const maxAllowedDiscount = roundMoneyValue((base * Number(maxDiscountPercentage || 0)) / 100, digits);
+  return Math.min(balance, Math.floor(maxAllowedDiscount / value + 1e-9));
+}

@@ -24,6 +24,7 @@ import { resolveRemoteWeightedBarcode } from '@/features/pos/lib/pos-remote-weig
 import { parseQuantityPrefixQuery } from '@/features/pos/lib/pos-quantity-prefix';
 import { lookupProductByBarcodeFromStorage } from '@/features/pos/lib/pos-catalog-storage';
 import { useAuthStore } from '@/stores/auth-store';
+import { useHasAnyPermission } from '@/shared/hooks/use-permission';
 import { usePosWorkspace } from '@/features/pos/hooks/usePosWorkspace';
 import { usePosWorkspaceKeyboardShortcuts } from '@/features/pos/hooks/usePosWorkspaceKeyboardShortcuts';
 import {
@@ -65,6 +66,19 @@ export function PosWorkspace() {
   const [newProductInitialName, setNewProductInitialName] = useState('');
   const [newProductInitialBarcode, setNewProductInitialBarcode] = useState('');
   const [editProductId, setEditProductId] = useState<string | null>(null);
+
+  // F12 (trial problem 15): double-clicking a cart line opens the
+  // FULL product editor (EditProductForm incl. buy/cost price) with
+  // no permission check at all — anyone who can open POS could open
+  // it and read cost prices, even without the 'products' permission
+  // (the save itself already 403s server-side without it). Only a
+  // 'products' holder gets the affordance. Residual, by design: a
+  // rep holding the cashier-default 'products' permission can still
+  // open it — product edit is governed by 'products', not by
+  // deliveryReps, and removing 'products' from the cashier default
+  // would break the blessed cashier add-product workflow; that split
+  // needs a user decision (see F12 report).
+  const canEditProduct = useHasAnyPermission('products');
   const [modifiersModalLineKey, setModifiersModalLineKey] = useState<string>('');
   const [shortcutRecallDraftId, setShortcutRecallDraftId] = useState('');
   const [scannedSale, setScannedSale] = useState<Sale | null>(null);
@@ -664,7 +678,7 @@ export function PosWorkspace() {
         onRequestDiscountAuthorization={requestDiscountAuthorization}
         onRequestLineDelete={requestLineDelete}
         onItemModifiersClick={requestItemModifiers}
-        onEditProduct={setEditProductId}
+        onEditProduct={canEditProduct ? setEditProductId : undefined}
         onRequestSelectedLineDelete={requestSelectedLineDelete}
         onRequestHeldDelete={requestHeldDelete}
         onRequestClearHeldDrafts={requestClearHeldDrafts}

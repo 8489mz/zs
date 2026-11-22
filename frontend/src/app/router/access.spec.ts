@@ -252,6 +252,39 @@ describe('router access guards', () => {
       useAuthStore.setState({ user: null, tenant: null });
     }
   });
+
+  it('F12: the van supervisor console requires deliveryRepsAdmin — a rep with deliveryReps only is denied', () => {
+    const repUser: AuthUser = { ...adminUser, id: 'u-rep', username: 'rep', role: 'cashier', permissions: ['dashboard', 'sales', 'inventory', 'deliveryReps'] };
+    const supervisorUser: AuthUser = { ...adminUser, id: 'u-sup', username: 'supervisor', role: 'admin', permissions: ['dashboard', 'sales', 'inventory', 'deliveryReps', 'deliveryRepsAdmin'] };
+    const vanTenant = {
+      id: 't-van',
+      name: 'Van Client',
+      activityType: 'wholesale_van',
+      plan_id: 'plan_ultimate',
+      features: ['deliveryReps', 'sales', 'catalog', 'pos', 'cashDrawer', 'inventory', 'reports'],
+    } as any;
+    const adminNavItem = { key: 'van-sales-admin', label: 'سيارات التوزيع (الفان)', to: '/inventory/van-sales' };
+
+    try {
+      useAuthStore.setState({ user: repUser, tenant: vanTenant });
+      // The rep keeps his own screen: the feature is on and the rep list opens.
+      expect(hasRequiredFeature('/delivery-reps', repUser)).toBe(true);
+      expect(canAccessPath(repUser, '/delivery-reps')).toBe(true);
+      // ...but every admin-console path is denied, sidebar item included.
+      expect(canAccessPath(repUser, '/inventory/van-sales')).toBe(false);
+      expect(canAccessPath(repUser, '/van-sales/admin')).toBe(false);
+      expect(canAccessPath(repUser, '/van-sales/management')).toBe(false);
+      expect(canAccessNavigationItem(repUser, adminNavItem)).toBe(false);
+      // The supervisor passes all three paths.
+      useAuthStore.setState({ user: supervisorUser, tenant: vanTenant });
+      expect(canAccessPath(supervisorUser, '/inventory/van-sales')).toBe(true);
+      expect(canAccessPath(supervisorUser, '/van-sales/admin')).toBe(true);
+      expect(canAccessPath(supervisorUser, '/van-sales/management')).toBe(true);
+      expect(canAccessNavigationItem(supervisorUser, adminNavItem)).toBe(true);
+    } finally {
+      useAuthStore.setState({ user: null, tenant: null });
+    }
+  });
 });
 
 // INV-IMPORT-FX-RATE-REGISTRATION (I9-E): the R11 search failure —

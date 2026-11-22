@@ -119,6 +119,18 @@
  * sale paths). F8 adds no statement here: getCashDiscountPercent
  * joins F1a's existing import line in compute-totals-and-gates.ts.
  *
+ * F13 (reports-discount-profit): reports->sales 0 -> 1 (new edge):
+ * the reports query helper (reports-query.helper.ts) now imports the
+ * ONE shared discounted-sale predicate (discountedSaleSql) from the
+ * sales discount filter helper instead of duplicating it — the sales
+ * module's predicate, applied to reports for the first time. Backend
+ * total pin 749 -> 750 and backend edge pin 72 -> 73 (= the edge
+ * delta, no other growth); posting 97 / foundation 20 unchanged. Deliberate new coupling, not a pure
+ * move: the reports module now reads the sales discount predicate,
+ * which is the point of the package (one predicate, two consumers:
+ * sales + reports). New bidirectional pair reports|sales (sales->
+ * reports: 1 already pinned).
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -185,6 +197,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'purchases->sales': 1,
   'purchases->settings': 2,
   'reports->accounting': 18,
+  'reports->sales': 1,
   'returns->accounting': 26,
   'returns->import-sales': 1,
   'returns->sales': 5,
@@ -276,11 +289,11 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
   'updates->settings': 1,
 };
 
-const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|hr', 'accounting|manufacturing', 'accounting|purchases', 'delivery-reps|sales', 'returns|sales', 'sales|settings', 'sales|storefront'];
+const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|hr', 'accounting|manufacturing', 'accounting|purchases', 'delivery-reps|sales', 'reports|sales', 'returns|sales', 'sales|settings', 'sales|storefront'];
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|treasury', 'accounts|purchases', 'audit|settings', 'cash-drawer|pos', 'customers|sales', 'inventory|products', 'maintenance|products', 'pos|products', 'pos|sales', 'pos|settings', 'pos|storefront', 'products|settings'];
 const PINNED_POSTING_EXTERNAL = 97;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 749;
+const PINNED_BACKEND_TOTAL = 750;
 const PINNED_FRONTEND_TOTAL = 136;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
@@ -521,7 +534,7 @@ async function main(): Promise<void> {
   );
 
   // 1. Backend ratchet: no new edge, no edge may grow, totals pinned.
-  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 72, 'pinned backend edge table must list 72 edges');
+  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 73, 'pinned backend edge table must list 73 edges');
   const backend = scanBackend();
   assert.ok(backend.total >= BACKEND_TOTAL_FLOOR, `backend scan found only ${backend.total} statements (floor ${BACKEND_TOTAL_FLOOR}): the scanner is broken or the baseline needs re-pinning`);
   assert.ok(backend.edges.size >= BACKEND_EDGE_FLOOR, `backend scan found only ${backend.edges.size} edges (floor ${BACKEND_EDGE_FLOOR})`);

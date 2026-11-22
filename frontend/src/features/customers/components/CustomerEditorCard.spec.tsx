@@ -9,15 +9,27 @@
  * name the actual problem instead of a generic error, and while the
  * fetch is pending no (wrong) value may be shown.
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import { CustomerEditorCard } from './CustomerEditorCard';
+import { customerFormSchema } from '@/features/customers/schemas/customer.schema';
 import { createTestQueryClient } from '@/test/test-query-client';
 import type { Customer } from '@/types/domain';
 
-const { mockBalances } = vi.hoisted(() => ({
+const { mockBalances, mockMutate } = vi.hoisted(() => ({
   mockBalances: vi.fn(),
+  mockMutate: vi.fn(),
+}));
+
+vi.mock('@/features/customers/hooks/useCustomerActions', () => ({
+  useUpdateCustomerMutation: () => ({
+    mutate: mockMutate,
+    isPending: false,
+    isError: false,
+    isSuccess: false,
+    error: null,
+  }),
 }));
 
 vi.mock('@/shared/hooks/use-catalog-queries', () => ({
@@ -88,5 +100,53 @@ describe('CustomerEditorCard ledger current balance', () => {
 
     expect(screen.getByText(/جارٍ تحميل الرصيد الدفتري الحالي/)).toBeInTheDocument();
     expect(screen.queryByText(/1,250\.00/)).not.toBeInTheDocument();
+  });
+});
+
+/* F14 (van trial problem 16): C-1057 was over-collected to a stored
+ * balance of -50.00 (problem 2's residue, fixed at source by F2), and
+ * the edit dialog could not save the customer at all: the disabled
+ * opening-balance input is prefilled with the stored balance, but the
+ * shared form schema requires balance >= 0, so the red validation
+ * error sat under a field the user cannot change and handleSubmit
+ * never fired. The disabled field round-trips the stored value — the
+ * backend update refuses any CHANGED balance
+ * (CUSTOMER_BALANCE_EDIT_FORBIDDEN) and carries no Min(0) on it — so
+ * the edit form must accept whatever the book already holds. */
+describe('CustomerEditorCard negative stored balance (F14)', () => {
+  const overCollectedCustomer: Customer = {
+    ...storedZeroCustomer,
+    id: '1057',
+    name: 'عميل اختبار',
+    balance: -50,
+  };
+
+  it('saves an over-collected customer: the disabled opening-balance field shows -50 and the save posts it back unchanged', async () => {
+    mockBalances.mockResolvedValue([{ ...overCollectedCustomer, balance: -50 }]);
+    mockMutate.mockClear();
+
+    const { container } = renderCard(overCollectedCustomer);
+
+    const openingInput = (await screen.findByDisplayValue('-50')) as HTMLInputElement;
+    expect(openingInput).toBeDisabled();
+    expect(container.querySelector('input[type="number"][disabled]')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /حفظ تعديلات المحل/ }));
+
+    await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(1));
+    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({ balance: -50 }));
+  });
+
+  it('still refuses a negative opening balance typed on the create form', () => {
+    expect(
+      customerFormSchema.safeParse({
+        name: 'عميل اختبار',
+        phone: '',
+        address: '',
+        balance: -50,
+        type: 'cash',
+        creditLimit: 0,
+      }).success,
+    ).toBe(false);
   });
 });

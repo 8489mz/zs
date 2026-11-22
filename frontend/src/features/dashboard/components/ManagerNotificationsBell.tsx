@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useManagerActions } from '@/features/dashboard/hooks/useManagerActions';
 import { importantManagerActions } from '@/features/dashboard/lib/manager-actions-ui';
 import { useOfflineUpdateCheck } from '@/shared/hooks/use-offline-update-check';
+import { useHasAnyPermission } from '@/shared/hooks/use-permission';
 import { RefreshCwIcon, BellIcon, BellOffIcon } from '@/shared/components/icons/AppIcons';
 import { isAudioChimeEnabled, playNotificationChime, setAudioChimeEnabled } from '@/lib/audio-chime';
 
@@ -46,7 +47,13 @@ export function ManagerNotificationsBell() {
   const previousCountRef = useRef<number | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const managerActions = useManagerActions(30);
+  // F12 (trial problem 15): these are manager alerts — fraud,
+  // margin, shortage and collection insights for the whole tenant.
+  // The endpoint requires 'reports'; without it the query stays
+  // disabled, so a rep sees no alert at all (only a desktop-update
+  // notice, if one exists, still reaches him).
+  const canSeeManagerReports = useHasAnyPermission('reports');
+  const managerActions = useManagerActions(30, canSeeManagerReports);
   const { data: updateInfo } = useOfflineUpdateCheck('desktop');
   const importantActions = importantManagerActions(managerActions.data?.insights || []);
   const hasUpdate = Boolean(updateInfo?.updateAvailable && updateInfo.latestVersion);

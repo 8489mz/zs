@@ -54,7 +54,7 @@ export class VanSalesAdminController {
   }
 
   @Get('pre-sales-orders')
-  @RequireAnyPermission('deliveryReps', 'sales')
+  @RequirePermissions('deliveryRepsAdmin')
   async listPreSalesOrders(
     @Req() req: RequestWithAuth,
     @Query('repId') repId?: string,
@@ -68,7 +68,7 @@ export class VanSalesAdminController {
   }
 
   @Get('pre-sales-orders/:id')
-  @RequireAnyPermission('deliveryReps', 'sales')
+  @RequirePermissions('deliveryRepsAdmin')
   async getPreSalesOrderDetails(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -77,7 +77,7 @@ export class VanSalesAdminController {
   }
 
   @Post('pre-sales-orders/:id/approve')
-  @RequireAnyPermission('deliveryReps', 'sales')
+  @RequirePermissions('deliveryRepsAdmin')
   async approvePreSalesOrder(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -86,7 +86,7 @@ export class VanSalesAdminController {
   }
 
   @Post('pre-sales-orders/:id/reject')
-  @RequireAnyPermission('deliveryReps', 'sales')
+  @RequirePermissions('deliveryRepsAdmin')
   async rejectPreSalesOrder(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -96,7 +96,7 @@ export class VanSalesAdminController {
   }
 
   @Post('pre-sales-orders/consolidate-requisition')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async consolidatePreSalesOrdersToRequisition(
     @Req() req: RequestWithAuth,
     @Body()
@@ -111,7 +111,7 @@ export class VanSalesAdminController {
   }
 
   @Post('pre-sales-orders/:id/convert-invoice')
-  @RequireAnyPermission('deliveryReps', 'sales')
+  @RequirePermissions('deliveryRepsAdmin')
   async convertPreSalesOrderToInvoice(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -126,7 +126,7 @@ export class VanSalesAdminController {
   }
 
   @Get('trips')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listTrips(
     @Req() req: RequestWithAuth,
     @Query('repId') repId?: string,
@@ -138,7 +138,7 @@ export class VanSalesAdminController {
   }
 
   @Get('trips/:id')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async getTripDetails(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -149,7 +149,7 @@ export class VanSalesAdminController {
   }
 
   @Post('trips/:id/settle')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async settleTripAdmin(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -172,13 +172,13 @@ export class VanSalesAdminController {
   }
 
   @Get('vehicles')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listVehicles(@Req() req: RequestWithAuth) {
     return this.adminFleet.listVehicles(req);
   }
 
   @Post('vehicles')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async createVehicle(
     @Req() req: RequestWithAuth,
     @Body()
@@ -199,7 +199,7 @@ export class VanSalesAdminController {
   }
 
   @Put('vehicles/:id')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async updateVehicle(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -222,7 +222,7 @@ export class VanSalesAdminController {
   }
 
   @Post('vehicles/:id/assign')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async assignRep(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -232,7 +232,7 @@ export class VanSalesAdminController {
   }
 
   @Get('returns')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listReturns(
     @Req() req: RequestWithAuth,
     @Query('status') status?: string,
@@ -244,7 +244,7 @@ export class VanSalesAdminController {
   }
 
   @Post('returns/:id/approve')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async approveReturn(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -253,7 +253,7 @@ export class VanSalesAdminController {
   }
 
   @Post('returns/:id/reject')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async rejectReturn(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -263,7 +263,7 @@ export class VanSalesAdminController {
   }
 
   @Get('available-products')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async getAdminAvailableProducts(
     @Req() req: RequestWithAuth,
     @Query('warehouseId') warehouseId?: string,
@@ -272,7 +272,7 @@ export class VanSalesAdminController {
   }
 
   @Get('requisitions')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listAdminRequisitions(
     @Req() req: RequestWithAuth,
     @Query('status') status?: string,
@@ -282,13 +282,13 @@ export class VanSalesAdminController {
   }
 
   @Get('warehouses')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listAdminWarehouses(@Req() req: RequestWithAuth) {
     return this.adminFleet.listAdminWarehouses(req);
   }
 
   @Post('requisitions')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async createAdminRequisition(
     @Req() req: RequestWithAuth,
     @Body()
@@ -304,7 +304,7 @@ export class VanSalesAdminController {
   }
 
   @Put('requisitions/:id/review')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async reviewRequisition(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -314,7 +314,7 @@ export class VanSalesAdminController {
   }
 
   @Post('requisitions/:id/dispatch')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async dispatchRequisition(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -323,7 +323,7 @@ export class VanSalesAdminController {
   }
 
   @Post('requisitions/:id/reject')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async rejectRequisition(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -333,7 +333,7 @@ export class VanSalesAdminController {
   }
 
   @Delete('requisitions/:id')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async deleteRequisition(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -343,7 +343,7 @@ export class VanSalesAdminController {
 
   // Targets Management Endpoints
   @Get('targets')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listRepTargets(
     @Req() req: RequestWithAuth,
     @Query('month') month?: string,
@@ -352,7 +352,7 @@ export class VanSalesAdminController {
   }
 
   @Post('targets')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async setRepTarget(
     @Req() req: RequestWithAuth,
     @Body()
@@ -371,13 +371,13 @@ export class VanSalesAdminController {
   }
 
   @Get('targets/commission-config')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async getCommissionConfig(@Req() req: RequestWithAuth) {
     return this.adminTargets.getCommissionConfig(req);
   }
 
   @Post('targets/commission-config')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async saveCommissionConfig(
     @Req() req: RequestWithAuth,
     @Body()
@@ -392,7 +392,7 @@ export class VanSalesAdminController {
   }
 
   @Post('targets/settle-commission')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async settleRepCommission(
     @Req() req: RequestWithAuth,
     @Body()
@@ -407,7 +407,7 @@ export class VanSalesAdminController {
   }
 
   @Get('kpis')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async getRouteKpis(
     @Req() req: RequestWithAuth,
     @Query('dateFrom') dateFrom?: string,
@@ -417,7 +417,7 @@ export class VanSalesAdminController {
   }
 
   @Get('field-visits')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listFieldVisits(
     @Req() req: RequestWithAuth,
     @Query('repId') repId?: string,
@@ -430,7 +430,7 @@ export class VanSalesAdminController {
   }
 
   @Post('customers/:id/route-schedule')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async setCustomerRouteSchedule(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -451,7 +451,7 @@ export class VanSalesAdminController {
   }
 
   @Get('supervisor/customer-routes')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async getSupervisorCustomerRoutes(
     @Req() req: RequestWithAuth,
     @Query('search') search?: string,
@@ -463,7 +463,7 @@ export class VanSalesAdminController {
   }
 
   @Post('supervisor/customer-routes/bulk-assign')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async bulkAssignCustomerRoutes(
     @Req() req: RequestWithAuth,
     @Body()
@@ -481,7 +481,7 @@ export class VanSalesAdminController {
   }
 
   @Get('fuel-logs')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listFuelLogs(
     @Req() req: RequestWithAuth,
     @Query('vehicleId') vehicleId?: string,
@@ -493,7 +493,7 @@ export class VanSalesAdminController {
   }
 
   @Post('fuel-logs')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async recordFuelLog(
     @Req() req: RequestWithAuth,
     @Body()
@@ -513,7 +513,7 @@ export class VanSalesAdminController {
 
   // Fleet Oil Changes Endpoints
   @Get('oil-changes')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listOilChanges(
     @Req() req: RequestWithAuth,
     @Query('vehicleId') vehicleId?: string,
@@ -522,7 +522,7 @@ export class VanSalesAdminController {
   }
 
   @Post('oil-changes')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async recordOilChange(
     @Req() req: RequestWithAuth,
     @Body()
@@ -543,13 +543,13 @@ export class VanSalesAdminController {
   }
 
   @Get('maintenance-alerts')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async getMaintenanceAlerts(@Req() req: RequestWithAuth) {
     return this.adminOps.getMaintenanceAlerts(req);
   }
 
   @Get('vehicles/:id/drivers')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listVehicleDrivers(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -558,7 +558,7 @@ export class VanSalesAdminController {
   }
 
   @Post('vehicles/:id/drivers')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async assignVehicleDriver(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -575,7 +575,7 @@ export class VanSalesAdminController {
   }
 
   @Delete('vehicles/:id/drivers/:driverId')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async removeVehicleDriver(
     @Req() req: RequestWithAuth,
     @Param('driverId', ParseIntPipe) driverId: number,
@@ -584,7 +584,7 @@ export class VanSalesAdminController {
   }
 
   @Get('transfers')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listAdminTransfers(
     @Req() req: RequestWithAuth,
     @Query('repId') repId?: string,
@@ -594,7 +594,7 @@ export class VanSalesAdminController {
   }
 
   @Get('trips/:id/expenses')
-  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  @RequirePermissions('deliveryRepsAdmin')
   async getAdminTripExpenses(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -603,7 +603,7 @@ export class VanSalesAdminController {
   }
 
   @Get('trips/:id/packaging')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async getAdminTripPackaging(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -612,7 +612,7 @@ export class VanSalesAdminController {
   }
 
   @Get('customers/:customerId/packaging')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async getAdminCustomerPackaging(
     @Req() req: RequestWithAuth,
     @Param('customerId', ParseIntPipe) customerId: number,
@@ -621,7 +621,7 @@ export class VanSalesAdminController {
   }
 
   @Get('fraud-radar/summary')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory', 'accounting')
+  @RequirePermissions('deliveryRepsAdmin')
   async getFraudRadarSummary(
     @Req() req: RequestWithAuth,
     @Query('days') days?: string,
@@ -631,7 +631,7 @@ export class VanSalesAdminController {
   }
 
   @Get('fraud-radar/events')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory', 'accounting')
+  @RequirePermissions('deliveryRepsAdmin')
   async getFraudRadarEvents(
     @Req() req: RequestWithAuth,
     @Query('days') days?: string,
@@ -647,7 +647,7 @@ export class VanSalesAdminController {
   // =========================================================================
 
   @Get('promotions')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listAdminPromotions(
     @Req() req: RequestWithAuth,
     @Query('isActive') isActive?: string,
@@ -657,7 +657,7 @@ export class VanSalesAdminController {
   }
 
   @Post('promotions')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async createPromotion(
     @Req() req: RequestWithAuth,
     @Body() body: any,
@@ -666,7 +666,7 @@ export class VanSalesAdminController {
   }
 
   @Put('promotions/:id')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async updatePromotion(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -676,7 +676,7 @@ export class VanSalesAdminController {
   }
 
   @Delete('promotions/:id')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async deletePromotion(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -685,7 +685,7 @@ export class VanSalesAdminController {
   }
 
   @Patch('promotions/:id/toggle-active')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async togglePromotionActive(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -695,7 +695,7 @@ export class VanSalesAdminController {
   }
 
   @Post('routes/optimize')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async optimizeSupervisorRoute(
     @Req() req: RequestWithAuth,
     @Body() body: {
@@ -711,7 +711,7 @@ export class VanSalesAdminController {
   }
 
   @Get('visits')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listVisitsHistory(
     @Req() req: RequestWithAuth,
     @Query('tripId') tripId?: string,
@@ -724,7 +724,7 @@ export class VanSalesAdminController {
   }
 
   @Get('trade-surveys')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async listTradeSurveys(
     @Req() req: RequestWithAuth,
     @Query('tripId') tripId?: string,
@@ -735,7 +735,7 @@ export class VanSalesAdminController {
   }
 
   @Get('trips/:tripId/breadcrumbs')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryRepsAdmin')
   async getLiveTripBreadcrumbs(
     @Req() req: RequestWithAuth,
     @Param('tripId', ParseIntPipe) tripId: number,
@@ -744,7 +744,7 @@ export class VanSalesAdminController {
   }
 
   @Get('financial-ledger')
-  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  @RequirePermissions('deliveryRepsAdmin')
   async getRepFinancialLedger(
     @Req() req: RequestWithAuth,
     @Query('repId') repId?: string,
@@ -756,7 +756,7 @@ export class VanSalesAdminController {
   }
 
   @Post('financial-ledger/:id/settle')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async settleRepFinancialItem(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -775,7 +775,7 @@ export class VanSalesAdminController {
   }
 
   @Post('financial-ledger/bonus')
-  @RequirePermissions('deliveryReps')
+  @RequirePermissions('deliveryRepsAdmin')
   async addRepBonusOrCommission(
     @Req() req: RequestWithAuth,
     @Body() body: { repId: number; entryType: 'bonus' | 'commission'; amount: number; notes: string },
@@ -784,7 +784,7 @@ export class VanSalesAdminController {
   }
 
   @Post('financial-ledger/link-employee')
-  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  @RequirePermissions('deliveryRepsAdmin')
   async linkRepToEmployee(
     @Req() req: RequestWithAuth,
     @Body() body: { repId: number; employeeId: number | null },
@@ -793,7 +793,7 @@ export class VanSalesAdminController {
   }
 
   @Get('financial-ledger/candidate-employees')
-  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  @RequirePermissions('deliveryRepsAdmin')
   async listCandidateEmployees(
     @Req() req: RequestWithAuth,
   ) {
@@ -801,7 +801,7 @@ export class VanSalesAdminController {
   }
 
   @Post('financial-ledger/auto-create-employee')
-  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  @RequirePermissions('deliveryRepsAdmin')
   async autoCreateEmployee(
     @Req() req: RequestWithAuth,
     @Body() body: { repId: number },

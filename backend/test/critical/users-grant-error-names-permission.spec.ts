@@ -12,8 +12,8 @@ CORRECTED DIAGNOSIS (user caught it live, 2026-11-14 — "هو فين اصلا
 البحري دي"): this is an Electron (offline) copy whose tenant was
 created as retail + clothes, with no maritime in it at all. At
 activation (activation.service.ts) the owner gets role 'admin' +
-SUPER_ADMIN_PERMISSIONS — 45 retail keys. But the owner template in
-the add-user form sent DEFAULT_ADMIN_PERMS — 57 keys = the same 45
+SUPER_ADMIN_PERMISSIONS — 46 retail keys. But the owner template in
+the add-user form sent DEFAULT_ADMIN_PERMS — 58 keys = the same 46
 PLUS 12 hidden keys (6 maritime + 6 contracting). The form only ever
 shows getFilteredPermissionGroups for the tenant's vertical, so those
 12 boxes do not exist on screen: the user could never untick them,
@@ -24,11 +24,11 @@ scopes the template/draft to the tenant's vertical (frontend) so no
 hidden key is ever sent; the grant rule itself is unchanged.
 
 WHAT THIS PINS, driving the REAL UsersService on PGlite:
-1. HEADLINE: the retail-scoped owner template (45 keys — the exact
+1. HEADLINE: the retail-scoped owner template (46 keys — the exact
    set the activation owner holds) created by that retail owner
    succeeds: role 'admin', no error, row created with exactly those
    permissions.
-2. The UNSCOPED legacy payload (57 keys incl. the 12 hidden ones) is
+2. The UNSCOPED legacy payload (58 keys incl. the 12 hidden ones) is
    still refused by the unchanged guard -> 403
    GRANT_EXCEEDS_ACTOR_PERMISSIONS, no row created, and the refusal
    names the FIRST offending permission in template order in plain
@@ -70,10 +70,10 @@ const GENERIC_403 = 'غير مسموح بتنفيذ هذه العملية.';
 
 /* The UNSCOPED owner template exactly as the form used to send it:
  * frontend/src/features/settings/components/user-management.shared.ts
- * DEFAULT_ADMIN_PERMS (57 keys, order preserved — the guard names
+ * DEFAULT_ADMIN_PERMS (58 keys, order preserved — the guard names
  * the FIRST permission in this order the actor does not hold). */
 const UNSCOPED_TEMPLATE_PERMISSIONS = [
-  'dashboard', 'products', 'sales', 'kitchen', 'purchases', 'inventory', 'suppliers', 'customers', 'crm', 'accounts', 'accounting', 'returns', 'reports', 'audit', 'treasury', 'services', 'hr', 'hrEmployees', 'hrAttendance', 'hrContracts', 'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView', 'hrSalaryManage', 'settings', 'pricingCenterView', 'pricingCenterManage', 'canEditUsers', 'canManageUsers', 'canManageSettings', 'canManageBackups', 'canPrint', 'canDiscount', 'canEditPrice', 'canSellWholesale', 'canViewProfit', 'canDelete', 'canEditInvoices', 'canDirectReturn', 'canAdjustInventory', 'canManageBranchStock', 'cashDrawer', 'deliveryReps',
+  'dashboard', 'products', 'sales', 'kitchen', 'purchases', 'inventory', 'suppliers', 'customers', 'crm', 'accounts', 'accounting', 'returns', 'reports', 'audit', 'treasury', 'services', 'hr', 'hrEmployees', 'hrAttendance', 'hrContracts', 'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView', 'hrSalaryManage', 'settings', 'pricingCenterView', 'pricingCenterManage', 'canEditUsers', 'canManageUsers', 'canManageSettings', 'canManageBackups', 'canPrint', 'canDiscount', 'canEditPrice', 'canSellWholesale', 'canViewProfit', 'canDelete', 'canEditInvoices', 'canDirectReturn', 'canAdjustInventory', 'canManageBranchStock', 'cashDrawer', 'deliveryReps', 'deliveryRepsAdmin',
   'maritimeJobs', 'maritimeContainers', 'maritimeInquiries', 'maritimeQuotations', 'maritimeRfqs', 'maritimePolicies',
   'contractingProjects', 'contractingInvoices', 'contractingBoq', 'contractingDailyLogs', 'contractingChangeOrders', 'contractingSubcontractors',
 ];
@@ -85,7 +85,7 @@ const HIDDEN_VERTICAL_KEYS = new Set([
   'contractingProjects', 'contractingInvoices', 'contractingBoq', 'contractingDailyLogs', 'contractingChangeOrders', 'contractingSubcontractors',
 ]);
 
-/* The retail-scoped owner template (45 keys): the unscoped list
+/* The retail-scoped owner template (46 keys): the unscoped list
  * minus the 12 hidden keys — exactly the set the activation owner
  * holds (backend/src/core/auth/constants/super-admin-permissions.ts,
  * same set; only 'crm' sits in a different position). This is what
@@ -141,7 +141,7 @@ async function main(): Promise<void> {
     }
 
     await anyDb.insertInto('tenants').values({ id: TENANT, plan_id: null, status: 'active' }).execute();
-    // The activation owner: role admin holding exactly the 45 retail keys.
+    // The activation owner: role admin holding exactly the 46 retail keys.
     await seedUser(20, TENANT, 'retailowner', 'admin', RETAIL_TEMPLATE_PERMISSIONS);
     await seedUser(2, TENANT, 'clerk', 'cashier', []);
     await pg.exec(`SELECT setval(pg_get_serial_sequence('users', 'id'), (SELECT MAX(id) FROM users));`);

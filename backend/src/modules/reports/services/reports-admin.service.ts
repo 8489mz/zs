@@ -176,6 +176,11 @@ export class ReportsAdminService {
       expenses_agg as (select created_by as user_id, count(*)::int as expenses_count, coalesce(sum(amount), 0)::numeric as expenses_total, max(expense_date) as last_expenses_at from expenses where tenant_id = ${tenantId} and expense_date >= ${fromDate!} and expense_date <= ${toDate!} and created_by is not null group by created_by),
       audit_agg as (select created_by as user_id, count(*)::int as audit_count, max(created_at) as last_audit_at from audit_logs where tenant_id = ${tenantId} and created_at >= ${fromDate!} and created_at <= ${toDate!} and created_by is not null group by created_by),
       shifts_agg as (select opened_by as user_id, count(*)::int as shifts_count, sum(case when status = 'open' then 1 else 0 end)::int as open_shifts, max(created_at) as last_shift_at from cashier_shifts where tenant_id = ${tenantId} and created_at >= ${fromDate!} and created_at <= ${toDate!} group by opened_by),
+      -- F13 (trial problem 18): per-user sales COGS, same shape as the
+      -- summary helper (sale_items.qty x cost_price on posted sales,
+      -- net of returned-items COGS via the same coalesce chain).
+      sales_cogs_agg as (select s.created_by as user_id, coalesce(sum(si.qty * si.cost_price), 0)::numeric as sales_cogs from sale_items si inner join sales s on s.id = si.sale_id and s.tenant_id = si.tenant_id where s.tenant_id = ${tenantId} and s.created_at >= ${fromDate!} and s.created_at <= ${toDate!} and s.created_by is not null and s.status = 'posted' group by s.created_by),
+      returned_cogs_agg as (select rd.created_by as user_id, coalesce(sum(ri.qty * coalesce(ri.cost_price, si.cost_price, p.cost_price, 0)), 0)::numeric as returned_cogs from return_items ri inner join return_documents rd on rd.id = ri.return_document_id and rd.tenant_id = ri.tenant_id left join sale_items si on si.id = ri.sale_item_id and si.tenant_id = ri.tenant_id left join products p on p.id = ri.product_id and p.tenant_id = ri.tenant_id where rd.tenant_id = ${tenantId} and rd.return_type = 'sale' and rd.created_at >= ${fromDate!} and rd.created_at <= ${toDate!} and rd.created_by is not null group by rd.created_by),
       employee_metrics as (
         select u.id, u.username, u.display_name, u.role, u.is_active,
         coalesce(sa.sales_count, 0) as sales_count, coalesce(sa.sales_total, 0) as sales_total,
@@ -183,6 +188,8 @@ export class ReportsAdminService {
         coalesce(ra.returns_count, 0) as returns_count, coalesce(ra.returns_total, 0) as returns_total,
         coalesce(ea.expenses_count, 0) as expenses_count, coalesce(ea.expenses_total, 0) as expenses_total,
         coalesce(aa.audit_count, 0) as audit_count, coalesce(sha.shifts_count, 0) as shifts_count, coalesce(sha.open_shifts, 0) as open_shifts,
+        coalesce(sca.sales_cogs, 0) - coalesce(rca.returned_cogs, 0) as sales_cogs,
+        coalesce(sa.sales_total, 0) - coalesce(ra.returns_total, 0) - (coalesce(sca.sales_cogs, 0) - coalesce(rca.returned_cogs, 0)) as sales_profit,
         greatest(coalesce(sa.last_sales_at, to_timestamp(0)), coalesce(pa.last_purchases_at, to_timestamp(0)), coalesce(ra.last_returns_at, to_timestamp(0)), coalesce(ea.last_expenses_at, to_timestamp(0)), coalesce(aa.last_audit_at, to_timestamp(0)), coalesce(sha.last_shift_at, to_timestamp(0)), coalesce(u.last_login_at, to_timestamp(0)), coalesce(u.created_at, to_timestamp(0))) as last_activity_at
         from users u
         left join sales_agg sa on sa.user_id = u.id
@@ -191,19 +198,21 @@ export class ReportsAdminService {
         left join expenses_agg ea on ea.user_id = u.id
         left join audit_agg aa on aa.user_id = u.id
         left join shifts_agg sha on sha.user_id = u.id
+        left join sales_cogs_agg sca on sca.user_id = u.id
+        left join returned_cogs_agg rca on rca.user_id = u.id
         where u.tenant_id = ${tenantId} ${searchClause} ${selectedUserClause} ${roleClause}
       )`;
 
     const rowsResult = await sql<any>`${baseMetricsCte} select * from employee_metrics where 1 = 1 ${activityClause} order by last_activity_at desc, display_name asc, username asc limit ${pageSize} offset ${offset}`.execute(this.db);
-    const summaryResult = await sql<any>`${baseMetricsCte} select count(*)::int as total_users, sum(case when is_active then 1 else 0 end)::int as active_users, sum(case when (sales_count + purchases_count + returns_count + expenses_count + audit_count + shifts_count) > 0 then 1 else 0 end)::int as users_with_activity, coalesce(sum(sales_total), 0)::numeric as total_sales, coalesce(sum(purchases_total), 0)::numeric as total_purchases, coalesce(sum(returns_total), 0)::numeric as total_returns, coalesce(sum(expenses_total), 0)::numeric as total_expenses, coalesce(sum(audit_count), 0)::int as total_audit_events, coalesce(sum(shifts_count), 0)::int as total_shifts from employee_metrics where 1 = 1 ${activityClause}`.execute(this.db);
+    const summaryResult = await sql<any>`${baseMetricsCte} select count(*)::int as total_users, sum(case when is_active then 1 else 0 end)::int as active_users, sum(case when (sales_count + purchases_count + returns_count + expenses_count + audit_count + shifts_count) > 0 then 1 else 0 end)::int as users_with_activity, coalesce(sum(sales_total), 0)::numeric as total_sales, coalesce(sum(purchases_total), 0)::numeric as total_purchases, coalesce(sum(returns_total), 0)::numeric as total_returns, coalesce(sum(expenses_total), 0)::numeric as total_expenses, coalesce(sum(audit_count), 0)::int as total_audit_events, coalesce(sum(shifts_count), 0)::int as total_shifts, coalesce(sum(sales_cogs), 0)::numeric as total_sales_cogs, coalesce(sum(sales_profit), 0)::numeric as total_sales_profit from employee_metrics where 1 = 1 ${activityClause}`.execute(this.db);
 
     const countRow = summaryResult.rows?.[0] || {};
     const totalItems = Number(countRow.total_users || 0);
-    const rows = (rowsResult.rows || []).map((row: any) => ({ id: String(row.id || ''), name: row.display_name || row.username || 'مستخدم', username: row.username || '', role: row.role || 'cashier', isActive: row.is_active !== false, salesCount: Number(row.sales_count || 0), salesTotal: Number(row.sales_total || 0), purchasesCount: Number(row.purchases_count || 0), purchasesTotal: Number(row.purchases_total || 0), returnsCount: Number(row.returns_count || 0), returnsTotal: Number(row.returns_total || 0), expensesCount: Number(row.expenses_count || 0), expensesTotal: Number(row.expenses_total || 0), auditCount: Number(row.audit_count || 0), shiftsCount: Number(row.shifts_count || 0), openShifts: Number(row.open_shifts || 0), lastActivityAt: row.last_activity_at || null }));
+    const rows = (rowsResult.rows || []).map((row: any) => ({ id: String(row.id || ''), name: row.display_name || row.username || 'مستخدم', username: row.username || '', role: row.role || 'cashier', isActive: row.is_active !== false, salesCount: Number(row.sales_count || 0), salesTotal: Number(row.sales_total || 0), purchasesCount: Number(row.purchases_count || 0), purchasesTotal: Number(row.purchases_total || 0), returnsCount: Number(row.returns_count || 0), returnsTotal: Number(row.returns_total || 0), expensesCount: Number(row.expenses_count || 0), expensesTotal: Number(row.expenses_total || 0), auditCount: Number(row.audit_count || 0), shiftsCount: Number(row.shifts_count || 0), openShifts: Number(row.open_shifts || 0), salesCogs: Number(row.sales_cogs || 0), salesProfit: Number(row.sales_profit || 0), lastActivityAt: row.last_activity_at || null }));
 
     return {
       rows,
-      summary: { totalUsers: Number(countRow.total_users || 0), activeUsers: Number(countRow.active_users || 0), usersWithActivity: Number(countRow.users_with_activity || 0), totalSales: Number(countRow.total_sales || 0), totalPurchases: Number(countRow.total_purchases || 0), totalReturns: Number(countRow.total_returns || 0), totalExpenses: Number(countRow.total_expenses || 0), totalAuditEvents: Number(countRow.total_audit_events || 0), totalShifts: Number(countRow.total_shifts || 0) },
+      summary: { totalUsers: Number(countRow.total_users || 0), activeUsers: Number(countRow.active_users || 0), usersWithActivity: Number(countRow.users_with_activity || 0), totalSales: Number(countRow.total_sales || 0), totalPurchases: Number(countRow.total_purchases || 0), totalReturns: Number(countRow.total_returns || 0), totalExpenses: Number(countRow.total_expenses || 0), totalAuditEvents: Number(countRow.total_audit_events || 0), totalShifts: Number(countRow.total_shifts || 0), totalSalesCogs: Number(countRow.total_sales_cogs || 0), totalSalesProfit: Number(countRow.total_sales_profit || 0) },
       pagination: buildPagination(page, pageSize, totalItems),
     };
   }

@@ -54,6 +54,11 @@ export const PERMISSION_ARABIC_LABELS: Record<string, string> = {
   hrSalaryManage: 'إدارة بيانات الراتب',
   canDelete: 'الحذف',
   deliveryReps: 'إدارة المناديب',
+  // F12 (trial problem 15): supervisor-only van-admin key — reads
+  // of other reps' trips, van settings, targets, ledger and fraud
+  // data. A rep holds 'deliveryReps' only; this key is granted to
+  // the tenant admin / supervisor, never to a rep login.
+  deliveryRepsAdmin: 'إشراف الفان (كل المناديب والإعدادات)',
   maritimeJobs: 'أوامر تشغيل الشحن (Jobs)',
   maritimeContainers: 'تتبع وإدارة الحاويات',
   maritimeInquiries: 'استفسارات الشحن',

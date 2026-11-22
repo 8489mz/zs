@@ -16,6 +16,10 @@ type MetricsInput = {
   currentSection: ReportsSectionKey;
   submittedRange: { from: string; to: string };
   report: ReportSummary | null;
+  // F13 (trial problem 27): when a user/location scope is active, the
+  // tenant-wide financial summary must not stand in for the scoped
+  // report in the sales health rows (nonzero cards vs 0.00 summary).
+  scopeFiltered?: boolean;
   accountingFinancialSummary?: FinancialSummaryResponse | null;
   accountingCashMovement?: CashMovementResponse | null;
   accountingReceivablesPayables?: ReceivablesPayablesResponse | null;
@@ -29,6 +33,7 @@ export function useReportsWorkspaceMetrics({
   currentSection,
   submittedRange,
   report,
+  scopeFiltered,
   accountingFinancialSummary,
   accountingCashMovement,
   accountingReceivablesPayables,
@@ -80,9 +85,9 @@ export function useReportsWorkspaceMetrics({
       case 'sales':
         return [
           { label: 'الأيام المغطاة', value: `${rangeDays} يوم` },
-          { label: 'صافي المبيعات', value: formatCurrency(report?.sales.netSales ?? financialCards?.netSales ?? 0) },
+          { label: 'صافي المبيعات', value: formatCurrency(report?.sales.netSales ?? (scopeFiltered ? 0 : financialCards?.netSales ?? 0)) },
           { label: 'عدد الفواتير', value: `${report?.sales.count ?? 0} فاتورة` },
-          { label: 'المرتجعات والخصم', value: formatCurrency(report?.returns.total ?? (financialCards ? financialCards.salesReturns + financialCards.salesDiscounts : 0)) },
+          { label: 'المرتجعات والخصم', value: formatCurrency(report?.returns.total ?? (scopeFiltered ? 0 : (financialCards ? financialCards.salesReturns + financialCards.salesDiscounts : 0))) },
         ];
       case 'treasury':
         return [
@@ -137,6 +142,7 @@ export function useReportsWorkspaceMetrics({
     receivablesTotals,
     employeesQuery?.data?.summary,
     employeesQuery?.data?.pagination?.totalItems,
+    scopeFiltered,
   ]);
 
   const operatingSignalRows = useMemo(() => ([

@@ -15,6 +15,9 @@ export function SalesReportSection({
   reportQuery,
   accountingFinancialSummary,
   accountingFinancialSummaryLoading,
+  discountedOnly,
+  onDiscountedOnlyChange,
+  scopeFiltered,
   salesDailyAverage,
   purchaseDailyAverage,
   returnRatePercent,
@@ -24,9 +27,13 @@ export function SalesReportSection({
   printTopProducts,
   printSalesRegisterReport,
   formatPercent
-}: Pick<ReportsSectionContentProps, 'report' | 'reportQuery' | 'accountingFinancialSummary' | 'accountingFinancialSummaryLoading' | 'salesDailyAverage' | 'purchaseDailyAverage' | 'returnRatePercent' | 'rangeDays' | 'topProducts' | 'exportTopProducts' | 'printTopProducts' | 'printSalesRegisterReport' | 'formatPercent'>) {
+}: Pick<ReportsSectionContentProps, 'report' | 'reportQuery' | 'accountingFinancialSummary' | 'accountingFinancialSummaryLoading' | 'discountedOnly' | 'onDiscountedOnlyChange' | 'scopeFiltered' | 'salesDailyAverage' | 'purchaseDailyAverage' | 'returnRatePercent' | 'rangeDays' | 'topProducts' | 'exportTopProducts' | 'printTopProducts' | 'printSalesRegisterReport' | 'formatPercent'>) {
   const { t } = useTranslation();
-  const financial = accountingFinancialSummary?.cards;
+  // F13 (trial problem 27): under a user/location scope the tenant-wide
+  // financial summary must never stand in for the scoped report — its
+  // figures are unfiltered, so a filtered 0.00 summary showed nonzero
+  // cards. Scoped: the cards read the report only.
+  const financial = scopeFiltered ? undefined : accountingFinancialSummary?.cards;
   const salesTotal = report?.sales.total ?? financial?.grossSales ?? 0;
   const netSales = report?.sales.netSales ?? financial?.netSales ?? 0;
   const returnsAndDiscounts = report?.returns.total ?? (financial ? financial.salesReturns + financial.salesDiscounts : 0);
@@ -47,6 +54,17 @@ export function SalesReportSection({
         description={t('reports.sections.sales_report_section.s1', "تركيز مباشر على أرقام المبيعات ضمن النطاق الحالي مع الاحتفاظ بتفاصيل التشغيل مثل عدد الفواتير وأعلى الأصناف.")}
         actions={(
           <div className="actions compact-actions">
+            {/* F13 (trial problem 18): discounted-invoices-only filter.
+            Draft until the range is applied, like the location/user
+            filters in the range card. */}
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={discountedOnly === true}
+                onChange={(event) => onDiscountedOnlyChange?.(event.target.checked)}
+              />
+              {t('reports.sections.sales_report_section.s44', "المخصومة فقط")}
+            </label>
             <ReportPrintMenu
               label={t('reports.sections.sales_report_section.s2', "طباعة (ملخص)")}
               onPrintA4={() => void printSalesRegisterReport(false, 'A4')}

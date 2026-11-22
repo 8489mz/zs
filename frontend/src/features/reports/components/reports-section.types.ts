@@ -31,6 +31,13 @@ export type ReportsSectionContentProps = {
   flags (together with reportQuery.isLoading) so no card shows a number
   until every source its value reads from has loaded. */
   accountingFinancialSummaryLoading?: boolean;
+  /* F13 (trial problem 18): discounted-invoices-only filter, draft until
+  the range is applied. F13 (trial problem 27): when a user/location scope
+  is active, the tenant-wide financial summary must not stand in for the
+  scoped report in the sales cards. */
+  discountedOnly?: boolean;
+  onDiscountedOnlyChange?: (value: boolean) => void;
+  scopeFiltered?: boolean;
   accountingCashMovement?: CashMovementResponse | null;
   accountingCashMovementLoading?: boolean;
   accountingReceivablesPayables?: ReceivablesPayablesResponse | null;

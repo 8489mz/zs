@@ -2,7 +2,7 @@ import type { ManagedUserRecord } from '@/features/settings/api/settings.api';
 import { downloadExcelFile, escapeHtml, printHtmlDocument } from '@/lib/browser';
 
 export const DEFAULT_ADMIN_PERMS = [
-  'dashboard','products','sales','kitchen','purchases','inventory','suppliers','customers','crm','accounts','accounting','returns','reports','audit','treasury','services','hr','hrEmployees','hrAttendance','hrContracts','hrLoans','hrPayrollView','hrPayrollManage','hrPayrollApprove','hrSalaryView','hrSalaryManage','settings','pricingCenterView','pricingCenterManage','canEditUsers','canManageUsers','canManageSettings','canManageBackups','canPrint','canDiscount','canEditPrice','canSellWholesale','canViewProfit','canDelete','canEditInvoices','canDirectReturn','canAdjustInventory','canManageBranchStock','cashDrawer','deliveryReps',
+  'dashboard','products','sales','kitchen','purchases','inventory','suppliers','customers','crm','accounts','accounting','returns','reports','audit','treasury','services','hr','hrEmployees','hrAttendance','hrContracts','hrLoans','hrPayrollView','hrPayrollManage','hrPayrollApprove','hrSalaryView','hrSalaryManage','settings','pricingCenterView','pricingCenterManage','canEditUsers','canManageUsers','canManageSettings','canManageBackups','canPrint','canDiscount','canEditPrice','canSellWholesale','canViewProfit','canDelete','canEditInvoices','canDirectReturn','canAdjustInventory','canManageBranchStock','cashDrawer','deliveryReps','deliveryRepsAdmin',
   'maritimeJobs','maritimeContainers','maritimeInquiries','maritimeQuotations','maritimeRfqs','maritimePolicies',
   'contractingProjects','contractingInvoices','contractingBoq','contractingDailyLogs','contractingChangeOrders','contractingSubcontractors'
 ];
@@ -12,8 +12,8 @@ export const MARITIME_PERMISSIONS = [
 export const CONTRACTING_PERMISSIONS = [
   'contractingProjects', 'contractingInvoices', 'contractingBoq', 'contractingDailyLogs', 'contractingChangeOrders', 'contractingSubcontractors',
 ];
-/* INV-USER-GRANT-NAMES-PERMISSION: DEFAULT_ADMIN_PERMS is 57 keys =
- * the 45 retail keys the activation owner actually holds
+/* INV-USER-GRANT-NAMES-PERMISSION: DEFAULT_ADMIN_PERMS is 58 keys =
+ * the 46 retail keys the activation owner actually holds
  * (backend/src/core/auth/constants/super-admin-permissions.ts) PLUS
  * the 12 maritime/contracting keys above. A retail/clothes tenant
  * has no maritime or contracting in it at all, so its owner template
@@ -117,6 +117,11 @@ export const PERMISSION_LABELS: Record<string, string> = {
   hrSalaryManage: 'إدارة بيانات الراتب',
   canDelete: 'الحذف',
   deliveryReps: 'إدارة المناديب',
+  // F12 (trial problem 15): supervisor-only van-admin key — reads
+  // of other reps' trips, van settings, targets, ledger and fraud
+  // data. Never in the cashier/rep default; the owner template
+  // holds it, a rep login never does.
+  deliveryRepsAdmin: 'إشراف الفان (كل المناديب والإعدادات)',
 
   // Maritime Freight
   maritimeJobs: 'أوامر تشغيل الشحن (Jobs)',
@@ -225,6 +230,7 @@ export const PERMISSION_FEATURE_MAP: Record<string, string> = {
 
   // Delivery Reps
   deliveryReps: 'deliveryReps',
+  deliveryRepsAdmin: 'deliveryReps',
 
   // Manufacturing
   manufacturing: 'manufacturing',
@@ -244,7 +250,7 @@ export interface PermissionGroup {
 }
 
 export const USER_PERMISSION_GROUPS: PermissionGroup[] = [
-  { title: 'شاشات التشغيل اليومية', items: ['dashboard', 'sales', 'kitchen', 'customers', 'crm', 'cashDrawer', 'products', 'inventory', 'purchases', 'returns', 'suppliers', 'accounts', 'accounting', 'reports', 'pricingCenterView', 'deliveryReps'] },
+  { title: 'شاشات التشغيل اليومية', items: ['dashboard', 'sales', 'kitchen', 'customers', 'crm', 'cashDrawer', 'products', 'inventory', 'purchases', 'returns', 'suppliers', 'accounts', 'accounting', 'reports', 'pricingCenterView', 'deliveryReps', 'deliveryRepsAdmin'] },
   { title: 'الموارد البشرية', items: ['hr', 'hrEmployees', 'hrAttendance', 'hrContracts', 'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove'] },
   { title: 'تنفيذ العمليات', items: ['canPrint', 'canDiscount', 'canEditPrice', 'canSellWholesale', 'canEditInvoices', 'canDirectReturn', 'canAdjustInventory', 'canManageBranchStock', 'pricingCenterManage'] },
   { title: 'إدارة النظام', items: ['settings', 'canManageSettings', 'canEditUsers', 'canManageUsers', 'canManageBackups'] },

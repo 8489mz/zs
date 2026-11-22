@@ -1,7 +1,7 @@
 import { type Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { ReportRangeQueryDto } from '../dto/report-query.dto';
-import { applyDeliveryRepReturnsFilter, applyDeliveryRepSalesFilter, applyReportScopeFilter, buildTenantPredicate } from './reports-query.helper';
+import { applyDeliveryRepReturnsFilter, applyDeliveryRepSalesFilter, applyDiscountedOnlyReturnsFilter, applyDiscountedOnlySalesFilter, applyReportScopeFilter, buildTenantPredicate } from './reports-query.helper';
 import { sumMoney, toMoney } from './reports-math.helper';
 import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
@@ -50,6 +50,10 @@ type TopProductAccumulatorRow = {
   product_id?: string | number | null;
   product_name?: string | null;
   qty?: string | number | null;
+  // F13 (trial problem 39): qty is stored in SOLD units (1 carton);
+  // unit_multiplier is the pack size (12 pieces per carton). Top
+  // products count base pieces, so this field must be carried through.
+  unit_multiplier?: string | number | null;
   line_total?: string | number | null;
 };
 
@@ -80,6 +84,8 @@ type SummarySaleItemRow = {
   product_name?: string | null;
   line_total?: string | number | null;
   allocated_tax?: string | number | null;
+  // F13 (trial problem 39): sold-unit pack size; see TopProductAccumulatorRow.
+  unit_multiplier?: string | number | null;
 };
 
 export function buildTopProducts(rows: TopProductAccumulatorRow[], limit = 10): Array<{ name: string; qty: number; revenue: number; total: number }> {
@@ -88,7 +94,12 @@ export function buildTopProducts(rows: TopProductAccumulatorRow[], limit = 10): 
   for (const row of rows) {
     const key = String(row.product_name || row.product_id || '');
     const item = topProductsMap.get(key) || { name: String(row.product_name || ''), qty: 0, revenue: 0, total: 0 };
-    item.qty += Number(row.qty || 0);
+    // F13 (trial problem 39): quantity in BASE pieces — qty is stored in
+    // sold units (1 carton) and unit_multiplier is the pack size (12).
+    // Stock moves in base pieces and revenue already reflects them, so a
+    // bare sold-unit count (1 next to 288.00) misreads the sale. Rows
+    // without a multiplier count as pieces (multiplier defaults to 1).
+    item.qty += Number(row.qty || 0) * Number(row.unit_multiplier ?? 1);
     item.revenue += Number(row.line_total || 0);
     item.total += Number(row.line_total || 0);
     topProductsMap.set(key, item);
@@ -340,7 +351,9 @@ export async function buildReportSummaryAggregates(args: {
     : sql<boolean>`delivery_fee > 0 and delivery_fee_mode = 'store_fleet'`;
 
   // INV-VAN-PROFIT-REP-REPORTING: the rep filter scopes the sales side.
-  const salesAggQuery = applyDeliveryRepSalesFilter(applyReportScopeFilter(
+  // F13 (trial problem 18): the discounted-only filter scopes the same
+  // sales side (invoice discount OR any line discount > 0).
+  const salesAggQuery = applyDiscountedOnlySalesFilter(applyDeliveryRepSalesFilter(applyReportScopeFilter(
     db
       .selectFrom('sales')
       .select([
@@ -360,7 +373,7 @@ export async function buildReportSummaryAggregates(args: {
       .where('created_at', '<=', toDate)
       .where(buildTenantPredicate(tenantId)),
     query,
-  ), query);
+  ), query), query);
 
   const purchasesAggQuery = applyReportScopeFilter(
     db
@@ -417,7 +430,7 @@ export async function buildReportSummaryAggregates(args: {
     query, 'm',
   );
 
-  const returnsAggQuery = applyDeliveryRepReturnsFilter(applyReportScopeFilter(
+  const returnsAggQuery = applyDiscountedOnlyReturnsFilter(applyDeliveryRepReturnsFilter(applyReportScopeFilter(
     db
       .selectFrom('return_documents')
       .select([
@@ -430,9 +443,9 @@ export async function buildReportSummaryAggregates(args: {
       .where(buildTenantPredicate(tenantId))
       .groupBy('return_type'),
     query,
-  ), query);
+  ), query), query);
 
-  const salesReturnTaxQuery = applyDeliveryRepReturnsFilter(applyReportScopeFilter(
+  const salesReturnTaxQuery = applyDiscountedOnlyReturnsFilter(applyDeliveryRepReturnsFilter(applyReportScopeFilter(
     db.selectFrom('return_items as ri')
       .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
       .select(sql<number>`coalesce(sum(ri.allocated_tax), 0)`.as('tax_total'))
@@ -443,7 +456,7 @@ export async function buildReportSummaryAggregates(args: {
       .where(buildTenantPredicate(tenantId, 'ri')),
     query,
     'rd',
-  ), query, 'rd');
+  ), query, 'rd'), query, 'rd');
 
   const treasuryAggQuery = applyReportScopeFilter(
     db
@@ -458,7 +471,7 @@ export async function buildReportSummaryAggregates(args: {
     query,
   );
 
-  const rawCogsQuery = applyDeliveryRepSalesFilter(applyReportScopeFilter(
+  const rawCogsQuery = applyDiscountedOnlySalesFilter(applyDeliveryRepSalesFilter(applyReportScopeFilter(
     db
       .selectFrom('sale_items as si')
       .innerJoin('sales as s', (join) => join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'))
@@ -470,9 +483,9 @@ export async function buildReportSummaryAggregates(args: {
       .where(buildTenantPredicate(tenantId, 'si')),
     query,
     's',
-  ), query, 's');
+  ), query, 's'), query, 's');
 
-  const returnedCogsQuery = applyDeliveryRepReturnsFilter(applyReportScopeFilter(
+  const returnedCogsQuery = applyDiscountedOnlyReturnsFilter(applyDeliveryRepReturnsFilter(applyReportScopeFilter(
     db
       .selectFrom('return_items as ri')
       .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
@@ -490,15 +503,19 @@ export async function buildReportSummaryAggregates(args: {
       .where(buildTenantPredicate(tenantId, 'ri')),
     query,
     'rd',
-  ), query, 'rd');
+  ), query, 'rd'), query, 'rd');
 
-  const topProductsQuery = applyDeliveryRepSalesFilter(applyReportScopeFilter(
+  const topProductsQuery = applyDiscountedOnlySalesFilter(applyDeliveryRepSalesFilter(applyReportScopeFilter(
     db
       .selectFrom('sale_items as si')
       .innerJoin('sales as s', (join) => join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'))
       .select([
         sql<string>`coalesce(si.product_name, 'صنف غير محدد')`.as('name'),
-        sql<number>`coalesce(sum(si.qty), 0)`.as('qty'),
+        // F13 (trial problem 39): quantity in BASE pieces — qty is stored
+        // in sold units, unit_multiplier is the pack size (see
+        // buildTopProducts). COGS above is untouched: cost_price is
+        // already stored per sold unit x multiplier.
+        sql<number>`coalesce(sum(si.qty * coalesce(si.unit_multiplier, 1)), 0)`.as('qty'),
         sql<number>`coalesce(sum(si.line_total), 0)`.as('revenue'),
         sql<number>`coalesce(sum(si.line_total), 0)`.as('total'),
       ])
@@ -513,7 +530,7 @@ export async function buildReportSummaryAggregates(args: {
       .limit(10),
     query,
     's',
-  ), query, 's');
+  ), query, 's'), query, 's');
 
   const [
     salesAggRow,

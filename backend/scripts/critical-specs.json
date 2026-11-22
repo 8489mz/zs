@@ -302,6 +302,8 @@
     "test/critical/pos-cash-discount.spec.ts",
     "test/critical/customer-phone-validation.spec.ts",
     "test/critical/pos-van-stock-pool.spec.ts",
-    "test/critical/van-load-available-qty.spec.ts"
+    "test/critical/van-load-available-qty.spec.ts",
+    "test/critical/van-admin-permission-split.spec.ts",
+    "test/critical/reports-discount-profit.spec.ts"
   ]
 }

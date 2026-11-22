@@ -44,6 +44,17 @@ export const routePermissionMap: Record<string, RoutePermissionRequirement> = {
   '/pos': 'sales',
   'cash-drawer': ['cashDrawer', 'treasury'],
   '/cash-drawer': ['cashDrawer', 'treasury'],
+  // F12 (trial problem 15): the van supervisor console is NOT the
+  // rep's screen. The rep's own flows live on delivery-reps /
+  // driver-mobile / van-sales/mobile (feature deliveryReps, no extra
+  // permission); every admin-console path requires the supervisor-only
+  // 'deliveryRepsAdmin' key on top of the deliveryReps feature.
+  'van-sales-admin': 'deliveryRepsAdmin',
+  '/van-sales/admin': 'deliveryRepsAdmin',
+  'van-sales/management': 'deliveryRepsAdmin',
+  '/van-sales/management': 'deliveryRepsAdmin',
+  'inventory/van-sales': 'deliveryRepsAdmin',
+  '/inventory/van-sales': 'deliveryRepsAdmin',
   purchases: 'purchases',
   '/purchases': 'purchases',
   'purchases-orders': 'purchases',

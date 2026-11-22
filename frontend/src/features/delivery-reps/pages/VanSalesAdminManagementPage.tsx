@@ -17,6 +17,7 @@ import { VanPromotionsAdminTab } from '../components/VanPromotionsAdminTab';
 import { VanVisitsTrackingAdminTab } from '../components/VanVisitsTrackingAdminTab';
 import { UpsertDeliveryRepModal } from '@/shared/components/delivery-reps/UpsertDeliveryRepModal';
 import { useVanSalesAdmin, type DeliveryRep } from '../hooks/useVanSalesAdmin';
+import { useHasAnyPermission } from '@/shared/hooks/use-permission';
 import { vanSalesApi } from '../api/van-sales.api';
 import type { VanAdminTabKey } from './van-admin/van-admin-types';
 import { AdminHeader } from './van-admin/admin-header';
@@ -53,9 +54,18 @@ export default function VanSalesAdminManagementPage() {
   const [discountCapDraft, setDiscountCapDraft] = useState<number>(5);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
+  // F12 (trial problem 15): this console shows every rep's trips,
+  // figures, targets, ledger and fraud data plus the van-control
+  // settings dialog. A rep login holds 'deliveryReps' only; only a
+  // holder of the supervisor-only 'deliveryRepsAdmin' key may render
+  // it. The backend denies the same key on every admin endpoint, so
+  // this gate is the UI half — the denied page fires no admin query.
+  const canManageVanAdmin = useHasAnyPermission('deliveryRepsAdmin');
+
   const settingsQuery = useQuery({
     queryKey: ['van-settlement-settings'],
     queryFn: () => settingsApi.settings(),
+    enabled: canManageVanAdmin,
   });
 
   useEffect(() => {
@@ -73,12 +83,13 @@ export default function VanSalesAdminManagementPage() {
     pendingReturns,
     pendingRequisitions,
     suspicionEventsCount,
-  } = useVanSalesAdmin();
+  } = useVanSalesAdmin(canManageVanAdmin);
 
   const ledgerBadgeQuery = useQuery({
     queryKey: ['van-rep-financial-ledger-badge'],
     queryFn: () => vanSalesApi.getRepFinancialLedger({ status: 'pending' }),
     staleTime: 30_000,
+    enabled: canManageVanAdmin,
   });
   const pendingShortagesCount = ledgerBadgeQuery.data?.items?.length || 0;
 
@@ -174,6 +185,32 @@ export default function VanSalesAdminManagementPage() {
       }
     }
   };
+
+  // F12: a rep (or anyone without the supervisor key) never sees
+  // the console at all — no tabs, no trips of other reps, no
+  // settings dialog. The rep's own work lives on the driver pages.
+  if (!canManageVanAdmin) {
+    return (
+      <div
+        dir="rtl"
+        style={{
+          maxWidth: '1280px',
+          width: 'min(100%, 1280px)',
+          margin: '0 auto',
+          padding: '48px 16px',
+          textAlign: 'center',
+          boxSizing: 'border-box',
+        }}
+      >
+        <strong style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+          هذه الشاشة للمشرف فقط
+        </strong>
+        <p style={{ color: '#64748b', marginTop: '8px' }}>
+          إدارة الفان (رحلات كل المناديب والإعدادات) تحتاج صلاحية إشراف الفان. شاشة المندوب الخاصة بك هي شاشة البيع الميداني.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div

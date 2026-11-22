@@ -1,5 +1,6 @@
 import { ReportRangeQueryDto } from '../dto/report-query.dto';
 import { getPagination, parseRange, resolveTenantDayRange } from './reports-range.helper';
+import { discountedReturnInvoiceSql, discountedSaleSql } from '../../sales/helpers/sales-discount-filter.helper';
 import { sql } from '../../../database/kysely';
 
 export function applyReportScopeFilter<T extends object>(queryBuilder: T, query: ReportRangeQueryDto, tableAlias?: string): T {
@@ -57,6 +58,21 @@ export function applyDeliveryRepReturnsFilter<T extends object>(queryBuilder: T,
   return (queryBuilder as any)
     .where(sql.ref(`${alias}.return_type`), '=', 'sale')
     .where(sql<boolean>`exists (select 1 from sales s2 where s2.id = ${sql.ref(`${alias}.invoice_id`)} and s2.tenant_id = ${sql.ref(`${alias}.tenant_id`)} and s2.delivery_rep_id = ${repIdNum})`);
+}
+
+// F13 (trial problem 18): discounted-invoices-only on the sales side.
+// Only call on queries whose table (or join) carries the sales columns
+// the shared predicate reads — the same call discipline as the rep filter.
+export function applyDiscountedOnlySalesFilter<T extends object>(queryBuilder: T, query: ReportRangeQueryDto, tableAlias?: string): T {
+  if (!query.discountedOnly) return queryBuilder;
+  return (queryBuilder as any).where(discountedSaleSql(tableAlias ?? 'sales'));
+}
+
+// F13 (trial problem 18): sale returns of discounted invoices only.
+// Only call on return_documents(-aliased) queries.
+export function applyDiscountedOnlyReturnsFilter<T extends object>(queryBuilder: T, query: ReportRangeQueryDto, tableAlias?: string): T {
+  if (!query.discountedOnly) return queryBuilder;
+  return (queryBuilder as any).where(discountedReturnInvoiceSql(tableAlias ?? 'return_documents'));
 }
 
 // Single source of truth for the reports tenant predicate (extracted

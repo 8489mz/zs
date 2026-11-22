@@ -5,6 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { customersApi } from '@/shared/api/customers.api';
 import { posApi } from '@/features/pos/api/pos.api';
+import { calcMaxLoyaltyPointsToRedeem } from '@/features/pos/lib/pos-cart-totals';
 import { Button } from '@/shared/ui/button';
 import { StarIcon } from '@/shared/components/icons/AppIcons';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
@@ -271,7 +272,12 @@ export function PosCheckoutCustomerSection({
          * gate now uses the backend's default. */
         const discountInCurrency = Number(pos.totals?.loyaltyDiscount || 0);
         const totalValueInCurrency = roundMoneyValue(loyaltyPoints * pointValue, bookDigits);
-        const subTotal = Number(pos.totals?.subTotal || 0);
+        /* F14 (van trial, F1b loyalty item): the redeem-all cap divides
+         * the NET subtotal (gross minus line discounts) — the same base
+         * the backend and the totals engine cap the loyalty discount
+         * at. The gross base redeemed points the backend then capped
+         * in money but still deducted in full. */
+        const netSubTotal = Number((pos.totals?.netSubTotal ?? pos.totals?.subTotal) || 0);
 
         return (
           <div style={{
@@ -325,9 +331,7 @@ export function PosCheckoutCustomerSection({
                     type="button"
                     variant="secondary"
                     onClick={() => {
-                      const maxAllowedDiscount = (subTotal * maxPct) / 100;
-                      const maxPointsAllowedByCap = Math.floor(maxAllowedDiscount / pointValue);
-                      const pointsToRedeem = Math.min(loyaltyPoints, maxPointsAllowedByCap);
+                      const pointsToRedeem = calcMaxLoyaltyPointsToRedeem(loyaltyPoints, pointValue, netSubTotal, maxPct, bookDigits);
                       if (pointsToRedeem > 0) {
                         pos.setLoyaltyPointsRedeemed?.(pointsToRedeem);
                       }

@@ -20,6 +20,7 @@ export function useReportsWorkspaceController(currentSection: ReportsSectionKey)
     enabled: ['overview', 'sales', 'purchases'].includes(currentSection),
     locationId: state.submittedLocationId !== 'all' ? state.submittedLocationId : undefined,
     userId: state.submittedUserId !== 'all' ? state.submittedUserId : undefined,
+    discountedOnly: state.submittedDiscountedOnly,
   });
   const accountingFinancialSummaryQuery = useQuery({
     queryKey: ['reports', 'accounting-financial-summary', state.submittedRange.from, state.submittedRange.to],
@@ -81,10 +82,15 @@ export function useReportsWorkspaceController(currentSection: ReportsSectionKey)
   }, { enabled: currentSection === 'employees' });
 
   const report = reportQuery.data ?? null;
+  // F13 (trial problem 27): a user/location scope is active, so the
+  // tenant-wide financial summary must never stand in for the scoped
+  // report on the sales screen (nonzero cards next to a 0.00 summary).
+  const scopeFiltered = state.submittedUserId !== 'all' || state.submittedLocationId !== 'all';
   const metrics = useReportsWorkspaceMetrics({
     currentSection,
     submittedRange: state.submittedRange,
     report,
+    scopeFiltered,
     accountingFinancialSummary: accountingFinancialSummaryQuery.data ?? null,
     accountingCashMovement: accountingCashMovementQuery.data ?? null,
     accountingReceivablesPayables: accountingReceivablesPayablesQuery.data ?? null,
@@ -182,6 +188,9 @@ export function useReportsWorkspaceController(currentSection: ReportsSectionKey)
     setLocationId: state.setLocationId,
     userId: state.userId,
     setUserId: state.setUserId,
+    discountedOnly: state.discountedOnly,
+    onDiscountedOnlyChange: state.setDiscountedOnly,
+    scopeFiltered,
     ...actions,
   };
 }

@@ -17,7 +17,7 @@ import { ExecutiveBiGrid } from '@/features/dashboard/components/ExecutiveBiGrid
 import { DashboardDailyBrief } from '@/features/dashboard/components/DashboardDailyBrief';
 import { DashboardDailyDecisionGrid } from '@/features/dashboard/components/DashboardDailyDecisionGrid';
 import { formatCurrency } from '@/lib/format';
-import { useHasFeature } from '@/shared/hooks/use-permission';
+import { useHasFeature, useHasAnyPermission } from '@/shared/hooks/use-permission';
 import { useAuthStore } from '@/stores/auth-store';
 import { isPlatformAdmin } from '@/app/router/access';
 import {
@@ -150,8 +150,14 @@ export function DashboardPage() {
   }
 
   const overview = useDashboardOverview();
+  // F12 (trial problem 15): the decision center and the manager
+  // alerts are supervisor surfaces — a rep/cashier holds 'dashboard'
+  // but not 'reports', and the cashier default deliberately excludes
+  // 'reports'. Without it the secondary queries never fire and the
+  // decision grid is not rendered at all (no misleading empty state).
+  const canSeeManagerReports = useHasAnyPermission('reports');
   // Let the first dashboard response render before running secondary report queries.
-  const showSecondaryReports = Boolean(overview.data);
+  const showSecondaryReports = Boolean(overview.data) && canSeeManagerReports;
   const managerActions = useManagerActions(30, showSecondaryReports);
   const managerOverview = useDashboardManagerOverview(showSecondaryReports);
 
@@ -258,15 +264,17 @@ export function DashboardPage() {
           
           {/* العمود الرئيسي (الأيمن) */}
           <div className="page-stack" style={{ gap: '16px' }}>
-            {/* مركز اتخاذ القرارات التفاعلي */}
-            <DashboardDailyDecisionGrid
-              data={managerOverview.data}
-              topSuppliers={overview.data.topSuppliers}
-              totalSupplierDebt={Number(stats.supplierDebt || 0)}
-              isLoading={managerOverview.isLoading}
-              isError={managerOverview.isError}
-              error={managerOverview.error}
-            />
+            {/* مركز اتخاذ القرارات التفاعلي — للمشرف فقط (F12) */}
+            {canSeeManagerReports && (
+              <DashboardDailyDecisionGrid
+                data={managerOverview.data}
+                topSuppliers={overview.data.topSuppliers}
+                totalSupplierDebt={Number(stats.supplierDebt || 0)}
+                isLoading={managerOverview.isLoading}
+                isError={managerOverview.isError}
+                error={managerOverview.error}
+              />
+            )}
 
             {/* أعلى الأصناف مبيعاً اليوم */}
             <FormSection title={t('dashboard.top_selling_today', 'أعلى أصناف اليوم مبيعاً')} description={t('dashboard.top_selling_subtitle', 'الأصناف الأكثر طلباً وحركة خلال فواتير اليوم.')} actions={<span className="nav-pill">{t('dashboard.today', 'اليوم')}</span>} className="dashboard-premium-card">

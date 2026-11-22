@@ -4,6 +4,31 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { createTestQueryClient } from '@/test/test-query-client';
+import { useAuthStore } from '@/stores/auth-store';
+import type { AuthUser } from '@/types/auth';
+
+// F12: the decision center is a supervisor surface — only a
+// 'reports' holder sees it. The existing cases model the supervisor;
+// the rep case below models a rep login (no 'reports').
+const supervisorUser: AuthUser = {
+  id: 'u-supervisor',
+  username: 'supervisor',
+  role: 'admin',
+  permissions: ['dashboard', 'sales', 'reports'],
+  displayName: 'Supervisor',
+  branchIds: ['b-1'],
+  defaultBranchId: 'b-1',
+};
+
+const repUser: AuthUser = {
+  id: 'u-rep',
+  username: 'rep',
+  role: 'cashier',
+  permissions: ['dashboard', 'sales', 'deliveryReps'],
+  displayName: 'Rep',
+  branchIds: ['b-1'],
+  defaultBranchId: 'b-1',
+};
 
 const dashboardOverview = {
   range: { from: '2026-04-27T00:00:00.000Z', to: '2026-04-27T23:59:59.999Z' },
@@ -124,6 +149,7 @@ vi.mock('@/shared/system/SmartDemoOnboardingBanner', () => ({
 
 describe('Dashboard daily home layout', () => {
   it('waits for the primary overview before starting secondary report queries', () => {
+    useAuthStore.setState({ user: supervisorUser });
     useDashboardOverviewMock.mockReturnValue({ data: undefined, isLoading: true, isError: false, error: null });
     useManagerActionsMock.mockReturnValue({ data: undefined, isLoading: false, isError: false, error: null });
     useDashboardManagerOverviewMock.mockReturnValue({ data: undefined, isLoading: false, isError: false, error: null });
@@ -139,6 +165,7 @@ describe('Dashboard daily home layout', () => {
   });
 
   it('renders the current focused daily dashboard with decision and summary cards', () => {
+    useAuthStore.setState({ user: supervisorUser });
     useDashboardOverviewMock.mockReturnValue({
       data: dashboardOverview,
       isLoading: false,
@@ -181,5 +208,38 @@ describe('Dashboard daily home layout', () => {
     expect(screen.getByText('أعلى أصناف اليوم مبيعاً')).toBeInTheDocument();
     expect(screen.getByText('الحسابات والمخزون')).toBeInTheDocument();
     expect(screen.getByText('حركة اليوم المالية')).toBeInTheDocument();
+  });
+
+  it('F12: a rep without reports never starts the secondary queries and never sees the decision center', () => {
+    useAuthStore.setState({ user: repUser });
+    useDashboardOverviewMock.mockReturnValue({
+      data: dashboardOverview,
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    useManagerActionsMock.mockReturnValue({
+      data: { insights: [] },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    useDashboardManagerOverviewMock.mockReturnValue({
+      data: managerOverview,
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <MemoryRouter><DashboardPage /></MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(useManagerActionsMock).toHaveBeenCalledWith(30, false);
+    expect(useDashboardManagerOverviewMock).toHaveBeenCalledWith(false);
+    expect(screen.getAllByText('ملخص اليوم').length).toBeGreaterThan(0);
+    expect(screen.queryByText('مركز اتخاذ القرارات')).not.toBeInTheDocument();
   });
 });

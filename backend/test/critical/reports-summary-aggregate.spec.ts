@@ -42,7 +42,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, account_id text, return_type text, total numeric, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz);
     CREATE TABLE return_items (id bigserial PRIMARY KEY, tenant_id text, return_document_id bigint, sale_item_id bigint, product_id bigint, qty numeric, cost_price numeric, allocated_tax numeric);
     CREATE TABLE treasury_transactions (id bigserial PRIMARY KEY, tenant_id text, account_id text, amount numeric, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz);
-    CREATE TABLE sale_items (id bigserial PRIMARY KEY, tenant_id text, sale_id bigint, product_id bigint, product_name text, qty numeric, line_total numeric, cost_price numeric);
+    CREATE TABLE sale_items (id bigserial PRIMARY KEY, tenant_id text, sale_id bigint, product_id bigint, product_name text, qty numeric, line_total numeric, cost_price numeric, unit_multiplier numeric DEFAULT 1);
     CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, cost_price numeric);
   `);
   return { pg, db };

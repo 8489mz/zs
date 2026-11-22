@@ -160,6 +160,8 @@ export function EmployeesReportSection({
               ),
             },
             { key: 'sales', header: t('reports.sections.employees_report_section.s41', "المبيعات"), cell: (row) => `${row.salesCount} · ${formatCurrency(row.salesTotal || 0)}` },
+            // F13 (trial problem 18): per-user sales profit column.
+            { key: 'profit', header: t('reports.sections.employees_report_section.s63', "ربح المبيعات"), cell: (row) => formatCurrency(row.salesProfit || 0) },
             { key: 'returns', header: t('reports.sections.employees_report_section.s42', "المرتجعات"), cell: (row) => `${row.returnsCount} · ${formatCurrency(row.returnsTotal || 0)}` },
             { key: 'purchases', header: t('reports.sections.employees_report_section.s43', "المشتريات"), cell: (row) => `${row.purchasesCount} · ${formatCurrency(row.purchasesTotal || 0)}` },
             { key: 'ops', header: t('reports.sections.employees_report_section.s44', "العمليات"), cell: (row) => `${row.shiftsCount} وردية · ${row.auditCount} سجل` },
