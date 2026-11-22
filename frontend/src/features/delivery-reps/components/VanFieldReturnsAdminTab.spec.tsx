@@ -42,6 +42,16 @@ vi.mock('../api/van-sales.api', () => ({
     listAdminReturns: mockListReturns,
     approveReturn: mockApproveReturn,
     rejectReturn: mockRejectReturn,
+    // INV-VAN-SALES-MOCK-EVALUATE-PROMOTIONS: VanSaleTab calls this
+    // 250ms after a non-empty cart renders; the stub matches the real
+    // return shape (van-sales-fraud-promotions.ts:124).
+    evaluateCartPromotions: vi.fn().mockResolvedValue({
+      ok: true,
+      appliedPromotions: [],
+      bonusItemsToAdd: [],
+      totalPromotionalDiscount: 0,
+      upsellNudges: [],
+    }),
   },
 }));
 
