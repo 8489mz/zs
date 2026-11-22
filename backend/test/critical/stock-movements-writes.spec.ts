@@ -2,7 +2,7 @@
  * INV-STOCK-MOVEMENTS-WRITE-INVENTORY: stock-movements writes spec.
  *
  * This spec pins docs/STOCK_MOVEMENTS_WRITES.md: the line-based scan
- * of backend/src must find exactly 68 direct stock_movements writes,
+ * of backend/src must find exactly 70 direct stock_movements writes,
  * and every one must be listed in the document by file:line. Any new
  * direct write (or a removed one) fails this spec, so the inventory
  * can only change deliberately, with the document updated in the same
@@ -34,7 +34,7 @@ import * as path from 'path';
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const BACKEND_SRC = path.join(REPO_ROOT, 'backend', 'src');
 const DOC_PATH = path.join(REPO_ROOT, 'docs', 'STOCK_MOVEMENTS_WRITES.md');
-const PINNED_WRITE_COUNT = 68;
+const PINNED_WRITE_COUNT = 70;
 
 type Kind = 'WRITE-insert' | 'WRITE-delete' | 'WRITE-update' | 'READ' | 'OTHER';
 
@@ -125,7 +125,7 @@ async function main(): Promise<void> {
   // 2. Every scanned write must be listed in the document by file:line.
   assert.ok(fs.existsSync(DOC_PATH), 'docs/STOCK_MOVEMENTS_WRITES.md must exist');
   const doc = fs.readFileSync(DOC_PATH, 'utf8');
-  assert.ok(doc.includes('Total business writes: **68**'), 'docs/STOCK_MOVEMENTS_WRITES.md must state the pinned total of 68');
+  assert.ok(doc.includes('Total business writes: **70**'), 'docs/STOCK_MOVEMENTS_WRITES.md must state the pinned total of 70');
   for (const site of sites) {
     assert.ok(
       doc.includes(`${site.file}:${site.line}`),
