@@ -20,6 +20,7 @@ import {
   BiometricAttendanceController,
 } from './controllers/biometric-attendance.controller';
 import { BiometricAttendanceService } from './services/biometric-attendance.service';
+import { BiometricStagingService } from './services/biometric-staging.service';
 
 @Module({
   imports: [DatabaseModule, AuditModule, AuthFoundationModule, AccountingModule, CashDrawerModule],
@@ -40,6 +41,7 @@ import { BiometricAttendanceService } from './services/biometric-attendance.serv
     EndOfServiceService,
     RecruitmentAtsService,
     BiometricAttendanceService,
+    BiometricStagingService,
   ],
   exports: [
     MobileAttendanceService,
@@ -47,6 +49,7 @@ import { BiometricAttendanceService } from './services/biometric-attendance.serv
     EndOfServiceService,
     RecruitmentAtsService,
     BiometricAttendanceService,
+    BiometricStagingService,
   ],
 })
 export class HrModule {}

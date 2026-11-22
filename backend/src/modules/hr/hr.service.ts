@@ -180,21 +180,28 @@ export class HrService {
       tx: this.tx,
       audit: this.audit,
       tenantPredicate: this.tenantPredicate.bind(this),
-      refreshAttendanceExceptionForEmployeeDate: this.attendanceExceptionsService.refreshAttendanceExceptionForEmployeeDate.bind(this),
+      refreshAttendanceExceptionForEmployeeDate:
+        this.attendanceExceptionsService.refreshAttendanceExceptionForEmployeeDate.bind(
+          this.attendanceExceptionsService,
+        ),
     });
     this.payrollReviewService = new HrPayrollReviewService({
       getPayrollPolicies: this.getPayrollPolicies.bind(this),
     });
     this.payrollRebuildService = new HrPayrollRebuildService({
       getPayrollPolicies: this.getPayrollPolicies.bind(this),
-      calculatePayrollOperationalReview: this.payrollReviewService.calculatePayrollOperationalReview.bind(this),
+      calculatePayrollOperationalReview: this.payrollReviewService.calculatePayrollOperationalReview.bind(
+        this.payrollReviewService,
+      ),
     });
     this.payrollRunsService = new HrPayrollRunsService({
       db: this.db,
       tx: this.tx,
       audit: this.audit,
-      rebuildPayrollRunItems: this.payrollRebuildService.rebuildPayrollRunItems.bind(this),
-      calculatePayrollOperationalReview: this.payrollReviewService.calculatePayrollOperationalReview.bind(this),
+      rebuildPayrollRunItems: this.payrollRebuildService.rebuildPayrollRunItems.bind(this.payrollRebuildService),
+      calculatePayrollOperationalReview: this.payrollReviewService.calculatePayrollOperationalReview.bind(
+        this.payrollReviewService,
+      ),
     });
     this.employeesService = new HrEmployeesService({
       db: this.db,
@@ -203,14 +210,18 @@ export class HrService {
       scope: this.scope.bind(this),
       tenantPredicate: this.tenantPredicate.bind(this),
       assertEmployeeBelongsToTenant: this.assertEmployeeBelongsToTenant.bind(this),
-      listCompensation: this.employeeRecordsService.listCompensation.bind(this),
-      listContacts: this.employeeRecordsService.listContacts.bind(this),
-      listContracts: this.employeeRecordsService.listContracts.bind(this),
-      listDocuments: this.employeeRecordsService.listDocuments.bind(this),
-      listLoans: this.loansService.listLoans.bind(this),
-      deductibleApprovedLeaveDaysByEmployee: this.leaveService.deductibleApprovedLeaveDaysByEmployee.bind(this),
-      reconciledUsedAnnualLeaves: this.leaveService.reconciledUsedAnnualLeaves.bind(this),
-      invalidateReviewedPayrollForNewHire: this.payrollRunsService.invalidateReviewedPayrollForNewHire.bind(this),
+      listCompensation: this.employeeRecordsService.listCompensation.bind(this.employeeRecordsService),
+      listContacts: this.employeeRecordsService.listContacts.bind(this.employeeRecordsService),
+      listContracts: this.employeeRecordsService.listContracts.bind(this.employeeRecordsService),
+      listDocuments: this.employeeRecordsService.listDocuments.bind(this.employeeRecordsService),
+      listLoans: this.loansService.listLoans.bind(this.loansService),
+      deductibleApprovedLeaveDaysByEmployee: this.leaveService.deductibleApprovedLeaveDaysByEmployee.bind(
+        this.leaveService,
+      ),
+      reconciledUsedAnnualLeaves: this.leaveService.reconciledUsedAnnualLeaves.bind(this.leaveService),
+      invalidateReviewedPayrollForNewHire: this.payrollRunsService.invalidateReviewedPayrollForNewHire.bind(
+        this.payrollRunsService,
+      ),
     });
     this.advancesService = new HrAdvancesService({
       db: this.db,
@@ -219,8 +230,8 @@ export class HrService {
       accountingPosting: this.accountingPosting,
       cashDrawer: this.cashDrawer,
       getPayrollPolicies: this.getPayrollPolicies.bind(this),
-      rebuildPayrollRunItems: this.payrollRebuildService.rebuildPayrollRunItems.bind(this),
-      invalidatePayrollRunReview: this.payrollRunsService.invalidatePayrollRunReview.bind(this),
+      rebuildPayrollRunItems: this.payrollRebuildService.rebuildPayrollRunItems.bind(this.payrollRebuildService),
+      invalidatePayrollRunReview: this.payrollRunsService.invalidatePayrollRunReview.bind(this.payrollRunsService),
     });
     this.payrollPostingService = new HrPayrollPostingService({
       db: this.db,
@@ -230,10 +241,10 @@ export class HrService {
       accountingPosting: this.accountingPosting,
       cashDrawer: this.cashDrawer,
       getPayrollPolicies: this.getPayrollPolicies.bind(this),
-      getPayrollRun: this.payrollRunsService.getPayrollRun.bind(this),
-      getPayrollRunStatusForUpdate: this.payrollRunsService.getPayrollRunStatusForUpdate.bind(this),
-      invalidatePayrollRunReview: this.payrollRunsService.invalidatePayrollRunReview.bind(this),
-      rebuildPayrollRunItems: this.payrollRebuildService.rebuildPayrollRunItems.bind(this),
+      getPayrollRun: this.payrollRunsService.getPayrollRun.bind(this.payrollRunsService),
+      getPayrollRunStatusForUpdate: this.payrollRunsService.getPayrollRunStatusForUpdate.bind(this.payrollRunsService),
+      invalidatePayrollRunReview: this.payrollRunsService.invalidatePayrollRunReview.bind(this.payrollRunsService),
+      rebuildPayrollRunItems: this.payrollRebuildService.rebuildPayrollRunItems.bind(this.payrollRebuildService),
     });
   }
 

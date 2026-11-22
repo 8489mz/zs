@@ -11,7 +11,6 @@ import { useHrAttendance, useHrAttendanceExceptions, useHrMutations } from '@/fe
 import { hrApi } from '@/features/hr/api/hr.api';
 import { queryKeys } from '@/app/query-keys';
 import { useHasAnyPermission } from '@/shared/hooks/use-permission';
-import { ImportWorkbench } from '@/shared/components/ImportWorkbench';
 import {
   DraftRow,
   ExceptionFilter,
@@ -158,7 +157,6 @@ export function HrAttendancePage() {
   const [exceptionFilter, setExceptionFilter] = useState<ExceptionFilter>('needs_action');
   const [draftByEmployeeId, setDraftByEmployeeId] = useState<Record<string, DraftRow>>({});
   const [modifiedEmployeeIds, setModifiedEmployeeIds] = useState<Set<string>>(new Set());
-  const [importOpen, setImportOpen] = useState(false);
   const [biometricModalOpen, setBiometricModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'attendance' | 'exceptions'>('attendance');
   const [manualPrompt, setManualPrompt] = useState<ManualAttendancePrompt>(null);
@@ -576,10 +574,7 @@ export function HrAttendancePage() {
                 onClick={() => setBiometricModalOpen(true)}
                 style={{ backgroundColor: '#170e5e', color: '#ffffff' }}
               >
-                {t('hr.hr_attendance_page.biometric_hub', "أجهزة البصمة والربط السحابي")}
-              </Button>
-              <Button variant={importOpen ? 'primary' : 'secondary'} onClick={() => setImportOpen(!importOpen)}>
-                {t('hr.hr_attendance_page.s2', "استيراد إكسيل")}
+                {t('hr.hr_attendance_page.biometric_hub', "استيراد الحضور وأجهزة البصمة")}
               </Button>
               {canViewPayroll && <Button variant="secondary" onClick={() => navigate('/hr/payroll')}>{t('hr.hr_attendance_page.s3', "المرتبات")}</Button>}
               {canViewEmployees && <Button variant="secondary" onClick={() => navigate('/hr/employees')}>{t('hr.hr_attendance_page.s4', "الموظفون")}</Button>}
@@ -588,138 +583,6 @@ export function HrAttendancePage() {
         />
 
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          {importOpen && (
-            <div className="no-print" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: '10px',
-                  flexWrap: 'wrap',
-                  background: '#eef2ff',
-                  border: '1px solid #c7d2fe',
-                  borderRadius: '8px',
-                  padding: '8px 12px',
-                  marginBottom: '12px',
-                }}
-              >
-                <span style={{ fontSize: '12px', fontWeight: 600, color: '#170e5e' }}>
-                  لملفات أجهزة البصمة الخام (مثل <code>attlog.dat</code> أو <code>attendance_logs.csv</code> أو <code>user.dat</code>) مع تجميع الدخول والخروج وربط الأرقام، يفضل استخدام مركز أجهزة البصمة الذكي:
-                </span>
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => {
-                    setImportOpen(false);
-                    setBiometricModalOpen(true);
-                  }}
-                  style={{ padding: '4px 12px', fontSize: '12px', backgroundColor: '#170e5e', color: '#ffffff' }}
-                >
-                  فتح مركز أجهزة البصمة
-                </Button>
-              </div>
-              <ImportWorkbench
-                title={t('hr.hr_attendance_page.s5', "استيراد الحضور من إكسيل")}
-                description={t('hr.hr_attendance_page.s6', "يدعم الأعمدة العربية أو الإنجليزية المكافئة وملفات البصمة الخام.")}
-                defaultCollapsed={false}
-                requiredColumns={[t('hr.hr_attendance_page.s7', "كود الموظف"), t('hr.hr_attendance_page.s8', "التاريخ")]}
-                requiredFieldKeys={['employeeNo', 'workDate']}
-                fieldMappings={[
-                  {
-                    key: 'employeeNo',
-                    label: t('hr.hr_attendance_page.s9', "كود الموظف (مطلوب)"),
-                    aliases: ['كود الموظف', 'كود الموظف (User ID)', 'رقم البصمة', 'رقم الموظف', 'AC-No.', 'User ID', 'Employee ID', 'PIN', 'employeeNo'],
-                  },
-                  {
-                    key: 'workDate',
-                    label: t('hr.hr_attendance_page.s10', "التاريخ (مطلوب)"),
-                    aliases: ['التاريخ', 'التاريخ والوقت (Date Time)', 'التاريخ والوقت', 'Date Time', 'Date/Time', 'Date', 'workDate'],
-                  },
-                  {
-                    key: 'checkInAt',
-                    label: t('hr.hr_attendance_page.s11', "وقت الحضور"),
-                    aliases: ['وقت الحضور', 'الحضور', 'Clock In', 'Check In', 'checkInAt'],
-                  },
-                  {
-                    key: 'checkOutAt',
-                    label: t('hr.hr_attendance_page.s12', "وقت الانصراف"),
-                    aliases: ['وقت الانصراف', 'الانصراف', 'Clock Out', 'Check Out', 'checkOutAt'],
-                  },
-                ]}
-                isPending={mutations.bulkImportAttendanceRecords.isPending}
-                onDownloadTemplate={() => {
-                  const csv = t('hr.hr_attendance_page.s13', "كود الموظف,التاريخ,وقت الحضور,وقت الانصراف\n101,2026-07-25,09:00,17:00");
-                  const blob = new Blob([new Uint8Array([0xef, 0xbb, 0xbf]), csv], { type: 'text/csv;charset=utf-8;' });
-                  const link = document.createElement('a');
-                  link.href = URL.createObjectURL(blob);
-                  link.download = t('hr.hr_attendance_page.s14', "نموذج_الحضور.csv");
-                  link.click();
-                }}
-                onImportRows={async (importedRows) => {
-                  if (!importedRows.length) return { imported: 0, skipped: 0, errors: [] };
-                  const sampleRow = importedRows[0] || {};
-                  const sampleDateVal = String(
-                    sampleRow.workDate ||
-                      sampleRow[t('hr.hr_attendance_page.s15', "التاريخ")] ||
-                      sampleRow['التاريخ والوقت (Date Time)'] ||
-                      sampleRow['التاريخ والوقت'] ||
-                      sampleRow['Date/Time'] ||
-                      sampleRow['Date Time'] ||
-                      '',
-                  ).trim();
-                  const hasCombinedDateTime = /\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}/.test(sampleDateVal) ||
-                    /\d{1,2}[-/]\d{1,2}[-/]\d{4}\s+\d{1,2}:\d{2}/.test(sampleDateVal);
-
-                  if (hasCombinedDateTime) {
-                    const headers = Object.keys(sampleRow);
-                    const tsvLines = [
-                      headers.join('\t'),
-                      ...importedRows.map((row) => headers.map((h) => String(row[h] ?? '').replace(/\t/g, ' ').trim()).join('\t')),
-                    ];
-                    return hrApi.importBiometricLog({
-                      rawText: tsvLines.join('\n'),
-                      debounceMinutes: 3,
-                      onlyOpenPayrollMonth: true,
-                    });
-                  }
-
-                  const records = importedRows
-                    .map((row) => {
-                      const rawWorkDate = String(
-                        row.workDate ||
-                          row[t('hr.hr_attendance_page.s15', "التاريخ")] ||
-                          row['التاريخ والوقت (Date Time)'] ||
-                          row['Date'] ||
-                          '',
-                      ).trim();
-                      const workDate = rawWorkDate.split(/\s+/)[0] || '';
-                      const employeeNo = String(
-                        row.employeeNo ||
-                          row[t('hr.hr_attendance_page.s16', "كود الموظف")] ||
-                          row['كود الموظف (User ID)'] ||
-                          row['AC-No.'] ||
-                          row['User ID'] ||
-                          '',
-                      ).trim();
-                      return {
-                        employeeNo,
-                        workDate,
-                        checkInAt: toDateTime(workDate, row.checkInAt || row[t('hr.hr_attendance_page.s17', "وقت الحضور")] || ''),
-                        checkOutAt: toDateTime(workDate, row.checkOutAt || row[t('hr.hr_attendance_page.s18', "وقت الانصراف")] || ''),
-                      };
-                    })
-                    .filter((r) => r.employeeNo && r.workDate);
-
-                  if (!records.length) {
-                    return { imported: 0, skipped: importedRows.length, errors: ['لم يتم العثور على صفوف صالحة تحتوي على كود الموظف والتاريخ في هذه الشريحة'] };
-                  }
-                  return mutations.bulkImportAttendanceRecords.mutateAsync({ records });
-                }}
-              />
-            </div>
-          )}
-
           {/* Unified Anti-Clutter Toolbar */}
           <AttendancePageToolbar
             viewMode={viewMode}

@@ -64,11 +64,10 @@ import { up, down } from '../../src/database/migrations/2040000000337_import_con
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const MIGRATIONS_DIR = path.join(REPO_ROOT, 'backend', 'src', 'database', 'migrations');
 const MIGRATION_FILE = '2040000000337_import_container_deposit_amount_3dp.ts';
-// Highest migration on disk at the time of this edit (0340 landed
-// after 0338 and owns the top slot now — see the section-8 pin;
-// 0340 is the F12 deliveryRepsAdmin backfill from the van-trial
-// fix chain, and it touches neither deposit table).
-const HIGHEST_MIGRATION_FILE = '2040000000340_delivery_reps_admin_backfill.ts';
+// Highest migration on disk at the time of this edit (0342 landed
+// after 0341/0340 and owns the top slot now — see the section-8 pin;
+// 0341 and 0342 are HR biometric tables and touch neither deposit table).
+const HIGHEST_MIGRATION_FILE = '2040000000342_hr_biometric_raw_punches_staging.ts';
 
 const COLUMNS: Array<[string, string]> = [
   ['import_container_deposits', 'deposit_amount_egp'],
@@ -185,14 +184,13 @@ async function main(): Promise<void> {
     await db.destroy();
   }
 
-  // 8. Static pins: the migration file exists, the 0340 migration
-  // is the highest on disk (0338 stopped being highest when 0340
-  // landed), and no migration other than the two creators
-  // (0238, 0241), the serial-id change (0306) and this one ever
-  // touches either table.
+  // 8. Static pins: the migration file exists, the 0342 migration
+  // is the highest on disk (0341/0342 landed after 0340), and no
+  // migration other than the two creators (0238, 0241), the
+  // serial-id change (0306) and this one ever touches either table.
   const files = fs.readdirSync(MIGRATIONS_DIR).filter((n) => n.endsWith('.ts') && !n.endsWith('.d.ts')).sort();
   assert.ok(files.includes(MIGRATION_FILE), 'the 0337 migration file must exist in the migrations directory');
-  assert.equal(files[files.length - 1], HIGHEST_MIGRATION_FILE, 'the 0340 migration must be the highest-numbered migration on disk');
+  assert.equal(files[files.length - 1], HIGHEST_MIGRATION_FILE, 'the 0342 migration must be the highest-numbered migration on disk');
   const touching: string[] = [];
   for (const file of files) {
     const src = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');

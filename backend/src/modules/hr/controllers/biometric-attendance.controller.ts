@@ -23,12 +23,16 @@ import {
   type PreviewBiometricLogDto,
   type UpsertBiometricDeviceDto,
 } from '../services/biometric-attendance.service';
+import { BiometricStagingService } from '../services/biometric-staging.service';
 
 @Controller('api/hr/biometric')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('hr')
 export class BiometricAttendanceController {
-  constructor(private readonly biometricService: BiometricAttendanceService) {}
+  constructor(
+    private readonly biometricService: BiometricAttendanceService,
+    private readonly stagingService: BiometricStagingService,
+  ) {}
 
   @Get('devices')
   @RequirePermissions('hrAttendance')
@@ -90,6 +94,36 @@ export class BiometricAttendanceController {
   @RequirePermissions('hrAttendance')
   async importLog(@Body() body: ImportBiometricLogDto, @Req() req: RequestWithAuth) {
     return this.biometricService.importBiometricLog(body, req.authContext!);
+  }
+
+  @Get('pending-punches')
+  @RequirePermissions('hrAttendance')
+  async listPendingPunches(@Req() req: RequestWithAuth) {
+    return this.stagingService.listPendingUnmatchedPunches(req.authContext!);
+  }
+
+  @Post('create-employee')
+  @RequirePermissions('hrAttendance')
+  async createEmployeeFromPin(
+    @Body() body: { pin: string; displayName?: string | null },
+    @Req() req: RequestWithAuth,
+  ) {
+    return this.stagingService.createEmployeeFromBiometricPin(body, req.authContext!);
+  }
+
+  @Post('bulk-create-employees')
+  @RequirePermissions('hrAttendance')
+  async bulkCreateEmployees(
+    @Body() body: { items: Array<{ pin: string; displayName?: string | null }> },
+    @Req() req: RequestWithAuth,
+  ) {
+    return this.stagingService.bulkCreateEmployeesFromPins(body?.items || [], req.authContext!);
+  }
+
+  @Delete('pending-punches/:pin')
+  @RequirePermissions('hrAttendance')
+  async dismissPendingPin(@Param('pin') pin: string, @Req() req: RequestWithAuth) {
+    return this.stagingService.dismissPendingPin(pin, req.authContext!);
   }
 }
 

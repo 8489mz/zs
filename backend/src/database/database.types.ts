@@ -1950,6 +1950,22 @@ export interface HrBiometricDeviceTable {
   updated_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
 }
 
+export interface HrBiometricRawPunchTable {
+  id: Generated<number>;
+  tenant_id: ColumnType<string, string | undefined, string | undefined>;
+  account_id: ColumnType<string, string | undefined, string | undefined>;
+  device_serial: string | null;
+  device_pin: string;
+  work_date: ColumnType<string, string | undefined, string | undefined>;
+  check_in_at: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;
+  check_out_at: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;
+  raw_punch_count: ColumnType<number, number | undefined, number | undefined>;
+  status: 'pending' | 'posted' | 'dismissed';
+  resolved_employee_id: number | null;
+  created_at: ColumnType<Date, string | undefined, never>;
+  updated_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
+}
+
 export interface HrEmployeeTable {
   tenant_id: ColumnType<string, string | undefined, string | undefined>;
   account_id: ColumnType<string, string | undefined, string | undefined>;
@@ -2675,6 +2691,7 @@ export interface Database {
   hr_employee_ledger: HrEmployeeLedgerTable;
   hr_attendance_records: HrAttendanceRecordTable;
   hr_biometric_devices: HrBiometricDeviceTable;
+  hr_biometric_raw_punches: HrBiometricRawPunchTable;
   hr_attendance_exceptions: HrAttendanceExceptionTable;
   hr_leave_types: HrLeaveTypeTable;
   hr_leave_requests: HrLeaveRequestTable;
@@ -2947,6 +2964,7 @@ export interface Database {
   hr_employee_ledger: HrEmployeeLedgerTable;
   hr_attendance_records: HrAttendanceRecordTable;
   hr_biometric_devices: HrBiometricDeviceTable;
+  hr_biometric_raw_punches: HrBiometricRawPunchTable;
   hr_attendance_exceptions: HrAttendanceExceptionTable;
   hr_leave_types: HrLeaveTypeTable;
   hr_leave_requests: HrLeaveRequestTable;

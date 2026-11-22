@@ -69,10 +69,10 @@ import { up, down } from '../../src/database/migrations/2040000000338_van_sales_
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const MIGRATIONS_DIR = path.join(REPO_ROOT, 'backend', 'src', 'database', 'migrations');
 const MIGRATION_FILE = '2040000000338_van_sales_trips_loaded_amount_3dp.ts';
-// Highest migration on disk at the time of this edit (0340 is the F12
-// deliveryRepsAdmin backfill from the van-trial fix chain; the driven
-// migration above stays 0338 — only the highest-on-disk pin moves).
-const HIGHEST_MIGRATION_FILE = '2040000000340_delivery_reps_admin_backfill.ts';
+// Highest migration on disk at the time of this edit (0342 is the HR
+// biometric raw punches staging migration; the driven migration above
+// stays 0338 — only the highest-on-disk pin moves).
+const HIGHEST_MIGRATION_FILE = '2040000000342_hr_biometric_raw_punches_staging.ts';
 
 const ACCEPT_SCHEMA = `
   CREATE TABLE settings (tenant_id text, key text, value text);
@@ -248,7 +248,7 @@ async function main(): Promise<void> {
     assert.ok(stripped.includes("tenantBaseCurrency(trx as unknown as Kysely<Database>, tenantId)"), 'the accept path must resolve digits from the tenant base currency on the transaction');
     const files = fs.readdirSync(MIGRATIONS_DIR).filter((n) => n.endsWith('.ts') && !n.endsWith('.d.ts')).sort();
     assert.ok(files.includes(MIGRATION_FILE), 'the 0338 migration file must exist in the migrations directory');
-    assert.equal(files[files.length - 1], HIGHEST_MIGRATION_FILE, 'the 0340 migration must be the highest-numbered migration on disk');
+    assert.equal(files[files.length - 1], HIGHEST_MIGRATION_FILE, 'the 0342 migration must be the highest-numbered migration on disk');
     const touching: string[] = [];
     for (const file of files) {
       const src = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');

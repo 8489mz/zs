@@ -40,12 +40,14 @@ export function BiometricDevicesCloudTab({
   fullCloudUrl,
   onDevicesUpdated,
   onImported,
+  onRefreshConfig,
 }: {
   devices: BiometricDeviceItem[];
   loadingDevices: boolean;
   fullCloudUrl: string;
   onDevicesUpdated: (devices: BiometricDeviceItem[]) => void;
   onImported: () => void;
+  onRefreshConfig?: () => Promise<void>;
 }) {
   const [deviceName, setDeviceName] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
@@ -108,8 +110,12 @@ export function BiometricDevicesCloudTab({
       } else {
         toast.info(res.message || 'تم الاتصال بالجهاز — لا توجد حركات جديدة ضمن الشهر المفتوح');
       }
-      const refreshed = await hrApi.biometricDevices();
-      onDevicesUpdated(refreshed.devices || []);
+      if (onRefreshConfig) {
+        await onRefreshConfig();
+      } else {
+        const refreshed = await hrApi.biometricDevices();
+        onDevicesUpdated(refreshed.devices || []);
+      }
     } catch (err: any) {
       toast.error(err?.message || 'تعذر سحب الحركات من الجهاز عبر الشبكة المحلية');
     } finally {
@@ -390,11 +396,15 @@ export function BiometricEmployeePinsTab({
   pinDrafts,
   setPinDrafts,
   onEmployeesUpdated,
+  onRefreshConfig,
+  onAttendanceChanged,
 }: {
   employeePins: EmployeePinItem[];
   pinDrafts: Record<number, string>;
   setPinDrafts: React.Dispatch<React.SetStateAction<Record<number, string>>>;
   onEmployeesUpdated: (employees: EmployeePinItem[]) => void;
+  onRefreshConfig?: () => Promise<void>;
+  onAttendanceChanged?: () => void;
 }) {
   const [pinSearch, setPinSearch] = useState('');
   const [savingPinEmpId, setSavingPinEmpId] = useState<number | null>(null);
@@ -416,7 +426,14 @@ export function BiometricEmployeePinsTab({
       const pinVal = (pinDrafts[empId] || '').trim() || null;
       const res = await hrApi.assignEmployeeBiometricPin(empId, pinVal);
       onEmployeesUpdated(res.employeePins || []);
-      toast.success('تم حفظ رقم البصمة للموظف');
+      const posted = Number(res?.postedPendingDays || 0);
+      if (posted > 0) {
+        toast.success(`تم حفظ رقم البصمة وترحيل ${posted} يوم من «البصمات المعلقة» تلقائياً`);
+        if (onRefreshConfig) await onRefreshConfig();
+        if (onAttendanceChanged) onAttendanceChanged();
+      } else {
+        toast.success('تم حفظ رقم البصمة للموظف');
+      }
     } catch (err: any) {
       toast.error(err?.message || 'تعذر حفظ رقم البصمة');
     } finally {

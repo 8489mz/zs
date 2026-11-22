@@ -180,7 +180,11 @@ import {
     '4645,2020-07-26 17:40:10,بصمة إصبع (Fingerprint),تسجيل انصراف (Check-Out),1',
   ].join('\n');
 
-  const summaryD = parseAndAggregateBiometricLog(convertedCsv);
+  const summaryD = parseAndAggregateBiometricLog(convertedCsv, {
+    // Regression test: tenant has employee 001 (core "1"), while column 4 ("الرمز") is constant "1" on all rows!
+    // Must ALWAYS pick column 0 ("كود الموظف (User ID)"), never column 4 ("الرمز").
+    knownEmployeePins: new Set(['001', '1']),
+  });
   assert.equal(summaryD.appliedColumnMapping.hasHeaderRow, true);
   assert.equal(summaryD.appliedColumnMapping.pinColIndex, 0);
   assert.equal(summaryD.appliedColumnMapping.dateTimeColIndex, 1);

@@ -20,6 +20,7 @@ import {
   type EmployeeBiometricCandidate,
 } from '../engines/biometric-log-parser.engine';
 import { fetchZktecoUdpData, probeZktecoLanDevice } from './zkteco-lan.client';
+import { BiometricStagingService } from './biometric-staging.service';
 
 export interface UpsertBiometricDeviceDto {
   deviceName: string;
@@ -34,12 +35,17 @@ export interface UpsertBiometricDeviceDto {
   notes?: string | null;
 }
 
+export type BiometricSyncScope = 'since_last' | 'open_month' | 'custom';
+
 export interface PreviewBiometricLogDto {
   rawText?: string;
   base64UserDat?: string;
   debounceMinutes?: number;
   minSessionMinutes?: number;
   columnMapping?: BiometricColumnMapping;
+  syncScope?: BiometricSyncScope;
+  fromDate?: string | null;
+  toDate?: string | null;
 }
 
 export interface ImportBiometricLogDto {
@@ -48,6 +54,12 @@ export interface ImportBiometricLogDto {
   minSessionMinutes?: number;
   onlyOpenPayrollMonth?: boolean;
   columnMapping?: BiometricColumnMapping;
+  autoCreateEmployees?: boolean;
+  stageUnmatched?: boolean;
+  deviceSerial?: string | null;
+  syncScope?: BiometricSyncScope;
+  fromDate?: string | null;
+  toDate?: string | null;
 }
 
 @Injectable()
@@ -58,6 +70,7 @@ export class BiometricAttendanceService {
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly hrService: HrService,
     private readonly audit: AuditService,
+    private readonly stagingService: BiometricStagingService,
   ) {}
 
   private async ensureBiometricSchema(): Promise<void> {
@@ -278,7 +291,27 @@ export class BiometricAttendanceService {
       auth,
     );
 
-    return this.listDevices(auth);
+    let postedPendingDays = 0;
+    if (cleanPin) {
+      const empRow = await this.db
+        .selectFrom('hr_employees')
+        .select(['employee_no'])
+        .where('id', '=', employeeId)
+        .where('tenant_id', '=', auth.tenantId!)
+        .executeTakeFirst();
+      if (empRow?.employee_no) {
+        const postRes = await this.stagingService.postPendingPunchesForEmployee(
+          cleanPin,
+          employeeId,
+          empRow.employee_no,
+          auth,
+        );
+        postedPendingDays = postRes.postedDays;
+      }
+    }
+
+    const listRes = await this.listDevices(auth);
+    return { ...listRes, postedPendingDays };
   }
 
   async testLanDeviceConnection(id: number, auth: AuthContext) {
@@ -351,23 +384,79 @@ export class BiometricAttendanceService {
         rawText: rawAttlogLines.join('\n'),
         debounceMinutes: 3,
         onlyOpenPayrollMonth: true,
+        stageUnmatched: true,
+        deviceSerial: device.serial_number,
       },
       auth,
     );
 
     await this.audit.log(
       'Pull LAN biometric attendance',
-      `Pulled ${rawAttlogLines.length} punches from ${device.device_name} (${ip}:${port}), imported ${importResult.imported}`,
+      `Pulled ${rawAttlogLines.length} punches from ${device.device_name} (${ip}:${port}), imported ${importResult.imported}, staged ${importResult.stagedPendingCount || 0}`,
       auth,
     );
+
+    const stagedSuffix =
+      importResult.stagedPendingCount && importResult.stagedPendingCount > 0
+        ? `، وحفظ ${importResult.stagedPendingCount} يوم غير مربوط في «البصمات المعلقة»`
+        : '';
 
     return {
       pulledPunchesCount: rawAttlogLines.length,
       deviceUsersCount: deviceUsers.length,
       deviceUsers,
       ...importResult,
-      message: `تم سحب ${rawAttlogLines.length} حركة من الجهاز واعتماد ${importResult.imported} يوم عمل بنجاح`,
+      message: `تم سحب ${rawAttlogLines.length} حركة من الجهاز واعتماد ${importResult.imported} يوم عمل بنجاح${stagedSuffix}`,
     };
+  }
+
+  private async resolveEffectiveDateWindow(
+    tenantId: string,
+    openMonthStart: string,
+    todayKey: string,
+    requestedScope?: BiometricSyncScope,
+    fromDate?: string | null,
+    toDate?: string | null,
+  ): Promise<{
+    appliedSyncScope: BiometricSyncScope;
+    lastImportedDate: string | null;
+    effectiveFrom: string;
+    effectiveTo: string;
+  }> {
+    const watermarkRes = await sql<{ last_date: string | null }>`
+      SELECT MAX(to_char(work_date, 'YYYY-MM-DD')) AS last_date
+      FROM hr_attendance_records
+      WHERE tenant_id = ${tenantId}
+        AND source = 'import'
+        AND work_date BETWEEN ${openMonthStart}::date AND ${todayKey}::date
+    `.execute(this.db);
+    const lastImportedDate = watermarkRes.rows[0]?.last_date || null;
+
+    const scope: BiometricSyncScope =
+      requestedScope === 'open_month' || requestedScope === 'custom' ? requestedScope : 'since_last';
+
+    if (scope === 'open_month') {
+      return { appliedSyncScope: scope, lastImportedDate, effectiveFrom: openMonthStart, effectiveTo: todayKey };
+    }
+
+    if (scope === 'custom') {
+      const cleanFrom = String(fromDate || '').trim();
+      const cleanTo = String(toDate || '').trim();
+      const isoRx = /^\d{4}-\d{2}-\d{2}$/;
+      const effectiveFrom =
+        isoRx.test(cleanFrom) && cleanFrom >= openMonthStart && cleanFrom <= todayKey ? cleanFrom : openMonthStart;
+      const effectiveTo =
+        isoRx.test(cleanTo) && cleanTo >= effectiveFrom && cleanTo <= todayKey ? cleanTo : todayKey;
+      return { appliedSyncScope: scope, lastImportedDate, effectiveFrom, effectiveTo };
+    }
+
+    // 'since_last' (Incremental Watermark): starts at lastImportedDate (inclusive to catch check-out)
+    // or falls back seamlessly to openMonthStart on the first import of the month.
+    const effectiveFrom =
+      lastImportedDate && lastImportedDate >= openMonthStart && lastImportedDate <= todayKey
+        ? lastImportedDate
+        : openMonthStart;
+    return { appliedSyncScope: 'since_last', lastImportedDate, effectiveFrom, effectiveTo: todayKey };
   }
 
   async previewBiometricLog(payload: PreviewBiometricLogDto, auth: AuthContext) {
@@ -422,6 +511,14 @@ export class BiometricAttendanceService {
     const tenantTimezone = await getTenantTimezone(this.db, auth.tenantId);
     const todayKey = todayTenantDate(tenantTimezone);
     const openMonthStart = firstDayOfTenantMonth(todayKey);
+    const dateWindow = await this.resolveEffectiveDateWindow(
+      auth.tenantId!,
+      openMonthStart,
+      todayKey,
+      payload.syncScope,
+      payload.fromDate,
+      payload.toDate,
+    );
 
     const readyRecords: Array<
       AggregatedBiometricDailyRecord & {
@@ -432,17 +529,24 @@ export class BiometricAttendanceService {
       }
     > = [];
     let historicalOutOfMonthCount = 0;
+    let skippedBeforeWindowCount = 0;
+    let unmatchedInMonthCount = 0;
     const unmatchedPinCounts = new Map<string, number>();
 
     for (const rec of summary.dailyRecords) {
-      const match = resolveEmployee(rec.pin);
-      if (!match) {
-        unmatchedPinCounts.set(rec.pin, (unmatchedPinCounts.get(rec.pin) || 0) + 1);
+      if (rec.workDate < openMonthStart || rec.workDate > todayKey) {
+        historicalOutOfMonthCount++;
+        continue;
+      }
+      if (rec.workDate < dateWindow.effectiveFrom || rec.workDate > dateWindow.effectiveTo) {
+        skippedBeforeWindowCount++;
         continue;
       }
 
-      if (rec.workDate < openMonthStart || rec.workDate > todayKey) {
-        historicalOutOfMonthCount++;
+      const match = resolveEmployee(rec.pin);
+      if (!match) {
+        unmatchedInMonthCount++;
+        unmatchedPinCounts.set(rec.pin, (unmatchedPinCounts.get(rec.pin) || 0) + 1);
         continue;
       }
 
@@ -465,8 +569,13 @@ export class BiometricAttendanceService {
       totalDeduplicatedTaps: summary.totalDeduplicatedTaps,
       totalDailyAggregated: summary.dailyRecords.length,
       openPayrollMonth: { from: openMonthStart, to: todayKey },
+      lastImportedDate: dateWindow.lastImportedDate,
+      appliedSyncScope: dateWindow.appliedSyncScope,
+      appliedDateRange: { from: dateWindow.effectiveFrom, to: dateWindow.effectiveTo },
       readyToImportCount: readyRecords.length,
+      unmatchedInMonthCount,
       historicalOutOfMonthCount,
+      skippedBeforeWindowCount,
       minDate: summary.minDate,
       maxDate: summary.maxDate,
       unmatchedPins: Array.from(unmatchedPinCounts.entries()).map(([pin, daysCount]) => ({
@@ -528,6 +637,14 @@ export class BiometricAttendanceService {
     const todayKey = todayTenantDate(tenantTimezone);
     const openMonthStart = firstDayOfTenantMonth(todayKey);
     const filterToOpenMonth = payload.onlyOpenPayrollMonth !== false;
+    const dateWindow = await this.resolveEffectiveDateWindow(
+      auth.tenantId!,
+      openMonthStart,
+      todayKey,
+      payload.syncScope,
+      payload.fromDate,
+      payload.toDate,
+    );
 
     const recordsToImport: Array<{
       employeeNo: string;
@@ -537,19 +654,58 @@ export class BiometricAttendanceService {
     }> = [];
 
     let historicalSkipped = 0;
+    let skippedBeforeWindow = 0;
     let unmatchedSkipped = 0;
+    let autoCreatedEmployees = 0;
     const unmatchedPins = new Set<string>();
+    const unmatchedInMonthRecords: Array<{
+      pin: string;
+      workDate: string;
+      checkInAt: string | null;
+      checkOutAt: string | null;
+      rawPunchCount: number;
+    }> = [];
+
+    const autoCreatedPinToEmpNo = new Map<string, string>();
 
     for (const rec of summary.dailyRecords) {
-      const match = resolveEmployee(rec.pin);
-      if (!match) {
-        unmatchedSkipped++;
-        unmatchedPins.add(rec.pin);
+      if (filterToOpenMonth && (rec.workDate < openMonthStart || rec.workDate > todayKey)) {
+        historicalSkipped++;
+        continue;
+      }
+      if (filterToOpenMonth && (rec.workDate < dateWindow.effectiveFrom || rec.workDate > dateWindow.effectiveTo)) {
+        skippedBeforeWindow++;
         continue;
       }
 
-      if (filterToOpenMonth && (rec.workDate < openMonthStart || rec.workDate > todayKey)) {
-        historicalSkipped++;
+      const match = resolveEmployee(rec.pin);
+      if (!match) {
+        if (payload.autoCreateEmployees) {
+          let empNo = autoCreatedPinToEmpNo.get(rec.pin);
+          if (!empNo) {
+            const created = await this.stagingService.createEmployeeFromBiometricPin({ pin: rec.pin }, auth);
+            empNo = created.employeeNo;
+            autoCreatedPinToEmpNo.set(rec.pin, empNo);
+            if (!created.alreadyExisted) autoCreatedEmployees++;
+          }
+          recordsToImport.push({
+            employeeNo: empNo,
+            workDate: rec.workDate,
+            checkInAt: rec.checkInAt || undefined,
+            checkOutAt: rec.checkOutAt || undefined,
+          });
+          continue;
+        }
+
+        unmatchedSkipped++;
+        unmatchedPins.add(rec.pin);
+        unmatchedInMonthRecords.push({
+          pin: rec.pin,
+          workDate: rec.workDate,
+          checkInAt: rec.checkInAt,
+          checkOutAt: rec.checkOutAt,
+          rawPunchCount: rec.rawPunchCount,
+        });
         continue;
       }
 
@@ -561,19 +717,33 @@ export class BiometricAttendanceService {
       });
     }
 
+    let stagedPendingCount = 0;
+    if (unmatchedInMonthRecords.length > 0 && payload.stageUnmatched !== false) {
+      stagedPendingCount = await this.stagingService.stageUnmatchedDailyRecords(
+        auth.tenantId!,
+        auth.accountId || 'default',
+        payload.deviceSerial || 'file_import',
+        unmatchedInMonthRecords,
+      );
+    }
+
     if (recordsToImport.length === 0) {
       return {
         imported: 0,
         skipped: summary.dailyRecords.length,
         historicalSkipped,
         unmatchedSkipped,
+        stagedPendingCount,
+        autoCreatedEmployees,
         unmatchedPins: Array.from(unmatchedPins),
         totalRawPunches: summary.totalRawPunches,
         deduplicatedTaps: summary.totalDeduplicatedTaps,
         errors: [
-          unmatchedPins.size > 0
-            ? `لم يتم العثور على موظفين مطابقين لأرقام البصمة: ${Array.from(unmatchedPins).slice(0, 10).join(', ')}`
-            : `كافة الحركات في الملف (${historicalSkipped}) تقع خارج الشهر المفتوح حالياً (${openMonthStart} إلى ${todayKey})`,
+          stagedPendingCount > 0
+            ? `تم حفظ ${stagedPendingCount} يوم عمل في صندوق «البصمات المعلقة» لـ ${unmatchedPins.size} رقم بصمة غير مربوط بموظف؛ يمكنك ربطهم أو إنشاء ملفاتهم بضغطة زر.`
+            : skippedBeforeWindow > 0
+              ? `لا توجد حركات جديدة ضمن النطاق المحدد (${dateWindow.effectiveFrom} إلى ${dateWindow.effectiveTo})؛ يمكنك اختيار «الشهر المفتوح بالكامل» لاستعراض باقي الشهر.`
+              : `كافة الحركات في الملف (${historicalSkipped}) تقع خارج الشهر المفتوح حالياً (${openMonthStart} إلى ${todayKey})`,
         ],
       };
     }
@@ -584,6 +754,8 @@ export class BiometricAttendanceService {
       ...importResult,
       historicalSkipped,
       unmatchedSkipped,
+      stagedPendingCount,
+      autoCreatedEmployees,
       unmatchedPins: Array.from(unmatchedPins),
       totalRawPunches: summary.totalRawPunches,
       deduplicatedTaps: summary.totalDeduplicatedTaps,
@@ -690,10 +862,27 @@ export class BiometricAttendanceService {
       checkOutAt?: string;
     }> = [];
 
+    const unmatchedAdmsRecords: Array<{
+      pin: string;
+      workDate: string;
+      checkInAt: string | null;
+      checkOutAt: string | null;
+      rawPunchCount: number;
+    }> = [];
+
     for (const rec of summary.dailyRecords) {
       if (rec.workDate < openMonthStart || rec.workDate > todayKey) continue;
       const match = resolveEmployee(rec.pin);
-      if (!match) continue;
+      if (!match) {
+        unmatchedAdmsRecords.push({
+          pin: rec.pin,
+          workDate: rec.workDate,
+          checkInAt: rec.checkInAt,
+          checkOutAt: rec.checkOutAt,
+          rawPunchCount: rec.rawPunchCount,
+        });
+        continue;
+      }
 
       const existing = await this.db
         .selectFrom('hr_attendance_records')
@@ -742,6 +931,15 @@ export class BiometricAttendanceService {
       };
 
       await this.hrService.bulkImportAttendanceRecords({ records: recordsToUpsert }, syntheticAuth);
+    }
+
+    if (unmatchedAdmsRecords.length > 0) {
+      await this.stagingService.stageUnmatchedDailyRecords(
+        device.tenant_id,
+        device.account_id || 'default',
+        cleanSn,
+        unmatchedAdmsRecords,
+      );
     }
 
     await this.db

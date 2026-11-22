@@ -415,19 +415,27 @@ export function autoDetectBiometricColumns(
       if (usedTemporalCols.has(c)) continue;
       const hLower = (hasHeaderRow ? firstRow[c] || '' : '').toLowerCase().trim();
 
-      // Penalize columns that are clearly employee name, department, or machine/verify flags
-      if (/(اسم الموظف|الاسم|القسم|الفرع|employee.?name|full.?name|dept|department|verify|machine|device)/i.test(hLower)) {
+      // Exclude columns that are clearly non-employee metadata, verify/status flags, or work codes
+      if (
+        /(اسم الموظف|الاسم|القسم|الفرع|طريقة التحقق|التحقق|الحال|الرمز|نوع الحرك|employee.?name|full.?name|dept|department|verify|work.?code|machine|device|status|state|direction)/i.test(
+          hLower,
+        )
+      ) {
         continue;
       }
 
       let score = 0;
-      if (/(كود الموظف|رقم البصم|رقم الموظف|الكود|ac-no|acno|enno|empno|employeeno|employee.?id|person.?id|user.?id|badge|pin|^id$|^code$|^no\.?$)/i.test(hLower)) {
-        score += 120;
+      const hasExplicitPinHeader =
+        /(كود الموظف|رقم البصم|رقم الموظف|الكود|ac-no|acno|enno|empno|employeeno|employee.?id|person.?id|user.?id|badge|pin|^id$|^code$|^no\.?$)/i.test(
+          hLower,
+        );
+      if (hasExplicitPinHeader) {
+        score += 500;
       }
 
       const distinctVals = new Set<string>();
+      const distinctDbMatchedPins = new Set<string>();
       let validCodeCount = 0;
-      let knownDbHits = 0;
 
       for (const row of dataRows) {
         const rawVal = normalizeArabicDigits(row[c] || '').trim();
@@ -437,7 +445,7 @@ export function autoDetectBiometricColumns(
         if (knownEmployeePins && knownEmployeePins.size > 0) {
           const core = extractNumericPinCore(rawVal);
           if (knownEmployeePins.has(rawVal.toLowerCase()) || (core && knownEmployeePins.has(core))) {
-            knownDbHits++;
+            distinctDbMatchedPins.add(core || rawVal.toLowerCase());
           }
         }
 
@@ -447,10 +455,19 @@ export function autoDetectBiometricColumns(
         }
       }
 
-      score += knownDbHits * 50;
-      score += validCodeCount * 3;
-      if (distinctVals.size > 1) score += 10;
-      if (c === 0) score += 5; // Tie-breaker favors first column (standard ZKTeco attlog.dat)
+      // Guard against constant flag/workcode columns (e.g. "1" repeated on every single row)
+      const isConstantFlagColumn =
+        distinctVals.size === 1 && dataRows.length >= 3 && /^[0-5]$/.test(Array.from(distinctVals)[0] || '');
+
+      if (isConstantFlagColumn && !hasExplicitPinHeader) {
+        score -= 200;
+      } else if (distinctVals.size > 1 || dataRows.length <= 2) {
+        score += distinctDbMatchedPins.size * 60;
+      }
+
+      score += validCodeCount * 2;
+      if (distinctVals.size > 1) score += 25;
+      if (c === 0) score += 10; // Tie-breaker favors first column (standard ZKTeco attlog.dat)
 
       if (score > bestPinScore && validCodeCount > 0) {
         bestPinScore = score;

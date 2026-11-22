@@ -254,6 +254,9 @@ export const hrApi = {
     base64UserDat?: string;
     debounceMinutes?: number;
     columnMapping?: Record<string, unknown>;
+    syncScope?: 'since_last' | 'open_month' | 'custom';
+    fromDate?: string | null;
+    toDate?: string | null;
   }) =>
     http<any>('/api/hr/biometric/preview-log', {
       method: 'POST',
@@ -265,12 +268,19 @@ export const hrApi = {
     debounceMinutes?: number;
     onlyOpenPayrollMonth?: boolean;
     columnMapping?: Record<string, unknown>;
+    autoCreateEmployees?: boolean;
+    stageUnmatched?: boolean;
+    syncScope?: 'since_last' | 'open_month' | 'custom';
+    fromDate?: string | null;
+    toDate?: string | null;
   }) =>
     http<{
       imported: number;
       skipped: number;
       historicalSkipped: number;
       unmatchedSkipped: number;
+      stagedPendingCount?: number;
+      autoCreatedEmployees?: number;
       unmatchedPins: string[];
       totalRawPunches: number;
       deduplicatedTaps: number;
@@ -279,6 +289,44 @@ export const hrApi = {
       method: 'POST',
       body: JSON.stringify(payload),
       timeoutMs: CSV_IMPORT_TIMEOUT_MS,
+    }),
+  biometricPendingPunches: () =>
+    http<{
+      totalPendingDays: number;
+      pendingPinsCount: number;
+      groups: Array<{
+        pin: string;
+        deviceSerial: string;
+        daysCount: number;
+        totalPunches: number;
+        minDate: string;
+        maxDate: string;
+        recentDays: Array<{ workDate: string; checkInAt: string | null; checkOutAt: string | null }>;
+      }>;
+    }>('/api/hr/biometric/pending-punches'),
+  createEmployeeFromBiometricPin: (payload: { pin: string; displayName?: string | null }) =>
+    http<{
+      employeeId: number;
+      employeeNo: string;
+      displayName: string;
+      alreadyExisted: boolean;
+      postedDays: number;
+    }>('/api/hr/biometric/create-employee', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  bulkCreateEmployeesFromBiometricPins: (items: Array<{ pin: string; displayName?: string | null }>) =>
+    http<{
+      createdCount: number;
+      existedCount: number;
+      postedDays: number;
+    }>('/api/hr/biometric/bulk-create-employees', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
+  dismissPendingBiometricPin: (pin: string) =>
+    http<any>(`/api/hr/biometric/pending-punches/${encodeURIComponent(pin)}`, {
+      method: 'DELETE',
     }),
 };
 

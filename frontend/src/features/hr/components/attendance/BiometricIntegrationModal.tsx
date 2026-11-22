@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { StandardDialog } from '@/shared/components/StandardDialog';
 import { Button } from '@/shared/ui/button';
-import { CustomSelect } from '@/shared/ui/custom-select';
 import { toast } from '@/shared/components/system-alert';
 import {
   CheckCircleIcon,
+  ClockIcon,
   DownloadIcon,
-  FileTextIcon,
-  RefreshCwIcon,
-  ShieldCheckIcon,
+  PlusIcon,
   SlidersIcon,
   UploadIcon,
   UsersIcon,
@@ -20,6 +18,11 @@ import {
   type BiometricDeviceItem,
   type EmployeePinItem,
 } from './BiometricDevicesAndPinsTabs';
+import {
+  BiometricPendingPunchesTab,
+  type PendingBiometricGroup,
+} from './BiometricPendingPunchesTab';
+import { BiometricFileImportTab } from './BiometricFileImportTab';
 
 interface BiometricIntegrationModalProps {
   open: boolean;
@@ -27,7 +30,7 @@ interface BiometricIntegrationModalProps {
   onImported: () => void;
 }
 
-type ModalTab = 'file_import' | 'devices_cloud' | 'employee_pins';
+type ModalTab = 'file_import' | 'pending_punches' | 'devices_cloud' | 'employee_pins';
 
 export function BiometricIntegrationModal({
   open,
@@ -38,12 +41,17 @@ export function BiometricIntegrationModal({
   const [loadingDevices, setLoadingDevices] = useState(true);
   const [devices, setDevices] = useState<BiometricDeviceItem[]>([]);
   const [employeePins, setEmployeePins] = useState<EmployeePinItem[]>([]);
+  const [pendingGroups, setPendingGroups] = useState<PendingBiometricGroup[]>([]);
   const [admsPushPath, setAdmsPushPath] = useState('/api/hr/biometric/iclock/cdata');
 
   // File Import & User.dat decoder state
   const [selectedFileName, setSelectedFileName] = useState('');
   const [rawLogText, setRawLogText] = useState('');
   const [debounceMinutes, setDebounceMinutes] = useState(3);
+  const [syncScope, setSyncScope] = useState<'since_last' | 'open_month' | 'custom'>('since_last');
+  const [customFromDate, setCustomFromDate] = useState('');
+  const [customToDate, setCustomToDate] = useState('');
+  const [autoCreateEmployees, setAutoCreateEmployees] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
@@ -56,9 +64,13 @@ export function BiometricIntegrationModal({
   const loadBiometricConfig = async () => {
     setLoadingDevices(true);
     try {
-      const res = await hrApi.biometricDevices();
+      const [res, pendingRes] = await Promise.all([
+        hrApi.biometricDevices(),
+        hrApi.biometricPendingPunches().catch(() => ({ groups: [], totalPendingDays: 0, pendingPinsCount: 0 })),
+      ]);
       setDevices(res.devices || []);
       setEmployeePins(res.employeePins || []);
+      setPendingGroups(pendingRes.groups || []);
       if (res.admsPushPath) setAdmsPushPath(res.admsPushPath);
       const drafts: Record<number, string> = {};
       for (const emp of res.employeePins || []) {
@@ -108,9 +120,16 @@ export function BiometricIntegrationModal({
         const res = await hrApi.previewBiometricLog({
           rawText: tsvText,
           debounceMinutes,
+          syncScope,
+          fromDate: syncScope === 'custom' ? customFromDate : null,
+          toDate: syncScope === 'custom' ? customToDate : null,
         });
         setPreviewData(res);
         setCustomColumnMapping(res.appliedColumnMapping);
+        if (res.openPayrollMonth) {
+          setCustomFromDate((prev) => prev || res.openPayrollMonth.from);
+          setCustomToDate((prev) => prev || res.openPayrollMonth.to);
+        }
         return;
       }
 
@@ -137,11 +156,47 @@ export function BiometricIntegrationModal({
       const res = await hrApi.previewBiometricLog({
         rawText: text,
         debounceMinutes,
+        syncScope,
+        fromDate: syncScope === 'custom' ? customFromDate : null,
+        toDate: syncScope === 'custom' ? customToDate : null,
       });
       setPreviewData(res);
       setCustomColumnMapping(res.appliedColumnMapping);
+      if (res.openPayrollMonth) {
+        setCustomFromDate((prev) => prev || res.openPayrollMonth.from);
+        setCustomToDate((prev) => prev || res.openPayrollMonth.to);
+      }
     } catch (err: any) {
       toast.error(err?.message || 'تعذر تحليل ملف البصمة');
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const handleChangeDateScope = async (
+    nextScope: 'since_last' | 'open_month' | 'custom',
+    nextFrom?: string,
+    nextTo?: string,
+  ) => {
+    const resolvedFrom = nextFrom !== undefined ? nextFrom : customFromDate || previewData?.openPayrollMonth?.from || '';
+    const resolvedTo = nextTo !== undefined ? nextTo : customToDate || previewData?.openPayrollMonth?.to || '';
+    setSyncScope(nextScope);
+    if (nextFrom !== undefined) setCustomFromDate(nextFrom);
+    if (nextTo !== undefined) setCustomToDate(nextTo);
+    if (!rawLogText) return;
+    setIsPreviewLoading(true);
+    try {
+      const res = await hrApi.previewBiometricLog({
+        rawText: rawLogText,
+        debounceMinutes,
+        columnMapping: customColumnMapping,
+        syncScope: nextScope,
+        fromDate: nextScope === 'custom' ? resolvedFrom : null,
+        toDate: nextScope === 'custom' ? resolvedTo : null,
+      });
+      setPreviewData(res);
+    } catch (err: any) {
+      toast.error(err?.message || 'تعذر تحديث نطاق التواريخ');
     } finally {
       setIsPreviewLoading(false);
     }
@@ -160,6 +215,9 @@ export function BiometricIntegrationModal({
         rawText: rawLogText,
         debounceMinutes,
         columnMapping: nextMapping,
+        syncScope,
+        fromDate: syncScope === 'custom' ? customFromDate : null,
+        toDate: syncScope === 'custom' ? customToDate : null,
       });
       setPreviewData(res);
     } catch (err: any) {
@@ -178,11 +236,26 @@ export function BiometricIntegrationModal({
         debounceMinutes,
         onlyOpenPayrollMonth: true,
         columnMapping: customColumnMapping,
+        autoCreateEmployees,
+        stageUnmatched: true,
+        syncScope,
+        fromDate: syncScope === 'custom' ? customFromDate : null,
+        toDate: syncScope === 'custom' ? customToDate : null,
       });
+      await loadBiometricConfig();
       if (res.imported > 0) {
-        toast.success(`تم استيراد ${res.imported} سجل حضور وانصراف بنجاح`);
+        const extra =
+          res.autoCreatedEmployees && res.autoCreatedEmployees > 0
+            ? ` (تم إنشاء ${res.autoCreatedEmployees} موظف تلقائياً)`
+            : res.stagedPendingCount && res.stagedPendingCount > 0
+              ? ` وحفظ ${res.stagedPendingCount} يوم غير مربوط في «البصمات المعلقة»`
+              : '';
+        toast.success(`تم استيراد ${res.imported} سجل حضور وانصراف بنجاح${extra}`);
         onImported();
-        onClose();
+        if (!res.stagedPendingCount) onClose();
+      } else if (res.stagedPendingCount && res.stagedPendingCount > 0) {
+        toast.info(`تم حفظ ${res.stagedPendingCount} يوم في «البصمات المعلقة» بانتظار ربط أو إنشاء الموظفين`);
+        setActiveTab('pending_punches');
       } else {
         toast.warning(res.errors?.[0] || 'لم يتم استيراد سجلات جديدة ضمن الشهر المفتوح');
       }
@@ -254,12 +327,69 @@ export function BiometricIntegrationModal({
           rawText: rawLogText,
           debounceMinutes,
           columnMapping: customColumnMapping,
+          syncScope,
+          fromDate: syncScope === 'custom' ? customFromDate : null,
+          toDate: syncScope === 'custom' ? customToDate : null,
         });
         setPreviewData(refreshed);
       }
     } catch (err: any) {
       toast.error(err?.message || 'تعذر ربط رقم البصمة');
     }
+  };
+
+  const handleQuickCreateEmployee = async (pin: string) => {
+    try {
+      const res = await hrApi.createEmployeeFromBiometricPin({ pin });
+      toast.success(`تم إنشاء الموظف (${res.displayName}) وربطه برقم البصمة (#${pin})`);
+      await loadBiometricConfig();
+      if (rawLogText) {
+        const refreshed = await hrApi.previewBiometricLog({
+          rawText: rawLogText,
+          debounceMinutes,
+          columnMapping: customColumnMapping,
+          syncScope,
+          fromDate: syncScope === 'custom' ? customFromDate : null,
+          toDate: syncScope === 'custom' ? customToDate : null,
+        });
+        setPreviewData(refreshed);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'تعذر إنشاء الموظف');
+    }
+  };
+
+  const handleBulkCreateFromUserDat = async () => {
+    const regularUsers = (previewData?.decodedUsers || []).filter((u: any) => u.privilegeRole === 'user');
+    if (!regularUsers.length) {
+      toast.warning('لا يوجد موظفون عاديون في ملف user.dat لإنشائهم');
+      return;
+    }
+    setIsImporting(true);
+    try {
+      const res = await hrApi.bulkCreateEmployeesFromBiometricPins(
+        regularUsers.map((u: any) => ({ pin: String(u.userId), displayName: u.name })),
+      );
+      toast.success(`تم إنشاء ${res.createdCount} موظف جديد (ومطابقة ${res.existedCount} موظف موجود بالفعل)`);
+      await loadBiometricConfig();
+      if (res.postedDays > 0) onImported();
+    } catch (err: any) {
+      toast.error(err?.message || 'تعذر إنشاء الموظفين من user.dat');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleDownloadBlankTemplate = () => {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const csv = `كود الموظف,التاريخ,وقت الحضور,وقت الانصراف\r\n101,${todayIso},09:00,17:00`;
+    const blob = new Blob([new Uint8Array([0xef, 0xbb, 0xbf]), csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'نموذج_الحضور.csv';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const fullCloudUrl = useMemo(() => {
@@ -289,27 +419,45 @@ export function BiometricIntegrationModal({
               </Button>
             )}
             {activeTab === 'file_import' && previewData?.mode === 'user_dat' && previewData?.decodedUsers?.length > 0 && (
-              <Button type="button" variant="secondary" onClick={handleExportDecodedUsersCsv}>
-                <DownloadIcon size={14} />
-                <span>تصدير مستخدمي الجهاز (CSV)</span>
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={isImporting}
+                  onClick={() => void handleBulkCreateFromUserDat()}
+                  style={{ backgroundColor: '#170e5e', color: '#ffffff' }}
+                >
+                  <PlusIcon size={14} />
+                  <span>{isImporting ? 'جاري الإنشاء...' : 'إنشاء موظفي الجهاز بالنظام'}</span>
+                </Button>
+                <Button type="button" variant="secondary" onClick={handleExportDecodedUsersCsv}>
+                  <DownloadIcon size={14} />
+                  <span>تصدير مستخدمي الجهاز (CSV)</span>
+                </Button>
+              </>
             )}
-            {activeTab === 'file_import' && previewData?.mode === 'attendance_log' && previewData?.readyToImportCount > 0 && (
-              <Button
-                type="button"
-                variant="primary"
-                disabled={isImporting}
-                onClick={handleExecuteImport}
-                style={{ backgroundColor: '#170e5e', color: '#ffffff' }}
-              >
-                <CheckCircleIcon size={14} />
-                <span>
-                  {isImporting
-                    ? 'جاري الاعتماد والاستيراد...'
-                    : `اعتماد واستيراد الحركات (${previewData.readyToImportCount})`}
-                </span>
-              </Button>
-            )}
+            {activeTab === 'file_import' &&
+              previewData?.mode === 'attendance_log' &&
+              (previewData?.readyToImportCount > 0 || previewData?.unmatchedInMonthCount > 0) && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={isImporting}
+                  onClick={handleExecuteImport}
+                  style={{ backgroundColor: '#170e5e', color: '#ffffff' }}
+                >
+                  <CheckCircleIcon size={14} />
+                  <span>
+                    {isImporting
+                      ? 'جاري التنفيذ...'
+                      : previewData.readyToImportCount > 0
+                        ? `اعتماد واستيراد الحركات (${previewData.readyToImportCount})`
+                        : autoCreateEmployees
+                          ? `إنشاء الموظفين واستيراد (${previewData.unmatchedInMonthCount} يوم)`
+                          : `حفظ في البصمات المعلقة (${previewData.unmatchedInMonthCount} يوم)`}
+                  </span>
+                </Button>
+              )}
             <Button type="button" variant="secondary" onClick={onClose}>
               إغلاق
             </Button>
@@ -330,18 +478,27 @@ export function BiometricIntegrationModal({
           [
             {
               id: 'file_import' as ModalTab,
-              label: '1. قراءة ملفات البصمة والإكسيل (.dat / .xlsx / .csv / user.dat)',
+              label: '1. قراءة الملفات (.dat / .xlsx / .csv)',
               icon: <UploadIcon size={14} />,
+              badgeCount: 0,
+            },
+            {
+              id: 'pending_punches' as ModalTab,
+              label: '2. بصمات معلقة بانتظار الربط',
+              icon: <ClockIcon size={14} />,
+              badgeCount: pendingGroups.length,
             },
             {
               id: 'devices_cloud' as ModalTab,
-              label: `2. أجهزة البصمة والربط السحابي والشبكي (${devices.length})`,
+              label: `3. الأجهزة والربط السحابي (${devices.length})`,
               icon: <SlidersIcon size={14} />,
+              badgeCount: 0,
             },
             {
               id: 'employee_pins' as ModalTab,
-              label: '3. أرقام البصمة للموظفين (PIN Mapping)',
+              label: '4. أرقام البصمة (PIN)',
               icon: <UsersIcon size={14} />,
+              badgeCount: 0,
             },
           ] as const
         ).map((tab) => {
@@ -355,8 +512,8 @@ export function BiometricIntegrationModal({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                padding: '7px 14px',
-                fontSize: '12.5px',
+                padding: '7px 12px',
+                fontSize: '12px',
                 fontWeight: 600,
                 boxSizing: 'border-box',
                 borderRadius: '8px',
@@ -368,6 +525,20 @@ export function BiometricIntegrationModal({
             >
               {tab.icon}
               <span>{tab.label}</span>
+              {tab.badgeCount > 0 && (
+                <span
+                  style={{
+                    background: isActive ? '#ffffff' : '#dc2626',
+                    color: isActive ? '#170e5e' : '#ffffff',
+                    borderRadius: '10px',
+                    padding: '0 6px',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                  }}
+                >
+                  {tab.badgeCount}
+                </span>
+              )}
             </button>
           );
         })}
@@ -385,442 +556,39 @@ export function BiometricIntegrationModal({
         }}
       >
         {activeTab === 'file_import' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr auto',
-                gap: '12px',
-                alignItems: 'center',
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '10px',
-                padding: '10px 14px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <label
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    backgroundColor: '#170e5e',
-                    color: '#ffffff',
-                    padding: '6px 14px',
-                    borderRadius: '7px',
-                    fontSize: '12.5px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <UploadIcon size={14} />
-                  <span>اختر ملف البصمة أو الإكسيل (.dat / .xlsx / .csv / user.dat)</span>
-                  <input
-                    type="file"
-                    accept=".dat,.txt,.csv,.log,.xlsx,.xls"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      const f = e.currentTarget.files?.[0];
-                      void handleFilePicked(f);
-                      e.currentTarget.value = '';
-                    }}
-                  />
-                </label>
-                {selectedFileName && (
-                  <span
-                    style={{
-                      fontSize: '12.5px',
-                      fontWeight: 700,
-                      color: '#0f172a',
-                      background: '#e2e8f0',
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                    }}
-                  >
-                    {selectedFileName}
-                  </span>
-                )}
-              </div>
+          <BiometricFileImportTab
+            selectedFileName={selectedFileName}
+            debounceMinutes={debounceMinutes}
+            onDebounceMinutesChange={setDebounceMinutes}
+            syncScope={syncScope}
+            customFromDate={customFromDate}
+            customToDate={customToDate}
+            onChangeDateScope={handleChangeDateScope}
+            autoCreateEmployees={autoCreateEmployees}
+            onAutoCreateEmployeesChange={setAutoCreateEmployees}
+            isPreviewLoading={isPreviewLoading}
+            previewData={previewData}
+            employeePins={employeePins}
+            quickPinAssignEmpId={quickPinAssignEmpId}
+            onSelectQuickPinEmp={(pin, empId) =>
+              setQuickPinAssignEmpId((prev) => ({ ...prev, [pin]: empId }))
+            }
+            onFilePicked={handleFilePicked}
+            onDownloadBlankTemplate={handleDownloadBlankTemplate}
+            onUpdateColumnMapping={handleUpdateColumnMapping}
+            onQuickAssignPin={handleQuickAssignPin}
+            onQuickCreateEmployee={handleQuickCreateEmployee}
+          />
+        )}
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>فلتر البصمة المكررة (دقائق):</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={30}
-                  value={debounceMinutes}
-                  onChange={(e) => setDebounceMinutes(Math.max(0, Number(e.target.value) || 0))}
-                  style={{
-                    width: '58px',
-                    height: '32px',
-                    padding: '4px 8px',
-                    fontSize: '12.5px',
-                    borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    textAlign: 'center',
-                  }}
-                />
-              </div>
-            </div>
-
-            {isPreviewLoading ? (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  height: '100%',
-                  minHeight: '300px',
-                  color: '#64748b',
-                  gap: '8px',
-                }}
-              >
-                <RefreshCwIcon size={24} />
-                <span style={{ fontSize: '13px', fontWeight: 600 }}>جاري تحليل وفك تشفير ملف البصمة...</span>
-              </div>
-            ) : !previewData ? (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  height: '100%',
-                  minHeight: '300px',
-                  border: '1px dashed #cbd5e1',
-                  borderRadius: '10px',
-                  backgroundColor: '#ffffff',
-                  padding: '20px',
-                  textAlign: 'center',
-                }}
-              >
-                <FileTextIcon size={32} />
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', marginTop: '8px' }}>
-                  ارفع ملف الحركات من الفلاشة أو الإكسيل بأي ترتيب أعمدة
-                </div>
-                <div style={{ fontSize: '12px', color: '#64748b', maxWidth: '620px', marginTop: '4px', lineHeight: 1.6 }}>
-                  يتعرف المحرك تلقائياً على عمود كود الموظف والتاريخ والوقت مهما كان ترتيب الأعمدة في الملف، ويدعم فك تشفير ملف <code>user.dat</code> لاستخراج أسماء الموظفين وكلمات مرور السوبر أدمن المسجلة داخل الجهاز.
-                </div>
-              </div>
-            ) : previewData.mode === 'user_dat' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    background: '#eef2ff',
-                    border: '1px solid #c7d2fe',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <ShieldCheckIcon size={16} />
-                    <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#170e5e' }}>
-                      تم فك تشفير ملف مستخدمي جهاز البصمة (user.dat) بنجاح — إجمالي {previewData.decodedUsers?.length || 0} مستخدم
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
-                    <thead>
-                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>UID</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>رقم المستخدم (User ID)</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>الاسم على الجهاز</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>مستوى الصلاحية</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>كلمة المرور المسجلة</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(previewData.decodedUsers || []).map((u: any) => (
-                        <tr key={u.uid} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '7px 12px', fontWeight: 600 }}>{u.uid}</td>
-                          <td style={{ padding: '7px 12px', fontWeight: 800, color: '#170e5e' }}>{u.userId}</td>
-                          <td style={{ padding: '7px 12px' }}>{u.name}</td>
-                          <td style={{ padding: '7px 12px' }}>
-                            <span
-                              style={{
-                                padding: '2px 8px',
-                                borderRadius: '6px',
-                                fontSize: '11.5px',
-                                fontWeight: 700,
-                                background: u.privilegeRole === 'super_admin' ? '#fee2e2' : u.privilegeRole !== 'user' ? '#fef3c7' : '#f1f5f9',
-                                color: u.privilegeRole === 'super_admin' ? '#991b1b' : u.privilegeRole !== 'user' ? '#92400e' : '#334155',
-                              }}
-                            >
-                              {u.privilegeLabelAr}
-                            </span>
-                          </td>
-                          <td style={{ padding: '7px 12px', fontFamily: 'monospace', fontWeight: 700, color: u.password ? '#0f172a' : '#94a3b8' }}>
-                            {u.password || 'بصمة فقط (بدون باسورد)'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px' }}>
-                    <div style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 600 }}>إجمالي البصمات الخام بالملف</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>
-                      {previewData.totalRawPunches ?? 0}
-                    </div>
-                  </div>
-                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px' }}>
-                    <div style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 600 }}>بصمات مكررة مستبعدة لحظياً</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#475569', marginTop: '2px' }}>
-                      {previewData.totalDeduplicatedTaps ?? 0}
-                    </div>
-                  </div>
-                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px' }}>
-                    <div style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 600 }}>حركات أرشيفية خارج الشهر المفتوح</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#d97706', marginTop: '2px' }}>
-                      {previewData.historicalOutOfMonthCount ?? 0}
-                    </div>
-                  </div>
-                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '8px 12px' }}>
-                    <div style={{ fontSize: '11.5px', color: '#166534', fontWeight: 600 }}>جاهز للاعتماد بالشهر المفتوح</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#15803d', marginTop: '2px' }}>
-                      {previewData.readyToImportCount ?? 0} يوم عمل
-                    </div>
-                  </div>
-                </div>
-
-                {previewData.detectedColumns?.length >= 2 && (
-                  <div
-                    style={{
-                      background: '#f8fafc',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '8px',
-                      padding: '8px 12px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '6px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#170e5e' }}>
-                        ترتيب الأعمدة المكتشف تلقائياً (يمكنك تعديل أي عمود إذا كان الملف من جهاز مختلف):
-                      </span>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(previewData.appliedColumnMapping?.hasHeaderRow)}
-                          onChange={(e) => void handleUpdateColumnMapping({ hasHeaderRow: e.target.checked })}
-                        />
-                        <span>السطر الأول يحتوي على عناوين أعمدة</span>
-                      </label>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                      <div>
-                        <span style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '2px' }}>
-                          عمود كود الموظف / البصمة:
-                        </span>
-                        <CustomSelect
-                          value={String(previewData.appliedColumnMapping?.pinColIndex ?? 0)}
-                          onChange={(val) => void handleUpdateColumnMapping({ pinColIndex: Number(val) })}
-                          options={previewData.detectedColumns.map((col: any) => ({
-                            value: String(col.index),
-                            label: `${col.headerLabel} (${col.sampleValue.slice(0, 18)})`,
-                          }))}
-                        />
-                      </div>
-                      <div>
-                        <span style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '2px' }}>
-                          عمود التاريخ والوقت المدمج:
-                        </span>
-                        <CustomSelect
-                          value={
-                            previewData.appliedColumnMapping?.dateTimeColIndex !== null &&
-                            previewData.appliedColumnMapping?.dateTimeColIndex !== undefined
-                              ? String(previewData.appliedColumnMapping.dateTimeColIndex)
-                              : '-1'
-                          }
-                          onChange={(val) => {
-                            const idx = Number(val);
-                            void handleUpdateColumnMapping({
-                              dateTimeColIndex: idx >= 0 ? idx : -1,
-                            });
-                          }}
-                          options={[
-                            { value: '-1', label: '— التاريخ والوقت مفصولان —' },
-                            ...previewData.detectedColumns.map((col: any) => ({
-                              value: String(col.index),
-                              label: `${col.headerLabel} (${col.sampleValue.slice(0, 18)})`,
-                            })),
-                          ]}
-                        />
-                      </div>
-                      <div>
-                        <span style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '2px' }}>
-                          عمود التاريخ فقط (إن كان مفصولاً):
-                        </span>
-                        <CustomSelect
-                          value={
-                            previewData.appliedColumnMapping?.dateColIndex !== null &&
-                            previewData.appliedColumnMapping?.dateColIndex !== undefined
-                              ? String(previewData.appliedColumnMapping.dateColIndex)
-                              : '-1'
-                          }
-                          onChange={(val) => {
-                            const idx = Number(val);
-                            void handleUpdateColumnMapping({
-                              dateColIndex: idx >= 0 ? idx : -1,
-                              dateTimeColIndex: idx >= 0 ? -1 : previewData.appliedColumnMapping?.dateTimeColIndex,
-                            });
-                          }}
-                          options={[
-                            { value: '-1', label: '— غير مستخدم —' },
-                            ...previewData.detectedColumns.map((col: any) => ({
-                              value: String(col.index),
-                              label: `${col.headerLabel} (${col.sampleValue.slice(0, 18)})`,
-                            })),
-                          ]}
-                        />
-                      </div>
-                      <div>
-                        <span style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '2px' }}>
-                          عمود الوقت / الحضور (إن كان مفصولاً):
-                        </span>
-                        <CustomSelect
-                          value={
-                            previewData.appliedColumnMapping?.checkInTimeColIndex !== null &&
-                            previewData.appliedColumnMapping?.checkInTimeColIndex !== undefined
-                              ? String(previewData.appliedColumnMapping.checkInTimeColIndex)
-                              : '-1'
-                          }
-                          onChange={(val) => {
-                            const idx = Number(val);
-                            void handleUpdateColumnMapping({
-                              checkInTimeColIndex: idx >= 0 ? idx : -1,
-                            });
-                          }}
-                          options={[
-                            { value: '-1', label: '— مدمج مع التاريخ —' },
-                            ...previewData.detectedColumns.map((col: any) => ({
-                              value: String(col.index),
-                              label: `${col.headerLabel} (${col.sampleValue.slice(0, 18)})`,
-                            })),
-                          ]}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {previewData.unmatchedPins?.length > 0 && (
-                  <div
-                    style={{
-                      background: '#fffbeb',
-                      border: '1px solid #fde68a',
-                      borderRadius: '8px',
-                      padding: '10px 12px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px',
-                    }}
-                  >
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#92400e' }}>
-                      أرقام بصمة في الملف غير مربوطة بموظفين حالياً ({previewData.unmatchedPins.length} رقم) — يمكنك ربطها فوراً:
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                      {previewData.unmatchedPins.slice(0, 6).map((item: { pin: string; daysCount: number }) => (
-                        <div
-                          key={item.pin}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            background: '#ffffff',
-                            border: '1px solid #fcd34d',
-                            borderRadius: '6px',
-                            padding: '4px 8px',
-                          }}
-                        >
-                          <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
-                            رقم #{item.pin} ({item.daysCount} يوم):
-                          </span>
-                          <div style={{ width: '175px' }}>
-                            <CustomSelect
-                              value={quickPinAssignEmpId[item.pin] || ''}
-                              onChange={(val) =>
-                                setQuickPinAssignEmpId((prev) => ({ ...prev, [item.pin]: String(val) }))
-                              }
-                              options={employeePins.map((emp) => ({
-                                value: String(emp.id),
-                                label: emp.displayName,
-                                hint: emp.employeeNo,
-                              }))}
-                              placeholder="اختر الموظف..."
-                            />
-                          </div>
-                          <Button
-                            type="button"
-                            variant="primary"
-                            onClick={() => void handleQuickAssignPin(item.pin)}
-                            style={{ padding: '4px 8px', fontSize: '11.5px', backgroundColor: '#170e5e', color: '#fff' }}
-                          >
-                            ربط
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
-                    <thead>
-                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>الموظف</th>
-                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>رقم البصمة</th>
-                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>التاريخ</th>
-                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>أول بصمة (حضور)</th>
-                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>آخر بصمة (انصراف)</th>
-                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>إجمالي البصمات</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(previewData.previewRecords || []).length === 0 ? (
-                        <tr>
-                          <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>
-                            لا توجد سجلات مطابقة ضمن الشهر المفتوح ({previewData.openPayrollMonth?.from} إلى{' '}
-                            {previewData.openPayrollMonth?.to}). يمكنك تصدير الملف الكامل إلى إكسيل من الزر السفلي، أو ربط أرقام البصمة أعلاه.
-                          </td>
-                        </tr>
-                      ) : (
-                        (previewData.previewRecords || []).map((rec: any, idx: number) => (
-                          <tr key={`${rec.pin}_${rec.workDate}_${idx}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '7px 10px', fontWeight: 700, color: '#0f172a' }}>
-                              {rec.employeeName} <span style={{ color: '#64748b', fontSize: '11px' }}>({rec.employeeNo})</span>
-                            </td>
-                            <td style={{ padding: '7px 10px', fontFamily: 'monospace', fontWeight: 700 }}>{rec.pin}</td>
-                            <td style={{ padding: '7px 10px' }}>{rec.workDate}</td>
-                            <td style={{ padding: '7px 10px', color: '#15803d', fontWeight: 700 }}>
-                              {rec.checkInTime || '—'}
-                            </td>
-                            <td style={{ padding: '7px 10px', color: rec.checkOutTime ? '#1e40af' : '#d97706', fontWeight: 700 }}>
-                              {rec.checkOutTime || 'بصمة منفردة (تُراجع بالاستثناءات)'}
-                            </td>
-                            <td style={{ padding: '7px 10px', fontSize: '11.5px', color: '#475569' }}>
-                              {rec.rawPunchCount} بصمة
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
+        {activeTab === 'pending_punches' && (
+          <BiometricPendingPunchesTab
+            groups={pendingGroups}
+            employeePins={employeePins}
+            loading={loadingDevices}
+            onRefresh={loadBiometricConfig}
+            onAttendanceChanged={onImported}
+          />
         )}
 
         {activeTab === 'devices_cloud' && (
@@ -830,6 +598,7 @@ export function BiometricIntegrationModal({
             fullCloudUrl={fullCloudUrl}
             onDevicesUpdated={setDevices}
             onImported={onImported}
+            onRefreshConfig={loadBiometricConfig}
           />
         )}
 
@@ -839,6 +608,8 @@ export function BiometricIntegrationModal({
             pinDrafts={pinDrafts}
             setPinDrafts={setPinDrafts}
             onEmployeesUpdated={setEmployeePins}
+            onRefreshConfig={loadBiometricConfig}
+            onAttendanceChanged={onImported}
           />
         )}
       </div>
