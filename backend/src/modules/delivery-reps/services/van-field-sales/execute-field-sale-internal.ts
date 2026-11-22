@@ -212,9 +212,8 @@ export class ExecuteFieldSaleInternalSlice {
     // inside the open transaction deadlocks on PGlite's single
     // connection, and on Postgres it would read outside the trip
     // lock). The posting identity prefers the acting rep's linked
-    // login over the tenant's first active user, and the audit actor
-    // is that same linked login (or null, naming the rep in the
-    // details, when the rep has no linked login).
+    // login; F20: a rep with no linked login resolves to userId 0
+    // (NULL created_by downstream), never the first active user.
     const systemAuth = await this.resolveSystemAuthContext(tenantId, accountId, repId);
     const auditActor = await resolveVanMoneyAuditActor(this.anyDb, tenantId, repId);
 

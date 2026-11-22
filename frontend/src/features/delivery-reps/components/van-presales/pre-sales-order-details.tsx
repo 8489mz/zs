@@ -114,7 +114,7 @@ export function PreSalesOrderDetails({
           >
             <div>
               <span style={{ color: '#64748b' }}>{t('delivery_reps.van_pre_sales_admin_tab.s49', "المندوب:")} </span>
-              <strong style={{ color: '#0f172a' }}>{inspectedOrder.repName}</strong>
+              <strong style={{ color: '#0f172a' }}>{inspectedOrder.repName || `مندوب #${inspectedOrder.repId}`}</strong>
             </div>
             <div>
               <span style={{ color: '#64748b' }}>{t('delivery_reps.van_pre_sales_admin_tab.s50', "العميل:")} </span>

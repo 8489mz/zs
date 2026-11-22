@@ -236,6 +236,21 @@ export function useVisibleNavigationItems({
       return Boolean(tenant?.features?.includes(feat));
     };
 
+    // F17 (trial problem 29): a feature granted above the mode pattern
+    // (P10 super-admin override, visible in tenant.features, which the
+    // backend builds override-aware) gets its menu item. The
+    // wholesale_van / warehousing blocks below hide pos/cash-drawer
+    // unconditionally and run BEFORE the P10-aware gate at the end of
+    // this filter, so an override-granted item never rendered even
+    // though /pos works by direct URL (getPosAvailability honours the
+    // override and the route guard's P10 escape allows it). The direct
+    // features checks (not hasFeature) mirror that gate and keep the
+    // platform-admin bypass out. posGrantedByOverride is the settings
+    // read-path flag for the same 'pos' grant; the drawer has no such
+    // flag, so it follows its own 'cashDrawer' grant only.
+    const isPosFeatureGranted = settings?.posGrantedByOverride === true || Boolean(tenant?.features?.includes('pos'));
+    const isCashDrawerFeatureGranted = Boolean(tenant?.features?.includes('cashDrawer'));
+
     return navigationItems
       .filter((item) => {
         if (!user || !canAccessNavigationItem(user, item)) return false;
@@ -314,12 +329,20 @@ export function useVisibleNavigationItems({
         }
 
         if (isWholesaleVanVertical) {
-          if (['pos', 'cash-drawer', 'kds', 'displays', 'signage', 'product-modifiers', 'trade-in', 'imei-history', 'maintenance', 'clothing'].includes(item.key)) return false;
+          // F17: pos/cash-drawer show when the effective feature set
+          // grants them (P10 override); every other key in this list
+          // stays hidden for wholesale_van.
+          if (item.key === 'pos' && !isPosFeatureGranted) return false;
+          if (item.key === 'cash-drawer' && !isCashDrawerFeatureGranted) return false;
+          if (['kds', 'displays', 'signage', 'product-modifiers', 'trade-in', 'imei-history', 'maintenance', 'clothing'].includes(item.key)) return false;
           if (item.key?.startsWith('contracting-') || item.key === 'contracting' || item.key?.startsWith('maritime-') || item.key === 'maritime' || item.key?.startsWith('pharmacy-') || item.key?.startsWith('manufacturing-') || (item.key?.startsWith('import-') && settings?.importModuleEnabled !== true)) return false;
         }
 
         if (isWarehousingVertical) {
-          if (['pos', 'cash-drawer', 'kds', 'displays', 'signage', 'product-modifiers', 'trade-in', 'imei-history', 'maintenance', 'clothing', 'delivery-reps', 'van-sales-admin'].includes(item.key)) return false;
+          // F17: same exemption as wholesale_van above.
+          if (item.key === 'pos' && !isPosFeatureGranted) return false;
+          if (item.key === 'cash-drawer' && !isCashDrawerFeatureGranted) return false;
+          if (['kds', 'displays', 'signage', 'product-modifiers', 'trade-in', 'imei-history', 'maintenance', 'clothing', 'delivery-reps', 'van-sales-admin'].includes(item.key)) return false;
           if (item.key?.startsWith('contracting-') || item.key === 'contracting' || item.key?.startsWith('maritime-') || item.key === 'maritime' || item.key?.startsWith('pharmacy-') || item.key?.startsWith('manufacturing-') || (item.key?.startsWith('import-') && settings?.importModuleEnabled !== true)) return false;
         }
 
@@ -415,5 +438,5 @@ export function useVisibleNavigationItems({
         const bIndex = preferredOrder.indexOf(b.key);
         return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
       });
-  }, [user, tenant?.features, tenant?.activityType, tenant?.pillar, t, isEtaActive, totalOnlineOrdersCount, settings?.activityType, settings?.businessIndustry, settings?.posModuleEnabled, settings?.importModuleEnabled, settings?.enableMobileStoreFeatures, settings?.maintenanceProfile, settings?.enablePharmacyModule, settings?.manufacturingModuleEnabled, settings?.servicesModuleEnabled, settings?.storefrontModuleEnabled, settings?.installmentsModuleEnabled, settings?.fixedAssetsModuleEnabled, settings?.taxDeclarationModuleEnabled, settings?.deliveryFleetModuleEnabled, settings?.deliveryRepsModuleEnabled, settings?.vanSalesModuleEnabled, settings?.purchasesModuleEnabled, settings?.inventoryModuleEnabled, settings?.hrModuleEnabled, settings?.enableEnterpriseFeatures, settings?.restaurantModuleEnabled, settings?.maritimeFreightModuleEnabled, settings?.contractingModuleEnabled]);
+  }, [user, tenant?.features, tenant?.activityType, tenant?.pillar, t, isEtaActive, totalOnlineOrdersCount, settings?.activityType, settings?.businessIndustry, settings?.posModuleEnabled, settings?.posGrantedByOverride, settings?.importModuleEnabled, settings?.enableMobileStoreFeatures, settings?.maintenanceProfile, settings?.enablePharmacyModule, settings?.manufacturingModuleEnabled, settings?.servicesModuleEnabled, settings?.storefrontModuleEnabled, settings?.installmentsModuleEnabled, settings?.fixedAssetsModuleEnabled, settings?.taxDeclarationModuleEnabled, settings?.deliveryFleetModuleEnabled, settings?.deliveryRepsModuleEnabled, settings?.vanSalesModuleEnabled, settings?.purchasesModuleEnabled, settings?.inventoryModuleEnabled, settings?.hrModuleEnabled, settings?.enableEnterpriseFeatures, settings?.restaurantModuleEnabled, settings?.maritimeFreightModuleEnabled, settings?.contractingModuleEnabled]);
 }

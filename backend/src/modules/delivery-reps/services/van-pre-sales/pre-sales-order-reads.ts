@@ -171,8 +171,17 @@ export class PreSalesOrderReadsSlice {
       .orderBy('soi.id', 'asc')
       .execute();
 
+    // F18 (trial problem 31): the FE details dialog renders
+    // `Number(it.lineTotal)` and the FE item type declares `lineTotal`,
+    // so return it alongside `total` (additive, no FE type break);
+    // and fall back to `مندوب #<repId>` when dr.full_name is NULL,
+    // the same fallback the list row already renders.
+    const repName =
+      (order as any).repName ||
+      ((order as any).repId ? `مندوب #${(order as any).repId}` : '');
     return {
       ...order,
+      repName,
       id: Number(order.id),
       subtotalAmount: Number(order.subtotalAmount || 0),
       discountAmount: Number(order.discountAmount || 0),
@@ -188,6 +197,7 @@ export class PreSalesOrderReadsSlice {
         unitOfferSavings: it.unitOfferSavings != null ? Number(it.unitOfferSavings) : 0,
         discount: Number(it.discount || 0),
         total: Number(it.total || 0),
+        lineTotal: Number(it.total || 0),
       })),
     };
   }

@@ -777,7 +777,7 @@ async function main(): Promise<void> {
   }
 
   // 8. The orphan evidence spec is wired into BOTH critical lists,
-  // in identical order (304 specs — P8 wired the date-filter spec, P9 wired the FEFO spec, file #11 wired 6 marketplace specs, P10 wired the feature-overrides spec, F2 wired the POS collection-balance-cap spec, F5 wired the shift-close-password-identity spec, F19 wired the final-issue-paired-movement spec, F7 wired the pos-sale-trip-attribution spec, F7c wired the pos-collection-trip-attribution spec, F3 wired the van-route-sale-gate spec, F8 wired the pos-cash-discount spec, F4 wired the customer-phone-validation spec, F9 wired the pos-van-stock-pool spec, F10 wired the van-load-available-qty spec, F12 wired the van-admin-permission-split spec, F13 wired the reports-discount-profit spec).
+  // in identical order (308 specs — P8 wired the date-filter spec, P9 wired the FEFO spec, file #11 wired 6 marketplace specs, P10 wired the feature-overrides spec, F2 wired the POS collection-balance-cap spec, F5 wired the shift-close-password-identity spec, F19 wired the final-issue-paired-movement spec, F7 wired the pos-sale-trip-attribution spec, F7c wired the pos-collection-trip-attribution spec, F3 wired the van-route-sale-gate spec, F8 wired the pos-cash-discount spec, F4 wired the customer-phone-validation spec, F9 wired the pos-van-stock-pool spec, F10 wired the van-load-available-qty spec, F12 wired the van-admin-permission-split spec, F13 wired the reports-discount-profit spec, F18 wired the van-presales-consolidate-delivery-rep-alias spec and the van-presales-order-details-line-total spec, F20 wired the van-portal-sale-rep-attribution-f20 spec).
   {
     const specDir = __dirname;
     const jsonPath = path.join(specDir, '..', '..', 'scripts', 'critical-specs.json');
@@ -785,13 +785,13 @@ async function main(): Promise<void> {
     const list = JSON.parse(fs.readFileSync(jsonPath, 'utf8')).specs as string[];
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     const chain = String(pkg.scripts['test:critical:serial']).split(' && ').map((x) => x.replace(/^ts-node /, ''));
-    assert.equal(list.length, 305);
-    assert.equal(chain.length, 305);
+    assert.equal(list.length, 308);
+    assert.equal(chain.length, 308);
     assert.deepEqual(list, chain);
     assert.ok(list.includes('test/critical/van-field-noncash-evidence.spec.ts'));
     const idx = list.indexOf('test/critical/van-field-noncash-evidence.spec.ts');
     assert.equal(list[idx - 1], 'test/critical/van-field-sale-wholesale-price.spec.ts');
-    console.log('8. evidence spec wired into both critical lists (305 = 305, identical order), passed');
+    console.log('8. evidence spec wired into both critical lists (308 = 308, identical order), passed');
   }
 
   // 9. Regressions: (a) a main return without invoiceId is refused

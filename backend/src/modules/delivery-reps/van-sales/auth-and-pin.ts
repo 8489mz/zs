@@ -17,9 +17,15 @@ export class AuthAndPinService {
 
   /**
    * Van-sales endpoints are reached via the driver's portal token, not a staff session, so there is
-   * no AuthContext to post the journal under. Falls back to the tenant's earliest active user rather
-   * than a bare id — journal_entries.created_by/posted_by are FK'd to users(id), and an id that
-   * doesn't exist there fails the insert.
+   * no AuthContext to post the journal under. When the acting rep is
+   * named, the posting identity is his linked login — or honestly
+   * NOBODY (userId 0): the sale path maps 0 to a NULL created_by
+   * and the journal boundary (insertPostedJournal) maps
+   * createdBy/postedBy <= 0 to NULL, so no journal ever names user
+   * 0 or borrows the tenant's first active user for a sale he never
+   * made. When NO rep is named the fallback below stays: those
+   * callers are system actions (trip load journals) with no acting
+   * rep, and the journal needs a real FK'd user.
    */
   /**
    * M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the posting identity
@@ -27,11 +33,11 @@ export class AuthAndPinService {
    * rep, his linked login is the poster — the tenant's first active
    * user never sold or collected anything, so naming him as
    * created_by on the sale/collection/settlement journal was false
-   * attribution. When the rep has no linked login (or no rep is
-   * named) the old first-active-user fallback stays: making that
-   * honestly null needs a posting-layer decision (AuthContext.userId
-   * is number-typed and sale.created_by feeds postSale's fallback),
-   * recorded as a follow-up, not bundled here.
+   * attribution. F20 (trial problem 38) closes the M18 follow-up:
+   * when the rep has no linked login the identity is honestly 0
+   * (NULL downstream), not the first active user — the posting
+   * layer is 0-safe (sale.created_by maps 0 to null, and
+   * insertPostedJournal maps createdBy/postedBy <= 0 to NULL).
    */
   async resolveSystemAuthContext(tenantId: string, accountId: string, repId?: number | null): Promise<AuthContext> {
     if (repId && Number(repId) > 0) {
@@ -47,6 +53,20 @@ export class AuthAndPinService {
           accountId,
         };
       }
+      // F20 (trial problem 38): the rep is named but has no linked
+      // login — return the honest "no user" (0), never the tenant's
+      // first active user. The role/permissions stay 'admin' /
+      // ['accounting'] (the posting identity, not a session), and
+      // the sale + journal boundaries map 0 to NULL.
+      return {
+        userId: 0,
+        sessionId: 'van-sales-system',
+        username: 'van-sales-system',
+        role: 'admin',
+        permissions: ['accounting'],
+        tenantId,
+        accountId,
+      };
     }
     const user = await this.anyDb
       .selectFrom('users')

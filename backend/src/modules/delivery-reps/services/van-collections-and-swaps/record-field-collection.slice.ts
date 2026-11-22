@@ -102,7 +102,9 @@ export class RecordFieldCollectionSlice {
     // and the audit actor are resolved here, on the pool handle
     // BEFORE the transaction starts (P2 pattern — same hoist as the
     // field sale above). The posting identity prefers the acting
-    // rep's linked login over the tenant's first active user.
+    // rep's linked login; F20 (trial problem 38): a rep with no
+    // linked login resolves to userId 0 (NULL created_by
+    // downstream), never the tenant's first active user.
     const systemAuth = await this.deps.resolveSystemAuthContext(tenantId, accountId, repId);
     const auditActor = await resolveVanMoneyAuditActor(this.anyDb, tenantId, repId);
 

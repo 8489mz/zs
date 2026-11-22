@@ -36,7 +36,9 @@ export class ConsolidatePreSalesOrdersSlice {
       throw new AppError('يرجى تحديد طلب حجز واحد على الأقل للتجميع في إذن التحميل', 'NO_ORDERS_SELECTED', 400);
     }
 
-    const targetRepId = Number(payload?.targetRepId || 0);
+    // F18 (trial problem 30): the admin dialog sends `deliveryRepId`,
+    // older callers send `targetRepId` — accept either, target first.
+    const targetRepId = Number(payload?.targetRepId || payload?.deliveryRepId || 0);
     if (!targetRepId || targetRepId <= 0) {
       throw new AppError('يرجى تحديد المندوب / السيارة المستهدفة لتحميل البضاعة', 'TARGET_REP_REQUIRED', 400);
     }

@@ -60,7 +60,7 @@
  *     INSUFFICIENT_STOCK.
  * (f) Retail checkout: 5 pcs is refused (pool 4), then 4 pcs post
  *     (48.00) and only the branch location moves.
- * (g) Wiring: this spec is in both critical lists (303 specs,
+ * (g) Wiring: this spec is in both critical lists (308 specs,
  *     identical order).
  *
  * HOW THIS IS DRIVEN: the real CatalogProductService (real
@@ -458,22 +458,22 @@ async function main(): Promise<void> {
     }
   }
 
-  // (g) Wiring: this spec is in both critical lists (303 specs,
+  // (g) Wiring: this spec is in both critical lists (308 specs,
   // identical order) — the suite count moves 300 -> 303 with this batch (F4 + F9 + F10).
   {
     const specs = JSON.parse(readFileSync(join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
     const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 303);
-    assert.equal(chain.length, 303);
+    assert.equal(specs.length, 308);
+    assert.equal(chain.length, 308);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/pos-van-stock-pool.spec.ts'));
     assert.equal(
       specs[specs.indexOf('test/critical/pos-van-stock-pool.spec.ts') - 1],
       'test/critical/customer-phone-validation.spec.ts',
     );
-    console.log('  (g) wiring (303 specs, identical order) passed');
+    console.log('  (g) wiring (308 specs, identical order) passed');
   }
 
   console.log('pos-van-stock-pool: all cases passed');

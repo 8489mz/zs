@@ -102,7 +102,10 @@ export class VanSalesAdminController {
     @Body()
     body: {
       orderIds: number[];
-      targetRepId: number;
+      // F18 (trial problem 30): FE sends `deliveryRepId`; `targetRepId`
+      // is the older name. Either is accepted downstream.
+      targetRepId?: number;
+      deliveryRepId?: number;
       sourceWarehouseId?: number;
       notes?: string;
     },

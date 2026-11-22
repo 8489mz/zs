@@ -81,7 +81,11 @@ export type ListPreSalesOrdersFilters = {
 
 export type ConsolidatePreSalesOrdersPayload = {
   orderIds: number[];
-  targetRepId: number;
+  // F18 (trial problem 30): the admin dialog sends `deliveryRepId`
+  // (FE van-sales-presales.ts posts it verbatim); older callers send
+  // `targetRepId`. Either names the target rep; at least one is required.
+  targetRepId?: number;
+  deliveryRepId?: number;
   sourceWarehouseId?: number;
   notes?: string;
 };

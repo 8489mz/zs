@@ -66,7 +66,11 @@ export class ExecuteDamagedSwapSlice {
     // Resolved on the pool handle BEFORE the transaction: the journal
     // posts on the tx handle, and a pool read inside an open PGlite
     // transaction waits forever on the single connection.
-    const systemAuth = await this.deps.resolveSystemAuthContext(tenantId, accountId);
+    // F20 (trial problem 38): the swap is rep-acted (driver
+    // endpoint, trip locked by rep), so repId is passed like the
+    // sale and the collection — a linked rep's journal names his
+    // login, an unlinked rep's is honestly NULL, never the admin.
+    const systemAuth = await this.deps.resolveSystemAuthContext(tenantId, accountId, repId);
 
     const damagedPid = Number(payload.damagedProductId);
     const replacementPid = Number(payload.replacementProductId);
