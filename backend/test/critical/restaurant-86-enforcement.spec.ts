@@ -93,7 +93,7 @@ function chainable(terminal: Record<string, any>) {
   return builder;
 }
 
-function buildCreateSaleService(settingsRows: any[], rows86: any[]) {
+function buildCreateSaleService(settingsRows: any[], rows86: any[], hasFeature: (feature: string) => boolean = (feature) => feature === 'pos') {
   const trx: any = {
     executeQuery: async () => ({ rows: [] }),
     getExecutor: () => ({
@@ -160,6 +160,13 @@ function buildCreateSaleService(settingsRows: any[], rows86: any[]) {
       if (table === 'restaurant_86_items') {
         return chainable({ execute: async () => rows86 });
       }
+      // INV-VAN-PRICE-LIST-WIRING (after this spec): prepareSaleItems
+      // resolves the customer's / tenant-default price list once per
+      // sale. No list is configured in this mock, so the lookup
+      // returns null and the sale prices at base price.
+      if (table === 'price_lists') {
+        return chainable({ executeTakeFirst: async () => null });
+      }
       throw new Error(`unexpected (query|write) ${table}`);
     },
     insertInto: (table: string) => ({
@@ -188,7 +195,21 @@ function buildCreateSaleService(settingsRows: any[], rows86: any[]) {
   // NOTE: createSale passes hasFeature's return value UNawaited, so
   // the stub must return a plain boolean, not a Promise (a Promise
   // is truthy and would run the contract instead of skipping it).
-  service.planFeatureService = { hasFeature: () => false };
+  // P10 (2026-11-17, after this spec): createSale also gates POS
+  // sales on the 'pos' feature (load-sale-context.ts:166), so the
+  // stub must answer per feature — 'pos' true (a restaurant tenant
+  // has POS by profile default), everything else false — or the
+  // clean sale below dies at the gate instead of reaching the insert.
+  service.planFeatureService = {
+    hasFeature: (
+      _planId: any,
+      _extraFeatures: any,
+      feature: string,
+      _pillar?: any,
+      _activityType?: any,
+      _featureOverrides?: any,
+    ) => hasFeature(feature),
+  };
   return service;
 }
 
@@ -324,6 +345,16 @@ async function main() {
     const cleanService = buildCreateSaleService(saleSettings(), []);
     const { payload: payload2, auth: auth2 } = createSalePayload();
     await assert.rejects(async () => cleanService.createSale(payload2, auth2), /SALE_INSERT_REACHED/);
+    // P10 gate pin: a service whose feature stub refuses 'pos' must
+    // reject the clean sale with POS_FEATURE_NOT_AVAILABLE 403. This
+    // pins the intended P10 behaviour — the gate must not be weakened
+    // to make the clean sale above pass.
+    const gatedService = buildCreateSaleService(saleSettings(), [], () => false);
+    const { payload: payload3, auth: auth3 } = createSalePayload();
+    await assert.rejects(
+      async () => gatedService.createSale(payload3, auth3),
+      (err: any) => err?.code === 'POS_FEATURE_NOT_AVAILABLE' && err?.statusCode === 403,
+    );
   }
 
   // Part C: createOnlineOrder.
