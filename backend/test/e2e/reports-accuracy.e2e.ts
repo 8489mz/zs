@@ -45,7 +45,7 @@ async function main() {
 
   // Sale
   const custName = 'Rep Cust ' + Date.now();
-  const custReq = await client.post('/api/customers', { name: custName, creditLimit: 0 });
+  const custReq = await client.post('/api/customers', { name: custName, phone: '01012345678', creditLimit: 0 });
   const customerId = (custReq.customers || []).find((c: any) => c.name === custName)?.id;
   assert.ok(customerId, "Missing customerId");
 

@@ -23,9 +23,11 @@ async function main() {
   const suppliers = expectArray((await client.get('/api/suppliers')).suppliers, 'suppliers');
   const supplier = findByName(suppliers, supplierName);
 
+  // F4 (INV-CUSTOMER-PHONE-VALIDATION): customer phone is required and must
+  // be a valid number — 01012345678 is the F4 spec's proven-valid phone.
   await client.post('/api/customers', {
     name: customerName,
-    phone: '',
+    phone: '01012345678',
     address: '',
     balance: 0,
     type: 'cash',

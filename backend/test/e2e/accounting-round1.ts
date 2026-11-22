@@ -797,7 +797,7 @@ async function main() { console.log('MAIN EXECUTING');
       await admin.post('/api/inventory-adjustments', { actionType: 'add', productId: pd1, locationId: locId, qty: 100, reason: 'init', note: '' });
 
       const custName = 'Reg Customer ' + Date.now();
-      const customerRes = await admin.post('/api/customers', { name: custName, phone: '123456789', creditLimit: 0 });
+      const customerRes = await admin.post('/api/customers', { name: custName, phone: '01012345678', creditLimit: 0 });
       const customerId = customerRes.customers?.find((c: any) => c.name === custName)?.id || customerRes.id;
       const suppName1 = 'Reg Supplier ' + Date.now();
       let supplierRes = await admin.post('/api/suppliers', { name: suppName1, phone: '987654321' });

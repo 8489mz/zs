@@ -91,7 +91,7 @@ async function runTest() {
     }, 200);
 
     const supplierRes = await tenantClient.post('/api/suppliers', { name: `Supplier ${suffix}`, balance: 0 }, 201);
-    const customerRes = await tenantClient.post('/api/customers', { name: `Customer ${suffix}`, balance: 0, type: 'cash', creditLimit: 0 }, 201);
+    const customerRes = await tenantClient.post('/api/customers', { name: `Customer ${suffix}`, phone: '01012345678', balance: 0, type: 'cash', creditLimit: 0 }, 201);
     const categoryRes = await tenantClient.post('/api/categories', { name: `Cat ${suffix}` }, 201);
 
     const supplierId = Number(findByName((supplierRes as any).suppliers || [], `Supplier ${suffix}`).id);

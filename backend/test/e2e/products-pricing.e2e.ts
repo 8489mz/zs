@@ -27,7 +27,7 @@ async function main() {
   const supplier = expectArray(suppliersPayload.suppliers, 'suppliers').find((s: any) => s.name === `Sup ${suffix}`);
 
   // Create Customer for Sales
-  await clientA.post('/api/customers', { name: `Cust ${suffix}`, phone: '', address: '', balance: 0, type: 'cash', creditLimit: 0, storeCreditBalance: 0 }, 201);
+  await clientA.post('/api/customers', { name: `Cust ${suffix}`, phone: '01012345678', address: '', balance: 0, type: 'cash', creditLimit: 0, storeCreditBalance: 0 }, 201);
   const customersPayload = await clientA.get('/api/customers');
   const customer = expectArray(customersPayload.customers, 'customers').find((c: any) => c.name === `Cust ${suffix}`);
 
