@@ -79,7 +79,7 @@ export function useRequisitionCart({
       prev.map((line) => {
         if (!line.productId) return line;
         const matchingStock = line.warehouseStocks.find((s) => s.warehouseId === whId);
-        const avail = matchingStock ? matchingStock.qty : 0;
+        const avail = matchingStock?.availableQty ?? matchingStock?.qty ?? 0;
         return {
           ...line,
           sourceWarehouseId: whId,
@@ -103,10 +103,10 @@ export function useRequisitionCart({
         if (!prod) return line;
 
         const whId = line.sourceWarehouseId !== '' ? Number(line.sourceWarehouseId) : undefined;
-        let freshAvail = prod.totalStock;
+        let freshAvail = prod.availableQty ?? prod.totalStock;
         if (whId !== undefined) {
           const matchWh = (prod.warehouseStocks || []).find((s) => s.warehouseId === whId);
-          freshAvail = matchWh ? matchWh.qty : 0;
+          freshAvail = matchWh?.availableQty ?? matchWh?.qty ?? 0;
         }
 
         const freshPrice = prod.retailPrice ?? line.unitPrice;
@@ -157,13 +157,13 @@ export function useRequisitionCart({
       const stockInFilter = (product.warehouseStocks || []).find((w) => w.warehouseId === filterId);
       sourceWhId = filterId;
       sourceWhName = stockInFilter?.warehouseName || warehouses.find((w) => w.id === filterId)?.name || 'المستودع المختار';
-      availStock = stockInFilter?.qty || 0;
+      availStock = stockInFilter?.availableQty ?? stockInFilter?.qty ?? 0;
     } else {
-      const sortedStocks = [...(product.warehouseStocks || [])].sort((a, b) => b.qty - a.qty);
-      if (sortedStocks.length > 0 && sortedStocks[0].qty > 0) {
+      const sortedStocks = [...(product.warehouseStocks || [])].sort((a, b) => (b.availableQty ?? b.qty) - (a.availableQty ?? a.qty));
+      if (sortedStocks.length > 0 && (sortedStocks[0].availableQty ?? sortedStocks[0].qty) > 0) {
         sourceWhId = sortedStocks[0].warehouseId;
         sourceWhName = sortedStocks[0].warehouseName;
-        availStock = sortedStocks[0].qty;
+        availStock = sortedStocks[0].availableQty ?? sortedStocks[0].qty;
       } else if (warehouses.length > 0) {
         sourceWhId = warehouses[0].id;
         sourceWhName = warehouses[0].name;
@@ -269,7 +269,7 @@ export function useRequisitionCart({
         if (line.id !== lineId) return line;
         const matchingStock = line.warehouseStocks.find((s) => s.warehouseId === whId);
         const whObj = warehouses.find((w) => w.id === whId);
-        const newAvail = matchingStock ? matchingStock.qty : 0;
+        const newAvail = matchingStock?.availableQty ?? matchingStock?.qty ?? 0;
         return {
           ...line,
           sourceWarehouseId: whId,

@@ -299,6 +299,9 @@
     "test/critical/pos-sale-trip-attribution.spec.ts",
     "test/critical/pos-collection-trip-attribution.spec.ts",
     "test/critical/van-route-sale-gate.spec.ts",
-    "test/critical/pos-cash-discount.spec.ts"
+    "test/critical/pos-cash-discount.spec.ts",
+    "test/critical/customer-phone-validation.spec.ts",
+    "test/critical/pos-van-stock-pool.spec.ts",
+    "test/critical/van-load-available-qty.spec.ts"
   ]
 }

@@ -42,7 +42,7 @@ export function useAdminRequisitionReview(
           }
           return {
             ...line,
-            warehouseAvailQty: found.totalStock,
+            warehouseAvailQty: found.availableQty ?? found.totalStock,
             warehouseStocks: found.warehouseStocks,
             unit: found.unit || line.unit,
             isWeight: found.isWeight ?? line.isWeight,
@@ -179,7 +179,7 @@ export function useAdminRequisitionReview(
           approvedQty: initialQty,
           approvedCartons: mult > 1 ? 1 : 0,
           approvedPieces: 0,
-          warehouseAvailQty: prod.totalStock,
+          warehouseAvailQty: prod.availableQty ?? prod.totalStock,
         },
       ];
     });

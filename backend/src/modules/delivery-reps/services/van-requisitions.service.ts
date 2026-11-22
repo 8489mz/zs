@@ -4,6 +4,13 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
 import { generateDailySequenceNumber, listRepUsableWarehouseScope, assertWarehouseInRepScope } from './van-common.util';
+import { computeLocationAvailability, computeVanLoadAvailableQty } from '../../../common/utils/location-stock-ledger';
+import {
+  groupPendingHoldsByProduct,
+  summarizeProductBalances,
+  type ProductBalanceSummary,
+  type VanLoadPendingHold,
+} from './van-load-availability.helper';
 import { evaluateBatchExpiryStatus } from '../rep-target.engine';
 
 @Injectable()
@@ -215,7 +222,7 @@ export class VanRequisitionsService {
       const pids = Array.from(allProductIds);
       const prods = await this.anyDb
         .selectFrom('products')
-        .select(['id', 'name', 'barcode', 'retail_price as retailPrice'])
+        .select(['id', 'name', 'barcode', 'retail_price as retailPrice', 'stock_qty as stockQty', 'reserved_qty as reservedQty'])
         .where('id', 'in', pids)
         .where('tenant_id', '=', tenantId)
         .execute();
@@ -269,15 +276,20 @@ export class VanRequisitionsService {
       }
 
       for (const r of parsedRows) {
-        const stocks = await this.anyDb
+        // INV-VAN-LOAD-AVAILABLE-QTY (F10): the review list shows the
+        // same canonical available as the form and the dispatch
+        // pre-check — on-hand minus reserved, capped by the global
+        // leg — never the raw on-hand qty. The balance rows are read
+        // for every location (not just the source) so the unassigned
+        // leg and the global-vs-located discrepancy match the
+        // ledger's read-only availability exactly.
+        const balances = await this.anyDb
           .selectFrom('product_location_stock')
-          .select(['product_id', 'qty'])
-          .where('location_id', '=', r.sourceWarehouseId)
+          .select(['product_id', 'location_id', 'branch_id', 'qty', 'reserved_qty'])
           .where('product_id', 'in', pids)
           .where('tenant_id', '=', tenantId)
           .execute();
-        const stockMap = new Map<number, number>();
-        stocks.forEach((s: any) => stockMap.set(Number(s.product_id), Number(s.qty || 0)));
+        const balanceByProduct = summarizeProductBalances(balances);
 
         const enrichItem = (it: any) => {
           const pid = Number(it.productId);
@@ -288,6 +300,23 @@ export class VanRequisitionsService {
           const isWeight = it.isWeight !== undefined
             ? Boolean(it.isWeight)
             : Boolean(uInfo?.isWeight || /كجم|كيلو|جرام|جم|وزن|kg/i.test(p?.name || ''));
+
+          // Canonical available at the source warehouse (same function
+          // the form and the dispatch pre-check read).
+          const bal = balanceByProduct.get(pid);
+          const whBal = bal?.byWarehouse.get(Number(r.sourceWarehouseId));
+          const globalStock = Number((p as any)?.stockQty || 0);
+          const globalReserved = Number((p as any)?.reservedQty || 0);
+          const discrepancy = globalStock - (bal?.locatedSum || 0);
+          const unassignedQty = (bal?.unassignedQty || 0) + (discrepancy > 0.001 ? discrepancy : 0);
+          const warehouseAvailQty = computeVanLoadAvailableQty(computeLocationAvailability({
+            locationQty: whBal?.qty || 0,
+            locationReserved: whBal?.reservedQty || 0,
+            unassignedQty,
+            unassignedReserved: bal?.unassignedReserved || 0,
+            globalStock,
+            globalReserved,
+          }));
 
           let cartons = it.cartons !== undefined ? Number(it.cartons) : undefined;
           let pieces = it.pieces !== undefined ? Number(it.pieces) : undefined;
@@ -322,7 +351,7 @@ export class VanRequisitionsService {
             productName: p?.name || `صنف #${pid}`,
             barcode: p?.barcode || '',
             retailPrice: Number(p?.retailPrice || 0),
-            warehouseAvailQty: stockMap.get(pid) || 0,
+            warehouseAvailQty,
             unitName: baseName,
             packagingUnit: packUnit,
             isWeight,
@@ -586,6 +615,8 @@ export class VanRequisitionsService {
         'p.name',
         'p.barcode',
         'p.retail_price',
+        'p.stock_qty',
+        'p.reserved_qty',
         'p.is_active',
         'p.supplier_id',
         's.name as supplier_name',
@@ -606,6 +637,7 @@ export class VanRequisitionsService {
         'pls.location_id',
         'sl.name as location_name',
         sql<number>`cast(coalesce(pls.qty, 0) as numeric)`.as('qty'),
+        sql<number>`cast(coalesce(pls.reserved_qty, 0) as numeric)`.as('reservedQty'),
       ])
       .where('pls.tenant_id', '=', tenantId)
       .where('sl.is_active', '=', true)
@@ -620,16 +652,20 @@ export class VanRequisitionsService {
 
     const stockRows = await stockQuery.execute();
 
-    const stockMap = new Map<number, Array<{ warehouseId: number; warehouseName: string; qty: number }>>();
+    const stockMap = new Map<number, Array<{ warehouseId: number; warehouseName: string; qty: number; reservedQty: number }>>();
     for (const row of stockRows) {
       const pid = Number(row.product_id);
       const qty = Number(row.qty || 0);
-      if (qty > 0) {
+      const reservedQty = Number((row as any).reservedQty || 0);
+      // A warehouse with zero on-hand but a reservation still counts:
+      // it is the warehouse the gate would refuse a load from.
+      if (qty > 0 || reservedQty > 0) {
         const list = stockMap.get(pid) || [];
         list.push({
           warehouseId: Number(row.location_id),
           warehouseName: row.location_name,
           qty,
+          reservedQty,
         });
         stockMap.set(pid, list);
       }
@@ -642,9 +678,15 @@ export class VanRequisitionsService {
       isWeight: boolean;
     }>();
     const fefoBatchMap = new Map<number, { batchNumber: string | null; expiryDate: string }>();
+    // INV-VAN-LOAD-AVAILABLE-QTY (F10): per-product balance detail for
+    // the canonical available (all locations, so the unassigned leg
+    // and the global-vs-located discrepancy match the ledger), and the
+    // pending load permits that will draw from the same stock.
+    const balanceByProduct = new Map<number, ProductBalanceSummary>();
+    const holdsByProduct = new Map<number, VanLoadPendingHold[]>();
 
     if (productIds.length > 0) {
-      const [unitRows, batchRows, genericBatchRows] = await Promise.all([
+      const [unitRows, batchRows, genericBatchRows, balanceRows, pendingReqRows] = await Promise.all([
         this.anyDb
           .selectFrom('product_units')
           .select(['product_id', 'name', 'multiplier', 'is_base_unit'])
@@ -672,6 +714,29 @@ export class VanRequisitionsService {
           .where(sql<boolean>`cast(coalesce(quantity, 0) as numeric) > 0`)
           .orderBy('expiry_date', (ob: any) => ob.asc().nullsLast())
           .orderBy('id', 'asc')
+          .execute()
+          .catch(() => []),
+        this.anyDb
+          .selectFrom('product_location_stock')
+          .select(['product_id', 'location_id', 'branch_id', 'qty', 'reserved_qty'])
+          .where('tenant_id', '=', tenantId)
+          .where('product_id', 'in', productIds)
+          .execute()
+          .catch(() => []),
+        this.anyDb
+          .selectFrom('van_load_requisitions as vlr')
+          .leftJoin('delivery_representatives as dr', 'dr.id', 'vlr.rep_id')
+          .select([
+            'vlr.doc_no as docNo',
+            'vlr.rep_id as repId',
+            sql<string>`coalesce(dr.name, '')`.as('repName'),
+            'vlr.source_warehouse_id as sourceWarehouseId',
+            'vlr.requested_items as requestedItems',
+            'vlr.approved_items as approvedItems',
+          ])
+          .where('vlr.tenant_id', '=', tenantId)
+          .where('vlr.status', '=', 'pending')
+          .orderBy('vlr.id', 'asc')
           .execute()
           .catch(() => []),
       ]);
@@ -733,6 +798,14 @@ export class VanRequisitionsService {
           }
         }
       }
+
+      for (const [pid, entry] of summarizeProductBalances(balanceRows || [])) {
+        balanceByProduct.set(pid, entry);
+      }
+
+      for (const [pid, holds] of groupPendingHoldsByProduct(pendingReqRows || [])) {
+        holdsByProduct.set(pid, holds);
+      }
     }
 
     const targetWhId = warehouseId && Number(warehouseId) > 0 ? Number(warehouseId) : undefined;
@@ -745,12 +818,56 @@ export class VanRequisitionsService {
       // listed every warehouse's stock even for a single-warehouse
       // request. (The rep scope above already filtered stockMap.)
       const allWhStocks = stockMap.get(pId) || [];
-      const whStocks = targetWhId
+      // INV-VAN-LOAD-AVAILABLE-QTY (F10): the form shows the SAME
+      // canonical available the dispatch pre-check and the stock gate
+      // enforce — on-hand minus reserved, capped by the global leg —
+      // never the raw on-hand qty. totalStock keeps its on-hand
+      // meaning so the two numbers stay distinguishable (problem 32).
+      const bal = balanceByProduct.get(pId);
+      const globalStock = Number(p.stock_qty || 0);
+      const globalReserved = Number(p.reserved_qty || 0);
+      const discrepancy = globalStock - (bal?.locatedSum || 0);
+      const unassignedQty = (bal?.unassignedQty || 0) + (discrepancy > 0.001 ? discrepancy : 0);
+      const unassignedReserved = bal?.unassignedReserved || 0;
+      const canonicalFor = (locationQty: number, locationReserved: number): number =>
+        computeVanLoadAvailableQty(computeLocationAvailability({
+          locationQty,
+          locationReserved,
+          unassignedQty,
+          unassignedReserved,
+          globalStock,
+          globalReserved,
+        }));
+      const whStocks = (targetWhId
         ? allWhStocks.filter((w) => w.warehouseId === targetWhId)
-        : allWhStocks;
+        : allWhStocks
+      ).map((w) => ({ ...w, availableQty: canonicalFor(w.qty, w.reservedQty) }));
       const totalStock = targetWhId
         ? (whStocks[0]?.qty || 0)
         : whStocks.reduce((sum, w) => sum + w.qty, 0);
+      // One requested warehouse: the canonical number for that
+      // warehouse — computed from the warehouse row even when the row
+      // is missing, because unassigned stock is sellable from any
+      // warehouse and the gate would drain it in. No filter: the
+      // per-warehouse location legs (each floored at zero) plus the
+      // single unassigned leg, capped by the global leg — the same
+      // three legs, aggregated.
+      const targetRow = targetWhId
+        ? allWhStocks.find((w) => w.warehouseId === targetWhId)
+        : undefined;
+      const availableQty = targetWhId
+        ? canonicalFor(targetRow?.qty || 0, targetRow?.reservedQty || 0)
+        : Math.min(
+          whStocks.reduce((sum, w) => sum + Math.max(0, w.qty - w.reservedQty), 0) +
+            Math.max(0, unassignedQty - unassignedReserved),
+          Math.max(0, globalStock - globalReserved),
+        );
+      const reservedQty = targetWhId
+        ? (targetRow?.reservedQty || 0)
+        : whStocks.reduce((sum, w) => sum + w.reservedQty, 0) + unassignedReserved;
+      const pendingHolds = (holdsByProduct.get(pId) || []).filter(
+        (h) => targetWhId === undefined || h.sourceWarehouseId === targetWhId,
+      );
       const unitInfo = unitsMap.get(pId);
       const baseUnit = unitInfo?.baseUnitName || 'قطعة';
       const isWeight = Boolean(unitInfo?.isWeight || /كجم|كيلو|جرام|جم|وزن|kg/i.test(p.name || ''));
@@ -779,6 +896,10 @@ export class VanRequisitionsService {
         packagingUnit: unitInfo?.packagingUnit,
         isWeight,
         totalStock,
+        onHandQty: totalStock,
+        availableQty,
+        reservedQty,
+        pendingHolds,
         warehouseStocks: whStocks,
         supplierId: p.supplier_id ? Number(p.supplier_id) : undefined,
         supplierName: (p.supplier_name || '').trim() || 'الشركة العامة',

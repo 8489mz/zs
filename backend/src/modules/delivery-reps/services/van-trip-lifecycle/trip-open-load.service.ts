@@ -6,9 +6,43 @@ import { AppError } from '../../../../common/errors/app-error';
 import { AccountingPostingService } from '../../../accounting/accounting-posting.service';
 import { resolveVanMoneyAuditActor } from '../van-common.util';
 import { getTenantTimezone, todayTenantDate } from '../../../../common/utils/tenant-timezone.util';
+import { computeVanLoadAvailableQty, getLocationAvailability } from '../../../../common/utils/location-stock-ledger';
+import { parseRequisitionItems, pendingHoldQtyFor } from '../van-load-availability.helper';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
 import { type VanTripLifecycleDeps } from './van-trip-types';
+
+/**
+ * INV-VAN-LOAD-AVAILABLE-QTY (F10): the pending load permits that will
+ * draw a product from a warehouse. Read only on the refusal path, so
+ * the happy path pays no extra query. A pending permit reserves
+ * NOTHING in the ledger — it is named so the rep/admin sees which
+ * permit is waiting on the same stock, not as a claim that it holds
+ * the reservation.
+ */
+async function findPendingLoadHolds(
+  trxAny: any,
+  tenantId: string,
+  productId: number,
+  warehouseId: number,
+): Promise<Array<{ docNo: string; qty: number }>> {
+  const rows = await trxAny
+    .selectFrom('van_load_requisitions')
+    .select(['doc_no', 'requested_items', 'approved_items'])
+    .where('tenant_id', '=', tenantId)
+    .where('status', '=', 'pending')
+    .where('source_warehouse_id', '=', warehouseId)
+    .orderBy('id', 'asc')
+    .execute();
+  const holds: Array<{ docNo: string; qty: number }> = [];
+  for (const row of rows || []) {
+    const requested = parseRequisitionItems(row.requested_items);
+    const items = requested.length > 0 ? requested : parseRequisitionItems(row.approved_items);
+    const qty = pendingHoldQtyFor(items, productId, warehouseId);
+    if (qty > 0) holds.push({ docNo: String(row.doc_no), qty });
+  }
+  return holds;
+}
 
 @Injectable()
 export class TripOpenLoadService {
@@ -150,19 +184,28 @@ export class TripOpenLoadService {
             throw new AppError(`الصنف رقم #${pid} غير موجود في النظام`, 'PRODUCT_NOT_FOUND', 404);
           }
 
-          const sourceStock = await trxAny
-            .selectFrom('product_location_stock')
-            .select(['qty'])
-            .where('product_id', '=', pid)
-            .where('location_id', '=', effectiveLocId)
-            .where('tenant_id', '=', tenantId)
-            .forUpdate()
-            .executeTakeFirst();
-
-          const avail = Number(sourceStock?.qty || 0);
+          // INV-VAN-LOAD-AVAILABLE-QTY (F10): the pre-check reads the
+          // same canonical available the gate enforces (on-hand minus
+          // reserved, capped by the global leg) through the ledger's
+          // read-only availability — never the raw on-hand qty. The
+          // locked gate (applyStockDelta, inside moveVanStock below)
+          // stays the authority: it re-locks the product and the
+          // balances in canonical order, so a concurrent move that
+          // lands after this read still fails closed there.
+          const availability = await getLocationAvailability(trx, {
+            tenantId,
+            accountId,
+            productId: pid,
+            locationId: effectiveLocId,
+          });
+          const avail = computeVanLoadAvailableQty(availability);
           if (avail < qty) {
+            const holds = await findPendingLoadHolds(trxAny, tenantId, pid, effectiveLocId);
+            const holdsText = holds.length > 0
+              ? ` — طلبات تحميل معلقة لنفس الصنف من هذا المخزن: ${holds.map((h) => `#${h.docNo} (${h.qty})`).join('، ')}`
+              : '';
             throw new AppError(
-              `رصيد المستودع المصدر لا يكفي للصنف "${prod?.name || pid}". المتوفر: ${avail}، المطلوب: ${qty}`,
+              `رصيد المستودع المصدر لا يكفي للصنف "${prod?.name || pid}". المتوفر للتحميل: ${avail}، المطلوب: ${qty}${holdsText}`,
               'INSUFFICIENT_SOURCE_STOCK',
               400,
             );
@@ -400,19 +443,25 @@ export class TripOpenLoadService {
           throw new AppError(`الصنف رقم #${pid} غير موجود في النظام`, 'PRODUCT_NOT_FOUND', 404);
         }
 
-        const sourceStock = await trxAny
-          .selectFrom('product_location_stock')
-          .select(['qty'])
-          .where('product_id', '=', pid)
-          .where('location_id', '=', effectiveLocId)
-          .where('tenant_id', '=', tenantId)
-          .forUpdate()
-          .executeTakeFirst();
-
-        const avail = Number(sourceStock?.qty || 0);
+        // INV-VAN-LOAD-AVAILABLE-QTY (F10): same canonical pre-check
+        // as openTripAndLoad — the ledger's available (on-hand minus
+        // reserved, capped by the global leg), never the raw on-hand
+        // qty. The locked gate inside moveVanStock stays the
+        // authority for concurrent moves.
+        const availability = await getLocationAvailability(trx, {
+          tenantId,
+          accountId,
+          productId: pid,
+          locationId: effectiveLocId,
+        });
+        const avail = computeVanLoadAvailableQty(availability);
         if (avail < qty) {
+          const holds = await findPendingLoadHolds(trxAny, tenantId, pid, effectiveLocId);
+          const holdsText = holds.length > 0
+            ? ` — طلبات تحميل معلقة لنفس الصنف من هذا المخزن: ${holds.map((h) => `#${h.docNo} (${h.qty})`).join('، ')}`
+            : '';
           throw new AppError(
-            `رصيد المستودع المصدر لا يكفي للصنف "${prod?.name || pid}". المتوفر: ${avail}، المطلوب: ${qty}`,
+            `رصيد المستودع المصدر لا يكفي للصنف "${prod?.name || pid}". المتوفر للتحميل: ${avail}، المطلوب: ${qty}${holdsText}`,
             'INSUFFICIENT_SOURCE_STOCK',
             400,
           );

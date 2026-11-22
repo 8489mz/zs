@@ -257,6 +257,18 @@ export interface DriverProductStock {
   warehouseId: number;
   warehouseName: string;
   qty: number;
+  /** Reserved qty at this warehouse (F10: the gate nets it off). */
+  reservedQty?: number;
+  /** Canonical available at this warehouse (F10: on-hand minus reserved, capped by the global leg). */
+  availableQty?: number;
+}
+
+export interface VanLoadPendingHold {
+  docNo: string;
+  repId?: number;
+  repName?: string;
+  qty: number;
+  sourceWarehouseId?: number;
 }
 
 export interface DriverAvailableProduct {
@@ -267,6 +279,14 @@ export interface DriverAvailableProduct {
   retailPrice: number;
   unit: string;
   totalStock: number;
+  /** Canonical available for a load (F10) — the number the form clamp, the pre-check and the gate all use. */
+  availableQty?: number;
+  /** On-hand qty at the requested scope (same number as totalStock, named so the two stay distinguishable). */
+  onHandQty?: number;
+  /** Reserved qty at the requested scope. */
+  reservedQty?: number;
+  /** Pending load permits that will draw from the same stock (informational — they reserve nothing). */
+  pendingHolds?: VanLoadPendingHold[];
   warehouseStocks: DriverProductStock[];
   packagingUnit?: { name: string; multiplier: number };
   isWeight?: boolean;

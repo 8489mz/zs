@@ -274,7 +274,7 @@ export function DriverNewLoadRequisitionView({
       }
       const c = map.get(compName)!;
       c.totalProducts += 1;
-      if (prod.totalStock > 0) {
+      if ((prod.availableQty ?? prod.totalStock) > 0) {
         c.availableProducts += 1;
       }
 
@@ -333,7 +333,7 @@ export function DriverNewLoadRequisitionView({
   }, [companies, selectedCompany, availableProducts]);
 
   const totalAvailableItemsCount = useMemo(() => {
-    return (availableProducts || []).filter((p) => p.totalStock > 0).length;
+    return (availableProducts || []).filter((p) => (p.availableQty ?? p.totalStock) > 0).length;
   }, [availableProducts]);
 
   const outOfStockCount = useMemo(() => {
@@ -360,14 +360,14 @@ export function DriverNewLoadRequisitionView({
     if (selectedCategory !== 'all') {
       list = list.filter((p) => ((p.categoryName || '').trim() || 'عام') === selectedCategory);
     }
-    return list.filter((p) => p.totalStock <= 0).length;
+    return list.filter((p) => (p.availableQty ?? p.totalStock) <= 0).length;
   }, [availableProducts, catalogSearchQuery, selectedCompany, selectedCategory]);
 
   // Filter Catalog Products by search, company, category, and out of stock
   const displayedProducts = useMemo(() => {
     return (availableProducts || []).filter((p) => {
       // Out of stock filter
-      if (!showOutOfStock && p.totalStock <= 0) return false;
+      if (!showOutOfStock && (p.availableQty ?? p.totalStock) <= 0) return false;
 
       // 1. Search query filter takes priority across ALL companies
       if (catalogSearchQuery.trim()) {

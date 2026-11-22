@@ -106,7 +106,8 @@ export function LoadRequisitionProductList({
       }}
     >
       {items.map((prod) => {
-        const isOutOfStock = prod.totalStock <= 0;
+        const availQty = prod.availableQty ?? prod.totalStock;
+        const isOutOfStock = availQty <= 0;
         const mult = prod.packagingUnit?.multiplier || 1;
         const isCartonItem = Boolean(prod.packagingUnit && mult > 1);
 
@@ -117,8 +118,8 @@ export function LoadRequisitionProductList({
         const currentPieces = lineItem?.pieces ?? (isCartonItem ? totalChosen % mult : totalChosen);
 
         // Stock breakdown in cartons
-        const availCartons = isCartonItem ? Math.floor(prod.totalStock / mult) : 0;
-        const availPieces = isCartonItem ? prod.totalStock % mult : prod.totalStock;
+        const availCartons = isCartonItem ? Math.floor(availQty / mult) : 0;
+        const availPieces = isCartonItem ? availQty % mult : availQty;
 
         return (
           <div
@@ -194,16 +195,22 @@ export function LoadRequisitionProductList({
                 {!isOutOfStock ? (
                   isCartonItem ? (
                     <>
-                      {availCartons} {prod.packagingUnit?.name} {availPieces > 0 ? `+ ${availPieces}ق` : ''} ({prod.totalStock}{t('delivery_reps.driver_new_load_requisition_view.s17', "ق)")}
+                      {availCartons} {prod.packagingUnit?.name} {availPieces > 0 ? `+ ${availPieces}ق` : ''} ({availQty}{t('delivery_reps.driver_new_load_requisition_view.s17', "ق)")}
                     </>
                   ) : (
-                    `متاح: ${prod.totalStock} ${prod.unit}`
+                    `متاح: ${availQty} ${prod.unit}`
                   )
                 ) : (
                   t('delivery_reps.driver_new_load_requisition_view.s18', "نافد من المخزن")
                 )}
               </span>
             </div>
+
+            {prod.pendingHolds && prod.pendingHolds.length > 0 && (
+              <div style={{ fontSize: '10.5px', color: '#92400e' }}>
+                {t('delivery_reps.driver_new_load_requisition_view.s19', "طلبات تحميل معلقة على نفس المخزون:")} {prod.pendingHolds.map((h) => `#${h.docNo} (${h.qty})`).join('، ')}
+              </div>
+            )}
 
             {/* Row 3: Action / Steppers */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '2px', borderTop: '1px solid #f1f5f9', paddingTop: '4px' }}>

@@ -482,7 +482,7 @@ export function DriverLoadRequisitionModal({
                       </div>
                     ) : searchResults.length > 0 ? (
                       searchResults.map((product) => {
-                        const hasStock = product.totalStock > 0;
+                        const hasStock = (product.availableQty ?? product.totalStock) > 0;
                         return (
                           <div
                             key={product.id}
@@ -557,7 +557,7 @@ export function DriverLoadRequisitionModal({
                                   color: hasStock ? '#15803d' : '#b91c1c',
                                 }}
                               >
-                                {hasStock ? `المتاح: ${product.totalStock} ${product.unit}` : t('delivery_reps.driver_load_requisition_modal.s13', "نفد الرصيد")}
+                                {hasStock ? `المتاح: ${product.availableQty ?? product.totalStock} ${product.unit}` : t('delivery_reps.driver_load_requisition_modal.s13', "نفد الرصيد")}
                               </span>
                               <span style={{ fontSize: '11.5px', color: '#170e5e', fontWeight: 800 }}>
                                 {product.retailPrice.toFixed(2)} <CurrencySymbol />

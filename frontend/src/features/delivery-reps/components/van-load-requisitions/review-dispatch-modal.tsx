@@ -707,10 +707,10 @@ export function ReviewDispatchModal(props: ReviewDispatchModalProps) {
                                     style={{
                                       fontSize: '11px',
                                       fontWeight: 800,
-                                      color: p.totalStock > 0 ? '#15803d' : '#dc2626',
+                                      color: (p.availableQty ?? p.totalStock) > 0 ? '#15803d' : '#dc2626',
                                     }}
                                   >
-                                    {t('delivery_reps.van_load_requisitions_admin_tab.s103', "متاح:")} {p.totalStock} {t('delivery_reps.van_load_requisitions_admin_tab.s104', "قطعة")}
+                                    {t('delivery_reps.van_load_requisitions_admin_tab.s103', "متاح:")} {p.availableQty ?? p.totalStock} {t('delivery_reps.van_load_requisitions_admin_tab.s104', "قطعة")}
                                   </span>
                                   <span style={{ fontSize: '11.5px', color: '#170e5e', fontWeight: 800 }}>
                                     {alreadyInReview ? t('delivery_reps.van_load_requisitions_admin_tab.s105', "+ زيادة كمية") : t('delivery_reps.van_load_requisitions_admin_tab.s106', "+ إضافة")}

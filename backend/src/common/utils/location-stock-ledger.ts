@@ -671,6 +671,31 @@ export function computeLocationAvailability(args: {
   };
 }
 
+/**
+ * INV-VAN-LOAD-AVAILABLE-QTY (F10): the ONE available quantity for a
+ * van load out of a location. applyStockDelta allows a negative
+ * location move only when BOTH legs pass — the location leg
+ * (availableAtLocation: location qty minus its reservations, plus
+ * sellable unassigned stock) AND the global leg (globalAvailable:
+ * stock_qty minus reserved_qty) — and reserveLocationStock enforces
+ * exactly the same two numbers before reserving. So the loadable
+ * quantity is the MINIMUM of the two, never either one alone. The
+ * load form, both trip-open pre-checks and the admin review list all
+ * read this function, so the three can never disagree again (trial:
+ * 19 pcs at exactly the on-hand qty failed at the gate while the
+ * form showed 19 — part of it was reserved). This function only
+ * combines the two legs; the legs themselves stay defined exactly
+ * once, in computeLocationAvailability.
+ */
+export function computeVanLoadAvailableQty(availability: {
+  availableAtLocation: number;
+  globalAvailable: number;
+}): number {
+  return roundStockQty(
+    Math.min(Number(availability.availableAtLocation || 0), Number(availability.globalAvailable || 0)),
+  );
+}
+
 export type LocationAvailability = {
   productId: number;
   locationId: number | null;

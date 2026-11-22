@@ -32,10 +32,36 @@ export type SellableBranch = {
 
 export type SellableLocation = { id: number; branchId: number | null };
 
-/** المخازن التي لا يُباع منها بحال: التالف وما هو في الطريق والمحجوز صحياً. */
-const NEVER_SELLABLE_TYPES = new Set(['damaged', 'in_transit', 'quarantine']);
+/** المخازن التي لا يُباع منها بحال: التالف وما هو في الطريق والمحجوز صحياً — ومخزن السيارة
+ * (van_stock): بضاعة محمّلة عهدة المندوب تُباع عبر البيع الميداني فقط وتُسوَّى عند إغلاق الرحلة،
+ * فلا يجوز لنقطة البيع (ولا للمتجر) أن تسحب منها. */
+const NEVER_SELLABLE_TYPES = new Set(['damaged', 'in_transit', 'quarantine', 'van_stock']);
 
 export const ALL_OPERATIONAL_LOCATIONS = 'all_operational_locations';
+
+/**
+ * F9 (trial problems 12 + 14): whether this branch's POS pool covers
+ * ALL operational locations. A wholesale_van tenant has no single
+ * shop counter — its stock lives in the main warehouse (and the
+ * other branch / internal warehouses) — while the branch row still
+ * says single_location (the provisioning default), so POS displayed
+ * only the branch default's net stock: 4 pieces on the trial item,
+ * then "نفد" once those 4 sold, while the main warehouse held 42
+ * (19 after the sale). The tenant's activity (session-resolved,
+ * never from the request) widens the pool; retail tenants keep
+ * exactly the branch setting. Van stock itself (location_type
+ * 'van_stock') stays OUT of the pool by design — it is the rep's
+ * loaded custody, sold only via field sales and reconciled at trip
+ * settlement; the eligibility filter below already excludes it, and
+ * this helper does not change that filter.
+ */
+export function posSellsFromAllOperationalLocations(
+  branch: SellableBranch | null | undefined,
+  activityType?: string | null,
+): boolean {
+  if (branch?.sales_stock_mode === ALL_OPERATIONAL_LOCATIONS) return true;
+  return activityType === 'wholesale_van';
+}
 
 /**
  * ترتيب المخازن التي يجوز لهذا الفرع السحب منها، **الأولى أولى**.

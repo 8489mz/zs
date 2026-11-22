@@ -4,7 +4,7 @@ import { releaseLocationStock } from '../../../../common/utils/location-stock-le
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { assertBusinessAccountingDate } from '../../../accounting/accounting-boundaries';
 import { currencyMoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
-import { ALL_OPERATIONAL_LOCATIONS, resolveBranchSellableLocations } from '../../../../common/engines/branch-sellable-locations.engine';
+import { ALL_OPERATIONAL_LOCATIONS, posSellsFromAllOperationalLocations, resolveBranchSellableLocations } from '../../../../common/engines/branch-sellable-locations.engine';
 import { assertProductsNot86ed } from '../restaurant-advanced-fnb.service';
 import type { ExchangeReturnContext } from '../../../returns/returns.service';
 import type { CreateSaleContext, CreateSaleDeps } from './create-sale-types';
@@ -243,13 +243,23 @@ export class LoadSaleContextService {
       // يرفضه الموقع على نفس الفرع ونفس المخزون.
       let eligibleLocations: Array<{ id: number | null; branchId: number | null }> =
         [{ id: normalized.locationId, branchId: normalized.branchId }];
-      if (normalized.source === 'pos' && branch?.sales_stock_mode === ALL_OPERATIONAL_LOCATIONS) {
+      if (normalized.source === 'pos' && posSellsFromAllOperationalLocations(branch, auth.activityType)) {
         const allLocs = await trx.selectFrom('stock_locations')
           .select(['id', 'location_type', 'branch_id'])
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .where('is_active', '=', true)
           .execute();
-        eligibleLocations = resolveBranchSellableLocations(branch, normalized.branchId, allLocs);
+        // F9: the engine itself gates on the branch mode, so a
+        // wholesale_van tenant hands it the EFFECTIVE mode (the
+        // storefront precedent: { ...branch, sales_stock_mode:
+        // effectiveMode }) — passing the raw single_location row
+        // would collapse the widened pool back to the default
+        // location, and display (46) and checkout (4) would disagree.
+        eligibleLocations = resolveBranchSellableLocations(
+          { ...branch, sales_stock_mode: ALL_OPERATIONAL_LOCATIONS },
+          normalized.branchId,
+          allLocs,
+        );
       }
 
       // SF-2 D-SF-11: one stock gate for storefront orders — the

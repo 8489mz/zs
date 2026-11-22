@@ -157,7 +157,7 @@ export function useRequisitionSubmit({
             pieces,
             sourceWarehouseId: item.sourceWarehouseId ? Number(item.sourceWarehouseId) : (res.sourceWarehouseId || 1),
             sourceWarehouseName: item.sourceWarehouseName || prod?.warehouseStocks?.[0]?.warehouseName || 'المستودع',
-            availableInWarehouse: prod?.totalStock || 0,
+            availableInWarehouse: prod?.availableQty ?? prod?.totalStock ?? 0,
             warehouseStocks: prod?.warehouseStocks || [],
             qty,
             searchQuery: item.productName || prod?.name,

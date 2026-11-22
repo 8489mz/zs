@@ -17,6 +17,7 @@ import { getTenantTimezone } from '../../../../common/utils/tenant-timezone.util
 import { computeInvoiceTotals } from '../../../../common/utils/invoice-totals';
 import { ensureUniqueFlowItems } from '../../../../common/utils/financial-integrity';
 import { applyStockDelta, previewConsumableStockQty } from '../../../../common/utils/location-stock-ledger';
+import { posSellsFromAllOperationalLocations } from '../../../../common/engines/branch-sellable-locations.engine';
 import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary';
 import { formatCreditLimitExceededMessage } from '../credit-limit-message';
 import type { SalesEditAndCancelDeps } from './sales-edit-and-cancel-types';
@@ -232,14 +233,13 @@ export class UpdateSaleService {
       }
 
       let eligibleLocations = [{ id: normalized.locationId, branchId: normalized.branchId }];
-      if (normalized.source === 'pos' && branch?.sales_stock_mode === 'all_operational_locations') {
+      if (normalized.source === 'pos' && posSellsFromAllOperationalLocations(branch, auth.activityType)) {
         const allLocs = await trx.selectFrom('stock_locations')
           .select(['id', 'location_type', 'branch_id'])
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .where('is_active', '=', true)
-          .where('location_type', 'not in', ['damaged', 'in_transit', 'quarantine'])
+          .where('location_type', 'not in', ['damaged', 'in_transit', 'quarantine', 'van_stock'])
           .execute();
-          
         const defaultLocId = branch.default_stock_location_id;
         
         const sortedLocs = allLocs.filter(l => {

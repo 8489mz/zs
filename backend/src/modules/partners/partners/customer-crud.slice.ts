@@ -4,6 +4,7 @@ import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { AppError } from '../../../common/errors/app-error';
 import { UpsertCustomerDto } from '../dto/upsert-customer.dto';
+import { validateAndNormalizePhone } from '../../../core/utils/phone-utils';
 import { extractCustomerVisitDays } from '../../delivery-reps/van-routes-schedule.util';
 import type { RawBuilder } from 'kysely';
 
@@ -58,6 +59,39 @@ export class CustomerCrudSlice {
   }
 
   /**
+   * F4 (trial problem 4): a POS "add customer" created a fake
+   * customer ("عميل وهمي للاختبار", 01000000000) because the phone
+   * was never required or checked. The phone is now REQUIRED and
+   * must pass the codebase's established validator,
+   * validateAndNormalizePhone (the same rule users.service.ts
+   * enforces with INVALID_PHONE); the stored value is the
+   * validator's normalized national number, so the existing
+   * duplicate detection (generatePhoneSearchVariants) keeps working.
+   * The format pattern alone accepts 01000000000, so a minimal
+   * placeholder guard refuses numbers whose subscriber digits
+   * (past the 3-digit trunk prefix) are all identical — the
+   * codebase already treats 01000000000 / 0000000000 as
+   * placeholders (migration 2040000000019, saas-admin.service.ts).
+   * Duplicates are NOT refused here: a phone already held by
+   * another customer still creates the customer and still returns
+   * phoneWarning (standing decision 2026-11-06: warn but ALLOW).
+   */
+  private validateCustomerPhone(raw: unknown): string {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) throw new AppError('Customer phone is required', 'CUSTOMER_PHONE_REQUIRED', 400);
+    const result = validateAndNormalizePhone(trimmed);
+    if (!result.isValid) {
+      throw new AppError(result.error || 'Invalid phone number', 'INVALID_PHONE', 400);
+    }
+    const digits = result.nationalNumber.replace(/\D/g, '');
+    const subscriber = digits.slice(3);
+    if (subscriber.length >= 4 && [...subscriber].every((d) => d === subscriber[0])) {
+      throw new AppError('Customer phone looks like a placeholder number, enter a real mobile number', 'CUSTOMER_PHONE_PLACEHOLDER', 400);
+    }
+    return result.nationalNumber;
+  }
+
+  /**
    * INV-VAN-PRICE-LIST-WIRING: resolves a requested price-list
    * assignment to a storable id. null/undefined (no assignment) pass
    * through as null. An unknown id, a foreign-tenant id, or a
@@ -89,7 +123,7 @@ export class CustomerCrudSlice {
     const name = String(payload.name || '').trim();
     if (!name) throw new AppError('Customer name is required', 'CUSTOMER_NAME_REQUIRED', 400);
     if (await this.customerNameExists(name, actor)) throw new AppError('Customer already exists', 'CUSTOMER_EXISTS', 400);
-    const phone = String(payload.phone || '').trim();
+    const phone = this.validateCustomerPhone(payload.phone);
     // INV-VAN-PRICE-LIST-WIRING: an unknown or foreign list id is
     // refused before anything is written; an inactive list id is
     // stored (assignment preserved for reactivation).
@@ -161,7 +195,7 @@ export class CustomerCrudSlice {
     const name = String(payload.name || '').trim();
     if (!name) throw new AppError('Customer name is required', 'CUSTOMER_NAME_REQUIRED', 400);
     if (await this.customerNameExists(name, actor, id)) throw new AppError('Customer already exists', 'CUSTOMER_EXISTS', 400);
-    const phone = String(payload.phone || '').trim();
+    const phone = this.validateCustomerPhone(payload.phone);
 
     const requestedBalance = Number(payload.balance ?? existing.balance ?? 0);
     if (Math.abs(Number(existing.balance || 0) - requestedBalance) > 0.0001) {

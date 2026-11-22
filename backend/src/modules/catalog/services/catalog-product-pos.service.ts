@@ -8,7 +8,7 @@ import { normalizeArabicSearch } from '../../../common/utils/arabic-search.util'
 import { buildPosCatalogVersion } from '../engines/pos-catalog-version.engine';
 import { normalizePgDateOnly } from '../../../common/utils/tenant-timezone.util';
 import { MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
-import { availableAcrossLocations } from '../../../common/engines/branch-sellable-locations.engine';
+import { availableAcrossLocations, posSellsFromAllOperationalLocations } from '../../../common/engines/branch-sellable-locations.engine';
 import { findPosProductsByBarcodeWithDb } from './pos-barcode-lookup.helper';
 import { ProductRow, ProductWriteExecutor, ProductOfferColumnCapabilities, ProductOfferReadRow, ProductUnitReadRow, PosProductLookupRow } from './catalog-product-types';
 
@@ -147,12 +147,12 @@ export class CatalogProductPosService {
     let eligibleLocationIds: number[] = scopedLocation ? [scopedLocation.id] : [];
     if (requestedBranchId > 0) {
       const branch = await this.db.selectFrom('branches').select(['default_stock_location_id', 'sales_stock_mode', 'allow_external_sales_stock']).where('id', '=', requestedBranchId).where(this.tenantPredicate(actor)).executeTakeFirst();
-      if (branch && branch.sales_stock_mode === 'all_operational_locations') {
+      if (branch && posSellsFromAllOperationalLocations(branch, actor.activityType)) {
         const allLocs = await this.db.selectFrom('stock_locations')
           .select(['id', 'location_type', 'branch_id'])
           .where(this.tenantPredicate(actor))
           .where('is_active', '=', true)
-          .where('location_type', 'not in', ['damaged', 'in_transit', 'quarantine'])
+          .where('location_type', 'not in', ['damaged', 'in_transit', 'quarantine', 'van_stock'])
           .execute();
 
         const defaultLocId = branch.default_stock_location_id;
