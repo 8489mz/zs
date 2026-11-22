@@ -246,6 +246,14 @@ export interface AppSettings {
   printNumberFormat?: 'arabic' | 'english' | string;
   printDualReceiptForOnlineDelivery?: boolean;
   posModuleEnabled?: boolean;
+  /**
+   * P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): computed by the backend
+   * (getSettings) — true when a super-admin granted the 'pos' override
+   * for this tenant. Never persisted; the settings save strips it.
+   * Declared here too (not only in domain-models/settings.ts) because
+   * @/types/domain re-exports THIS AppSettings, and the sidebar reads it.
+   */
+  posGrantedByOverride?: boolean;
   purchasesModuleEnabled?: boolean;
   inventoryModuleEnabled?: boolean;
   hrModuleEnabled?: boolean;
