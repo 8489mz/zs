@@ -484,7 +484,7 @@ async function main(): Promise<void> {
       'broker-expense insert supplies payment_date as the tenant day',
     );
 
-    const saas = readSource('../../src/modules/saas-admin/saas-admin.service.ts');
+    const saas = readSource('../../src/modules/saas-admin/saas-admin/saas-admin-subscriptions.ts');
     assert.ok(
       saas.includes('checkClientBusinessDay(body.date, tenantTz,'),
       'recordPayment bounds the supplied date through the P6 helper',
