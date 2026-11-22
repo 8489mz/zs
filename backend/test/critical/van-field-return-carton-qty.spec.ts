@@ -341,8 +341,13 @@ async function main(): Promise<void> {
     assert.ok(eligibleSource.includes('unitMultiplier'), 'eligible-sales items must carry the multiplier');
     const approveSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/approve-field-return.slice.ts'), 'utf8');
     assert.ok(approveSource.includes('unit_multiplier'), 'approval must read the sale-line multiplier');
-    const apiSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/api/van-sales.api.ts'), 'utf8');
-    assert.ok(apiSource.includes('unitMultiplier'), 'CustomerEligibleSaleItem must carry unitMultiplier');
+    const apiSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/api/van-sales/van-sales-types-b.ts'), 'utf8');
+    const itemStart = apiSource.indexOf('export interface CustomerEligibleSaleItem {');
+    const itemEnd = apiSource.indexOf('}', itemStart);
+    assert.ok(itemStart > 0 && itemEnd > itemStart, 'CustomerEligibleSaleItem must exist in van-sales-types-b');
+    assert.ok(apiSource.slice(itemStart, itemEnd).includes('unitMultiplier'), 'CustomerEligibleSaleItem must carry unitMultiplier');
+    const barrelSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/api/van-sales.api.ts'), 'utf8');
+    assert.ok(barrelSource.includes('CustomerEligibleSaleItem'), 'the van-sales barrel must still re-export CustomerEligibleSaleItem');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-VAN-FIELD-RETURN-CARTON-QTY').length - 1, 1, 'the invariant entry must exist exactly once');
   }

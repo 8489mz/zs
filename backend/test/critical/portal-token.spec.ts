@@ -95,7 +95,7 @@ function run(): void {
   // 3. الديسكتوب/الأوفلاين يعمل بلا سر مضبوط: سر التثبيت يُولَّد عند أول تشغيل
   //    ويُحفَظ محلياً — ولا يكون أبداً السر الثابت العام القديم.
   withTempSecretFile((secretPath) => {
-    withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, ZS_INSTALL_SECRET_PATH: secretPath }, () => {
+    withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, SESSION_CSRF_SECRET: undefined, ZS_INSTALL_SECRET_PATH: secretPath }, () => {
       const resolved = resolvePortalTokenSecret();
       assert.notEqual(resolved, OLD_DESKTOP_LITERAL, 'the resolved desktop secret must never be the retired public literal');
       const token = signPortalToken({ employeeId: 7, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
@@ -109,7 +109,7 @@ function run(): void {
 
   // 3-b. بيئة التطوير والبايلوت المحلي (LOCAL_PILOT) تعمل أيضاً كبيئة محلية بلا إيقاف البوابات.
   withTempSecretFile((secretPath) => {
-    withEnv({ APP_MODE: 'LOCAL_PILOT', SESSION_SECRET: undefined, ZS_INSTALL_SECRET_PATH: secretPath }, () => {
+    withEnv({ APP_MODE: 'LOCAL_PILOT', SESSION_SECRET: undefined, SESSION_CSRF_SECRET: undefined, ZS_INSTALL_SECRET_PATH: secretPath }, () => {
       assert.notEqual(resolvePortalTokenSecret(), OLD_DESKTOP_LITERAL);
       const token = signPortalToken({ employeeId: 9, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
       const payload = verifyPortalToken<any>(`Bearer ${token}`, ERRORS);
@@ -165,10 +165,10 @@ function run(): void {
     const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'zs-install-secret-b-'));
     try {
       let token = '';
-      withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, ZS_INSTALL_SECRET_PATH: path.join(dirA, 'install-secret') }, () => {
+      withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, SESSION_CSRF_SECRET: undefined, ZS_INSTALL_SECRET_PATH: path.join(dirA, 'install-secret') }, () => {
         token = signPortalToken({ employeeId: 7, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
       });
-      withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, ZS_INSTALL_SECRET_PATH: path.join(dirB, 'install-secret') }, () => {
+      withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, SESSION_CSRF_SECRET: undefined, ZS_INSTALL_SECRET_PATH: path.join(dirB, 'install-secret') }, () => {
         expectAppError('BAD_SIGNATURE', () => verifyPortalToken(token, ERRORS));
       });
     } finally {

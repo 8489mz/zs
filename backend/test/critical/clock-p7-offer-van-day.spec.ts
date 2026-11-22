@@ -206,7 +206,7 @@ async function main(): Promise<void> {
   assert.ok(page.includes('visitId?: number'), 'activeVisit carries the server visit id');
   assert.ok(page.includes('visitId: Number(res.visitId)'), 'the check-in response visitId is stored');
   assert.ok(page.includes('vanSalesApi.checkOutVisit(visitId)'), 'end-visit calls checkOutVisit with the stored id');
-  const api = readFileSync(resolve(__dirname, '../../../frontend/src/features/delivery-reps/api/van-sales.api.ts'), 'utf8');
+  const api = readFileSync(resolve(__dirname, '../../../frontend/src/features/delivery-reps/api/van-sales/van-sales-visits-ledger.ts'), 'utf8');
   const apiStart = api.indexOf('checkOutVisit: async');
   const apiEnd = api.indexOf('recordTradeSurvey', apiStart);
   assert.ok(apiStart > 0 && apiEnd > apiStart);
