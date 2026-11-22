@@ -134,7 +134,7 @@ describe('package-3 conversions in place', () => {
     expect(bank).toContain('todayLocalDateKey(parsed)');
     expect(bank).toContain('todayLocalDateKey()');
     for (const rel of [
-      'features/contracting/components/ScheduleGeneratorModal.tsx',
+      'features/contracting/components/schedule-generator/schedule-generator-data.ts',
       'features/contracting/components/TaskDelayModal.tsx',
     ]) {
       const text = fs.readFileSync(path.join(FRONTEND_SRC, rel), 'utf8');
