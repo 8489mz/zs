@@ -8,7 +8,6 @@
     "src/modules/ai-copilot/ai-copilot.service.ts": 1510,
     "src/modules/contracting/contracting.controller.ts": 1363,
     "src/modules/hr/employee-portal.service.ts": 1010,
-    "src/modules/saas-admin/saas-admin.service.ts": 1785,
     "src/modules/sales/services/pos-terminal.service.ts": 1412,
     "src/modules/sales/services/sales-orders.service.ts": 1204,
     "src/modules/settings/services/offline-releases.service.ts": 1133,

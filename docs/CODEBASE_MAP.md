@@ -319,13 +319,13 @@ canonical money engines.
 - Engines: `engines/exchange-store-credit.engine.ts`, `engines/refund-tender.engine.ts`
 - Subdirectories: `dto`, `engines`, `helpers`
 
-### `backend/src/modules/saas-admin/` (11 files)
+### `backend/src/modules/saas-admin/` (19 files)
 
 - Module: `saas-admin.module.ts`
 - Controllers: `developer.controller.ts`, `saas-admin.controller.ts`, `saas-diagnostics.controller.ts`
 - Services: `saas-admin.service.ts`, `saas-diagnostics.service.ts`, `trial-tenant-provisioning.service.ts`
 - Engines: (none)
-- Subdirectories: `dto`
+- Subdirectories: `dto`, `saas-admin`
 
 ### `backend/src/modules/sales/` (55 files)
 
