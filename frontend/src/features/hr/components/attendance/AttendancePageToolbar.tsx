@@ -1,4 +1,3 @@
-import React from 'react';
 import { Button } from '@/shared/ui/button';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import {
