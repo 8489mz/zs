@@ -258,6 +258,7 @@ export const hrApi = {
     http<any>('/api/hr/biometric/preview-log', {
       method: 'POST',
       body: JSON.stringify(payload),
+      timeoutMs: CSV_IMPORT_TIMEOUT_MS,
     }),
   importBiometricLog: (payload: {
     rawText: string;

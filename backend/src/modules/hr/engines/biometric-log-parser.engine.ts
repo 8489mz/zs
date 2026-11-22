@@ -184,8 +184,10 @@ function mapPunchDirection(code: string): BiometricPunchDirection {
     trimmed === 'check_in' ||
     trimmed === 'checkin' ||
     trimmed === 'check-in' ||
-    trimmed === 'حضور' ||
-    trimmed === 'دخول'
+    trimmed.includes('check-in') ||
+    trimmed.includes('check_in') ||
+    trimmed.includes('حضور') ||
+    trimmed.includes('دخول')
   ) {
     return 'in';
   }
@@ -196,8 +198,10 @@ function mapPunchDirection(code: string): BiometricPunchDirection {
     trimmed === 'check_out' ||
     trimmed === 'checkout' ||
     trimmed === 'check-out' ||
-    trimmed === 'انصراف' ||
-    trimmed === 'خروج'
+    trimmed.includes('check-out') ||
+    trimmed.includes('check_out') ||
+    trimmed.includes('انصراف') ||
+    trimmed.includes('خروج')
   ) {
     return 'out';
   }

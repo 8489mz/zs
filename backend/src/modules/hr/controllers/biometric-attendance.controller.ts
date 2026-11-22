@@ -127,9 +127,16 @@ export class BiometricAdmsWebhookController {
       rawText = String((body as Record<string, unknown>).rawText || '');
     } else if (typeof req?.rawBody === 'string' || Buffer.isBuffer(req?.rawBody)) {
       rawText = Buffer.isBuffer(req.rawBody) ? req.rawBody.toString('utf8') : req.rawBody;
-    } else if (body && typeof body === 'object') {
+    } else if (body && typeof body === 'object' && Object.keys(body as Record<string, unknown>).length > 0) {
       // Sometimes express urlencoded parser turns raw lines into keys of body object
       rawText = Object.keys(body as Record<string, unknown>).join('\n');
+    } else if (req && req.readable) {
+      // Physical ZKTeco ADMS terminals send Content-Type: text/plain which Express json() skips
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+      }
+      rawText = Buffer.concat(chunks).toString('utf8');
     }
 
     return this.biometricService.handleAdmsPush(sn || '', table || 'ATTLOG', rawText);

@@ -171,6 +171,25 @@ import {
   assert.equal(customOverrideSummary.dailyRecords[0].pin, '4645');
   assert.equal(customOverrideSummary.dailyRecords[0].checkInTime, '09:00:00');
   assert.equal(customOverrideSummary.dailyRecords[0].checkOutTime, '17:00:00');
+
+  // Case D: Converted attendance_logs.csv format (Arabic+English headers & combined Date Time)
+  const convertedCsv = [
+    'كود الموظف (User ID),التاريخ والوقت (Date Time),طريقة التحقق,الحالة,الرمز',
+    '4645,2020-07-26 10:26:49,بصمة إصبع (Fingerprint),تسجيل حضور (Check-In),1',
+    '4645,2020-07-26 10:26:55,بصمة إصبع (Fingerprint),تسجيل حضور (Check-In),1',
+    '4645,2020-07-26 17:40:10,بصمة إصبع (Fingerprint),تسجيل انصراف (Check-Out),1',
+  ].join('\n');
+
+  const summaryD = parseAndAggregateBiometricLog(convertedCsv);
+  assert.equal(summaryD.appliedColumnMapping.hasHeaderRow, true);
+  assert.equal(summaryD.appliedColumnMapping.pinColIndex, 0);
+  assert.equal(summaryD.appliedColumnMapping.dateTimeColIndex, 1);
+  assert.equal(summaryD.dailyRecords.length, 1);
+  assert.equal(summaryD.dailyRecords[0].pin, '4645');
+  assert.equal(summaryD.dailyRecords[0].workDate, '2020-07-26');
+  assert.equal(summaryD.dailyRecords[0].checkInTime, '10:26:49');
+  assert.equal(summaryD.dailyRecords[0].checkOutTime, '17:40:10');
+  assert.equal(summaryD.totalDeduplicatedTaps, 1);
 }
 
 console.log('biometric-log-parser.engine.spec: all cases passed');
