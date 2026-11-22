@@ -25,6 +25,10 @@ export interface VanFieldSalesDeps {
   resolveSystemAuthContext: (...args: any[]) => any;
   sortItemsByProductId: <T extends { productId: number }>(items: T[]) => T[];
   verifySupervisorPin: (...args: any[]) => any;
+  // F3: the route gate (rep -> customer history, three-way: own /
+  // other-rep / no-history). Bound from the facade like
+  // verifySupervisorPin above.
+  assertRepRouteForSale: (tenantId: string, repId: number, customerId: number) => Promise<void>;
 }
 
 @Injectable()
@@ -40,6 +44,7 @@ export class VanFieldSalesService {
   private readonly resolveSystemAuthContext: (...args: any[]) => any;
   private readonly sortItemsByProductId: <T extends { productId: number }>(items: T[]) => T[];
   private readonly verifySupervisorPin: (...args: any[]) => any;
+  private readonly assertRepRouteForSale: (tenantId: string, repId: number, customerId: number) => Promise<void>;
 
   constructor(deps: VanFieldSalesDeps) {
     this.db = deps.db;
@@ -53,6 +58,7 @@ export class VanFieldSalesService {
     this.resolveSystemAuthContext = deps.resolveSystemAuthContext;
     this.sortItemsByProductId = deps.sortItemsByProductId;
     this.verifySupervisorPin = deps.verifySupervisorPin;
+    this.assertRepRouteForSale = deps.assertRepRouteForSale;
   }
 
   private get anyDb(): any {
@@ -74,6 +80,7 @@ export class VanFieldSalesService {
         resolveSystemAuthContext: this.resolveSystemAuthContext,
         sortItemsByProductId: this.sortItemsByProductId,
         verifySupervisorPin: this.verifySupervisorPin,
+        assertRepRouteForSale: this.assertRepRouteForSale,
       });
     }
     return this.executeFieldSaleInternalInstance;

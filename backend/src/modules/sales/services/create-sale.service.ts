@@ -38,6 +38,7 @@ import { AllocateTendersAndDeliveryService } from './create-sale/allocate-tender
 import { InsertSaleAndStockService } from './create-sale/insert-sale-and-stock';
 import { FinalizeSaleService } from './create-sale/finalize-sale';
 import { resolvePosTripAttribution, type PosTripAttribution } from './create-sale/resolve-pos-trip-attribution';
+import { assertPosRepRouteForSale } from './create-sale/assert-pos-rep-route';
 
 export class CreateSaleService {
   private readonly db: CreateSaleDeps['db'];
@@ -223,6 +224,27 @@ export class CreateSaleService {
       });
     } catch {
       vanTripAttribution = null;
+    }
+
+    // F3 (trial problem 3): the route gate for a rep sale. The
+    // attribution above resolved the seller's rep + active trip; a
+    // rep sale to a customer served by a DIFFERENT rep is refused
+    // here, BEFORE the transaction opens, so a refusal writes
+    // nothing. A customer with no history anywhere posts (the first
+    // sale creates the association) and the rep's own served customer
+    // posts; a supervisor PIN (managerPin, the existing override
+    // path) approves a genuine off-route sale. Ordinary retail
+    // counter sales — no attribution, or no customer on the invoice —
+    // never reach the gate.
+    if (vanTripAttribution && Number(normalized.customerId) > 0) {
+      await assertPosRepRouteForSale(this.db, {
+        tenantId: scope.tenantId,
+        repId: vanTripAttribution.repId,
+        customerId: Number(normalized.customerId),
+        managerPin: normalized.managerPin,
+        auth,
+        authz: this.authz,
+      });
     }
 
     const txStartedAt = Date.now();

@@ -369,7 +369,16 @@ export function useVisibleNavigationItems({
 
         // Enterprise Sales gating (CRM, Sales Orders, Price Lists, Quotations):
         if (item.key === 'crm' && !isMaritimeVertical && !isContractingVertical && !isImportVertical && !isManufacturingVertical && !isServicesVertical && (!isEnterpriseCommerceActive || settings?.crmModuleEnabled !== true)) return false;
-        if ((item.key === 'sales-orders' || item.key === 'price-lists' || item.key === 'quotations') && !isMaritimeVertical && !isContractingVertical && !isManufacturingVertical && !isImportVertical && !isWarehousingVertical && !isEnterpriseCommerceActive) return false;
+        if ((item.key === 'sales-orders' || item.key === 'quotations') && !isMaritimeVertical && !isContractingVertical && !isManufacturingVertical && !isImportVertical && !isWarehousingVertical && !isEnterpriseCommerceActive) return false;
+        // INV-VAN-PRICE-LIST-WIRING (F8): price lists are a wholesale/
+        // van core need (a named list per customer drives the field
+        // price), not an enterprise extra — the trial on test10k
+        // found "no price list exists anywhere" only because this
+        // gate hid the sidebar entry for wholesale_van tenants
+        // (the route itself is 'catalog'-gated and reachable, and
+        // the customer form already offers the assignment). Van
+        // tenants keep the gate off sales-orders/quotations above.
+        if (item.key === 'price-lists' && !isMaritimeVertical && !isContractingVertical && !isManufacturingVertical && !isImportVertical && !isWarehousingVertical && !isWholesaleVanVertical && !isEnterpriseCommerceActive) return false;
 
         // Purchases gating:
         if ((item.key === 'purchases-orders' || item.key === 'purchases-rfqs' || item.key === 'purchases-reorder') && !isContractingVertical && !isMaritimeVertical && !isManufacturingVertical && !isImportVertical && !isWarehousingVertical && (!isEnterpriseCommerceActive || settings?.purchasesModuleEnabled === false || (!hasFeature('purchases') && settings?.purchasesModuleEnabled !== true))) return false;

@@ -285,6 +285,7 @@ export class VanSalesService {
         resolveSystemAuthContext: this.resolveSystemAuthContext.bind(this),
         sortItemsByProductId: this.sortItemsByProductId.bind(this),
         verifySupervisorPin: this.verifySupervisorPin.bind(this),
+        assertRepRouteForSale: this.assertRepRouteForSale.bind(this),
       });
     }
     return this.fieldSales;
@@ -569,6 +570,14 @@ export class VanSalesService {
 
   private async assertRepServedCustomer(tenantId: string, repId: number, customerId: number): Promise<void> {
     return this.fieldCollection.assertRepServedCustomer(tenantId, repId, customerId);
+  }
+
+  private async listCustomerServingRepIds(tenantId: string, customerId: number): Promise<Set<number>> {
+    return this.fieldCollection.listCustomerServingRepIds(tenantId, customerId);
+  }
+
+  private async assertRepRouteForSale(tenantId: string, repId: number, customerId: number): Promise<void> {
+    return this.fieldCollection.assertRepRouteForSale(tenantId, repId, customerId);
   }
 
   async listTripDamagedSwaps(tenantId: string, tripId: number, repId?: number) {

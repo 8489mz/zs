@@ -296,6 +296,9 @@
     "test/critical/pos-collection-balance-cap.spec.ts",
     "test/critical/shift-close-password-identity.spec.ts",
     "test/critical/final-issue-paired-movement.spec.ts",
-    "test/critical/pos-sale-trip-attribution.spec.ts"
+    "test/critical/pos-sale-trip-attribution.spec.ts",
+    "test/critical/pos-collection-trip-attribution.spec.ts",
+    "test/critical/van-route-sale-gate.spec.ts",
+    "test/critical/pos-cash-discount.spec.ts"
   ]
 }

@@ -23,6 +23,7 @@ import { IdempotencyService } from '../../../core/idempotency/idempotency.servic
 import { assertCustomerPaymentJobOwnership } from '../helpers/customer-payment-job-ownership';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { resolvePosTripAttribution, type PosTripAttribution } from '../../sales/services/create-sale/resolve-pos-trip-attribution';
 
 export interface PurchasesWriteCustomerPaymentsDeps {
   db: Kysely<Database>;
@@ -85,6 +86,24 @@ export class PurchasesWriteCustomerPaymentsService {
     }
     try {
     assertNonCashTransferReference(payload.paymentChannel, payload.transferReference);
+    // F7c (POS-to-trip attribution for collections, trial problem 9):
+    // resolve the acting rep + active trip BEFORE the transaction
+    // opens, reusing the F7 resolver (one attribution, two POS
+    // paths: sales + collections). A lookup that fails inside the
+    // transaction would abort the whole receipt (25P02), so any
+    // failure here leaves the payment unattributed instead of
+    // unposted. The DTO carries no explicit rep, so the link is
+    // always the acting user's phone/username rep row.
+    let vanTripAttribution: PosTripAttribution | null = null;
+    try {
+      vanTripAttribution = await resolvePosTripAttribution(this.db, {
+        tenantId: scope.tenantId,
+        auth,
+        explicitRepId: null,
+      });
+    } catch {
+      vanTripAttribution = null;
+    }
     const paymentResult = await this.tx.runInTransaction(this.db, async (trx) => {
       const customer = await trx
         .selectFrom('customers')
@@ -191,6 +210,29 @@ export class PurchasesWriteCustomerPaymentsService {
         );
       }
 
+      // F7c: the pre-transaction candidate is re-checked inside
+      // this transaction — the trip row is locked and only a
+      // still-OPEN trip accepts the stamp and its counters (the same
+      // predicate lockOpenTripRow uses: any status except 'settled').
+      // A trip settled between resolution and insert receives
+      // neither; the payment still posts. The gate above already
+      // ran, so a refused collection stamps and moves nothing.
+      let vanTripId: number | null = null;
+      let attributedRepId: number | null = null;
+      if (vanTripAttribution) {
+        const tripRow = await trx
+          .selectFrom('van_sales_trips')
+          .select(['id', 'status'])
+          .where('id', '=', vanTripAttribution.tripId)
+          .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+          .forUpdate()
+          .executeTakeFirst();
+        if (tripRow && String(tripRow.status || '') !== 'settled') {
+          vanTripId = vanTripAttribution.tripId;
+          attributedRepId = vanTripAttribution.repId;
+        }
+      }
+
       const insert = await trx
         .insertInto('customer_payments')
         .values({
@@ -203,6 +245,8 @@ export class PurchasesWriteCustomerPaymentsService {
           branch_id: branchId,
           location_id: locationId,
           job_id: targetJobId || null,
+          van_trip_id: vanTripId,
+          rep_id: attributedRepId,
           created_by: auth.userId,
           tenant_id: scope.tenantId,
           account_id: scope.accountId,
@@ -211,6 +255,45 @@ export class PurchasesWriteCustomerPaymentsService {
         .executeTakeFirstOrThrow();
 
       const paymentId = Number(insert.id);
+      // F7c: the trip counter moves EXACTLY ONCE, in this same
+      // transaction, by channel — mirroring the field-collection
+      // slice (record-field-collection.slice.ts), the only other
+      // writer of a customer_payments row's trip counters. Cash
+      // sits with the rep, so cash_collected += amount; instapay
+      // and bank are electronic (the stored 'bank' value IS the
+      // field path's bank_transfer — resolveFieldCollectionChannel),
+      // so total_instapay_collections += amount, feeding
+      // settle-trip's expectedBankTransfers; card / wallet money
+      // never sits with the rep, so no counter moves — the same
+      // zero leg tripSaleContribution gives a card sale. The row
+      // is stamped in all three cases. No other path moves a POS
+      // collection's counters (the field path writes its own rows;
+      // settlement only reads the counters), so this is the single
+      // move; a refused collection never reaches here.
+      if (vanTripId) {
+        const channel = String(payload.paymentChannel || 'cash').trim().toLowerCase();
+        if (channel === 'cash') {
+          await trx
+            .updateTable('van_sales_trips')
+            .set({
+              cash_collected: sql`cash_collected + ${amount}`,
+              updated_at: sql`NOW()`,
+            })
+            .where('id', '=', vanTripId)
+            .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+            .execute();
+        } else if (channel === 'instapay' || channel === 'bank') {
+          await trx
+            .updateTable('van_sales_trips')
+            .set({
+              total_instapay_collections: sql`total_instapay_collections + ${amount}`,
+              updated_at: sql`NOW()`,
+            })
+            .where('id', '=', vanTripId)
+            .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+            .execute();
+        }
+      }
       // The receipt number is generated here, before the ledger /
       // treasury / journal writes, so it can be part of every
       // narration (problem 28). The value is unchanged: it derives

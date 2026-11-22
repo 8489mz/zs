@@ -1,6 +1,6 @@
 import { AppError } from '../../../../common/errors/app-error';
 import { computeInvoiceTotals } from '../../../../common/utils/invoice-totals';
-import { getVanRepDiscountCapPercent } from '../../../delivery-reps/rep-target/rep-settings.slice';
+import { getCashDiscountPercent, getVanRepDiscountCapPercent } from '../../../delivery-reps/rep-target/rep-settings.slice';
 import { allocateInvoiceDiscount } from '../../engines/invoice-discount.engine';
 import { resolveSaleServiceCharge } from '../../engines/sale-service-charge.engine';
 import { resolveSaleTaxRate } from '../../engines/sale-tax-rate.engine';
@@ -169,7 +169,7 @@ export class ComputeTotalsAndGatesService {
       // closed on anything finer than book digits. The shared totals
       // util is untouched; postSale re-rounds these same book-digits
       // values, so the journal legs are unchanged.
-      const { taxAmount, total } = roundSaleInvoiceTotals(
+      let { taxAmount, total } = roundSaleInvoiceTotals(
         computeInvoiceTotals(subtotal, effectiveDiscount, normalized.taxRate, normalized.pricesIncludeTax, normalized.deliveryFee, normalized.serviceCharge, Number((normalized as any).tipAmount || 0)),
         moneyDigits,
       );
@@ -194,7 +194,7 @@ export class ComputeTotalsAndGatesService {
           );
         }
       }
-      const { taxAmount: itemOnlyTaxAmount } = roundSaleInvoiceTotals(
+      let { taxAmount: itemOnlyTaxAmount } = roundSaleInvoiceTotals(
         computeInvoiceTotals(subtotal, effectiveDiscount, normalized.taxRate, normalized.pricesIncludeTax, 0, 0, 0),
         moneyDigits,
       );
@@ -230,6 +230,57 @@ export class ComputeTotalsAndGatesService {
         ? await this.authz.authorizeDiscountOverride(normalized.managerPin, auth, trx)
         : null;
 
+      // INV-VAN-PRICE-LIST-WIRING (F8): the SYSTEM cash discount in
+      // POS — the portal path (execute-field-sale-internal) computes
+      // it server-side from the tenant cashDiscountPercent setting
+      // and POS never did, so an immediate-cash sale posted the full
+      // price while the same sale in the field got the discount.
+      // Immediate cash only: paymentType 'cash' with every declared
+      // tender leg on the cash channel (no legs = the tender
+      // engine's cash fallback) — card, wallet, instapay and mixed
+      // tenders never see it, exactly like the portal's
+      // card/instapay/split branches — and never a delivery: the POS
+      // COD model treats any cash-paid delivery as cash out for
+      // collection, not cash in hand at posting. Applied AFTER the
+      // rep-cap check above (a rep at the 5% cap still posts with the
+      // cash discount, no PIN — the portal's rule), after the
+      // expected-total check (the frontend displays the pre-discount
+      // total, so the check compares against that) and after the
+      // line allocation + floor check (the portal never allocates
+      // the system discount to lines). The base is the net
+      // (subtotal − invoice discount), the portal's totalSale base,
+      // and — like the portal — the amount joins effectiveDiscount
+      // so the stored discount and the tax base both carry it, while
+      // systemCashDiscountAmount is also stored distinctly on the
+      // sale for the invoice to show it separately.
+      let systemCashDiscountAmount = 0;
+      const declaredLegs = normalized.payments || [];
+      const fallbackChannel = (['card', 'wallet', 'instapay'].includes(normalized.paymentChannel) ? normalized.paymentChannel : 'cash');
+      const isImmediateCashSale = normalized.paymentType === 'cash'
+        && String(normalized.orderType || '').trim() !== 'delivery'
+        && (declaredLegs.length === 0 ? fallbackChannel === 'cash' : declaredLegs.every((entry) => entry.paymentChannel === 'cash'));
+      if (isImmediateCashSale) {
+        const cashDiscountPercent = await getCashDiscountPercent(trx, scope.tenantId);
+        const cashDiscountBase = roundSaleResidual(subtotal - effectiveDiscount, moneyDigits);
+        if (cashDiscountPercent > 0 && cashDiscountBase > 0) {
+          const computed = roundSaleResidual(cashDiscountBase * (cashDiscountPercent / 100), moneyDigits);
+          if (computed > 0 && computed < cashDiscountBase) {
+            systemCashDiscountAmount = computed;
+            effectiveDiscount = roundSaleResidual(effectiveDiscount + systemCashDiscountAmount, moneyDigits);
+            const recomputed = roundSaleInvoiceTotals(
+              computeInvoiceTotals(subtotal, effectiveDiscount, normalized.taxRate, normalized.pricesIncludeTax, normalized.deliveryFee, normalized.serviceCharge, Number((normalized as any).tipAmount || 0)),
+              moneyDigits,
+            );
+            taxAmount = recomputed.taxAmount;
+            total = recomputed.total;
+            itemOnlyTaxAmount = roundSaleInvoiceTotals(
+              computeInvoiceTotals(subtotal, effectiveDiscount, normalized.taxRate, normalized.pricesIncludeTax, 0, 0, 0),
+              moneyDigits,
+            ).taxAmount;
+          }
+        }
+      }
+
       if (exchange) {
         const settlement = await this.returnsService.settleExchangeReturn(trx, exchange, total,
           payload.exchangeRefundMethod || 'cash', auth, normalized.managerPin || payload.managerPin);
@@ -259,5 +310,6 @@ export class ComputeTotalsAndGatesService {
     ctx.isAdminSeller = isAdminSeller;
     ctx.floorApproval = floorApproval;
     ctx.collectibleTotal = collectibleTotal;
+    ctx.systemCashDiscountAmount = systemCashDiscountAmount;
   }
 }

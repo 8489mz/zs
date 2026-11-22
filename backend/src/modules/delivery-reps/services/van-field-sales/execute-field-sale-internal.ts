@@ -4,6 +4,7 @@ import { AppError } from '../../../../common/errors/app-error';
 import { assertBusinessAccountingDate } from '../../../accounting/accounting-boundaries';
 import { evaluateCreditLimitCheck, evaluateFieldCardPayment } from '../../van-trip-reconciliation.engine';
 import { resolveVanMoneyAuditActor } from '../van-common.util';
+import { assertRouteGate } from '../van-collections-and-swaps/rep-route-gate';
 import {
   extractCoordinatesFromCustomerLocation,
   evaluateGeofenceCompliance,
@@ -60,6 +61,7 @@ export class ExecuteFieldSaleInternalSlice {
     return this.db as any;
   }
 
+
   public async executeFieldSaleInternal(
     repId: number,
     tenantId: string,
@@ -67,9 +69,8 @@ export class ExecuteFieldSaleInternalSlice {
     payload: ExecuteFieldSaleInternalPayload,
   ) {
 
-    // INV-VAN-OFFLINE-TIMESTAMPS: the gate runs first, before any
-    // read — a tampered or stale offline stamp fails fast and writes
-    // nothing.
+    // INV-VAN-OFFLINE-TIMESTAMPS: the gate runs first, before any read — a tampered
+    // or stale offline stamp fails fast and writes nothing.
     const offlineCreatedAt = validateVanOfflineCreatedAt(payload.offlineCreatedAt);
     const trip = await this.anyDb
       .selectFrom('van_sales_trips as vt')
@@ -89,9 +90,8 @@ export class ExecuteFieldSaleInternalSlice {
 
     let resolvedCustomerId: number | null = payload.customerId ? Number(payload.customerId) : null;
     let customerName = payload.customerName || 'عميل نقدي ميداني';
-    // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: the customer's type drives
-    // the price branch below, so it is loaded BEFORE the item loop
-    // (the in-transaction customer read is after the loop — too late).
+    // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: the customer's type drives the price branch
+    // below, so it is loaded BEFORE the item loop (the in-transaction customer read is after the loop — too late).
     let customerType: string | null = null;
 
     const isCreditOrSplit = payload.paymentMethod === 'credit' || payload.paymentMethod === 'split';
@@ -112,6 +112,7 @@ export class ExecuteFieldSaleInternalSlice {
         resolvedCustomerId = Number(existing.id);
         customerName = existing.name;
         customerType = (existing as any).customer_type || null;
+        await assertRouteGate(this.anyDb, repId, tenantId, accountId, resolvedCustomerId, this.verifySupervisorPin, payload.supervisorOverridePin);
       } else {
         isNewCustomer = true;
         customerName = payload.customerName.trim();
@@ -127,6 +128,8 @@ export class ExecuteFieldSaleInternalSlice {
       customerName = cust.name;
       customerType = (cust as any).customer_type || null;
 
+      // F3: the route gate runs BEFORE the metadata link below — a refused off-route sale must not record this rep against the customer it was refused for.
+      await assertRouteGate(this.anyDb, repId, tenantId, accountId, resolvedCustomerId, this.verifySupervisorPin, payload.supervisorOverridePin);
       // Ensure shared customer retains multi-rep link in assigned_rep_ids without overwriting primary rep
       let metaObj: any = {};
       if (typeof cust.metadata === 'string') {
@@ -154,12 +157,10 @@ export class ExecuteFieldSaleInternalSlice {
     let totalSale = 0;
     let subtotalSale = 0;
     let discountSale = 0;
-    // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the rep-granted
-    // discount accumulated over the lines (explicit line discounts +
-    // lowered-price deltas below the authorized price), and the
-    // authorized pre-discount gross it is measured against. Offers
-    // never enter repLineDiscountTotal: they are system discounts,
-    // measured into systemAuthorizedPrice before this.
+    // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the rep-granted discount accumulated over
+    // the lines (explicit line discounts + lowered-price deltas below the authorized price),
+    // and the authorized pre-discount gross it is measured against. Offers never enter
+    // repLineDiscountTotal: they are system discounts, measured into systemAuthorizedPrice before this.
     let repLineDiscountTotal = 0;
     let capBaseTotal = 0;
     // INV-VAN-PRICE-LIST-WIRING: the SYSTEM cash discount for this
@@ -191,10 +192,9 @@ export class ExecuteFieldSaleInternalSlice {
     // transaction).
     const discountCapPercent = await getVanRepDiscountCapPercent(this.anyDb, tenantId);
 
-    // INV-VAN-PRICE-LIST-WIRING: the tenant cash-discount % (default
-    // 0 = off), read on the pool handle before the transaction opens,
-    // next to the rep cap — same hoist reason (a settings read must
-    // never run inside the open transaction).
+    // INV-VAN-PRICE-LIST-WIRING: the tenant cash-discount % (default 0 = off), read on the
+    // pool handle before the transaction opens, next to the rep cap — same hoist reason (a settings
+    // read must never run inside the open transaction).
     const cashDiscountPercent = await getCashDiscountPercent(this.anyDb, tenantId);
 
     // INV-VAN-PRICE-LIST-WIRING: the payment terms the price-list

@@ -134,6 +134,14 @@ export class VanCollectionsAndSwapsService {
     return this.repScopedReadsSlice.assertRepServedCustomer(tenantId, repId, customerId);
   }
 
+  async listCustomerServingRepIds(tenantId: string, customerId: number): Promise<Set<number>> {
+    return this.repScopedReadsSlice.listCustomerServingRepIds(tenantId, customerId);
+  }
+
+  async assertRepRouteForSale(tenantId: string, repId: number, customerId: number): Promise<void> {
+    return this.repScopedReadsSlice.assertRepRouteForSale(tenantId, repId, customerId);
+  }
+
   async listTripDamagedSwaps(tenantId: string, tripId: number, repId?: number) {
     return this.repScopedReadsSlice.listTripDamagedSwaps(tenantId, tripId, repId);
   }

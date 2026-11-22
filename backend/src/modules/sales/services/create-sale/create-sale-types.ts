@@ -111,6 +111,9 @@ export interface CreateSaleContext {
   isAdminSeller: boolean;
   floorApproval: { mode: 'pin' | 'account' | 'bypass'; authorizedByName: string; authorizedById?: number } | null;
   collectibleTotal: number;
+  // INV-VAN-PRICE-LIST-WIRING (F8): the system cash discount for
+  // this sale, computed in Phase 3 and stored distinctly by Phase 5.
+  systemCashDiscountAmount: number;
   // Phase 4 outputs (allocateTendersAndDelivery).
   payments: AppliedSaleTender[];
   paidAmount: number;

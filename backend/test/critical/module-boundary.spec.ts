@@ -92,6 +92,33 @@
  * a pure move: the sales module now reads delivery-reps trip state,
  * which is the point of the package (one attribution, two sale paths).
  *
+ * F7c (pos-collection-trip-attribution): purchases->sales 0 -> 1 (new
+ * edge): the POS customer-payment writer
+ * (purchases-write-customer-payments.service.ts) now imports the F7
+ * attribution resolver (resolve-pos-trip-attribution.ts), reusing the
+ * ONE rep/trip resolution instead of re-deriving it — the POS sale
+ * path's attribution, applied to POS collections for the first time.
+ * Backend total pin 747 -> 748 (= the edge delta, no other growth);
+ * posting 97 / foundation 20 unchanged. Deliberate new coupling, not
+ * a pure move: the purchases module now reads the sales attribution,
+ * which is the point of the package (one attribution, two POS paths:
+ * sales + collections). No new bidirectional pair (no sales->purchases
+ * edge exists); the counter move itself is inline Kysely in the
+ * purchases service, mirroring the field-collection slice, so it
+ * adds no second statement to this edge.
+ *
+ * F3 (van-route-sale-gate): sales->delivery-reps 7 -> 8: the POS gate
+ * helper (assert-pos-rep-route.ts) now imports assertRepRouteForSale
+ * from the delivery-reps route gate (rep-route-gate.ts), reusing the
+ * ONE rep-served-customer definition instead of re-deriving route
+ * membership — the portal path's predicate, applied to POS for the
+ * first time. Backend total pin 748 -> 749 (= the edge delta, no
+ * other growth); posting 97 / foundation 20 unchanged. Deliberate new
+ * coupling, not a pure move: the sales module now reads delivery-reps
+ * route state, which is the point of the package (one route rule, two
+ * sale paths). F8 adds no statement here: getCashDiscountPercent
+ * joins F1a's existing import line in compute-totals-and-gates.ts.
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -155,6 +182,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'purchases->catalog': 1,
   'purchases->delivery-reps': 1,
   'purchases->inventory': 1,
+  'purchases->sales': 1,
   'purchases->settings': 2,
   'reports->accounting': 18,
   'returns->accounting': 26,
@@ -165,7 +193,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'saas-admin->storefront': 2,
   'sales->accounting': 67,
   'sales->cash-drawer': 5,
-  'sales->delivery-reps': 7,
+  'sales->delivery-reps': 8,
   'sales->import-sales': 4,
   'sales->manufacturing': 1,
   'sales->reports': 1,
@@ -252,7 +280,7 @@ const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|hr', 'accounti
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|treasury', 'accounts|purchases', 'audit|settings', 'cash-drawer|pos', 'customers|sales', 'inventory|products', 'maintenance|products', 'pos|products', 'pos|sales', 'pos|settings', 'pos|storefront', 'products|settings'];
 const PINNED_POSTING_EXTERNAL = 97;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 747;
+const PINNED_BACKEND_TOTAL = 749;
 const PINNED_FRONTEND_TOTAL = 136;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
@@ -493,7 +521,7 @@ async function main(): Promise<void> {
   );
 
   // 1. Backend ratchet: no new edge, no edge may grow, totals pinned.
-  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 71, 'pinned backend edge table must list 71 edges');
+  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 72, 'pinned backend edge table must list 72 edges');
   const backend = scanBackend();
   assert.ok(backend.total >= BACKEND_TOTAL_FLOOR, `backend scan found only ${backend.total} statements (floor ${BACKEND_TOTAL_FLOOR}): the scanner is broken or the baseline needs re-pinning`);
   assert.ok(backend.edges.size >= BACKEND_EDGE_FLOOR, `backend scan found only ${backend.edges.size} edges (floor ${BACKEND_EDGE_FLOOR})`);

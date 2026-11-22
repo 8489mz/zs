@@ -240,6 +240,14 @@ export class FieldCollectionService {
     return this.getCollectionsAndSwaps().listRepServedCustomerIds(tenantId, repId);
   }
 
+  async listCustomerServingRepIds(tenantId: string, customerId: number): Promise<Set<number>> {
+    return this.getCollectionsAndSwaps().listCustomerServingRepIds(tenantId, customerId);
+  }
+
+  async assertRepRouteForSale(tenantId: string, repId: number, customerId: number): Promise<void> {
+    return this.getCollectionsAndSwaps().assertRepRouteForSale(tenantId, repId, customerId);
+  }
+
   async assertRepServedCustomer(tenantId: string, repId: number, customerId: number): Promise<void> {
     return this.getCollectionsAndSwaps().assertRepServedCustomer(tenantId, repId, customerId);
   }

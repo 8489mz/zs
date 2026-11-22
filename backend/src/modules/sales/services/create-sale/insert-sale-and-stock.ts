@@ -31,7 +31,7 @@ export class InsertSaleAndStockService {
    * deduct stock. Facade L1414-1867.
    */
   async insertSaleAndStock(ctx: CreateSaleContext): Promise<void> {
-    const { trx, scope, normalized, payload, auth, floorApproval, belowFloorItems, payments, paidAmount, total, moneyDigits, effectiveDiscount, taxAmount, allocationByItem, preparedItems, autoProduceItems, eligibleLocations, allowNegativeStockSales, customer, exchange, effectiveTerms, offlineDocNo, effectivePaymentType, subtotal, resolvedDeliveryFeeMode, finalTenderedAmount, changeAmount, deliveryRepId, deliveryStatus, collectionStatus, posTerminalCode, offlineCreatedAt, vanTripAttribution } = ctx;
+    const { trx, scope, normalized, payload, auth, floorApproval, belowFloorItems, payments, paidAmount, total, moneyDigits, effectiveDiscount, systemCashDiscountAmount, taxAmount, allocationByItem, preparedItems, autoProduceItems, eligibleLocations, allowNegativeStockSales, customer, exchange, effectiveTerms, offlineDocNo, effectivePaymentType, subtotal, resolvedDeliveryFeeMode, finalTenderedAmount, changeAmount, deliveryRepId, deliveryStatus, collectionStatus, posTerminalCode, offlineCreatedAt, vanTripAttribution } = ctx;
       let saleNote = normalized.note;
       if (offlineDocNo && !saleNote.includes(offlineDocNo)) {
         const offlineTag = `[إيصال أوفلاين: ${offlineDocNo}]`;
@@ -77,6 +77,10 @@ export class InsertSaleAndStockService {
           payment_channel: resolvePostedSalePaymentChannel(effectivePaymentType, payments),
           subtotal: roundMoney(subtotal, moneyDigits),
           discount: effectiveDiscount,
+          // INV-VAN-PRICE-LIST-WIRING (F8): the system cash discount
+          // for this sale, stored distinctly from the line/invoice
+          // discounts (the portal's column, same meaning).
+          system_cash_discount_amount: systemCashDiscountAmount,
           delivery_fee: normalized.deliveryFee,
           delivery_fee_mode: resolvedDeliveryFeeMode,
           tax_rate: normalized.taxRate,

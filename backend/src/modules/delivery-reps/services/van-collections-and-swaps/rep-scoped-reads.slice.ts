@@ -1,5 +1,6 @@
 import { sql } from '../../../../database/kysely';
 import { AppError } from '../../../../common/errors/app-error';
+import { assertRepRouteForSale as assertRepRouteForSaleShared, listCustomerServingRepIds as listCustomerServingRepIdsShared } from './rep-route-gate';
 import type { VanCollectionsAndSwapsDeps } from './van-collections-and-swaps.types';
 
 export class RepScopedReadsSlice {
@@ -87,6 +88,33 @@ export class RepScopedReadsSlice {
     const served = await this.listRepServedCustomerIds(tenantId, repId);
     if (served.has(Number(customerId))) return;
     throw new AppError('غير مصرح لك بالاطلاع على بيانات عميل لا يتبع لك', 'FORBIDDEN', 403);
+  }
+
+  /**
+   * F3 (trial problem 3): the reps who have served ONE customer, the
+   * transpose of listRepServedCustomerIds — same three evidence rows,
+   * filtered by customer instead of by rep. Shared with the sale
+   * gate below and with the POS gate (which imports the shared
+   * module directly); the slice stays the canonical home.
+   */
+  async listCustomerServingRepIds(tenantId: string, customerId: number): Promise<Set<number>> {
+    return listCustomerServingRepIdsShared(this.anyDb, tenantId, customerId);
+  }
+
+  /**
+   * F3 (trial problem 3): the route gate for a sale. Refuses ONLY a
+   * customer served by a DIFFERENT rep (non-empty serving set not
+   * containing this rep) with CUSTOMER_NOT_ON_REP_ROUTE (403). A
+   * customer with NO history anywhere (empty set) is allowed — the
+   * first sale creates the association — and the rep's own served
+   * customer is allowed. Deliberately NOT assertRepServedCustomer:
+   * that predicate refuses any unserved customer, which would make
+   * new-customer sales impossible. The supervisor-PIN override lives
+   * in the callers (each path verifies its PIN through its own
+   * existing override channel).
+   */
+  async assertRepRouteForSale(tenantId: string, repId: number, customerId: number): Promise<void> {
+    return assertRepRouteForSaleShared(this.anyDb, tenantId, repId, customerId);
   }
 
   async listTripDamagedSwaps(tenantId: string, tripId: number, repId?: number) {
