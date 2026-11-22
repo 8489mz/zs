@@ -53,6 +53,7 @@
   "sales/components/SalesOrderDetailsModal.tsx imports @/features/manufacturing/api/work-orders.api",
   "sales/pages/InstallmentsPage.tsx imports @/features/customers/api/customers.api",
   "settings/components/forms/tabs/ModulesSettingsTab.tsx imports @/features/maintenance/constants/maintenance-profiles",
+  "settings/components/forms/tabs/modules-settings/modules-settings-maintenance-profile.tsx imports @/features/maintenance/constants/maintenance-profiles",
   "settings/components/user-management/UnifiedAccessDirectoryPanel.tsx imports @/features/hr/api/hr.api",
   "settings/components/workspace-sections/marketplaces/marketplace-analytics.tsx imports @/features/storefront/api/marketplace-sync.api",
   "settings/components/workspace-sections/marketplaces/marketplace-assistants.tsx imports @/features/storefront/api/marketplace-sync.api",
