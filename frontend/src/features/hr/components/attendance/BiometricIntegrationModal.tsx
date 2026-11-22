@@ -23,6 +23,7 @@ import {
   type PendingBiometricGroup,
 } from './BiometricPendingPunchesTab';
 import { BiometricFileImportTab } from './BiometricFileImportTab';
+import { todayDate } from './attendance-types';
 
 interface BiometricIntegrationModalProps {
   open: boolean;
@@ -381,8 +382,8 @@ export function BiometricIntegrationModal({
   };
 
   const handleDownloadBlankTemplate = () => {
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const csv = `كود الموظف,التاريخ,وقت الحضور,وقت الانصراف\r\n101,${todayIso},09:00,17:00`;
+    const todayKey = todayDate();
+    const csv = `كود الموظف,التاريخ,وقت الحضور,وقت الانصراف\r\n101,${todayKey},09:00,17:00`;
     const blob = new Blob([new Uint8Array([0xef, 0xbb, 0xbf]), csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

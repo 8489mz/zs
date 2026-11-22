@@ -18,6 +18,7 @@ import { RecruitmentAtsService } from './services/recruitment-ats.service';
 import {
   BiometricAdmsWebhookController,
   BiometricAttendanceController,
+  BiometricMultiBrandWebhookController,
 } from './controllers/biometric-attendance.controller';
 import { BiometricAttendanceService } from './services/biometric-attendance.service';
 import { BiometricStagingService } from './services/biometric-staging.service';
@@ -32,6 +33,7 @@ import { BiometricStagingService } from './services/biometric-staging.service';
     RecruitmentAtsController,
     BiometricAttendanceController,
     BiometricAdmsWebhookController,
+    BiometricMultiBrandWebhookController,
   ],
   providers: [
     HrService,

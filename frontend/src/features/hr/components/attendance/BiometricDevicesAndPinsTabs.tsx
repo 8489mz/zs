@@ -54,10 +54,54 @@ export function BiometricDevicesCloudTab({
   const [deviceBrand, setDeviceBrand] = useState('zkteco');
   const [ipAddress, setIpAddress] = useState('192.168.1.201');
   const [port, setPort] = useState('4370');
+  const [commKey, setCommKey] = useState('0');
   const [branchName, setBranchName] = useState('');
   const [isSavingDevice, setIsSavingDevice] = useState(false);
   const [testingDeviceId, setTestingDeviceId] = useState<number | null>(null);
   const [pullingDeviceId, setPullingDeviceId] = useState<number | null>(null);
+
+  const isHttpBrand = deviceBrand === 'hikvision' || deviceBrand === 'dahua';
+
+  const activeCloudInfo = useMemo(() => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    if (deviceBrand === 'hikvision') {
+      return {
+        title: 'الربط السحابي والشبكي المباشر (Hikvision ISAPI + HTTP Listening)',
+        hint: 'للسحب الشبكي المباشر أدخل IP الجهاز ومنفذ 80 مع بيانات الدخول (مثال admin:Password123). أو للربط السحابي اللحظي ضع الرابط التالي في Network → Advanced → HTTP Listening:',
+        url: `${origin}/api/hr/biometric-push/hikvision?SN=YOUR_SERIAL`,
+      };
+    }
+    if (deviceBrand === 'dahua') {
+      return {
+        title: 'الربط الشبكي والسحابي المباشر (Dahua HTTP CGI + Digest Auth)',
+        hint: 'للسحب المباشر عبر الشبكة أدخل IP الجهاز ومنفذ 80 مع بيانات الدخول (مثال admin:Password123). أو أرسل الحركات سحابياً عبر الرابط التالي:',
+        url: `${origin}/api/hr/biometric-push/json`,
+      };
+    }
+    if (deviceBrand === 'generic') {
+      return {
+        title: 'الربط السحابي الشامل (Anviz / Suprema / جسور JSON)',
+        hint: 'أرسل الحركات لحظياً بصيغة JSON (serialNumber + punches) على الرابط التالي أو ارفع ملفات الفلاشة والإكسيل من التاب الأول:',
+        url: `${origin}/api/hr/biometric-push/json`,
+      };
+    }
+    return {
+      title: 'الربط السحابي والشبكي المباشر (ZKTeco TCP/UDP 4370 + ADMS Cloud Push)',
+      hint: 'يدعم كافة أجهزة ZKTeco وأشباهها عبر السحب المباشر (TCP/UDP 4370) أو الربط السحابي اللحظي من Comm. → Cloud Server Setting على الرابط التالي:',
+      url: fullCloudUrl,
+    };
+  }, [deviceBrand, fullCloudUrl]);
+
+  const handleBrandChange = (nextBrand: string) => {
+    setDeviceBrand(nextBrand);
+    if (nextBrand === 'hikvision' || nextBrand === 'dahua') {
+      setPort('80');
+      setCommKey((prev) => (prev === '0' ? '' : prev));
+    } else {
+      setPort('4370');
+      setCommKey((prev) => (prev === '' ? '0' : prev));
+    }
+  };
 
   const handleAddDevice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,18 +111,21 @@ export function BiometricDevicesCloudTab({
     }
     setIsSavingDevice(true);
     try {
+      const defaultPort = isHttpBrand ? 80 : 4370;
       const res = await hrApi.saveBiometricDevice({
         deviceName: deviceName.trim(),
         serialNumber: serialNumber.trim().toUpperCase(),
         deviceBrand,
         ipAddress: ipAddress.trim() || null,
-        port: Number(port || 4370),
+        port: Number(port || defaultPort),
+        commKey: commKey.trim() || (isHttpBrand ? null : '0'),
         branchName: branchName.trim() || null,
         status: 'active',
       });
       onDevicesUpdated(res.devices || []);
       setDeviceName('');
       setSerialNumber('');
+      setCommKey(isHttpBrand ? '' : '0');
       toast.success('تم تسجيل جهاز البصمة بنجاح');
     } catch (err: any) {
       toast.error(err?.message || 'تعذر حفظ جهاز البصمة');
@@ -158,10 +205,10 @@ export function BiometricDevicesCloudTab({
       >
         <div>
           <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#170e5e' }}>
-            الربط السحابي المباشر اللحظي (ZKTeco ADMS / iClock Cloud Push)
+            {activeCloudInfo.title}
           </div>
           <div style={{ fontSize: '11.5px', color: '#475569', marginTop: '2px' }}>
-            في شاشة جهاز البصمة ادخل إلى: <b>Comm. &rarr; Cloud Server Setting</b> وفعل خيار <b>Enable Domain Name</b> وضع الرابط التالي ليتم إرسال البصمات لحظياً بمجرد وضع الإصبع:
+            {activeCloudInfo.hint}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -177,13 +224,13 @@ export function BiometricDevicesCloudTab({
               direction: 'ltr',
             }}
           >
-            {fullCloudUrl}
+            {activeCloudInfo.url}
           </code>
           <Button
             type="button"
             variant="secondary"
             onClick={() => {
-              void navigator.clipboard?.writeText(fullCloudUrl);
+              void navigator.clipboard?.writeText(activeCloudInfo.url);
               toast.success('تم نسخ رابط الربط السحابي');
             }}
             style={{ padding: '5px 10px', fontSize: '12px' }}
@@ -198,7 +245,7 @@ export function BiometricDevicesCloudTab({
         onSubmit={handleAddDevice}
         style={{
           display: 'grid',
-          gridTemplateColumns: '1.3fr 1.2fr 0.9fr 1fr 0.6fr 0.9fr auto',
+          gridTemplateColumns: 'repeat(4, 1fr)',
           gap: '8px',
           alignItems: 'end',
           background: '#ffffff',
@@ -233,17 +280,29 @@ export function BiometricDevicesCloudTab({
         </div>
         <div>
           <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#334155', marginBottom: '3px' }}>
-            الماركة
+            الماركة والبروتوكول
           </label>
           <CustomSelect
             value={deviceBrand}
-            onChange={(val) => setDeviceBrand(String(val))}
+            onChange={(val) => handleBrandChange(String(val))}
             options={[
-              { value: 'zkteco', label: 'ZKTeco' },
-              { value: 'hikvision', label: 'Hikvision' },
-              { value: 'dahua', label: 'Dahua' },
-              { value: 'generic', label: 'أخرى' },
+              { value: 'zkteco', label: 'ZKTeco / ZK-OEM (TCP/UDP + ADMS)' },
+              { value: 'hikvision', label: 'Hikvision (ISAPI HTTP + Push)' },
+              { value: 'dahua', label: 'Dahua (HTTP CGI + Digest)' },
+              { value: 'generic', label: 'أخرى (Anviz / Suprema / JSON)' },
             ]}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#334155', marginBottom: '3px' }}>
+            الفرع / الموقع
+          </label>
+          <input
+            type="text"
+            value={branchName}
+            onChange={(e) => setBranchName(e.target.value)}
+            placeholder="الإدارة"
+            style={{ width: '100%', height: '33px', padding: '5px 8px', fontSize: '12.5px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
           />
         </div>
         <div>
@@ -260,7 +319,7 @@ export function BiometricDevicesCloudTab({
         </div>
         <div>
           <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#334155', marginBottom: '3px' }}>
-            Port
+            المنفذ (Port)
           </label>
           <input
             type="number"
@@ -271,21 +330,21 @@ export function BiometricDevicesCloudTab({
         </div>
         <div>
           <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#334155', marginBottom: '3px' }}>
-            الفرع / الموقع
+            {isHttpBrand ? 'بيانات الدخول (user:password)' : 'مفتاح الاتصال (CommKey)'}
           </label>
           <input
-            type="text"
-            value={branchName}
-            onChange={(e) => setBranchName(e.target.value)}
-            placeholder="الإدارة"
-            style={{ width: '100%', height: '33px', padding: '5px 8px', fontSize: '12.5px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+            type={isHttpBrand ? 'password' : 'text'}
+            value={commKey}
+            onChange={(e) => setCommKey(e.target.value)}
+            placeholder={isHttpBrand ? 'admin:Password123' : '0'}
+            style={{ width: '100%', height: '33px', padding: '5px 8px', fontSize: '12.5px', borderRadius: '6px', border: '1px solid #cbd5e1', direction: 'ltr' }}
           />
         </div>
         <Button
           type="submit"
           variant="primary"
           disabled={isSavingDevice}
-          style={{ height: '33px', padding: '0 12px', fontSize: '12.5px', backgroundColor: '#170e5e', color: '#fff', whiteSpace: 'nowrap' }}
+          style={{ height: '33px', padding: '0 12px', fontSize: '12.5px', backgroundColor: '#170e5e', color: '#fff', whiteSpace: 'nowrap', justifyContent: 'center' }}
         >
           <PlusIcon size={14} />
           <span>إضافة جهاز</span>

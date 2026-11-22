@@ -24,6 +24,10 @@ import {
   type UpsertBiometricDeviceDto,
 } from '../services/biometric-attendance.service';
 import { BiometricStagingService } from '../services/biometric-staging.service';
+import {
+  normalizeGenericJsonPushToAttlogLines,
+  parseHikvisionWebhookPayload,
+} from '../services/http-biometric-lan.client';
 
 @Controller('api/hr/biometric')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -180,5 +184,59 @@ export class BiometricAdmsWebhookController {
   @Header('Content-Type', 'text/plain; charset=utf-8')
   async pollCommand() {
     return 'OK';
+  }
+}
+
+/**
+ * Multi-Brand Hardware Cloud Push Receiver (Hikvision HTTP Listening + Universal JSON Push for Dahua / Anviz / Suprema / Bridges).
+ * Authenticates hardware strictly by active registered `serial_number` for tenant isolation.
+ */
+@Controller('api/hr/biometric-push')
+export class BiometricMultiBrandWebhookController {
+  constructor(private readonly biometricService: BiometricAttendanceService) {}
+
+  @Post('hikvision')
+  async receiveHikvisionEvent(@Query('SN') sn: string | undefined, @Body() body: unknown, @Req() req: any) {
+    let rawText = '';
+    if (typeof body === 'string') {
+      rawText = body;
+    } else if (Buffer.isBuffer(body)) {
+      rawText = body.toString('utf8');
+    } else if (body && typeof body === 'object' && Object.keys(body as Record<string, unknown>).length > 0) {
+      rawText = JSON.stringify(body);
+    } else if (typeof req?.rawBody === 'string' || Buffer.isBuffer(req?.rawBody)) {
+      rawText = Buffer.isBuffer(req.rawBody) ? req.rawBody.toString('utf8') : req.rawBody;
+    } else if (req && req.readable) {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+      }
+      rawText = Buffer.concat(chunks).toString('utf8');
+    }
+
+    const parsed = parseHikvisionWebhookPayload(rawText);
+    const resolvedSn = String(sn || parsed.serialNumber || '').trim();
+    if (!resolvedSn) {
+      return { ok: false, message: 'ERROR: SN REQUIRED' };
+    }
+    if (parsed.lines.length === 0) {
+      return { ok: true, received: 0 };
+    }
+    const result = await this.biometricService.handleAdmsPush(resolvedSn, 'ATTLOG', parsed.lines.join('\n'));
+    return { ok: result.startsWith('OK'), result };
+  }
+
+  @Post('json')
+  async receiveGenericJsonPush(@Query('SN') sn: string | undefined, @Body() body: unknown) {
+    const parsed = normalizeGenericJsonPushToAttlogLines(body);
+    const resolvedSn = String(sn || parsed.serialNumber || '').trim();
+    if (!resolvedSn) {
+      return { ok: false, message: 'ERROR: SN REQUIRED' };
+    }
+    if (parsed.lines.length === 0) {
+      return { ok: true, received: 0 };
+    }
+    const result = await this.biometricService.handleAdmsPush(resolvedSn, 'ATTLOG', parsed.lines.join('\n'));
+    return { ok: result.startsWith('OK'), result };
   }
 }
