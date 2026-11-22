@@ -291,6 +291,8 @@
     "test/critical/van-transfer-loaded-amount-3dp.spec.ts",
     "test/critical/restaurant-fnb-claims-post.spec.ts",
     "test/critical/restaurant-manager-comp-gate.spec.ts",
-    "test/critical/restaurant-86-enforcement.spec.ts"
+    "test/critical/restaurant-86-enforcement.spec.ts",
+    "test/critical/van-pos-discount-cap.spec.ts",
+    "test/critical/pos-collection-balance-cap.spec.ts"
   ]
 }

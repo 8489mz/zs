@@ -4,7 +4,8 @@
 
 import type { Dispatch, SetStateAction } from 'react';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
-import { roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
+import { type MoneyDigits } from '@/shared/utils/money';
+import { calcInvoiceDiscountAmountFromPercent, calcInvoiceDiscountPercent } from '@/features/pos/lib/pos-cart-totals';
 import { Button } from '@/shared/ui/button';
 
 interface PosCheckoutDiscountStripProps {
@@ -36,6 +37,11 @@ export function PosCheckoutDiscountStrip({
   onManagerPinDraftChange,
   onManagerApprovalOpenChange,
 }: PosCheckoutDiscountStripProps) {
+  /* F1b (van trial problem 20): the "%" input is a percent of the NET
+   * subtotal (gross minus line discounts) — the backend's stored
+   * subtotal — never of the gross. 4% on gross 100.00 with a 4.00 line
+   * discount is 3.84, not 4.00. */
+  const discountBase = pos.totals.netSubTotal ?? pos.totals.subTotal;
   return (
     <>
       {/* Step 3: Dedicated Discount Strip (Cleanly separated from payment legs) */}
@@ -76,18 +82,18 @@ export function PosCheckoutDiscountStrip({
             type="number"
             step="0.01"
             min="0"
-            value={isPercentFocused ? percentStr : (pos.discount > 0 && pos.totals.subTotal > 0 ? ((pos.discount / pos.totals.subTotal) * 100).toFixed(2).replace(/\.00$/, '') : '')}
+            value={isPercentFocused ? percentStr : (pos.discount > 0 && discountBase > 0 ? calcInvoiceDiscountPercent(pos.discount, discountBase).toFixed(2).replace(/\.00$/, '') : '')}
             onWheel={(e) => e.currentTarget.blur()}
             onFocus={(e) => { setIsPercentFocused(true); e.currentTarget.select(); }}
             onBlur={() => setIsPercentFocused(false)}
             onChange={(event) => {
               setPercentStr(event.target.value);
               const p = Number(event.target.value || 0);
-              pos.setDiscount(roundMoneyValue((p / 100) * pos.totals.subTotal, bookDigits));
+              pos.setDiscount(calcInvoiceDiscountAmountFromPercent(p, discountBase, bookDigits));
             }}
-            disabled={isDiscountLocked || isTerminalApproved || pos.totals.subTotal === 0}
+            disabled={isDiscountLocked || isTerminalApproved || discountBase === 0}
             placeholder="0"
-            style={{ boxSizing: 'border-box', width: '100%', height: '34px', borderRadius: '6px', fontSize: '13.5px', fontWeight: 700, border: '1px solid #cbd5e1', background: (isDiscountLocked || isTerminalApproved || pos.totals.subTotal === 0) ? '#f1f5f9' : '#ffffff', textAlign: 'center' }}
+            style={{ boxSizing: 'border-box', width: '100%', height: '34px', borderRadius: '6px', fontSize: '13.5px', fontWeight: 700, border: '1px solid #cbd5e1', background: (isDiscountLocked || isTerminalApproved || discountBase === 0) ? '#f1f5f9' : '#ffffff', textAlign: 'center' }}
           />
         </label>
         {isDiscountLocked ? (

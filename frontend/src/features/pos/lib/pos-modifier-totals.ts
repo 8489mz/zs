@@ -47,6 +47,34 @@ export function calcCartLineDiscount(item: PosCartLineLike): number {
   return Math.min(entered, Math.max(0, gross));
 }
 
+/* F1b (van trial problem 21): the cart line-discount INPUT takes a
+ * percent of the line gross, not an amount — typing 50 on a 24.00
+ * line is a 12.00 discount, not the clamped 24.00. The stored
+ * lineDiscount stays an AMOUNT (the backend contract:
+ * compute-totals-and-gates sums it as money); these helpers only
+ * translate at the input boundary. The percent-to-amount conversion
+ * is unrounded, like calcCartLineDiscount above: the caller rounds
+ * at book digits (updatePosItemLineDiscount does). */
+export function clampDiscountPercent(percent: unknown): number {
+  const p = Number(percent);
+  if (!Number.isFinite(p) || p <= 0) return 0;
+  return Math.min(p, 100);
+}
+
+export function calcLineDiscountAmountFromPercent(item: PosCartLineLike, percent: unknown): number {
+  const gross = calcCartLineTotal(item);
+  return (clampDiscountPercent(percent) / 100) * Math.max(0, gross);
+}
+
+/** The stored line discount expressed as a percent of the line gross
+ * (0 when there is no discount or no gross) — the value the percent
+ * input displays. */
+export function calcLineDiscountPercent(item: PosCartLineLike): number {
+  const gross = calcCartLineTotal(item);
+  if (gross <= 0) return 0;
+  return (calcCartLineDiscount(item) / gross) * 100;
+}
+
 /** Net line total: gross minus the line's own discount, matching the
  * backend's buildPreparedSaleItem lineTotal exactly. */
 export function calcCartLineNetTotal(item: PosCartLineLike): number {

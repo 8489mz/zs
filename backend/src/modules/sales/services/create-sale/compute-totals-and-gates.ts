@@ -1,5 +1,6 @@
 import { AppError } from '../../../../common/errors/app-error';
 import { computeInvoiceTotals } from '../../../../common/utils/invoice-totals';
+import { getVanRepDiscountCapPercent } from '../../../delivery-reps/rep-target/rep-settings.slice';
 import { allocateInvoiceDiscount } from '../../engines/invoice-discount.engine';
 import { resolveSaleServiceCharge } from '../../engines/sale-service-charge.engine';
 import { resolveSaleTaxRate } from '../../engines/sale-tax-rate.engine';
@@ -73,6 +74,76 @@ export class ComputeTotalsAndGatesService {
       const lineDiscountTotal = roundSaleResidual(normalized.items.reduce((sum, item) => sum + Number((item as { lineDiscount?: number }).lineDiscount || 0), 0), moneyDigits);
       const unapprovedDiscount = Math.max(0, roundSaleResidual(roundSaleResidual(normalized.discount - Number(approvedTerms?.approvedDiscount || 0), moneyDigits) + lineDiscountTotal, moneyDigits));
       await this.assertDiscountChangeAllowed(trx, auth, unapprovedDiscount, normalized.managerPin, subtotal);
+      // F1a (INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING): the tenant rep
+      // cap binds the COMBINED discount in POS too. The portal path
+      // enforces it; POS never did, so a rep posted 8% (4% line + 4%
+      // invoice, Z-261121-16629) and 50% (25% + 25%, Z-261121-16630)
+      // with no supervisor PIN. The cap applies ONLY when the seller
+      // is a delivery rep — the acting user linked to a
+      // delivery_representatives row, by the same phone/username link
+      // resolveRepLinkedUserId uses in reverse (rep.phone matches the
+      // user's phone or username). Ordinary cashiers keep their tier
+      // behaviour above, and the admin bypass stays exactly as it is
+      // (INV-POS-ADMIN-DISCOUNT-AUTHORITY). The combined percent is
+      // (line discounts + invoice discount) / gross subtotal — the
+      // portal's combinedDiscountPercent definition. Note ctx subtotal
+      // is NET of line discounts (buildPreparedSaleItem subtracts
+      // them from each line total), so the gross base is subtotal +
+      // lineDiscountTotal; using the net subtotal would read an exact
+      // 5% as 5.13% and refuse a sale sitting on the cap. Rounded at
+      // book digits before the comparison so an exact 5% never reads
+      // as 5.000000000000001. Above the cap, only an approved supervisor
+      // override (the same manager-PIN path the tier gate uses) lets
+      // the sale through; anything else is refused with the named
+      // 403 below. The zero-discount guard keeps discount-free sales
+      // (the hot path) free of the two link lookups.
+      const isAdminSellerForRepCap = auth.role === 'admin' || auth.role === 'super_admin';
+      if (!isAdminSellerForRepCap && !this.authz.hasPermission(auth, '*') && unapprovedDiscount > 0.0001) {
+        // The rep link is the acting user's identifiers: the username
+        // is in memory, the phone comes from the users row. Either
+        // leg may match a delivery_representatives phone. Both reads
+        // use selectAll + a JS filter on purpose: naming the phone
+        // column in SQL would abort this open transaction (25P02) on
+        // any harness whose users / delivery_representatives table
+        // has no phone column, and a caught 42703 cannot un-abort it
+        // (the portal hoists such reads before the transaction for
+        // exactly this reason; here the transaction is already open,
+        // so the read must never fail). select * returns whatever
+        // columns exist, so a missing phone simply matches nothing.
+        // In production both columns exist; rep rows per tenant are
+        // few, so the tenant-wide read is cheap.
+        const linkValues = [String(auth.username || '').trim()].filter((value) => value.length > 0);
+        const actingUser = await trx.selectFrom('users').selectAll()
+          .where('id', '=', Number(auth.userId)).executeTakeFirst();
+        for (const value of [actingUser?.phone, actingUser?.username]) {
+          const trimmed = String(value || '').trim();
+          if (trimmed.length > 0 && !linkValues.includes(trimmed)) linkValues.push(trimmed);
+        }
+        const repRows = await trx.selectFrom('delivery_representatives').selectAll()
+          .where('tenant_id', '=', scope.tenantId).execute();
+        const repLink = repRows.find((row) => linkValues.includes(String(row.phone || '').trim()));
+        if (repLink) {
+          const repCapPercent = await getVanRepDiscountCapPercent(trx, scope.tenantId);
+          const grossSubtotal = roundSaleResidual(subtotal + lineDiscountTotal, moneyDigits);
+          const combinedDiscountPercent = roundSaleResidual(grossSubtotal > 0 ? (unapprovedDiscount / grossSubtotal) * 100 : 0, moneyDigits);
+          if (combinedDiscountPercent > repCapPercent) {
+            let supervisorOverrideApproved = false;
+            try {
+              await this.authz.authorizeDiscountOverride(String(normalized.managerPin || '').trim(), auth, trx);
+              supervisorOverrideApproved = true;
+            } catch {
+              supervisorOverrideApproved = false;
+            }
+            if (!supervisorOverrideApproved) {
+              throw new AppError(
+                `الخصم الإجمالي على الفاتورة (${combinedDiscountPercent}%) يتجاوز سقف خصم المناديب (${repCapPercent}%) ويتطلب اعتماد المشرف برمز PIN`,
+                'COMBINED_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN',
+                403,
+              );
+            }
+          }
+        }
+      }
       if (effectiveDiscount > subtotal) throw new AppError('Discount cannot exceed subtotal', 'INVALID_DISCOUNT', 400);
       // R4-A (INV-REST-SALE-MONEY-TRUTH): the dine-in service charge
       // is a tenant decision, not a client assertion — same shape as

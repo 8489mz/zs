@@ -72,6 +72,16 @@
  * consequence, no new coupling: every added statement is an import the
  * pre-split facade already had.
  *
+ * F1a (van-pos-discount-cap): sales->delivery-reps 5 -> 6: the POS
+ * create-sale gate (compute-totals-and-gates.ts) now imports
+ * getVanRepDiscountCapPercent from the rep-settings slice, reusing the
+ * ONE tenant rep cap instead of re-reading the setting — the portal
+ * path's getter, applied to POS for the first time. Backend total pin
+ * 745 -> 746 (= the edge delta, no other growth); posting 97 /
+ * foundation 20 unchanged. Deliberate new coupling, not a pure move:
+ * the sales module now reads the delivery-reps cap, which is the
+ * point of the package (one cap, two sale paths).
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -145,7 +155,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'saas-admin->storefront': 2,
   'sales->accounting': 67,
   'sales->cash-drawer': 5,
-  'sales->delivery-reps': 5,
+  'sales->delivery-reps': 6,
   'sales->import-sales': 4,
   'sales->manufacturing': 1,
   'sales->reports': 1,
@@ -232,7 +242,7 @@ const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|hr', 'accounti
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|treasury', 'accounts|purchases', 'audit|settings', 'cash-drawer|pos', 'customers|sales', 'inventory|products', 'maintenance|products', 'pos|products', 'pos|sales', 'pos|settings', 'pos|storefront', 'products|settings'];
 const PINNED_POSTING_EXTERNAL = 97;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 745;
+const PINNED_BACKEND_TOTAL = 746;
 const PINNED_FRONTEND_TOTAL = 136;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;

@@ -178,7 +178,21 @@ export class PostCustomerPaymentExpenseService {
     throw new Error(`No valid expense posting account found for expense ${expenseId}`);
   }
 
-  async postCustomerPayment(queryable: DbOrTx, paymentId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  // Problem 28 (F2): the receipt number is REC-YYMMDD-###### where
+  // ###### is the payment id (see generateCustomerPaymentDocNo in
+  // purchases-write-customer-payments.service.ts). The live path passes
+  // it explicitly; a recovery re-post has no caller-held number, so it
+  // is derived from the stored row instead — same number, same day,
+  // except for a payment inserted in the last second before midnight.
+  private deriveCustomerPaymentDocNo(createdAt: unknown, paymentId: number): string {
+    const at = createdAt ? new Date(createdAt as string) : new Date();
+    const yy = String(at.getFullYear()).slice(-2);
+    const mm = String(at.getMonth() + 1).padStart(2, '0');
+    const dd = String(at.getDate()).padStart(2, '0');
+    return `REC-${yy}${mm}${dd}-${String(paymentId).padStart(6, '0')}`;
+  }
+
+  async postCustomerPayment(queryable: DbOrTx, paymentId: number, auth: AuthContext, docNo?: string): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
@@ -239,6 +253,8 @@ export class PostCustomerPaymentExpenseService {
     const branchId = payment.branch_id ? Number(payment.branch_id) : null;
     const locationId = payment.location_id ? Number(payment.location_id) : null;
     const customerName = String(payment.customer_name || '').trim();
+    const receiptNo = docNo || this.deriveCustomerPaymentDocNo(payment.created_at, paymentId);
+    const receiptLabel = receiptNo ? ` - سند قبض ${receiptNo}` : '';
 
     const cashAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.cash_account_id, '1110');
     const customerAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.customer_receivable_account_id, '1130');
@@ -287,7 +303,7 @@ export class PostCustomerPaymentExpenseService {
       tenantId: scope.tenantId,
       accountId: scope.accountId,
       entryDate: payment.created_at ? new Date(payment.created_at) : new Date(),
-      description: `قيد تحصيل عميل${customerName ? ` - ${customerName}` : ''}`,
+      description: `قيد تحصيل عميل${customerName ? ` - ${customerName}` : ''}${receiptLabel}`,
       branchId,
       locationId,
       createdBy: payment.created_by ? Number(payment.created_by) : auth.userId,

@@ -522,8 +522,8 @@ export class AccountingPostingService {
   async postSupplierPaymentScheduleSettlement(queryable: DbOrTx, settlementId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.purchasesTreasuryPosting.postSupplierPaymentScheduleSettlement(queryable, settlementId, auth);
   }
-  async postCustomerPayment(queryable: DbOrTx, paymentId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
-    return this.purchasesTreasuryPosting.postCustomerPayment(queryable, paymentId, auth);
+  async postCustomerPayment(queryable: DbOrTx, paymentId: number, auth: AuthContext, docNo?: string): Promise<{ posted: boolean; journalEntryId: number | null }> {
+    return this.purchasesTreasuryPosting.postCustomerPayment(queryable, paymentId, auth, docNo);
   }
   async postExpense(queryable: DbOrTx, expenseId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.purchasesTreasuryPosting.postExpense(queryable, expenseId, auth);

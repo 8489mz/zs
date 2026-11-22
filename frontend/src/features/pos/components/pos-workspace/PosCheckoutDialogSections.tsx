@@ -1,5 +1,6 @@
 import { getGlobalSystemCurrency, getSystemCountryCode, isKuwait, isSaudi } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { calcInvoiceDiscountPercent } from '@/features/pos/lib/pos-cart-totals';
 import { useState, useEffect, useMemo, type FormEvent, type RefObject } from 'react';
 import { posApi } from '@/features/pos/api/pos.api';
 import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
@@ -117,9 +118,13 @@ export function PosCheckoutPaymentSection({
 
   useEffect(() => {
     if (!isPercentFocused) {
-      setPercentStr(pos.discount > 0 && pos.totals.subTotal > 0 ? ((pos.discount / pos.totals.subTotal) * 100).toFixed(2).replace(/\.00$/, '') : '');
+      /* F1b (van trial problem 20): the "%" display divides by the NET
+       * subtotal, same base as the strip input — the gross base showed
+       * 4.00% for a 3.84 discount on a 96.00 net base. */
+      const discountBase = pos.totals.netSubTotal ?? pos.totals.subTotal;
+      setPercentStr(pos.discount > 0 && discountBase > 0 ? calcInvoiceDiscountPercent(pos.discount, discountBase).toFixed(2).replace(/\.00$/, '') : '');
     }
-  }, [pos.discount, pos.totals.subTotal, isPercentFocused]);
+  }, [pos.discount, pos.totals.netSubTotal, pos.totals.subTotal, isPercentFocused]);
 
   const currentSettings = pos.settings || pos.settingsQuery?.data;
   const isRestaurant = currentSettings?.restaurantModuleEnabled === true;

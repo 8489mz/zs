@@ -22,7 +22,7 @@ import { PurchasesFinanceService } from './purchases-finance.service';
 import { IdempotencyService } from '../../../core/idempotency/idempotency.service';
 import { assertCustomerPaymentJobOwnership } from '../helpers/customer-payment-job-ownership';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 export interface PurchasesWriteCustomerPaymentsDeps {
   db: Kysely<Database>;
@@ -98,6 +98,10 @@ export class PurchasesWriteCustomerPaymentsService {
       const currentBalance = Number(customer.balance || 0);
       const { branchId, locationId } = normalizePurchaseScope(payload);
 
+      // Job linkage is resolved BEFORE the balance gate: a job-linked
+      // payment is governed by the job's own invoiced/paid totals, not
+      // by the customer balance (see the gate below). The block is
+      // unchanged, only moved up.
       let targetJobId: number | null = payload.jobId ? Number(payload.jobId) : null;
 
       // Explicit payment-to-job linkage must be verified before the receipt or ledger is posted.
@@ -138,6 +142,55 @@ export class PurchasesWriteCustomerPaymentsService {
         verifiedJob = job;
       }
 
+      // INV-REP-COLLECTION-TOTAL-BALANCE-CAP (F2, POS path): a customer
+      // receipt may not exceed the customer's outstanding balance. The
+      // portal/field path refuses this under
+      // REP_COLLECTION_EXCEEDS_TOTAL_BALANCE 422 (validateIsolatedRepCollection
+      // + the defence-in-depth floor in record-field-collection.slice.ts);
+      // this path used to book the excess silently as an "advance"
+      // (the old advance/overpayment flags only chose a description
+      // prefix), which drove C-1057 to -50.00 in the van trial
+      // (REC-000019 collected an already-paid 50.00 invoice a second
+      // time). The comparison mirrors the portal engine (raw amount >
+      // balance); the refusal happens inside the transaction, before
+      // any write, so the whole receipt rolls back. There is no advance concept on this path —
+      // CreateCustomerPaymentDto carries no advance flag (unlike the
+      // supplier side, INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT) — so refusal
+      // is the behaviour; an explicitly-approved advance needs a
+      // separate flow and is out of scope here.
+      // JOB-LINKED CARVE-OUT (coordinator repair, 2026-11-22): a payment
+      // linked to a maritime job is NOT governed by the customer
+      // balance — a pre-invoice job deposit legitimately posts while
+      // the customer balance is 0 (the job's client_paid_total tracks
+      // it and a milestone is recorded below; the old code posted it
+      // the same way). For a job-linked payment the cap is the job's
+      // own remaining invoiced amount: when the job is invoiced
+      // (invoiced > 0) the payment may not exceed invoiced − paid; when
+      // it is uninvoiced (invoiced = 0) the payment is a deposit and is
+      // allowed. The defence-in-depth floor below is skipped for the
+      // same reason (a job deposit legitimately takes the customer
+      // balance negative as an advance against the job).
+      if (verifiedJob) {
+        const jobInvoiced = Number(verifiedJob.client_invoiced_total || 0);
+        const jobPaid = Number(verifiedJob.client_paid_total || 0);
+        const jobRemaining = jobInvoiced - jobPaid;
+        if (jobInvoiced > 0 && amount > jobRemaining) {
+          throw new AppError(
+            `لا يمكن تحصيل مبلغ (${amount} ج.م) أكبر من المتبقي على الشحنة "${verifiedJob.job_number}" (${jobRemaining} ج.م من أصل ${jobInvoiced} ج.م، والمسدد ${jobPaid} ج.م).`,
+            'REP_COLLECTION_EXCEEDS_TOTAL_BALANCE',
+            422,
+          );
+        }
+      } else if (amount > currentBalance) {
+        throw new AppError(
+          currentBalance <= 0
+            ? `لا توجد مديونية مستحقة على العميل "${customer.name}" لتحصيل مبلغ (${amount} ج.م) — الرصيد ${currentBalance} ج.م. الدفعة المقدمة تتم عبر مسار اعتماد منفصل، ولا تُقيد تلقائياً.`
+            : `لا يمكن تحصيل مبلغ (${amount} ج.م) أكبر من إجمالي مديونية العميل "${customer.name}" (${currentBalance} ج.م). لا توجد سلفة مسجلة على هذا العميل تسمح بالتحصيل الزائد.`,
+          'REP_COLLECTION_EXCEEDS_TOTAL_BALANCE',
+          422,
+        );
+      }
+
       const insert = await trx
         .insertInto('customer_payments')
         .values({
@@ -158,22 +211,41 @@ export class PurchasesWriteCustomerPaymentsService {
         .executeTakeFirstOrThrow();
 
       const paymentId = Number(insert.id);
-      const paymentNote = normalizeOptionalNote(payload.note);
-      const isAdvance = currentBalance <= 0;
-      const isOverpayment = currentBalance > 0 && amount > currentBalance;
-      const descPrefix = isAdvance
-        ? `دفعة مقدمة / عربون من العميل ${customer.name}`
-        : isOverpayment
-          ? `تحصيل وسداد مع دفعة مقدمة من العميل ${customer.name}`
-          : `تحصيل من العميل ${customer.name}`;
-
-      const fullDesc = `${descPrefix}${paymentNote ? ` - ${paymentNote}` : ''}`;
-      await this.financeService.addCustomerLedgerEntry(trx, customer.id, -amount, fullDesc, 'customer_payment', paymentId, auth, branchId, locationId);
-      await this.financeService.addTreasuryTransaction(trx, 'customer_payment', amount, fullDesc, 'customer_payment', paymentId, auth, branchId, locationId, payload.paymentChannel || 'cash');
-      const posting = await this.accountingPosting.postCustomerPayment(trx, paymentId, auth);
-      if (!posting.journalEntryId) throw new AppError(`Customer payment ${paymentId} has no journal entry`, 'LEDGER_POSTING_MISSING', 500);
-
+      // The receipt number is generated here, before the ledger /
+      // treasury / journal writes, so it can be part of every
+      // narration (problem 28). The value is unchanged: it derives
+      // only from the payment id and the current date.
       const docNo = await this.generateCustomerPaymentDocNo(trx, scope.tenantId, paymentId);
+      const paymentNote = normalizeOptionalNote(payload.note);
+      const fullDesc = `تحصيل من العميل ${customer.name} — سند قبض ${docNo}${paymentNote ? ` - ${paymentNote}` : ''}`;
+      await this.financeService.addCustomerLedgerEntry(trx, customer.id, -amount, fullDesc, 'customer_payment', paymentId, auth, branchId, locationId);
+      // INV-REP-COLLECTION-TOTAL-BALANCE-CAP (defence in depth): the
+      // gate above refuses any collection above the customer's total
+      // debt, so this must never fire — but the write itself must
+      // never commit a negative customer balance even if a future
+      // caller reaches it without the gate. Throwing here rolls the
+      // whole receipt transaction back. The comparison is at book
+      // digits so a sub-minor-unit residue in a legacy balance cannot
+      // refuse a collection the gate allowed. Skipped for job-linked
+      // payments: a pre-invoice job deposit legitimately takes the
+      // customer balance negative (advance against the job; the job's
+      // client_paid_total tracks it).
+      const balanceAfterRow = await trx
+        .selectFrom('customers')
+        .select('balance')
+        .where('id', '=', customer.id)
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .executeTakeFirst();
+      if (!verifiedJob && balanceAfterRow && roundMoney(Number(balanceAfterRow.balance || 0), digits) < 0) {
+        throw new AppError(
+          `لا يمكن تحصيل مبلغ (${amount} ج.م) من العميل "${customer.name}" أكبر من مديونية العميل — الرصيد بعد التحصيل سالب (${Number(balanceAfterRow.balance)} ج.م)`,
+          'REP_COLLECTION_EXCEEDS_TOTAL_BALANCE',
+          422,
+        );
+      }
+      await this.financeService.addTreasuryTransaction(trx, 'customer_payment', amount, fullDesc, 'customer_payment', paymentId, auth, branchId, locationId, payload.paymentChannel || 'cash');
+      const posting = await this.accountingPosting.postCustomerPayment(trx, paymentId, auth, docNo);
+      if (!posting.journalEntryId) throw new AppError(`Customer payment ${paymentId} has no journal entry`, 'LEDGER_POSTING_MISSING', 500);
 
       let allocatedJobNumber: string | null = null;
       if (verifiedJob && targetJobId) {

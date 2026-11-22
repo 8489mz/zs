@@ -19,7 +19,7 @@
 
 import { currencyMoneyDigits, roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
-import { calcCartLineDiscount, calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { calcCartLineDiscount, calcCartLineTotal, clampDiscountPercent } from '@/features/pos/lib/pos-modifier-totals';
 import type { PosItem } from '@/features/pos/types/pos.types';
 
 export interface PosCartTotalsSettings {
@@ -63,8 +63,7 @@ export interface PosCartTotals {
   total: number;
 }
 
-export function computePosCartTotals(input: PosCartTotalsInput): PosCartTotals {
-  const digits = input.bookDigits ?? currencyMoneyDigits(getGlobalSystemCurrency());
+export function computePosCartTotals(input: PosCartTotalsInput): PosCartTotals {  const digits = input.bookDigits ?? currencyMoneyDigits(getGlobalSystemCurrency());
   const grossSubTotal = input.cart.reduce((sum, item) => sum + calcCartLineTotal(item), 0);
   const lineDiscountTotal = roundMoneyValue(
     input.cart.reduce((sum, item) => sum + calcCartLineDiscount(item), 0),
@@ -134,4 +133,25 @@ export function computePosCartTotals(input: PosCartTotalsInput): PosCartTotals {
     taxAmount,
     total,
   };
+}
+
+/* F1b (van trial problem 20): the invoice "%" input is a percent of
+ * the NET subtotal (gross minus line discounts), never of the gross.
+ * Trial pin: gross 100.00 with a 4.00 line discount nets to 96.00, so
+ * 4% is 3.84 — the old gross base gave 4.00. The backend takes a flat
+ * amount (allocateInvoiceDiscount distributes an amount); this helper
+ * produces that amount, rounded at book digits. */
+export function calcInvoiceDiscountAmountFromPercent(percent: unknown, netSubTotal: number, digits: MoneyDigits): number {
+  const base = Math.max(0, Number(netSubTotal || 0));
+  return roundMoneyValue((clampDiscountPercent(percent) / 100) * base, digits);
+}
+
+/** The stored invoice discount expressed as a percent of the net
+ * subtotal (0 when there is no discount or no net base) — the value
+ * the "%" input displays. Unrounded; callers format it. */
+export function calcInvoiceDiscountPercent(discount: number, netSubTotal: number): number {
+  const base = Number(netSubTotal || 0);
+  const amount = Number(discount || 0);
+  if (base <= 0 || amount <= 0) return 0;
+  return (amount / base) * 100;
 }
