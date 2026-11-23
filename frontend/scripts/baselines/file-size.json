@@ -28,7 +28,6 @@
     "src/features/settings/components/modular-configurator/SmartModularConfiguratorModal.tsx": 1104,
     "src/features/settings/components/user-management/UnifiedAccessDirectoryPanel.tsx": 1144,
     "src/features/settings/components/workspace-sections/SettingsDemoDataWizardSection.tsx": 1230,
-    "src/features/settings/components/workspace-sections/SettingsWhatsAppGatewaySection.tsx": 1258,
     "src/features/settings/components/workspace-sections/SystemUpdatesSection.tsx": 1129,
     "src/features/storefront/components/MerchantOrdersTable.tsx": 1028,
     "src/features/storefront/components/StorefrontHeroEditorial.tsx": 1236,
