@@ -110,7 +110,14 @@ async function loadPosAvailability(): Promise<any> {
   return loadFrontendModule(pathToFileURL(resolve(__dirname, '../../../frontend/src/features/pos/lib/pos-availability.ts')).href);
 }
 async function loadVerticalScope(): Promise<any> {
-  return loadFrontendModule(pathToFileURL(resolve(__dirname, '../../../frontend/src/shared/verticals/vertical-scope.ts')).href);
+  // The barrel (vertical-scope.ts) re-exports from extensionless relative
+  // paths, which Node's ESM loader cannot resolve (ERR_MODULE_NOT_FOUND) —
+  // load the two slices the spec needs directly by their explicit .ts URLs.
+  // Each slice is runtime dependency-free (its only import is `import type`,
+  // erased by Node's type stripping), so the dynamic import keeps working.
+  const f1 = await loadFrontendModule(pathToFileURL(resolve(__dirname, '../../../frontend/src/shared/verticals/vertical-scope/resolve-current-vertical.ts')).href);
+  const f2 = await loadFrontendModule(pathToFileURL(resolve(__dirname, '../../../frontend/src/shared/verticals/vertical-scope/is-route-allowed-in-vertical.ts')).href);
+  return { ...f1, ...f2 };
 }
 
 const TENANT = 't1';
