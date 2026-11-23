@@ -1,11 +1,27 @@
 import { Module } from '@nestjs/common';
-import { ContractingController } from './contracting.controller';
+import {
+  ContractingCoreController,
+  ContractingFieldController,
+  ContractingFinanceController,
+  ContractingPlanningController,
+  ContractingExecutionController,
+  ContractingAssuranceController,
+  ContractingAdminController,
+} from './contracting.controller';
 import { ContractingService } from './contracting.service';
 import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
   imports: [AccountingModule],
-  controllers: [ContractingController],
+  controllers: [
+    ContractingCoreController,
+    ContractingFieldController,
+    ContractingFinanceController,
+    ContractingPlanningController,
+    ContractingExecutionController,
+    ContractingAssuranceController,
+    ContractingAdminController,
+  ],
   providers: [ContractingService],
   exports: [ContractingService],
 })
