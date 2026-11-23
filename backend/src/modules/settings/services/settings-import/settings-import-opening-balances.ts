@@ -9,11 +9,11 @@ import type { AccountingPostingService } from '../../../accounting/accounting-po
 
 export class SettingsImportOpeningBalances {
   constructor(
-    private readonly accountingPosting?: AccountingPostingService,
     private readonly bound: {
       scope: (actor: AuthContext) => TenantScope;
       tenantFields: (actor: AuthContext) => Record<string, string>;
     },
+    private readonly accountingPosting?: AccountingPostingService,
   ) {}
 
   private scope(actor: AuthContext): TenantScope {

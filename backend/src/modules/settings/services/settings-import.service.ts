@@ -37,10 +37,10 @@ export class SettingsImportService {
   }
 
   private get balances(): SettingsImportOpeningBalances {
-    return (this._balances ??= new SettingsImportOpeningBalances(this.accountingPosting, {
+    return (this._balances ??= new SettingsImportOpeningBalances({
       scope: (actor) => this.guards.scope(actor),
       tenantFields: (actor) => this.guards.tenantFields(actor),
-    }));
+    }, this.accountingPosting));
   }
 
   private get products(): SettingsImportProducts {
