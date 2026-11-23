@@ -7,6 +7,12 @@ interface MerchantOrdersReaperBannerProps {
 
 export function MerchantOrdersReaperBanner({ reapStatusQuery }: MerchantOrdersReaperBannerProps) {
   const { t } = useTranslation();
+  // The facade mounts this slice only inside `{reapStatusQuery.data && (...)}`,
+  // so data is always defined at the mount — but that narrowing does not cross
+  // the component boundary. Guard here so the 7 `reapStatusQuery.data.*`
+  // accesses below typecheck (TS18048 otherwise); the guard never fires
+  // in practice. (Merge defect D4, file #96.)
+  if (!reapStatusQuery.data) return null;
   return (
     <div style={{ fontSize: '12.5px', color: '#64748b', marginBottom: '12px' }}>
       {reapStatusQuery.data.lastSweep ? (
