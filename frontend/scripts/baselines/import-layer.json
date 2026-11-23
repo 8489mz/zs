@@ -104,5 +104,18 @@
   "features/settings/components/user-management-panels/UserManagementEditorCard.tsx imports app layer directly (@/app/router/access)",
   "features/settings/components/user-management/UserManagementListControls.tsx imports app layer directly (@/app/router/access)",
   "features/settings/components/workspace-sections/SettingsDemoDataWizardSection.tsx imports app layer directly (@/app/router/access)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-abandoned-tab)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-bosta-modal)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-bulk-cancel-dialog)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-delivery-modal)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-detail-modal)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-gcc-modal)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-kpi-grid)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-orders-tab)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-overview-tab)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-page-header)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-pos-success-dialog)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-reaper-banner)",
+  "features/storefront/pages/MerchantOnlineOrdersPage.tsx imports another page module (./merchant-online-orders/merchant-orders-view-switcher)",
   "features/updates/pages/UpdatesPage.spec.tsx imports another page module (./UpdatesPage)"
 ]

@@ -39,7 +39,6 @@
     "src/features/storefront/components/StorefrontHeroEditorial.tsx": 1236,
     "src/features/storefront/components/StorefrontPaymentGatewaysManager.tsx": 1234,
     "src/features/storefront/lib/storefront-photo-matcher.ts": 1345,
-    "src/features/storefront/pages/MerchantOnlineOrdersPage.tsx": 1430,
     "src/lib/pos-printing/template.ts": 1148,
     "src/shared/verticals/vertical-scope.ts": 1226
   }
