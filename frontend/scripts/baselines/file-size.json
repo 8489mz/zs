@@ -27,7 +27,6 @@
     "src/features/settings/components/workspace-sections/SettingsDemoDataWizardSection.tsx": 1230,
     "src/features/settings/components/workspace-sections/SystemUpdatesSection.tsx": 1129,
     "src/features/storefront/components/MerchantOrdersTable.tsx": 1028,
-    "src/features/storefront/components/StorefrontPaymentGatewaysManager.tsx": 1234,
     "src/features/storefront/lib/storefront-photo-matcher/storefront-photo-matcher-rules.ts": 1135,
     "src/lib/pos-printing/template.ts": 1148,
     "src/shared/verticals/vertical-scope.ts": 1226
