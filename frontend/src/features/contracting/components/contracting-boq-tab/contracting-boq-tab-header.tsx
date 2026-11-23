@@ -4,7 +4,7 @@ import type { ContractingBoqItem } from '../../contracting.types';
 
 export interface ContractingBoqTabHeaderProps {
   t: ReturnType<typeof useTranslation>['t'];
-  projectName: string;
+  projectName?: string;
   isExporting: boolean;
   items: ContractingBoqItem[];
   handleExportExcel: () => Promise<void>;
