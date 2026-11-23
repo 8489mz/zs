@@ -90,9 +90,9 @@
 | backend/src/modules/sales/services/sales-edit-and-cancel/cancel-sale.service.ts:206 | insert | sale_cancel | yes |  |
 | backend/src/modules/sales/services/sales-restaurant-and-serials.service.ts:443 | insert | manufacturing_consumption | yes |  |
 | backend/src/modules/sales/services/sales-restaurant-and-serials.service.ts:471 | insert | manufacturing_production | yes |  |
+| backend/src/modules/settings/services/demo-data/settings-demo-data-wipe.ts:103 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
+| backend/src/modules/settings/services/demo-data/settings-demo-data-wipe.ts:185 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
 | backend/src/modules/settings/services/settings-demo-data-wipe-tables.ts:95 | delete | (delete) | no | Tenant wipe/demo reset (deleteFrom), not a ledger movement. |
-| backend/src/modules/settings/services/settings-demo-data.service.ts:202 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
-| backend/src/modules/settings/services/settings-demo-data.service.ts:284 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
 | backend/src/modules/settings/services/settings-import.service.ts:615 | insert | opening_balance | yes | Opening balance on import: row written without an applyStockDelta call in this file. Phase 1: route through the ledger or document why direct. |
 | backend/src/modules/settings/services/settings-import.service.ts:1067 | insert | opening_stock | yes | Opening stock on import: see above. |
 | backend/src/modules/settings/settings.service.ts:948 | delete | (delete) | no | Location delete cleanup (deleteFrom), not a ledger movement. |
