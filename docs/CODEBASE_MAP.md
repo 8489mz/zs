@@ -175,13 +175,13 @@ canonical money engines.
 - Engines: `engines/fashion-stock-safety.engine.ts`, `engines/pos-catalog-version.engine.ts`, `engines/stock-movement-total.engine.ts`
 - Subdirectories: `dto`, `engines`, `services`
 
-### `backend/src/modules/contracting/` (47 files)
+### `backend/src/modules/contracting/` (54 files)
 
 - Module: `contracting.module.ts`
 - Controllers: `contracting.controller.ts`
 - Services: `contracting.service.ts`
 - Engines: (none)
-- Subdirectories: `contracting`, `dto`
+- Subdirectories: `contracting`, `controllers`, `dto`
 
 ### `backend/src/modules/crm/` (4 files)
 

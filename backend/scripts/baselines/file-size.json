@@ -5,7 +5,6 @@
   "note": "Ratchet baseline: files over the 1000-line cap at the base commit. A file fails the check only if it is over the cap and NOT listed here, or if it GREW past its recorded line count. Shrinkage (including partial splits) passes. Remove an entry when its file drops to <= 1000 lines. Regenerate with --update-baseline only after a reviewed change.",
   "entries": {
     "src/core/auth/services/session.service.ts": 1023,
-    "src/modules/contracting/contracting.controller.ts": 1363,
     "src/modules/hr/employee-portal.service.ts": 1010,
     "src/modules/sales/services/sales-orders.service.ts": 1204,
     "src/modules/settings/services/offline-releases.service.ts": 1133,
