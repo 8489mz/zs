@@ -44,7 +44,7 @@ export interface SettingsMainFormTabsProps {
   commitSelectedBranch: (branchId: string, branchName?: string) => void;
   setBranchPrefillName: (val: string) => void;
   setShowBranchQuickAdd: (val: boolean) => void;
-  visibleLocations?: Location[];
+  visibleLocations: Location[];
   onUpdateBranch?: (id: any, data: any) => Promise<any>;
   settings?: AppSettings;
   systemPrinters?: { name: string; displayName: string }[];
