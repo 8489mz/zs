@@ -414,7 +414,7 @@ canonical money engines.
     in feature directories (table below).
   - `frontend/src/shared/`: 157 files.
   - `frontend/src/styles/`: 63 files;
-    `frontend/src/lib/`: 63 files;
+    `frontend/src/lib/`: 66 files;
     `frontend/src/types/`: 29 files;
     `frontend/src/app/`: 14 files;
     `frontend/src/locales/`: 8 files;
