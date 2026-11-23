@@ -5,7 +5,7 @@ import { contractingApi } from '../api/contracting.api';
 import { MasterBoqItem, MasterBoqTrade } from '../contracting.types';
 import { downloadExcelFile } from '@/lib/browser';
 import { systemConfirm } from '@/shared/components/system-alert';
-import { normalizeTradeCategory, SECTORS } from './contracting-master-boq-page/contracting-master-boq-shared';
+import { normalizeTradeCategory, SECTORS, TRADE_ICONS } from './contracting-master-boq-page/contracting-master-boq-shared';
 import { ContractingMasterBoqPageHeader } from './contracting-master-boq-page/contracting-master-boq-page-header';
 import { ContractingMasterBoqNotification } from './contracting-master-boq-page/contracting-master-boq-notification';
 import { ContractingMasterBoqKpiCards } from './contracting-master-boq-page/contracting-master-boq-kpi-cards';

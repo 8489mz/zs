@@ -1,5 +1,4 @@
 import { AppIcons } from '@/shared/components/icons/AppIcons';
-import { SECTORS, TRADE_ICONS } from './contracting-master-boq-shared';
 import type { useTranslation } from 'react-i18next';
 import type { MasterBoqItem } from '../../contracting.types';
 import type { SectorDef } from './contracting-master-boq-shared';
