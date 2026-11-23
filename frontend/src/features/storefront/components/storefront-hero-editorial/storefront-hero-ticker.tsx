@@ -1,3 +1,4 @@
+import React from 'react';
 import type { StorefrontInfo } from '../../types/storefront.types';
 
 export interface StorefrontHeroTickerProps {
