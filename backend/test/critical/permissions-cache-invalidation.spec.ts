@@ -42,7 +42,7 @@
  * 3. trial-tenant-provisioning.service.ts — one insertInto('users'),
  *    zero updates: a brand-new tenant admin created inside trial
  *    provisioning; no sessions exist yet. SAFE.
- * 4. settings-demo-data.service.ts — one insertInto('users'), zero
+ * 4. demo-data/settings-demo-data-seed.ts — one insertInto('users'), zero
  *    updates, guarded by `if (!existing)` per username per tenant:
  *    demo users are only ever inserted, never rewritten. SAFE.
  * 5. migration 2040000000309_kitchen_permission_backfill.ts — a
@@ -388,7 +388,7 @@ async function main(): Promise<void> {
       const writerInventory: Array<{ file: string; inserts: number; updates: number }> = [
         { file: 'modules/activation/activation.service.ts', inserts: 1, updates: 0 },
         { file: 'modules/saas-admin/trial-tenant-provisioning.service.ts', inserts: 1, updates: 0 },
-        { file: 'modules/settings/services/settings-demo-data.service.ts', inserts: 1, updates: 0 },
+        { file: 'modules/settings/services/demo-data/settings-demo-data-seed.ts', inserts: 1, updates: 0 },
       ];
       for (const entry of writerInventory) {
         const source = readService(entry.file);

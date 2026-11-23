@@ -8,7 +8,6 @@
     "src/modules/hr/employee-portal.service.ts": 1010,
     "src/modules/sales/services/sales-orders.service.ts": 1204,
     "src/modules/settings/services/offline-releases.service.ts": 1133,
-    "src/modules/settings/services/settings-demo-data.service.ts": 1489,
     "src/modules/settings/services/settings-import.service.ts": 1222,
     "src/modules/settings/settings.service.ts": 1169,
     "src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts": 1352,
