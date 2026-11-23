@@ -5,10 +5,10 @@ import type { MaritimeMailConfig } from '../../api/maritime-freight.api';
 export interface MaritimeSettingsTabTemplatesProps {
   __t: ReturnType<typeof useTranslation>['t'];
   handleResetTemplates: () => void;
-  activeField: string;
+  activeField: 'subject' | 'intro' | 'signature';
   handleInsertTag: (tag: string) => void;
   config: MaritimeMailConfig;
-  setActiveField: React.Dispatch<React.SetStateAction<string>>;
+  setActiveField: React.Dispatch<React.SetStateAction<'subject' | 'intro' | 'signature'>>;
   setConfig: React.Dispatch<React.SetStateAction<MaritimeMailConfig>>;
   companyProfile: { name: string; email: string; phone: string };
   renderLivePreview: (templateStr: string) => string;
