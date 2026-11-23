@@ -480,10 +480,10 @@ financial logic.
 - Files in this directory: `index.ts`, `routes.tsx`
 - Subdirectories: `api`, `components`, `hooks`, `lib`, `pages`, `utils`
 
-### `frontend/src/features/contracting/` (108 files)
+### `frontend/src/features/contracting/` (113 files)
 
 - Files in this directory: `contracting.types.ts`, `index.ts`, `routes.tsx`
-- Subdirectories: `api`, `components`, `context`, `pages`, `utils`
+- Subdirectories: `api`, `components`, `context`, `contracting-types`, `pages`, `utils`
 
 ### `frontend/src/features/crm/` (10 files)
 
