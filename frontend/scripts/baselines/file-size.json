@@ -7,7 +7,6 @@
     "src/features/accounting/api/accounting.api.ts": 1009,
     "src/features/ai-copilot/components/AiBusinessCopilotModal.tsx": 1129,
     "src/features/contracting/components/ClientQuotationModal.tsx": 1064,
-    "src/features/contracting/components/ContractingBoqTab.tsx": 1304,
     "src/features/contracting/pages/ContractingMasterBoqPage.tsx": 1206,
     "src/features/contracting/utils/boqExcelParser.ts": 1107,
     "src/features/delivery-reps/components/VanSettleTab.tsx": 1756,
