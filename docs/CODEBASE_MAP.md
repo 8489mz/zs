@@ -351,7 +351,7 @@ canonical money engines.
 - Engines: (none)
 - Subdirectories: `dto`
 
-### `backend/src/modules/settings/` (42 files)
+### `backend/src/modules/settings/` (49 files)
 
 - Module: `settings.module.ts`
 - Controllers: `branches.controller.ts`, `controllers/daily-digest.controller.ts`, `controllers/offline-releases.controller.ts`, `controllers/settings-admin.controller.ts`, `controllers/settings-backup.controller.ts`, `controllers/settings-import.controller.ts`, `controllers/settings-support.controller.ts`, `controllers/tenant-transfer.controller.ts`, `controllers/whatsapp-gateway.controller.ts`, `settings.controller.ts`
