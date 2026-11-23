@@ -515,7 +515,7 @@ financial logic.
 - Files in this directory: `AddShipmentItemDialog.tsx`, `ChinaSourcingPage.tsx`, `ContainerAutopsyModal.tsx`, `ContainerDepositsManager.tsx`, `ContainerPreordersModal.tsx`, `CustomsBrokerManager.tsx`, `CustomsTariffCalculator.tsx`, `ImportApprovalsManager.tsx`, `ImportCommandCenter.tsx`, `ImportFxTreasuryManager.tsx`, `ImportProjectsManager.tsx`, `ImportReconciliationManager.tsx`, `ManagePartnersDialog.tsx`, `NewShipmentDialog.tsx`, `PartnerLedgerComponents.tsx`, `ProfitPool.tsx`, `ShipmentDetailsPage.tsx`, `ShipmentsManager.tsx`, `SupplierCredit.tsx`, `routes.tsx`
 - Subdirectories: `api`, `components`
 
-### `frontend/src/features/inventory/` (90 files)
+### `frontend/src/features/inventory/` (98 files)
 
 - Files in this directory: `contracts.ts`, `index.ts`, `routes.tsx`
 - Subdirectories: `api`, `components`, `hooks`, `lib`, `pages`, `schemas`, `utils`
