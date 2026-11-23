@@ -1,5 +1,4 @@
 import { XIcon } from '@/shared/components/icons/AppIcons';
-import type { useTranslation } from 'react-i18next';
 
 export interface SettingsDemoDataWizardNotificationProps {
   notification: { kind: 'success' | 'error'; message: string } | null;
