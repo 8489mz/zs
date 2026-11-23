@@ -34,8 +34,11 @@ if (fs.existsSync(draftNoticePath)) {
   errors.push(`Missing file: ${draftNoticePath}`);
 }
 
-// 3. SettingsMainForm duplicate notice check
-const settingsMainFormPath = path.join(srcRoot, 'features/settings/components/forms/SettingsMainForm.tsx');
+// 3. SettingsMainForm duplicate notice check — reads the J1 slice file, where the
+// single <DraftStateNotice /> use lives after the #108 split (it moved out of the
+// facade; the facade now contains 0). Re-pointed at the #108 merge (same class
+// as the desktop-mobile-isolation.spec.ts re-point).
+const settingsMainFormPath = path.join(srcRoot, 'features/settings/components/forms/settings-main-form/settings-main-form-notices.tsx');
 if (fs.existsSync(settingsMainFormPath)) {
   const content = fs.readFileSync(settingsMainFormPath, 'utf8');
   const count = (content.match(/<DraftStateNotice/g) || []).length;
