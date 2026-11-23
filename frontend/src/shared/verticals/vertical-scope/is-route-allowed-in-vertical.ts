@@ -1,5 +1,10 @@
 import type { BusinessVertical } from './vertical-scope.types';
-import { normalizeKey } from './vertical-scope-normalize-key';
+
+function normalizeKey(target: string): string {
+  const trimmed = String(target || '').trim();
+  if (!trimmed || trimmed === '/') return '/';
+  return trimmed.replace(/^\//, '').replace(/\/$/, '') || '/';
+}
 
 /**
  * Universal Vertical Isolation Check:
