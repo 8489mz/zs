@@ -590,7 +590,7 @@ financial logic.
 - Files in this directory: `routes.tsx`
 - Subdirectories: `api`, `components`, `hooks`, `pages`
 
-### `frontend/src/features/sales/` (58 files)
+### `frontend/src/features/sales/` (63 files)
 
 - Files in this directory: `contracts.ts`, `index.ts`, `routes.tsx`
 - Subdirectories: `api`, `components`, `hooks`, `lib`, `pages`, `utils`
