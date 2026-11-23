@@ -14,7 +14,6 @@
     "src/features/hr/pages/EmployeeProfilePage.tsx": 1018,
     "src/features/hr/pages/HrAttendancePage.tsx": 1127,
     "src/features/hr/pages/HrPayrollPage.tsx": 1170,
-    "src/features/import-sales/CustomsBrokerManager.tsx": 1051,
     "src/features/products/components/BarcodePrintDialog.tsx": 1066,
     "src/features/products/components/EditProductForm.tsx": 1043,
     "src/features/products/components/NewProductForm.tsx": 1013,
