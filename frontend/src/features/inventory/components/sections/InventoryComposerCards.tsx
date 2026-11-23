@@ -3,140 +3,22 @@ import { buildCountLocationStockMap, filterCountableProductsAtLocation } from '@
 import { classifyStockCountBarcodeScan } from '@/features/inventory/lib/count-barcode-identity';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FormSection } from '@/shared/components/form-section';
-import { Button } from '@/shared/ui/button';
-import { EmptyState } from '@/shared/ui/empty-state';
-import { Field } from '@/shared/ui/field';
-import { CustomSelect } from '@/shared/ui/custom-select';
 import { MutationFeedback } from '@/shared/components/mutation-feedback';
-import { SubmitButton } from '@/shared/components/submit-button';
-import { InventoryProductPicker } from '@/features/inventory/components/InventoryProductPicker';
 import { useClientPagination } from '@/shared/hooks/use-client-pagination';
 import { exportStockCountSheetExcel, printStockCountSheet, type StockCountSheetRow } from '@/features/inventory/lib/inventory-documents';
 import { useCategoriesQuery, useSuppliersQuery } from '@/shared/hooks/use-catalog-queries';
-import { getGlobalCurrencySymbol } from '@/lib/currencies';
-import {
-  BarcodeIcon,
-  PrinterIcon,
-  FileSpreadsheetIcon,
-  DownloadIcon,
-  CheckCircleIcon,
-  SearchIcon,
-  PlusIcon,
-  RefreshCwIcon,
-  SlidersIcon,
-  RotateCcwIcon,
-} from '@/shared/components/icons/AppIcons';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
-import type { Branch, Location, Product, StockCountItem, StockTransferItem } from '@/types/domain';
+import type { Branch, Location, Product, StockCountItem } from '@/types/domain';
 import { SINGLE_STORE_MODE } from '@/config/product-scope';
-
-interface StockTransferComposerCardProps {
-  products: Product[];
-  warehouses?: Location[];
-  locations?: Location[];
-  form: { fromLocationId: string; toLocationId: string; note: string; recipientName: string; productId: string; qty: string; serials: string; batchAllocations: string };
-  items: StockTransferItem[];
-  isPending: boolean;
-  isError: boolean;
-  isSuccess: boolean;
-  error?: unknown;
-  onFormChange: (patch: Partial<{ fromLocationId: string; toLocationId: string; note: string; recipientName: string; productId: string; qty: string; serials: string; batchAllocations: string }>) => void;
-  onAddItem: () => void;
-  onRemoveItem: (index: number) => void;
-  onSubmit: () => void;
-}
-
-export function StockTransferComposerCard({
-  products,
-  warehouses,
-  locations,
-  form,
-  items,
-  isPending,
-  isError,
-  isSuccess,
-  error,
-  onFormChange,
-  onAddItem,
-  onRemoveItem,
-  onSubmit
-}: StockTransferComposerCardProps) {
-  const { t } = useTranslation();
-  const warehouseList = warehouses || locations || [];
-  const warehouseOptions = useMemo(
-    () => [
-      { value: '', label: 'اختر المخزن' },
-      ...warehouseList.map((location) => ({ value: String(location.id), label: location.name })),
-    ],
-    [warehouseList],
-  );
-
-  return (
-    <FormSection title={t('inventory.sections.inventory_composer_cards.s0', "إذن صرف / نقل مخزون")} description={t('inventory.sections.inventory_composer_cards.s1', "تجميع الأصناف أولًا ثم اعتماد إذن الصرف مع إبقاء المراجعة السريعة للعناصر قبل الإرسال.")} actions={<span className="nav-pill">{t('inventory.sections.inventory_composer_cards.s2', "أذونات الصرف")}</span>}>
-      <div className="form-grid">
-        <Field label={t('inventory.sections.inventory_composer_cards.s3', "من مخزن")}>
-          <CustomSelect
-            value={form.fromLocationId}
-            onChange={(val) => onFormChange({ fromLocationId: val })}
-            options={warehouseOptions}
-            placeholder={t('inventory.sections.inventory_composer_cards.s4', "اختر المصدر")}
-          />
-        </Field>
-        <Field label={t('inventory.sections.inventory_composer_cards.s5', "إلى مخزن / فرع")}>
-          <CustomSelect
-            value={form.toLocationId}
-            onChange={(val) => onFormChange({ toLocationId: val })}
-            options={warehouseOptions}
-            placeholder={t('inventory.sections.inventory_composer_cards.s6', "اختر الوجهة")}
-          />
-        </Field>
-        <Field label={t('inventory.sections.inventory_composer_cards.s7', "مستلم البضاعة / السائق")}>
-          <input type="text" placeholder={t('inventory.sections.inventory_composer_cards.s8', "اسم المستلم (اختياري)")} value={form.recipientName || ''} onChange={(e) => onFormChange({ recipientName: e.target.value })} />
-        </Field>
-        <Field label={t('inventory.sections.inventory_composer_cards.s9', "الصنف")}>
-          <InventoryProductPicker
-            products={products}
-            value={form.productId}
-            onChange={(productId) => onFormChange({ productId })}
-            showStock
-            showPrice={false}
-          />
-        </Field>
-        <Field label={t('inventory.sections.inventory_composer_cards.s10', "الكمية")}>
-          <input type="number" min="0.001" step="0.001" value={form.qty} onChange={(e) => onFormChange({ qty: e.target.value })} />
-        </Field>
-        <Field label="سيريالات القطع المنقولة (رقم لكل سطر)">
-          <textarea rows={2} value={form.serials || ''} placeholder="IMEI / Serial" onChange={(e) => onFormChange({ serials: e.target.value })} />
-        </Field>
-        <Field label="توزيع التشغيلات (رقم التشغيلة في النظام:الكمية لكل سطر)">
-          <textarea rows={2} value={form.batchAllocations || ''} placeholder="123:2\n124:3" onChange={(e) => onFormChange({ batchAllocations: e.target.value })} />
-        </Field>
-        <Field label={t('inventory.sections.inventory_composer_cards.s11', "ملاحظات")}>
-          <textarea rows={3} value={form.note} onChange={(e) => onFormChange({ note: e.target.value })} />
-        </Field>
-        <div className="field">
-          <span>{t('inventory.sections.inventory_composer_cards.s12', "العناصر")}</span>
-          <div className="actions compact-actions">
-            <Button type="button" variant="secondary" onClick={onAddItem}>{t('inventory.sections.inventory_composer_cards.s13', "إضافة إلى إذن الصرف")}</Button>
-            <SubmitButton type="button" onClick={onSubmit} isPending={isPending} disabled={!items.length} idleText={t('inventory.sections.inventory_composer_cards.s14', "حفظ إذن الصرف")} pendingText={t('inventory.sections.inventory_composer_cards.s15', "جارٍ الحفظ...")} />
-          </div>
-        </div>
-      </div>
-      <MutationFeedback isError={isError} isSuccess={isSuccess} error={error} errorFallback={t('inventory.sections.inventory_composer_cards.s16', "تعذر إنشاء إذن الصرف")} successText={t('inventory.sections.inventory_composer_cards.s17', "تم إنشاء إذن الصرف بنجاح.")} />
-      <div className="list-stack" style={{ marginTop: 12 }}>
-        {items.length ? items.map((item, index) => (
-          <div className="list-row stacked-row" key={item.id}>
-            <div>
-              <strong>{item.productName}</strong>
-              <div className="muted small">{t('inventory.sections.inventory_composer_cards.s18', "الكمية:")} {item.qty}{item.serials?.length ? ` — ${item.serials.length} سيريال` : ''}{item.batchAllocations?.length ? ` — ${item.batchAllocations.length} تشغيلة` : ''}</div>
-            </div>
-            <Button type="button" variant="danger" onClick={() => onRemoveItem(index)}>{t('inventory.sections.inventory_composer_cards.s19', "حذف")}</Button>
-          </div>
-        )) : <EmptyState title={t('inventory.sections.inventory_composer_cards.s20', "لا توجد عناصر مضافة لإذن الصرف")} hint={t('inventory.sections.inventory_composer_cards.s21', "أضف صنفًا واحدًا على الأقل ثم احفظ.")} />}
-      </div>
-    </FormSection>
-  );
-}
+import { CheckCircleIcon } from '@/shared/components/icons/AppIcons';
+import type { StockCountType } from './inventory-composer-cards/inventory-composer-cards-shared';
+export { StockTransferComposerCard } from './inventory-composer-cards/stock-transfer-composer-card';
+import { StockCountComposerSetup } from './inventory-composer-cards/stock-count-composer-setup';
+import { StockCountComposerSessionBar } from './inventory-composer-cards/stock-count-composer-session-bar';
+import { StockCountComposerToolbar } from './inventory-composer-cards/stock-count-composer-toolbar';
+import { StockCountComposerQuickEntry } from './inventory-composer-cards/stock-count-composer-quick-entry';
+import { StockCountComposerFilterBar } from './inventory-composer-cards/stock-count-composer-filter-bar';
+import { StockCountComposerTable } from './inventory-composer-cards/stock-count-composer-table';
 
 interface StockCountComposerCardProps {
   products: Product[];
@@ -159,7 +41,6 @@ interface StockCountComposerCardProps {
   onSubmit: (options?: { noteOverride?: string }) => void;
 }
 
-type StockCountType = 'quick' | 'selected_items' | 'category' | 'supplier' | 'full';
 
 export function StockCountComposerCard({
   products,
@@ -702,248 +583,79 @@ export function StockCountComposerCard({
       actions={<span className="nav-pill">{isCountStarted ? t('inventory.sections.inventory_composer_cards.s25', "مرحلة العد والمراجعة") : t('inventory.sections.inventory_composer_cards.s26', "إنشاء الجلسة")}</span>}
     >
       {!isCountStarted ? (
-        <div className="stock-count-setup-stack">
-          <div className="stock-count-step-card">
-            <div className="stock-count-step-heading">
-              <span>1</span>
-              <div>
-                <strong>{t('inventory.sections.inventory_composer_cards.s27', "طريقة الجرد")}</strong>
-                <small>{t('inventory.sections.inventory_composer_cards.s28', "اختر نمط الجرد المناسب للعملية الحالية")}</small>
-              </div>
-            </div>
-            <div className="stock-count-method-grid">
-              {countTypeOptions.map((entry) => {
-                const countBadge = entry.key === 'full' && form.locationId && scopeProducts.length > 0
-                  ? ` (${scopeProducts.length} صنف)`
-                  : '';
-                return (
-                  <button
-                    key={entry.key}
-                    type="button"
-                    className={`stock-count-method-card ${countType === entry.key ? 'stock-count-method-card--active' : ''}`}
-                    onClick={() => setCountType(entry.key)}
-                  >
-                    <strong>{entry.label}{countBadge}</strong>
-                    <span>{entry.description}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="stock-count-step-card">
-            <div className="stock-count-step-heading">
-              <span>2</span>
-              <div>
-                <strong>{t('inventory.sections.inventory_composer_cards.s29', "نطاق الجرد والإعدادات")}</strong>
-                <small>{t('inventory.sections.inventory_composer_cards.s30', "حدد المخزن والملاحظة وخيارات العد")}</small>
-              </div>
-            </div>
-            <div className="stock-count-inline-form">
-              {!SINGLE_STORE_MODE ? (
-                <Field label={t('inventory.sections.inventory_composer_cards.s31', "الفرع")}>
-                  <CustomSelect
-                    value={form.branchId}
-                    onChange={(val) => onFormChange({ branchId: val })}
-                    options={branchOptions}
-                    placeholder={t('inventory.sections.inventory_composer_cards.s32', "بدون فرع")}
-                  />
-                </Field>
-              ) : null}
-              <Field label={t('inventory.sections.inventory_composer_cards.s33', "المخزن *")}>
-                <CustomSelect
-                  value={form.locationId}
-                  onChange={(val) => onFormChange({ locationId: val })}
-                  options={stockCountWarehouseOptions}
-                  placeholder={t('inventory.sections.inventory_composer_cards.s34', "اختر المخزن")}
-                />
-              </Field>
-              {countType === 'category' ? (
-                <Field label={t('inventory.sections.inventory_composer_cards.s35', "القسم / التصنيف")}>
-                  <CustomSelect
-                    value={selectedCategoryId}
-                    onChange={(val) => {
-                      setSelectedCategoryId(val);
-                      onItemsChange(() => []);
-                    }}
-                    options={categorySelectOptions}
-                    placeholder={t('inventory.sections.inventory_composer_cards.s36', "اختر القسم")}
-                  />
-                </Field>
-              ) : null}
-              {countType === 'supplier' ? (
-                <Field label={t('inventory.sections.inventory_composer_cards.s37', "المورد / الشركة")}>
-                  <CustomSelect
-                    value={selectedSupplierId}
-                    onChange={(val) => {
-                      setSelectedSupplierId(val);
-                      onItemsChange(() => []);
-                    }}
-                    options={supplierSelectOptions}
-                    placeholder={t('inventory.sections.inventory_composer_cards.s38', "اختر المورد")}
-                  />
-                </Field>
-              ) : null}
-              <Field label={t('inventory.sections.inventory_composer_cards.s39', "ملاحظة الجلسة")}>
-                <input
-                  type="text"
-                  value={form.note}
-                  onChange={(e) => onFormChange({ note: e.target.value })}
-                  placeholder={t('inventory.sections.inventory_composer_cards.s40', "مثال: جرد أسبوعي / جرد قبل طلبية المورد")}
-                />
-              </Field>
-            </div>
-
-            <div className="stock-count-bottom-bar">
-              <label className="stock-count-expected-toggle">
-                <input type="checkbox" checked={showExpectedInElectronicCount} onChange={(event) => setShowExpectedInElectronicCount(event.target.checked)} disabled={!canReviewStock} />
-                <span>{t('inventory.sections.inventory_composer_cards.s41', "إظهار كمية النظام أثناء الإدخال الإلكتروني")}</span>
-              </label>
-              <div className="stock-count-start-actions">
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={handleStartCount}
-                  disabled={isLoadingCatalog}
-                >
-                  {isLoadingCatalog ? 'جارٍ تحميل بيانات المخزن...' : t('inventory.sections.inventory_composer_cards.s42', "ابدأ جلسة الجرد")}
-                </Button>
-              </div>
-            </div>
-            {!canReviewStock ? <div className="surface-note" style={{ marginTop: 8 }}>{t('inventory.sections.inventory_composer_cards.s43', "وضع العد المخفي مفعل لهذا المستخدم لضمان عد فعلي بدون التأثر برصيد النظام.")}</div> : null}
-          </div>
-
-          {startCountMessage ? <div className="warning-box">{startCountMessage}</div> : null}
-        </div>
+        <StockCountComposerSetup
+          t={t}
+          countTypeOptions={countTypeOptions}
+          form={form}
+          scopeProducts={scopeProducts}
+          countType={countType}
+          setCountType={setCountType}
+          SINGLE_STORE_MODE={SINGLE_STORE_MODE}
+          onFormChange={onFormChange}
+          branchOptions={branchOptions}
+          stockCountWarehouseOptions={stockCountWarehouseOptions}
+          selectedCategoryId={selectedCategoryId}
+          setSelectedCategoryId={setSelectedCategoryId}
+          onItemsChange={onItemsChange}
+          categorySelectOptions={categorySelectOptions}
+          selectedSupplierId={selectedSupplierId}
+          setSelectedSupplierId={setSelectedSupplierId}
+          supplierSelectOptions={supplierSelectOptions}
+          showExpectedInElectronicCount={showExpectedInElectronicCount}
+          setShowExpectedInElectronicCount={setShowExpectedInElectronicCount}
+          canReviewStock={canReviewStock}
+          handleStartCount={handleStartCount}
+          isLoadingCatalog={isLoadingCatalog}
+          startCountMessage={startCountMessage}
+        />
       ) : (
         <div className="stock-count-review-stack">
           {/* Header Bar with inline stats & save actions */}
-          <div className="stock-count-session-bar">
-            <div className="stock-count-session-meta">
-              <div className="session-title-group">
-                <span className="stock-count-badge">{selectedCountType.label}</span>
-                <strong>{selectedLocation?.name ? `المخزن: ${selectedLocation.name}` : t('inventory.sections.inventory_composer_cards.s44', "المخزن")}</strong>
-                {selectedCategoryId ? <span className="meta-tag">{t('inventory.sections.inventory_composer_cards.s45', "القسم:")} {categoryOptions.find((c) => c.id === selectedCategoryId)?.label || selectedCategoryId}</span> : null}
-                {selectedSupplierId ? <span className="meta-tag">{t('inventory.sections.inventory_composer_cards.s46', "المورد:")} {supplierOptions.find((s) => s.id === selectedSupplierId)?.label || selectedSupplierId}</span> : null}
-              </div>
-
-              <div className="stock-count-stat-pills">
-                <span className="stat-pill">{t('inventory.sections.inventory_composer_cards.s47', "الأصناف:")} <strong>{items.length}</strong></span>
-                <span className="stat-pill" style={{ color: countedCount > 0 ? '#15803d' : undefined, background: countedCount > 0 ? '#f0fdf4' : undefined, border: countedCount > 0 ? '1px solid #bbf7d0' : undefined }}>
-                  تم عدها: <strong>{countedCount}</strong> من {items.length}
-                </span>
-                <span className="stat-pill">{t('inventory.sections.inventory_composer_cards.s48', "إجمالي المعدود:")} <strong>{totalCounted}</strong></span>
-                <span className="stat-pill">{t('inventory.sections.inventory_composer_cards.s49', "الفروقات:")} <strong>{totalVariance}</strong></span>
-                {canShowExpectedCount && financialSummary.deficitCost > 0 ? (
-                  <span className="stat-pill stat-pill--deficit">{t('inventory.sections.inventory_composer_cards.s50', "قيمة العجز:")} <strong>{financialSummary.deficitCost.toLocaleString('ar-EG')} {getGlobalCurrencySymbol()}</strong></span>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="actions compact-actions">
-              <Button type="button" variant="secondary" onClick={handleBackToSetup} disabled={isPending}>{t('inventory.sections.inventory_composer_cards.s51', "تعديل الإعدادات")}</Button>
-              <SubmitButton
-                type="button"
-                onClick={() => onSubmit({ noteOverride: buildSessionNoteWithType(form.note) })}
-                disabled={isPending || !countedCount || !form.locationId}
-                idleText={`إنشاء وحفظ الجلسة (${countedCount} صنف)`}
-                pendingText={t('inventory.sections.inventory_composer_cards.s53', "جارٍ الإنشاء...")}
-              />
-            </div>
-          </div>
+          <StockCountComposerSessionBar
+            selectedCountType={selectedCountType}
+            selectedLocation={selectedLocation}
+            t={t}
+            selectedCategoryId={selectedCategoryId}
+            categoryOptions={categoryOptions}
+            selectedSupplierId={selectedSupplierId}
+            supplierOptions={supplierOptions}
+            items={items}
+            countedCount={countedCount}
+            totalCounted={totalCounted}
+            totalVariance={totalVariance}
+            canShowExpectedCount={canShowExpectedCount}
+            financialSummary={financialSummary}
+            handleBackToSetup={handleBackToSetup}
+            isPending={isPending}
+            onSubmit={onSubmit}
+            buildSessionNoteWithType={buildSessionNoteWithType}
+            form={form}
+          />
 
           {/* Unified Scanner & Action Toolbar */}
-          <div className="stock-count-active-toolbar">
-            <div className="stock-count-scanner-group">
-              <span className="scanner-tag">
-                <BarcodeIcon size={16} />
-                <span>{t('inventory.sections.inventory_composer_cards.s54', "مسح سريع")}</span>
-              </span>
-              <input
-                ref={barcodeInputRef}
-                type="text"
-                className="stock-count-scanner-field"
-                placeholder={t('inventory.sections.inventory_composer_cards.s55', "امسح الباركود للعد السريع (+1 تلقائياً)...")}
-                value={barcodeScanInput}
-                onChange={(e) => setBarcodeScanInput(e.target.value)}
-                onKeyDown={handleBarcodeKeyDown}
-              />
-              <Button type="button" variant="secondary" onClick={() => handleBarcodeScan(barcodeScanInput)}>{t('inventory.sections.inventory_composer_cards.s56', "عد")}</Button>
-            </div>
-
-            <div className="stock-count-tools-group">
-              {canReviewStock ? (
-                <label className="stock-count-sheet-expected-toggle" title={t('inventory.sections.inventory_composer_cards.s57', "إظهار كميات النظام في شيت الطباعة والإكسيل")}>
-                  <input
-                    type="checkbox"
-                    checked={showExpectedInElectronicCount}
-                    onChange={(e) => setShowExpectedInElectronicCount(e.target.checked)}
-                  />
-                  <span>{t('inventory.sections.inventory_composer_cards.s58', "رصيد النظام")}</span>
-                </label>
-              ) : null}
-              {(countType === 'category' || countType === 'supplier' || countType === 'full') && !items.length ? (
-                <Button type="button" variant="primary" onClick={handlePopulateScopeItems}>
-                  <DownloadIcon size={15} />
-                  <span>{t('inventory.sections.inventory_composer_cards.s59', "إدخال إلكتروني (")}{scopeProducts.length} {t('inventory.sections.inventory_composer_cards.s60', "صنف)")}</span>
-                </Button>
-              ) : null}
-              {items.length > 0 ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={handleZeroUncounted}
-                    disabled={uncountedCount === 0}
-                    title={uncountedCount > 0 ? `وضع رصيد (0) لعدد ${uncountedCount} صنف متبقٍ لم يتم عده، مع الحفاظ على ما قمت بعده` : 'تم عد كافة الأصناف بالفعل'}
-                    style={{
-                      borderColor: uncountedCount > 0 ? '#93c5fd' : undefined,
-                      backgroundColor: uncountedCount > 0 ? '#eff6ff' : undefined,
-                      color: uncountedCount > 0 ? '#1d4ed8' : undefined,
-                      fontWeight: 700,
-                    }}
-                  >
-                    <RotateCcwIcon size={14} />
-                    <span>{uncountedCount > 0 ? `تصفير المتبقي (${uncountedCount})` : 'تصفير المتبقي (0)'}</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={handleZeroAllCounts}
-                    title="وضع رصيد صفري (0) لكافة أصناف الجلسة لإثبات أن المخزن فارغ ثم تعديل ما يتواجد فعلياً"
-                  >
-                    <span>تصفير الكل (0)</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={handleResetAllToExpected}
-                    title="إعادة تعيين كافة الكميات المعدودة لتطابق رصيد النظام (تصفير الفروقات)"
-                  >
-                    <RefreshCwIcon size={14} />
-                    <span>ملء برصيد النظام</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={handleClearAllCounts}
-                    title="إفراغ كافة خانات العد للبدء في الجرد الأعمى (الأصناف الفارغة لا يتم إدراجها في الجلسة)"
-                  >
-                    <SlidersIcon size={14} />
-                    <span>إفراغ الخانات (أعمى)</span>
-                  </Button>
-                </>
-              ) : null}
-              <Button type="button" variant="secondary" onClick={handlePrintSheet} disabled={!sheetRows.length}>
-                <PrinterIcon size={15} />
-                <span>{t('inventory.sections.inventory_composer_cards.s61', "طباعة الشيت")}</span>
-              </Button>
-              <Button type="button" variant="secondary" onClick={handleExportExcel} disabled={!sheetRows.length}>
-                <FileSpreadsheetIcon size={15} />
-                <span>Excel</span>
-              </Button>
-            </div>
-          </div>
+          <StockCountComposerToolbar
+            t={t}
+            barcodeInputRef={barcodeInputRef}
+            barcodeScanInput={barcodeScanInput}
+            setBarcodeScanInput={setBarcodeScanInput}
+            handleBarcodeKeyDown={handleBarcodeKeyDown}
+            handleBarcodeScan={handleBarcodeScan}
+            canReviewStock={canReviewStock}
+            showExpectedInElectronicCount={showExpectedInElectronicCount}
+            setShowExpectedInElectronicCount={setShowExpectedInElectronicCount}
+            countType={countType}
+            items={items}
+            handlePopulateScopeItems={handlePopulateScopeItems}
+            scopeProducts={scopeProducts}
+            handleZeroUncounted={handleZeroUncounted}
+            uncountedCount={uncountedCount}
+            handleZeroAllCounts={handleZeroAllCounts}
+            handleResetAllToExpected={handleResetAllToExpected}
+            handleClearAllCounts={handleClearAllCounts}
+            handlePrintSheet={handlePrintSheet}
+            sheetRows={sheetRows}
+            handleExportExcel={handleExportExcel}
+          />
 
           {lastScannedItem ? (
             <div className="stock-count-scan-alert">
@@ -953,324 +665,44 @@ export function StockCountComposerCard({
           ) : null}
 
           {/* Quick Manual Add Row */}
-          <div className="stock-count-quick-entry-row">
-            <span className="entry-row-title">{t('inventory.sections.inventory_composer_cards.s64', "إدراج صنف في الجرد:")}</span>
-            <div className="entry-row-picker">
-              <InventoryProductPicker products={scopeProducts.length > 0 ? scopeProducts : products} value={form.productId} onChange={(productId) => onFormChange({ productId })} showStock showPrice={false} hideHint={true} />
-            </div>
-            <input
-              type="number"
-              min="0"
-              step="0.001"
-              className="entry-row-qty"
-              value={form.countedQty}
-              onChange={(e) => onFormChange({ countedQty: e.target.value })}
-              placeholder={t('inventory.sections.inventory_composer_cards.s65', "الكمية")}
-            />
-            <input
-              type="text"
-              className="entry-row-reason"
-              value={form.reason}
-              onChange={(e) => onFormChange({ reason: e.target.value })}
-              placeholder={t('inventory.sections.inventory_composer_cards.s66', "سبب الفرق (مثال: عجز / كسر)")}
-            />
-            <Button type="button" variant="secondary" onClick={onAddItem}>
-              <PlusIcon size={15} />
-              <span>{t('inventory.sections.inventory_composer_cards.s67', "إدراج في الجرد")}</span>
-            </Button>
-          </div>
+          <StockCountComposerQuickEntry
+            t={t}
+            scopeProducts={scopeProducts}
+            products={products}
+            form={form}
+            onFormChange={onFormChange}
+            onAddItem={onAddItem}
+          />
 
           {startCountMessage ? <div className="warning-box">{startCountMessage}</div> : null}
           <MutationFeedback isError={isError} isSuccess={isSuccess} error={error} errorFallback={t('inventory.sections.inventory_composer_cards.s68', "تعذر إنشاء جلسة الجرد")} successText={t('inventory.sections.inventory_composer_cards.s69', "تم إنشاء جلسة الجرد بنجاح.")} />
 
           {/* Table Search & Filter Bar */}
-          {items.length > 3 ? (
-            <div className="stock-count-table-filter-bar">
-              <div className="stock-count-table-search-box">
-                <span className="search-icon"><SearchIcon size={14} color="#94a3b8" /></span>
-                <input
-                  type="text"
-                  className="table-search-input"
-                  placeholder={t('inventory.sections.inventory_composer_cards.s70', "ابحث في جدول الجلسة باسم الصنف أو الباركود...")}
-                  value={tableSearchQuery}
-                  onChange={(e) => setTableSearchQuery(e.target.value)}
-                />
-                {tableSearchQuery ? (
-                  <button type="button" className="clear-search-btn" onClick={() => setTableSearchQuery('')}>×</button>
-                ) : null}
-              </div>
-
-              <div className="stock-count-filter-pills">
-                <button
-                  type="button"
-                  className={`filter-pill-btn ${tableFilterTab === 'all' ? 'filter-pill-btn--active' : ''}`}
-                  onClick={() => setTableFilterTab('all')}
-                >
-                  الكل ({items.length})
-                </button>
-                <button
-                  type="button"
-                  className={`filter-pill-btn ${tableFilterTab === 'counted' ? 'filter-pill-btn--active' : ''}`}
-                  onClick={() => setTableFilterTab('counted')}
-                >
-                  تم عدها ({countedCount})
-                </button>
-                <button
-                  type="button"
-                  className={`filter-pill-btn ${tableFilterTab === 'variance' ? 'filter-pill-btn--active' : ''}`}
-                  onClick={() => setTableFilterTab('variance')}
-                >
-                  فروقات ({varianceItems})
-                </button>
-                <button
-                  type="button"
-                  className={`filter-pill-btn ${tableFilterTab === 'uncounted' ? 'filter-pill-btn--active' : ''}`}
-                  onClick={() => setTableFilterTab('uncounted')}
-                >
-                  لم تُعد ({uncountedCount})
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginRight: 'auto', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontSize: '11px', color: '#64748b' }}>لكل صفحة:</span>
-                  {[25, 50, 100].map((size) => (
-                    <button
-                      key={size}
-                      type="button"
-                      onClick={() => pagination.setPageSize(size)}
-                      style={{
-                        padding: '2px 7px',
-                        fontSize: '11px',
-                        fontWeight: '700',
-                        borderRadius: '4px',
-                        border: pagination.pageSize === size ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
-                        background: pagination.pageSize === size ? '#eff6ff' : '#ffffff',
-                        color: pagination.pageSize === size ? '#1d4ed8' : '#64748b',
-                        cursor: 'pointer',
-                        transition: 'all 120ms ease',
-                      }}
-                    >
-                      {size}
-                    </button>
-                  ))}
-                </div>
-
-                {pagination.totalPages > 1 ? (
-                  <div className="stock-count-quick-pager" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>
-                      {t('pagination.page_of', 'صفحة {{page}} من {{totalPages}}', { page: pagination.page, totalPages: pagination.totalPages })}
-                    </span>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <Button variant="secondary" type="button" onClick={() => pagination.goToPage(pagination.page - 1)} disabled={!pagination.hasPreviousPage} style={{ padding: '3px 8px', fontSize: '11px', height: '28px', minHeight: '28px' }}>
-                        {t('pagination.prev', 'السابق')}
-                      </Button>
-                      <Button variant="secondary" type="button" onClick={() => pagination.goToPage(pagination.page + 1)} disabled={!pagination.hasNextPage} style={{ padding: '3px 8px', fontSize: '11px', height: '28px', minHeight: '28px' }}>
-                        {t('pagination.next', 'التالي')}
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
+          <StockCountComposerFilterBar
+            items={items}
+            t={t}
+            tableSearchQuery={tableSearchQuery}
+            setTableSearchQuery={setTableSearchQuery}
+            tableFilterTab={tableFilterTab}
+            setTableFilterTab={setTableFilterTab}
+            countedCount={countedCount}
+            varianceItems={varianceItems}
+            uncountedCount={uncountedCount}
+            pagination={pagination}
+          />
 
           {/* High Density Items Table */}
-          <div className="table-wrap stock-count-items-table-wrap">
-            {filteredItems.length ? (
-              <>
-              <table className="stock-count-items-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px', textAlign: 'center' }}>#</th>
-                    <th>{t('inventory.sections.inventory_composer_cards.s74', "الصنف")}</th>
-                    {canShowExpectedCount ? <th style={{ textAlign: 'center' }}>{t('inventory.sections.inventory_composer_cards.s75', "كمية النظام")}</th> : null}
-                    <th style={{ width: '130px', textAlign: 'center' }}>{t('inventory.sections.inventory_composer_cards.s76', "الكمية المعدودة")}</th>
-                    {canShowExpectedCount ? <th style={{ textAlign: 'center' }}>{t('inventory.sections.inventory_composer_cards.s77', "الفرق")}</th> : null}
-                    <th>{t('inventory.sections.inventory_composer_cards.s78', "سبب الفرق")}</th>
-                    <th style={{ width: '70px', textAlign: 'center' }}>{t('inventory.sections.inventory_composer_cards.s79', "إجراء")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pagination.rows.map((item, index) => {
-                    const prod = products.find((p) => String(p.id) === String(item.productId));
-                    const isSerialized = Boolean(prod?.trackSerials || (item.countedSerials && item.countedSerials.length > 0));
-                    const hasBatchTracking = Boolean(item.batchCountsText);
-                    return (
-                      <tr key={item.id}>
-                        <td style={{ textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>{pagination.rangeStart + index}</td>
-                        <td>
-                          <strong>{item.productName}</strong>
-                          {(isSerialized || hasBatchTracking) ? (
-                            <div style={{ marginTop: 4, display: 'grid', gap: 3 }}>
-                              {isSerialized ? (
-                                <textarea
-                                  rows={2}
-                                  style={{ fontSize: 11, minWidth: 130 }}
-                                  placeholder="السيريالات الموجودة فعلاً (رقم في كل سطر)"
-                                  value={(item.countedSerials || []).join('\n')}
-                                  onChange={event => updateCountItemById(item.id, {
-                                    countedSerials: event.target.value.split(/[\n,،]+/).map(s => s.trim()).filter(Boolean),
-                                  })}
-                                />
-                              ) : null}
-                              {hasBatchTracking ? (
-                                <textarea
-                                  rows={2}
-                                  style={{ fontSize: 11, minWidth: 130 }}
-                                  placeholder="رصيد التشغيلات: رقم:كمية؛ الجديدة NEW:الرقم:YYYY-MM-DD:كمية"
-                                  value={item.batchCountsText || ''}
-                                  onChange={event => updateCountItemById(item.id, { batchCountsText: event.target.value })}
-                                />
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </td>
-                      {canShowExpectedCount ? <td style={{ textAlign: 'center' }} className="muted">{item.expectedQty || 0}</td> : null}
-                      <td style={{ textAlign: 'center' }}>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.001"
-                          placeholder="—"
-                          style={{
-                            textAlign: 'center',
-                            fontWeight: 'bold',
-                            backgroundColor: (item.countedQty === '' || item.countedQty == null) ? '#fafafa' : '#ffffff',
-                            color: (item.countedQty === '' || item.countedQty == null) ? '#94a3b8' : '#0f172a',
-                          }}
-                          value={item.countedQty === '' || item.countedQty == null ? '' : String(item.countedQty)}
-                          onChange={(event) => {
-                            const val = event.target.value;
-                            if (val === '') {
-                              updateCountItemById(item.id, { countedQty: '', isCounted: false });
-                            } else {
-                              updateCountItemById(item.id, { countedQty: Number(val), isCounted: true });
-                            }
-                          }}
-                        />
-                      </td>
-                      {canShowExpectedCount ? (
-                        <td style={{ textAlign: 'center' }}>
-                          {item.isCounted === false || item.countedQty === '' || item.countedQty == null ? (
-                            <span className="muted" style={{ fontSize: '12px' }}>—</span>
-                          ) : Number(item.varianceQty || 0) === 0 ? (
-                            <span className="stock-count-variance stock-count-variance--zero">{t('inventory.sections.inventory_composer_cards.s80', "مطابق (0)")}</span>
-                          ) : Number(item.varianceQty || 0) < 0 ? (
-                            <span className="stock-count-variance stock-count-variance--deficit">{t('inventory.sections.inventory_composer_cards.s81', "عجز")} {item.varianceQty}</span>
-                          ) : (
-                            <span className="stock-count-variance stock-count-variance--surplus">{t('inventory.sections.inventory_composer_cards.s82', "زيادة +")}{item.varianceQty}</span>
-                          )}
-                        </td>
-                      ) : null}
-                      <td>
-                        <input value={item.reason || ''} onChange={(event) => updateCountItemById(item.id, { reason: event.target.value })} placeholder={t('inventory.sections.inventory_composer_cards.s83', "سبب الفرق")} />
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <Button type="button" variant="secondary" onClick={() => removeCountItemById(item.id)}>{t('inventory.sections.inventory_composer_cards.s84', "إزالة")}</Button>
-                      </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-                            {/* Slim Bottom Footer Bar */}
-              <div
-                className="stock-count-table-footer-bar"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px',
-                  padding: '8px 14px',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  marginTop: '10px',
-                  flexWrap: 'wrap',
-                }}
-              >
-                {/* Right side: Range info and Page Size selector */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>
-                    {t('pagination.range', 'عرض {{rangeStart}}-{{rangeEnd}} من أصل {{totalItems}} {{itemLabel}}', {
-                      rangeStart: pagination.rangeStart,
-                      rangeEnd: pagination.rangeEnd,
-                      totalItems: pagination.totalItems,
-                      itemLabel: t('inventory.sections.inventory_composer_cards.s60', 'صنف'),
-                    })}
-                  </span>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontSize: '11.5px', color: '#64748b' }}>{t('pagination.per_page', 'لكل صفحة:')}</span>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      {[25, 50, 100].map((size) => (
-                        <button
-                          key={size}
-                          type="button"
-                          onClick={() => pagination.setPageSize(size)}
-                          style={{
-                            padding: '3px 9px',
-                            fontSize: '11.5px',
-                            fontWeight: '700',
-                            borderRadius: '5px',
-                            border: pagination.pageSize === size ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
-                            background: pagination.pageSize === size ? '#eff6ff' : '#ffffff',
-                            color: pagination.pageSize === size ? '#1d4ed8' : '#475569',
-                            cursor: 'pointer',
-                            transition: 'all 120ms ease',
-                          }}
-                        >
-                          {size}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Left side: Navigation buttons */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#334155' }}>
-                    {t('pagination.page_of', 'صفحة {{page}} من {{totalPages}}', {
-                      page: pagination.page,
-                      totalPages: pagination.totalPages,
-                    })}
-                  </span>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <Button
-                      variant="secondary"
-                      type="button"
-                      onClick={() => pagination.goToPage(pagination.page - 1)}
-                      disabled={!pagination.hasPreviousPage}
-                      style={{ padding: '3px 10px', fontSize: '12px', height: '28px', minHeight: '28px' }}
-                    >
-                      {t('pagination.prev', 'السابق')}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      type="button"
-                      onClick={() => pagination.goToPage(pagination.page + 1)}
-                      disabled={!pagination.hasNextPage}
-                      style={{ padding: '3px 10px', fontSize: '12px', height: '28px', minHeight: '28px' }}
-                    >
-                      {t('pagination.next', 'التالي')}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              </>
-            ) : items.length ? (
-              <EmptyState
-                title={t('inventory.sections.inventory_composer_cards.s85', "لا توجد نتائج مطابقة للبحث")}
-                hint={t('inventory.sections.inventory_composer_cards.s86', "جرب البحث بكلمة أخرى أو اضغط على تصنيف (الكل).")}
-              />
-            ) : (
-              <EmptyState
-                title={t('inventory.sections.inventory_composer_cards.s87', "لا توجد عناصر في جلسة الجرد حتى الآن")}
-                hint={countType === 'category' || countType === 'supplier' || countType === 'full' ? t('inventory.sections.inventory_composer_cards.s88', "اضغط على زر (إدخال إلكتروني) بالأعلى لتنزيل الأصناف، أو استخدم مسح الباركود.") : t('inventory.sections.inventory_composer_cards.s89', "استخدم ماسح الباركود أو الإضافة اليدوية بالأعلى لبدء تسجيل الأصناف.")}
-              />
-            )}
-          </div>
+          <StockCountComposerTable
+            filteredItems={filteredItems}
+            t={t}
+            canShowExpectedCount={canShowExpectedCount}
+            pagination={pagination}
+            products={products}
+            updateCountItemById={updateCountItemById}
+            removeCountItemById={removeCountItemById}
+            items={items}
+            countType={countType}
+          />
         </div>
       )}
     </FormSection>
