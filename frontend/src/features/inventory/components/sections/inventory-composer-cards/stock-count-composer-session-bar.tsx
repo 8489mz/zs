@@ -6,7 +6,7 @@ import type { StockCountType } from './inventory-composer-cards-shared';
 import type { Location, StockCountItem } from '@/types/domain';
 
 export interface StockCountComposerSessionBarProps {
-  selectedCountType: { key: StockCountType; label: string; description: string } | undefined;
+  selectedCountType: { key: StockCountType; label: string; description: string };
   selectedLocation: Location | undefined;
   t: ReturnType<typeof useTranslation>['t'];
   selectedCategoryId: string;
