@@ -7,7 +7,7 @@ import { PosTerminalTerminals } from './pos-terminal/pos-terminal-terminals';
 import { PosTerminalPayments } from './pos-terminal/pos-terminal-payments';
 import { PosTerminalCharges } from './pos-terminal/pos-terminal-charges';
 import { PosTerminalConnection } from './pos-terminal/pos-terminal-connection';
-import type { BridgeJob, PosTerminalInfo, TerminalPaymentRequest, TerminalPaymentSession, TerminalConnectionTestResult } from './pos-terminal/pos-terminal-shared';
+import type { BridgeJob, BridgePoller, PosTerminalInfo, TerminalPaymentRequest, TerminalPaymentSession, TerminalConnectionTestResult } from './pos-terminal/pos-terminal-shared';
 export { derivePosBridgeKey } from './pos-terminal/pos-terminal-shared';
 export type { TerminalPaymentRequest } from './pos-terminal/pos-terminal-shared';
 
@@ -29,11 +29,11 @@ export class PosTerminalService {
   private _s5?: PosTerminalConnection;
 
   private get s1(): PosTerminalBridge {
-    return (this._s1 ??= new PosTerminalBridge(this.db, this.logger, this.activeSessions, this.sessionTtlMs, this.bridgePollers, this.pendingBridgeJobs, this.bridgeLastSeen));
+    return (this._s1 ??= new PosTerminalBridge(this.logger, this.activeSessions, this.sessionTtlMs, this.bridgePollers, this.pendingBridgeJobs, this.bridgeLastSeen, this.db));
   }
 
   private get s2(): PosTerminalTerminals {
-    return (this._s2 ??= new PosTerminalTerminals(this.db, this.logger));
+    return (this._s2 ??= new PosTerminalTerminals(this.logger, this.db));
   }
 
   private get s3(): PosTerminalPayments {

@@ -8,13 +8,13 @@ import type { BridgeJob, TerminalPaymentSession, BridgePoller } from './pos-term
 
 export class PosTerminalBridge {
   constructor(
-    private readonly db?: Kysely<Database>,
     private readonly logger: Logger,
     private readonly activeSessions: Map<string, TerminalPaymentSession>,
     private readonly sessionTtlMs: number,
     private readonly bridgePollers: Map<string, BridgePoller[]>,
     private readonly pendingBridgeJobs: Map<string, BridgeJob[]>,
     private readonly bridgeLastSeen: Map<string, number>,
+    private readonly db?: Kysely<Database>,
   ) {}
 
   pruneExpiredSessions(): void {

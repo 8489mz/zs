@@ -6,8 +6,8 @@ import type { PosTerminalInfo } from './pos-terminal-shared';
 
 export class PosTerminalTerminals {
   constructor(
-    private readonly db?: Kysely<Database>,
     private readonly logger: Logger,
+    private readonly db?: Kysely<Database>,
   ) {}
 
   /**
