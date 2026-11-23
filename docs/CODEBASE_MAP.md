@@ -135,13 +135,13 @@ canonical money engines.
 - Engines: (none)
 - Subdirectories: `dto`
 
-### `backend/src/modules/ai-copilot/` (7 files)
+### `backend/src/modules/ai-copilot/` (13 files)
 
 - Module: `ai-copilot.module.ts`
 - Controllers: `ai-copilot.controller.ts`
 - Services: `ai-copilot.service.ts`, `services/ai-agent.service.ts`, `services/ai-knowledge.service.ts`
 - Engines: `engines/ai-embedding.engine.spec.ts`, `engines/ai-embedding.engine.ts`
-- Subdirectories: `engines`, `services`
+- Subdirectories: `ai-copilot`, `engines`, `services`
 
 ### `backend/src/modules/approvals/` (3 files)
 
