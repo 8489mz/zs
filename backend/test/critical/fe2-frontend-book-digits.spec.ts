@@ -200,7 +200,7 @@ const checks = [
   [`${F}import-sales/SupplierCredit.tsx`, "roundMoneyValue(remaining * rate, currencyMoneyDigits('EGP'))", 'setAmountEgp(String(Number((remaining * rate).toFixed(2))));'],
   [`${F}import-sales/components/ChinaProformasTab.tsx`, 'roundMoneyValue(computedLinesTotal, currencyMoneyDigits(currency))', 'Number(computedLinesTotal.toFixed(2))'],
   [`${F}import-sales/components/ChinaQuotationsTab.tsx`, "currencyMoneyDigits('EGP')", 'const estimatedUnitLandedCostEgp = Number('],
-  [`${F}import-sales/ShipmentDetailsPage.tsx`, "roundMoneyValue(pricingCostEgp * (1 + (Number(wholesaleMargin) || 0) / 100), currencyMoneyDigits('EGP'))", 'Math.round((pricingCostEgp * (1 + (Number(wholesaleMargin) || 0) / 100)) * 100) / 100'],
+  [`${F}import-sales/shipment-details-page/shipment-item-row-inputs.tsx`, "roundMoneyValue(pricingCostEgp * (1 + (Number(wholesaleMargin) || 0) / 100), currencyMoneyDigits('EGP'))", 'Math.round((pricingCostEgp * (1 + (Number(wholesaleMargin) || 0) / 100)) * 100) / 100'],
   [`${F}products/components/NewProductForm.tsx`, "roundMoneyValue(newRetail, bookDigits)", "form.setValue('retailPrice', Number(newRetail.toFixed(2))"],
   [`${F}products/components/ProductArchiveConfirmDialog.tsx`, 'roundMoneyValue(currentStock * unitCost, currencyMoneyDigits(getGlobalSystemCurrency()))', 'const totalCost = Number((currentStock * unitCost).toFixed(2));'],
   [`${F}storefront/api/storefront.api.ts`, 'roundMoneyValue(subtotal * 0.1, digits)', 'const discountAmount = Math.round(subtotal * 0.1 * 100) / 100;'],

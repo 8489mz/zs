@@ -510,10 +510,10 @@ financial logic.
 - Files in this directory: `HR_ATTENDANCE_BACKEND_INVENTORY.md`, `HR_BACKEND_INVENTORY.md`, `HR_BACKEND_SCOPE.md`, `HR_REBUILD_PLAN.md`, `routes.tsx`
 - Subdirectories: `api`, `components`, `hooks`, `pages`, `utils`
 
-### `frontend/src/features/import-sales/` (38 files)
+### `frontend/src/features/import-sales/` (43 files)
 
 - Files in this directory: `AddShipmentItemDialog.tsx`, `ChinaSourcingPage.tsx`, `ContainerAutopsyModal.tsx`, `ContainerDepositsManager.tsx`, `ContainerPreordersModal.tsx`, `CustomsBrokerManager.tsx`, `CustomsTariffCalculator.tsx`, `ImportApprovalsManager.tsx`, `ImportCommandCenter.tsx`, `ImportFxTreasuryManager.tsx`, `ImportProjectsManager.tsx`, `ImportReconciliationManager.tsx`, `ManagePartnersDialog.tsx`, `NewShipmentDialog.tsx`, `PartnerLedgerComponents.tsx`, `ProfitPool.tsx`, `ShipmentDetailsPage.tsx`, `ShipmentsManager.tsx`, `SupplierCredit.tsx`, `routes.tsx`
-- Subdirectories: `api`, `components`
+- Subdirectories: `api`, `components`, `shipment-details-page`
 
 ### `frontend/src/features/inventory/` (98 files)
 
