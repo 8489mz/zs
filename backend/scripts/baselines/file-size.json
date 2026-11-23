@@ -7,7 +7,6 @@
     "src/core/auth/services/session.service.ts": 1023,
     "src/modules/contracting/contracting.controller.ts": 1363,
     "src/modules/hr/employee-portal.service.ts": 1010,
-    "src/modules/sales/services/pos-terminal.service.ts": 1412,
     "src/modules/sales/services/sales-orders.service.ts": 1204,
     "src/modules/settings/services/offline-releases.service.ts": 1133,
     "src/modules/settings/services/settings-demo-data.service.ts": 1489,
