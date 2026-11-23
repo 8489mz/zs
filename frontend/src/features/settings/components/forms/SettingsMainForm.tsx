@@ -1,8 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import { DialogShell } from '@/shared/components/dialog-shell';
-import { SubmitButton } from '@/shared/components/submit-button';
-import { MutationFeedback } from '@/shared/components/mutation-feedback';
-import { AlertTriangleIcon, LightbulbIcon, CompassIcon, CheckIcon } from '@/shared/components/icons/AppIcons';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -10,20 +6,18 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { settingsFormSchema, type SettingsFormInput, type SettingsFormOutput } from '@/features/settings/schemas/settings.schema';
 import { useUnsavedChangesGuard } from '@/shared/hooks/use-unsaved-changes-guard';
 import { SINGLE_STORE_MODE } from '@/config/product-scope';
-import { BranchForm } from '@/features/settings/components/forms/BranchForm';
 import { normalizeText, type SettingsMainFormProps } from '@/features/settings/components/forms/settings-forms.shared';
 import { useLocalePreference } from '@/shared/locale/LocaleProvider';
 import { useSettingsUpdateMutation } from '@/features/settings/hooks/useSettingsMutations';
 import { buildZPayFormValues } from '@/features/settings/contracts';
-import { DraftStateNotice } from '@/shared/components/draft-state-notice';
 import { resolveBridgePrinter, resolveElectronPrinter } from '@/lib/printer-preferences';
 import { useAuthStore } from '@/stores/auth-store';
 
-import { GeneralSettingsTab } from './tabs/GeneralSettingsTab';
-import { SalesInventorySettingsTab } from './tabs/SalesInventorySettingsTab';
-import { ModulesSettingsTab } from './tabs/ModulesSettingsTab';
-import { PrintingSettingsTab } from './tabs/PrintingSettingsTab';
 import { SETTINGS_FIELD_METADATA, parseBoundedNumber } from './settings-field-metadata';
+import { SettingsMainFormSetupBanner } from './settings-main-form/settings-main-form-setup-banner';
+import { SettingsMainFormNotices } from './settings-main-form/settings-main-form-notices';
+import { SettingsMainFormTabs } from './settings-main-form/settings-main-form-tabs';
+import { SettingsMainFormActions } from './settings-main-form/settings-main-form-actions';
 export { SETTINGS_FIELD_METADATA };
 
 export function SettingsMainForm({ settings, branches, locations, canManageSettings, setupMode = false, onSetupAdvance, onUpdateBranch }: SettingsMainFormProps) {
@@ -862,252 +856,33 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
         }
       `}</style>
 
-        {/* شريط دليل الإعداد السريع لتشغيل المنشأة */}
-        {setupMode && (
-          <div
-            style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderInlineStart: '4px solid #170e5e',
-              borderRadius: '12px',
-              padding: '16px 20px',
-              marginBottom: '18px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '12px',
-              boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div
-                style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '10px',
-                  background: '#ede9fe',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#170e5e',
-                  flexShrink: 0,
-                }}
-              >
-                <CompassIcon size={20} color="#170e5e" />
-              </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <strong style={{ fontSize: '0.96rem', color: '#0f172a' }}>
-                    {__t('settings.forms.settings_main_form.s0', "دليل التجهيز السريع — الخطوة 1 من 3: بيانات المنشأة وترويسة الفواتير")}
-                  </strong>
-                  <span
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      background: '#eff6ff',
-                      color: '#1d4ed8',
-                      border: '1px solid #bfdbfe',
-                      padding: '2px 8px',
-                      borderRadius: '6px',
-                    }}
-                  >
-                    {__t('settings.forms.settings_main_form.s1', "الخطوة 1 من 3")}
-                  </span>
-                </div>
-                <p style={{ margin: '3px 0 0', fontSize: '0.83rem', color: '#64748b' }}>
-                  {__t('settings.forms.settings_main_form.s2', "أدخل اسم المتجر، الهاتف، والعنوان. بعد النقر على \"حفظ الإعدادات\" سيتم نقلك تلقائياً للخطوة 2 (تجهيز الأصناف والبيانات التجريبية).")}
-                </p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <button
-                type="button"
-                onClick={() => onSetupAdvance ? onSetupAdvance() : navigate('/settings/demo-data?setup=quickstart')}
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '8px',
-                  padding: '7px 14px',
-                  fontSize: '0.82rem',
-                  fontWeight: 700,
-                  color: '#334155',
-                  cursor: 'pointer',
-                }}
-              >
-                {__t('settings.forms.settings_main_form.s3', "المتابعة للخطوة 2")}
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  padding: '7px 10px',
-                  fontSize: '0.82rem',
-                  color: '#64748b',
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                }}
-              >
-                {__t('settings.forms.settings_main_form.s4', "العودة للرئيسية")}
-              </button>
-            </div>
-          </div>
-        )}
+        <SettingsMainFormSetupBanner
+          setupMode={setupMode}
+          __t={__t}
+          onSetupAdvance={onSetupAdvance}
+          navigate={navigate}
+        />
 
-        {/* الإشعارات والأخطاء */}
-        <DraftStateNotice visible={form.formState.isDirty && !mutation.isPending} title={__t('settings.forms.settings_main_form.s5', "تغييرات غير محفوظة")} hint={__t('settings.forms.settings_main_form.s6', "احفظ التعديلات أو أعد ضبطها قبل مغادرة الشاشة.")} />
-        {!canManageSettings ? <div className="muted small" style={{ marginBottom: 16 }}>{__t('settings.forms.settings_main_form.s7', "هذا الحساب يملك صلاحية عرض الإعدادات فقط بدون تعديل.")}</div> : null}
-        <MutationFeedback isError={mutation.isError} isSuccess={mutation.isSuccess} error={mutation.error} errorFallback={__t('settings.forms.settings_main_form.s8', "تعذر حفظ الإعدادات")} successText={__t('settings.forms.settings_main_form.s9', "تم حفظ الإعدادات بنجاح.")} />
-        {form.formState.errors.root?.serverError?.message ? (
-          <div className="document-prototype-section" style={{ backgroundColor: '#fee2e2', borderColor: '#ef4444', marginBottom: 16 }}>
-            <div style={{ color: '#b91c1c' }}>{form.formState.errors.root.serverError.message}</div>
-          </div>
-        ) : null}
-
-        {/* التابات وتنبيه الأخطاء التفاعلي */}
-        {!form.formState.isValid && form.formState.isSubmitted && Object.keys(form.formState.errors).length > 0 && (
-          <div
-            className="settings-validation-alert"
-            style={{
-              padding: '14px 18px',
-              background: '#fff5f5',
-              border: '1px solid #fca5a5',
-              borderInlineStart: '4px solid #ef4444',
-              borderRadius: '10px',
-              marginBottom: '16px',
-              fontSize: '0.86rem',
-              boxShadow: '0 2px 6px rgba(239, 68, 68, 0.08)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-              <div style={{ fontWeight: 800, color: '#991b1b', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.92rem' }}>
-                <AlertTriangleIcon size={18} color="#dc2626" />
-                <span>{__t('settings.forms.settings_main_form.s10', "توجد حقول تتطلب المراجعة أو استكمال البيانات قبل الحفظ (")}{Object.keys(form.formState.errors).filter(k => k !== 'root').length} {__t('settings.forms.settings_main_form.s11', "حقول):")}</span>
-              </div>
-              <span style={{ fontSize: '0.78rem', color: '#b91c1c', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <LightbulbIcon size={13} color="#b91c1c" />
-                <span>{__t('settings.forms.settings_main_form.s12', "انقر على أي حقل أدناه للانتقال إليه مباشرة وتمييزه")}</span>
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
-              {Object.entries(tabErrors).map(([tabId, items]) => {
-                if (!items.length) return null;
-                const tabNames: Record<string, string> = {
-                  general: __t('settings.forms.settings_main_form.s13', "عام"),
-                  sales_inventory: __t('settings.forms.settings_main_form.s14', "البيع وقواعد المخزون"),
-                  modules: __t('settings.forms.settings_main_form.s15', "موديولات النظام"),
-                  printing: __t('settings.forms.settings_main_form.s16', "الطباعة والإيصالات"),
-                };
-                return (
-                  <div
-                    key={tabId}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #fecaca',
-                      borderRadius: '8px',
-                      padding: '8px 12px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '6px',
-                    }}
-                  >
-                    <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#7f1d1d', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#dc2626' }} />
-                      <span>{__t('settings.forms.settings_main_form.s17', "تبويب \"")}{tabNames[tabId] || tabId}&quot;:</span>
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      {items.map((item) => (
-                        <button
-                          key={item.fieldKey}
-                          type="button"
-                          onClick={() => navigateToFieldAndHighlight(item.fieldKey)}
-                          title={__t('settings.forms.settings_main_form.s18', "انقر للانتقال للحقل وتمييزه")}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            background: '#fef2f2',
-                            border: '1px solid #f87171',
-                            borderRadius: '6px',
-                            padding: '4px 10px',
-                            fontSize: '0.8rem',
-                            color: '#b91c1c',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#fee2e2';
-                            e.currentTarget.style.borderColor = '#dc2626';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#fef2f2';
-                            e.currentTarget.style.borderColor = '#f87171';
-                          }}
-                        >
-                          <span>{item.label}</span>
-                          {item.message && item.message !== item.label ? (
-                            <span style={{ fontWeight: 500, color: '#991b1b', fontSize: '0.76rem' }}>
-                              ({item.message})
-                            </span>
-                          ) : null}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        <div className="settings-tabs" style={{ display: 'inline-flex', background: '#f1f5f9', padding: '4px', borderRadius: '10px', gap: '4px', marginBottom: '16px', overflowX: 'auto' }}>
-          {[
-            { id: 'general', label: __t('settings.forms.settings_main_form.s19', "عام") },
-            { id: 'sales_inventory', label: salesInventoryTabLabel },
-            { id: 'modules', label: __t('settings.forms.settings_main_form.s20', "تخصيص المنظومة والنشاط") },
-            { id: 'printing', label: printingTabLabel },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                background: activeTab === tab.id ? 'var(--primary, #0f172a)' : 'transparent',
-                color: activeTab === tab.id ? '#ffffff' : ((tabErrors as any)[tab.id]?.length ? '#ef4444' : '#64748b'),
-                border: 'none',
-                padding: '6px 16px',
-                borderRadius: '7px',
-                fontSize: '0.84rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'background-color 0.15s ease, color 0.15s ease',
-                whiteSpace: 'nowrap',
-                boxShadow: activeTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <span>{tab.label}</span>
-              {(tabErrors as any)[tab.id]?.length > 0 ? (
-                <span style={{ background: '#ef4444', color: '#fff', fontSize: '10px', borderRadius: '10px', padding: '1px 6px', fontWeight: 800 }}>
-                  {(tabErrors as any)[tab.id].length}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-      <div className="settings-tab-content-wrapper">
-        <GeneralSettingsTab
+        <SettingsMainFormNotices
+          form={form}
+          mutation={mutation}
+          __t={__t}
+          canManageSettings={canManageSettings}
+          tabErrors={tabErrors}
+          navigateToFieldAndHighlight={navigateToFieldAndHighlight}
+        />
+        <SettingsMainFormTabs
+          __t={__t}
+          salesInventoryTabLabel={salesInventoryTabLabel}
+          printingTabLabel={printingTabLabel}
+          setActiveTab={setActiveTab}
+          activeTab={activeTab}
+          tabErrors={tabErrors}
           form={form}
           branches={branches}
           locations={locations}
           canManageSettings={canManageSettings}
           disabled={disabled}
-          activeTab={activeTab}
           branchQuery={branchQuery}
           setBranchQuery={setBranchQuery}
           filteredBranches={filteredBranches}
@@ -1135,114 +910,27 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
           setShowBranchQuickAdd={setShowBranchQuickAdd}
           visibleLocations={visibleLocations}
           onUpdateBranch={onUpdateBranch}
-        />
-
-        <SalesInventorySettingsTab
-          form={form}
-          disabled={disabled}
-          activeTab={activeTab}
-          settings={settings}
-        />
-
-        <ModulesSettingsTab form={form} disabled={disabled} activeTab={activeTab} />
-
-        <PrintingSettingsTab
-          form={form}
-          disabled={disabled}
-          activeTab={activeTab}
           settings={settings}
           systemPrinters={systemPrinters}
-          savedCashierPrinter={form.watch('posElectronCashierPrinter')}
-          savedKitchenPrinter={form.watch('posElectronKitchenPrinter')}
-          savedBarcodePrinter={form.watch('posElectronBarcodePrinter')}
-          savedDocumentPrinter={form.watch('posElectronDocumentPrinter')}
-          posKitchenPrinterEnabled={form.watch('posKitchenPrinterEnabled')}
-          branchName={selectedBranch?.name}
-          locationName={visibleLocations.find((loc) => String(loc.id) === String(form.watch('currentLocationId')))?.name}
         />
-      </div>
 
-      {!canManageSettings ? <div className="muted small">{__t('settings.forms.settings_main_form.s21', "هذا الحساب يملك صلاحية عرض الإعدادات فقط بدون تعديل.")}</div> : null}
-      <MutationFeedback isError={mutation.isError} isSuccess={mutation.isSuccess} error={mutation.error} errorFallback={__t('settings.forms.settings_main_form.s22', "تعذر حفظ الإعدادات")} successText={__t('settings.forms.settings_main_form.s23', "تم حفظ الإعدادات بنجاح.")} />
-
-      <div
-        className="actions compact-actions sticky-form-actions settings-save-actions"
-        style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}
-      >
-        <SubmitButton
-          type="submit"
-          isPending={mutation.isPending}
-          isSuccess={mutation.isSuccess}
-          disabled={!canManageSettings}
-          idleText={setupMode ? __t('settings.forms.settings_main_form.s24', "حفظ والانتقال للخطوة التالية") : __t('settings.forms.settings_main_form.s25', "حفظ الإعدادات")}
-          pendingText={__t('settings.forms.settings_main_form.s26', "جارٍ الحفظ...")}
-          successText={__t('settings.forms.settings_main_form.s23', "تم حفظ الإعدادات بنجاح.")}
-          style={{ minWidth: '160px', background: '#170e5e', color: '#ffffff' }}
-        />
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => { if (canNavigateAway()) form.reset(); }}
-          disabled={mutation.isPending || !form.formState.isDirty}
-          style={{ height: '36px', padding: '0 16px', fontSize: '13px' }}
-        >
-          {__t('settings.forms.settings_main_form.s27', "تفريغ التغييرات")}
-        </button>
-      </div>
-
-      {showSaveSuccess && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 14px',
-            background: '#f0fdf4',
-            border: '1.5px solid #86efac',
-            borderRadius: '8px',
-            color: '#15803d',
-            fontSize: '12.5px',
-            fontWeight: 800,
-            marginTop: '10px',
-            boxShadow: '0 1px 4px rgba(22, 163, 74, 0.12)',
-            transition: 'all 0.3s ease',
-          }}
-        >
-          <CheckIcon size={16} color="#16a34a" />
-          <span>{__t('settings.forms.settings_main_form.s23', "تم حفظ الإعدادات بنجاح.")} كافة التعديلات مطبقة ومفعلة مباشرة الآن.</span>
-        </div>
-      )}
-
-      {/* مودال إضافة فرع سريع */}
-      <DialogShell open={!SINGLE_STORE_MODE && showBranchQuickAdd} onClose={() => setShowBranchQuickAdd(false)} width="min(560px, 100%)" ariaLabel={__t('settings.forms.settings_main_form.s28', "إضافة فرع جديد")}>
-        <div className="page-stack">
-          <div><strong>{__t('settings.forms.settings_main_form.s29', "إضافة فرع جديد")}</strong></div>
-          <BranchForm
-            canManageSettings={canManageSettings}
-            setupMode={setupMode}
-            onSetupAdvance={onSetupAdvance}
-            hasExistingLocations={locations.length > 0}
-            initialValues={{ name: branchPrefillName }}
-            onCreated={(payload) => {
-              const nextBranchId = String(payload.branchId || '').trim();
-              if (nextBranchId) {
-                commitSelectedBranch(nextBranchId, payload.name || branchPrefillName);
-              } else if (payload.name) {
-                const matched = branches.find((branch) => normalizeText(String(branch.name || '')) === normalizeText(payload.name || ''));
-                if (matched?.id) {
-                  commitSelectedBranch(String(matched.id), String(matched.name || payload.name));
-                } else {
-                  setBranchQuery(payload.name || branchPrefillName);
-                }
-              }
-              setShowBranchQuickAdd(false);
-            }}
-          />
-          <div className="actions compact-actions" style={{ justifyContent: 'flex-start' }}>
-            <button type="button" className="btn btn-secondary" onClick={() => setShowBranchQuickAdd(false)}>{__t('settings.forms.settings_main_form.s30', "إلغاء")}</button>
-          </div>
-        </div>
-      </DialogShell>
+      <SettingsMainFormActions
+        canManageSettings={canManageSettings}
+        __t={__t}
+        mutation={mutation}
+        setupMode={setupMode}
+        canNavigateAway={canNavigateAway}
+        form={form}
+        showSaveSuccess={showSaveSuccess}
+        showBranchQuickAdd={showBranchQuickAdd}
+        setShowBranchQuickAdd={setShowBranchQuickAdd}
+        onSetupAdvance={onSetupAdvance}
+        locations={locations}
+        branchPrefillName={branchPrefillName}
+        commitSelectedBranch={commitSelectedBranch}
+        branches={branches}
+        setBranchQuery={setBranchQuery}
+      />
 
 
     </form>
