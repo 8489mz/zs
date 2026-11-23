@@ -20,7 +20,6 @@
     "src/features/import-sales/CustomsBrokerManager.tsx": 1051,
     "src/features/import-sales/ShipmentDetailsPage.tsx": 1258,
     "src/features/inventory/components/sections/InventoryComposerCards.tsx": 1278,
-    "src/features/maritime-freight/api/maritime-freight.api.ts": 1365,
     "src/features/maritime-freight/components/MaritimeSettingsTab.tsx": 1315,
     "src/features/products/components/BarcodePrintDialog.tsx": 1066,
     "src/features/products/components/EditProductForm.tsx": 1043,
