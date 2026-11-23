@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { normalize } from '@/features/hr/pages/payroll/hr-payroll.helpers';
 import type { HrPayrollRunItem, HrPayrollAdjustment } from '@/types/domain';
-import { printPayslip } from './payroll-review-item-modal/payroll-review-item-modal-payslip';
+import { printPayslip, type PrintPayslipArgs } from './payroll-review-item-modal/payroll-review-item-modal-payslip';
 import { printThermalReceipt } from './payroll-review-item-modal/payroll-review-item-modal-thermal-receipt';
 import { PayrollReviewItemModalHeader } from './payroll-review-item-modal/payroll-review-item-modal-header';
 import { PayrollReviewItemModalKpiStrip } from './payroll-review-item-modal/payroll-review-item-modal-kpi-strip';
