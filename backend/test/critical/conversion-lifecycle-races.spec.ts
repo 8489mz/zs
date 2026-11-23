@@ -329,13 +329,17 @@ async function main() {
     assert.equal(conversionRecoverySaleId(null), null);
 
     // 12. Source pins + invariant pin.
-    const orderSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-orders.service.ts'), 'utf8');
-    const confirmSlice = orderSource.slice(orderSource.indexOf('async confirmAndReserve'), orderSource.indexOf('async cancelOrder'));
+    // File #119 (two-path): confirmAndReserve/cancelOrder moved to
+    // sales-orders-confirmation.ts; the conversion presence pins moved to
+    // sales-orders-conversion.ts. The facade holds neither.
+    const confirmSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-orders/sales-orders-confirmation.ts'), 'utf8');
+    const conversionSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-orders/sales-orders-conversion.ts'), 'utf8');
+    const confirmSlice = confirmSource.slice(confirmSource.indexOf('async confirmAndReserve'), confirmSource.indexOf('async cancelOrder'));
     assert.ok(confirmSlice.includes('forUpdate()'), 'confirmAndReserve must lock the order row');
     assert.ok(confirmSlice.includes('transaction().execute'), 'confirmAndReserve must read inside one transaction');
-    assert.ok(orderSource.includes('reserveOperation'), 'order conversion must reserve the operation row');
-    assert.ok(orderSource.includes('recordFailure'), 'order conversion must record a failed sale attempt');
-    assert.ok(orderSource.includes('getOperationState'), 'order conversion must read the operation row for recovery');
+    assert.ok(conversionSource.includes('reserveOperation'), 'order conversion must reserve the operation row');
+    assert.ok(conversionSource.includes('recordFailure'), 'order conversion must record a failed sale attempt');
+    assert.ok(conversionSource.includes('getOperationState'), 'order conversion must read the operation row for recovery');
     const quoteSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/quotations.service.ts'), 'utf8');
     const quoteSlice = quoteSource.slice(quoteSource.indexOf('async convertToSale'));
     assert.ok(quoteSlice.includes("'converting'"), 'quotation conversion must claim a converting state');

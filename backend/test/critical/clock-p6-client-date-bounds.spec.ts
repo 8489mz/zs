@@ -657,7 +657,9 @@ async function main(): Promise<void> {
   for (const file of [
     '../../src/modules/treasury/treasury.service.ts',
     '../../src/modules/purchases/services/goods-receipt-create.service.ts',
-    '../../src/modules/sales/services/sales-orders.service.ts',
+    // File #119: createOrder (the checkClientBusinessDay call site) moved
+    // to sales-orders-creation.ts — the facade holds no such call.
+    '../../src/modules/sales/services/sales-orders/sales-orders-creation.ts',
     '../../src/modules/sales/services/customer-installments.service.ts',
     '../../src/modules/accounting/services/ar-collections.service.ts',
   ]) {

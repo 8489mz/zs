@@ -82,7 +82,7 @@ root for capability-document ownership rules before editing them.
 
 ## Backend layout
 
-- `backend/src/` total: 1064 files.
+- `backend/src/` total: 1071 files.
   - `backend/src/modules/`: 556 files in
     37 module directories (table below).
   - `backend/src/database/`: 412 files,
@@ -327,7 +327,7 @@ canonical money engines.
 - Engines: (none)
 - Subdirectories: `dto`, `saas-admin`
 
-### `backend/src/modules/sales/` (61 files)
+### `backend/src/modules/sales/` (68 files)
 
 - Module: `sales.module.ts`
 - Controllers: `controllers/cashier-fraud-radar.controller.ts`, `controllers/commercial-subscription.controller.ts`, `controllers/customer-installments.controller.ts`, `controllers/delivery-aggregators.controller.ts`, `controllers/kds.controller.ts`, `controllers/kitchen-printers.controller.ts`, `controllers/pos-terminal.controller.ts`, `controllers/price-lists.controller.ts`, `controllers/quotations.controller.ts`, `controllers/restaurant-advanced-fnb.controller.ts`, `controllers/restaurant-food-waste.controller.ts`, `controllers/sales-orders.controller.ts`, `controllers/table-reservations.controller.ts`, `controllers/table-service-calls.controller.ts`, `sales.controller.ts`

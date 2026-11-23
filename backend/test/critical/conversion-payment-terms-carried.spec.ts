@@ -272,8 +272,10 @@ async function main() {
     // 9. Source pins: both conversions resolve terms through the one
     // resolver and build the payload from its result.
     {
+      // File #119: the order-conversion body moved to
+      // sales-orders-conversion.ts — the facade holds none of these pins.
       const ordersSource = readFileSync(
-        resolve(__dirname, '../../src/modules/sales/services/sales-orders.service.ts'),
+        resolve(__dirname, '../../src/modules/sales/services/sales-orders/sales-orders-conversion.ts'),
         'utf8',
       );
       const quotationsSource = readFileSync(

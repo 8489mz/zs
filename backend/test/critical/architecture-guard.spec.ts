@@ -150,7 +150,9 @@ async function main(): Promise<void> {
   );
 
   // 5. Sales order conversion: no swallowed re-reserve, no pool-handle release.
-  const salesOrders = stripComments(readFile('backend/src/modules/sales/services/sales-orders.service.ts'));
+  // File #119: the conversion body moved to sales-orders-conversion.ts —
+  // the facade no longer contains these strings.
+  const salesOrders = stripComments(readFile('backend/src/modules/sales/services/sales-orders/sales-orders-conversion.ts'));
   assert.ok(!salesOrders.includes('catch(() => undefined)'), 'no swallowed compensating write');
   assert.ok(!salesOrders.includes('releaseLocationStock(this.db'), 'no pool-handle release');
   assert.ok(salesOrders.includes('conversionRelease'), 'conversion release must stay wired into createSale');

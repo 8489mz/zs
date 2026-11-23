@@ -516,7 +516,9 @@ async function main(): Promise<void> {
     const { resolve } = await import('node:path');
     const writeSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale/compute-totals-and-gates.ts'), 'utf8');
     assert.ok(writeSource.includes('roundSaleInvoiceTotals'), 'createSale rounds totals through the shared seam');
-    const ordersSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-orders.service.ts'), 'utf8');
+    // File #119: the order-conversion body moved to
+    // sales-orders-conversion.ts — the facade holds none of these pins.
+    const ordersSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-orders/sales-orders-conversion.ts'), 'utf8');
     assert.ok(ordersSource.includes('resolveConversionDiscounts'), 'order conversion reconciles line discounts');
     assert.ok(ordersSource.includes('resolveConversionPaymentTerms'), 'order conversion carries payment terms');
     assert.ok(ordersSource.includes('lineDiscount'), 'order conversion payloads carry lineDiscount');
