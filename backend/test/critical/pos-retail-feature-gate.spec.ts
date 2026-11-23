@@ -613,7 +613,7 @@ async function main(): Promise<void> {
     const settingsSource = readFileSync(resolve(__dirname, '../../src/modules/settings/settings.service.ts'), 'utf8');
     assert.ok(!settingsSource.includes("primaryActivity = 'retail_general';\n      } else if ((primaryActivity === 'services'"), 'no services->retail_general rewrite left in getSettings');
     assert.ok(settingsSource.includes("subVertical === 'manufacturing'"), 'manufacturing settings branch matches the profile subVertical (the pillar check was dead)');
-    const verticalSource = readFileSync(resolve(__dirname, '../../../frontend/src/shared/verticals/vertical-scope.ts'), 'utf8');
+    const verticalSource = readFileSync(resolve(__dirname, '../../../frontend/src/shared/verticals/vertical-scope/resolve-current-vertical.ts'), 'utf8');
     assert.ok(verticalSource.includes("tenant?.features?.includes('pos')"), 'sidebar vertical promotes services only on a real pos feature');
     assert.ok(!verticalSource.includes("tenant?.plan_id === 'plan_ultimate'"), 'no plan_ultimate promotion left in the sidebar vertical');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
