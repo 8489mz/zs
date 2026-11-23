@@ -19,7 +19,6 @@
     "src/features/products/components/NewProductForm.tsx": 1013,
     "src/features/products/components/ProductsTableCard.tsx": 1184,
     "src/features/sales/pages/CreateSalesOrderPage.tsx": 1120,
-    "src/features/settings/components/forms/tabs/GeneralSettingsTab.tsx": 1208,
     "src/features/settings/components/modular-configurator/SmartModularConfiguratorModal.tsx": 1104,
     "src/features/settings/components/user-management/UnifiedAccessDirectoryPanel.tsx": 1144,
     "src/features/settings/components/workspace-sections/SystemUpdatesSection.tsx": 1129,
