@@ -57,7 +57,7 @@ describe('Desktop vs Mobile Viewport Isolation & 1280px Layout Invariants', () =
   });
 
   it('prevents duplicate DraftStateNotice renders in SettingsMainForm', () => {
-    const mainFormTsxPath = path.join(frontendDir, 'src/features/settings/components/forms/SettingsMainForm.tsx');
+    const mainFormTsxPath = path.join(frontendDir, 'src/features/settings/components/forms/settings-main-form/settings-main-form-notices.tsx');
     expect(fs.existsSync(mainFormTsxPath)).toBe(true);
 
     const formContent = fs.readFileSync(mainFormTsxPath, 'utf8');
