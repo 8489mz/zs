@@ -17,7 +17,7 @@ import {
   buildSalesPurchasesSeriesComponents,
   buildSeriesDayComponentsFromRows,
 } from './helpers/reports-series.helper';
-import { buildDashboardComputedState, buildDashboardOverviewPayload, buildDashboardScope, buildInventorySnapshot, buildPartnerExposureSnapshot } from './helpers/reports-dashboard.helper';
+import { buildDashboardComputedState, buildDashboardOverviewPayload, buildDashboardScope, buildInventorySnapshot, buildPartnerExposureSnapshot, fetchEarliestOpenShiftOpenedAt, fetchTodayWindowTotals, resolveOpenShiftTodayWindow, type TodayWindowTotals } from './helpers/reports-dashboard.helper';
 import { buildCustomerBalancesPayload, buildCustomerLedgerPayload, buildSupplierBalancesPayload, buildSupplierLedgerPayload, LedgerSummaryRow, PartnerLedgerEntryRow } from './helpers/reports-ledger.helper';
 import { buildCustomerLedgerTotals, buildSupplierLedgerTotals } from './helpers/reports-partner-ledger.helper';
 import { buildInventoryReportItems, buildInventorySummary, InventoryLocationBreakdownRow, InventoryReportProductRow } from './helpers/reports-inventory.helper';
@@ -391,10 +391,22 @@ export class ReportsService {
     }
     const scope = buildDashboardScope(new Date(), businessTimezone);
     const today = scope.today;
-    const todayStart = today.start;
     const todayEnd = today.end;
     const trendStart = scope.trendStart;
     const todayIso = scope.activeOfferDate;
+
+    // INV-HOME-PROFITS-OPEN-SHIFT: the earliest open shift for the
+    // tenant extends the home "today" window back to its open instant.
+    // A closed shift, or none at all, keeps the calendar day.
+    const todayWindow = resolveOpenShiftTodayWindow(
+      today,
+      await fetchEarliestOpenShiftOpenedAt({
+        db: this.db,
+        tenantId,
+        branchId: query.branchId,
+        locationId: query.locationId,
+      }),
+    );
 
     // PO-2 (PERFORMANCE_CONSTITUTION.md §5): this used to pull every active product/customer/supplier
     // for the tenant into Node and filter/reduce over them — linear in catalog size, so a tenant with
@@ -556,7 +568,7 @@ export class ReportsService {
           sql<number>`coalesce(sum(si.line_total), 0)`.as('sales_total'),
         ])
         .where('s.status', '=', 'posted')
-        .where('s.created_at', '>=', todayStart)
+        .where('s.created_at', '>=', todayWindow.start)
         .where('s.created_at', '<=', todayEnd)
         .where(this.tenantPredicate(auth, 's'))
         .groupBy(['si.product_id', 'si.product_name', 's.branch_id', 's.location_id'])
@@ -571,6 +583,24 @@ export class ReportsService {
     const topTodayRows = filterScope(rawTopTodayRows, query);
     const activeOffers = activeOffersRows.length;
 
+    // INV-HOME-PROFITS-OPEN-SHIFT: the trend rows above are pre-aggregated
+    // by calendar day, so they cannot carry the extended window — a
+    // prior-day sale's dateKey is yesterday and the snapshot filter would
+    // drop it. The extended "today" figures therefore come from two extra
+    // window aggregates, only when a shift actually extends the window.
+    // The 30-day trends keep the calendar-day rows, untouched.
+    let todayWindowTotals: TodayWindowTotals | undefined;
+    if (todayWindow.extended) {
+      todayWindowTotals = await fetchTodayWindowTotals({
+        db: this.db,
+        tenantId,
+        branchId: query.branchId,
+        locationId: query.locationId,
+        start: todayWindow.start,
+        end: todayWindow.end,
+      });
+    }
+
     const dashboardState = buildDashboardComputedState({
       recentSalesRows,
       recentPurchasesRows,
@@ -578,6 +608,7 @@ export class ReportsService {
       businessTimezone,
       todayKey: today.key,
       moneyDigits,
+      todayWindowTotals,
     });
 
     const inventorySnapshot = buildInventorySnapshot({
