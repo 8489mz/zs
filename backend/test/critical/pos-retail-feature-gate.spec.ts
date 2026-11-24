@@ -617,7 +617,7 @@ async function main(): Promise<void> {
     const { resolve } = await import('node:path');
     const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale/load-sale-context.ts'), 'utf8');
     assert.ok(serviceSource.includes('POS_FEATURE_NOT_AVAILABLE'), 'create-sale carries the POS feature gate');
-    const settingsSource = readFileSync(resolve(__dirname, '../../src/modules/settings/settings.service.ts'), 'utf8');
+    const settingsSource = readFileSync(resolve(__dirname, '../../src/modules/settings/settings/settings-reads.ts'), 'utf8');
     assert.ok(!settingsSource.includes("primaryActivity = 'retail_general';\n      } else if ((primaryActivity === 'services'"), 'no services->retail_general rewrite left in getSettings');
     assert.ok(settingsSource.includes("subVertical === 'manufacturing'"), 'manufacturing settings branch matches the profile subVertical (the pillar check was dead)');
     const verticalSource = readFileSync(resolve(__dirname, '../../../frontend/src/shared/verticals/vertical-scope/resolve-current-vertical.ts'), 'utf8');

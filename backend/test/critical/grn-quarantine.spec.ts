@@ -537,7 +537,7 @@ async function main(): Promise<void> {
     assert.ok(engineSource.includes("'quarantine'"), 'the sellable-locations engine excludes quarantine');
     const createSaleSource = readFileSync(resolve(here, '../../src/modules/sales/services/create-sale/load-sale-context.ts'), 'utf8');
     assert.ok(createSaleSource.includes("'damaged', 'in_transit', 'quarantine'"), 'the sale guards exclude quarantine');
-    const settingsSource = readFileSync(resolve(here, '../../src/modules/settings/settings.service.ts'), 'utf8');
+    const settingsSource = readFileSync(resolve(here, '../../src/modules/settings/settings/settings-branches-locations-write.ts'), 'utf8');
     assert.ok(settingsSource.includes("'damaged', 'quarantine'"), 'location creation accepts the quarantine type');
     const locationsPage = readFileSync(resolve(here, '../../../frontend/src/features/inventory/pages/LocationsManagementPage.tsx'), 'utf8');
     assert.ok(locationsPage.includes("'quarantine'"), 'the locations UI offers the quarantine type');

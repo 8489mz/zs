@@ -95,7 +95,7 @@
 | backend/src/modules/settings/services/settings-demo-data-wipe-tables.ts:95 | delete | (delete) | no | Tenant wipe/demo reset (deleteFrom), not a ledger movement. |
 | backend/src/modules/settings/services/settings-import.service.ts:615 | insert | opening_balance | yes | Opening balance on import: row written without an applyStockDelta call in this file. Phase 1: route through the ledger or document why direct. |
 | backend/src/modules/settings/services/settings-import.service.ts:1067 | insert | opening_stock | yes | Opening stock on import: see above. |
-| backend/src/modules/settings/settings.service.ts:948 | delete | (delete) | no | Location delete cleanup (deleteFrom), not a ledger movement. |
+| backend/src/modules/settings/settings/settings-locations-admin.ts:89 | delete | (delete) | no | Location delete cleanup (deleteFrom), not a ledger movement. |
 | backend/src/modules/tradein/tradein.service.ts:346 | insert | tradein_in | yes |  |
 
 ## Reverse asymmetry (screening only, not proven violations)

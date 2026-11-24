@@ -7,7 +7,6 @@
     "src/core/auth/services/session.service.ts": 1023,
     "src/modules/hr/employee-portal.service.ts": 1010,
     "src/modules/settings/services/offline-releases.service.ts": 1133,
-    "src/modules/settings/settings.service.ts": 1169,
     "src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts": 1352,
     "src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts": 1468
   }
