@@ -9,7 +9,6 @@
     "src/features/contracting/components/ClientQuotationModal.tsx": 1064,
     "src/features/contracting/utils/boqExcelParser.ts": 1107,
     "src/features/delivery-reps/components/VanSettleTab.tsx": 1756,
-    "src/features/hr/components/QuickCashAdvanceModal.tsx": 1159,
     "src/features/hr/pages/EmployeeProfilePage.tsx": 1018,
     "src/features/hr/pages/HrAttendancePage.tsx": 1127,
     "src/features/products/components/BarcodePrintDialog.tsx": 1066,
