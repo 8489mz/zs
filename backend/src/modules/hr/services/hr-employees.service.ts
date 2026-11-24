@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Kysely, sql, type Transaction } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
-import { paginateRows } from '../../../common/utils/pagination';
+import { boundedPage } from '../../../common/utils/bounded-page';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -158,6 +158,51 @@ export class HrEmployeesService {
 
   async listEmployees(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
+    const search = clean(query.search).toLowerCase();
+    const canViewEmployeeFiles = hasHrPermission(auth, 'hrEmployees') || auth.permissions.includes('*');
+    const canViewSalaryFields = canViewSalary(auth) || auth.permissions.includes('*');
+    const tenant = this.tenantPredicate(auth, 'e');
+    // INV-HR-EMPLOYEES-SQL-PAGINATION: the search predicate is pushed
+    // to SQL — the same six fields the in-memory filter checked
+    // (employeeNo, displayName, username, departmentName, jobTitleName,
+    // phone). strpos() is the exact `.includes()` equivalent, so LIKE
+    // wildcards in the search term stay literal. The phone branch
+    // applies only when the caller may view employee files — otherwise
+    // the phone is masked and must never match.
+    const searchPredicate = search
+      ? sql<boolean>`(
+        strpos(lower(btrim(coalesce(e.employee_no, ''))), ${search}) > 0
+        OR strpos(lower(coalesce(nullif(btrim(e.display_name), ''), btrim(btrim(coalesce(e.first_name, '')) || ' ' || btrim(coalesce(e.last_name, ''))))), ${search}) > 0
+        OR strpos(lower(btrim(coalesce(u.username, ''))), ${search}) > 0
+        OR strpos(lower(btrim(coalesce(d.name, ''))), ${search}) > 0
+        OR strpos(lower(btrim(coalesce(j.name, ''))), ${search}) > 0
+        ${canViewEmployeeFiles
+          ? sql`OR strpos(lower(btrim(coalesce((SELECT c.value FROM hr_employee_contacts c WHERE c.employee_id = e.id AND c.tenant_id = e.tenant_id ORDER BY c.is_primary DESC, c.id ASC LIMIT 1), ''))), ${search}) > 0`
+          : sql``}
+      )`
+      : null;
+    const where = searchPredicate ? sql<boolean>`${tenant} AND ${searchPredicate}` : tenant;
+    // INV-HR-EMPLOYEES-SQL-PAGINATION: the summary counts are exact
+    // over the FULL filtered set, never just the page — one COUNT
+    // query with the same predicates as the page query.
+    const counts = await sql<{ total_items: string; active_count: string }>`
+      SELECT COUNT(*) AS total_items,
+        COUNT(*) FILTER (WHERE coalesce(nullif(btrim(e.status), ''), 'active') = 'active') AS active_count
+      FROM hr_employees e
+      LEFT JOIN hr_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
+      LEFT JOIN hr_job_titles j ON j.id = e.job_title_id AND j.tenant_id = e.tenant_id
+      LEFT JOIN users u ON u.id = e.user_id AND u.tenant_id = e.tenant_id
+      WHERE ${where}
+    `.execute(this.db);
+    const totalItems = Number(counts.rows[0]?.total_items || 0);
+    const activeCount = Number(counts.rows[0]?.active_count || 0);
+    // paginateRows semantics preserved: defaultSize 25, page clamped
+    // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
+    // The cap is now 200 (boundedPage), not 5000.
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 25);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
     const result = await sql<Record<string, unknown>>`
       SELECT e.*, d.name AS department_name, j.name AS job_title_name, p.name AS position_name, b.name AS branch_name, l.name AS location_name, u.username AS username
       , to_char(e.hire_date, 'YYYY-MM-DD') AS hire_date_text
@@ -169,21 +214,20 @@ export class HrEmployeesService {
       LEFT JOIN branches b ON b.id = e.branch_id AND b.tenant_id = e.tenant_id
       LEFT JOIN stock_locations l ON l.id = e.location_id AND l.tenant_id = e.tenant_id
       LEFT JOIN users u ON u.id = e.user_id AND u.tenant_id = e.tenant_id
-      WHERE ${this.tenantPredicate(auth, 'e')}
+      WHERE ${where}
       ORDER BY e.id DESC
+      LIMIT ${pageSize} OFFSET ${offset}
     `.execute(this.db);
-    const search = clean(query.search).toLowerCase();
     // INV-LEAVE-BALANCE-NOT-DEDUCTING: one batch reconcile for the
     // listed employees, so the list shows the same used days as the
     // profile (approvals posted before the forward deduction existed
-    // never moved the stored counter).
+    // never moved the stored counter). Page-scoped: only the page's
+    // ids are reconciled — the values on the page are identical.
     const reconciledUsedByEmployee = await this.deductibleApprovedLeaveDaysByEmployee(
       result.rows.map((row) => Number(row.id)),
       String(auth.tenantId || ''),
     );
-    const canViewEmployeeFiles = hasHrPermission(auth, 'hrEmployees') || auth.permissions.includes('*');
-    const canViewSalaryFields = canViewSalary(auth) || auth.permissions.includes('*');
-    let rows = result.rows.map((row) => ({
+    const rows = result.rows.map((row) => ({
       id: String(row.id),
       employeeNo: clean(row.employee_no),
       nationalId: canViewEmployeeFiles ? clean(row.national_id) : '',
@@ -237,11 +281,7 @@ export class HrEmployeesService {
       ),
       notes: canViewEmployeeFiles ? clean(row.notes) : '',
     }));
-    if (search) {
-      rows = rows.filter((row) => [row.employeeNo, row.displayName, row.username, row.departmentName, row.jobTitleName, row.phone].some((value) => value && value.toLowerCase().includes(search)));
-    }
-    const paged = paginateRows(rows, query, { defaultSize: 25, maxSize: 5000 });
-    return { employees: paged.rows, pagination: paged.pagination, summary: { totalItems: rows.length, activeCount: rows.filter((row) => row.status === 'active').length } };
+    return { employees: rows, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary: { totalItems, activeCount } };
   }
 
   async getEmployeeProfile(id: number, auth: AuthContext): Promise<Record<string, unknown>> {

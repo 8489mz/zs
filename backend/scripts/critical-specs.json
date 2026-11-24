@@ -308,6 +308,7 @@
     "test/critical/van-presales-consolidate-delivery-rep-alias.spec.ts",
     "test/critical/van-presales-order-details-line-total.spec.ts",
     "test/critical/van-portal-sale-rep-attribution-f20.spec.ts",
-    "test/critical/migration-0339-idempotent.spec.ts"
+    "test/critical/migration-0339-idempotent.spec.ts",
+    "test/critical/hr-employees-sql-pagination.spec.ts"
   ]
 }

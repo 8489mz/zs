@@ -56,10 +56,23 @@ export function QuickCashAdvanceModal() {
     };
   }, []);
 
-  // Fetch active employees for dropdown
+  // Fetch active employees for dropdown — paged through, because the
+  // endpoint caps a page at 200 rows (INV-HR-EMPLOYEES-SQL-PAGINATION)
+  // and this dropdown needs the whole list. Same shape out as before.
   const { data: employeesData } = useQuery({
     queryKey: ['hr.employees', { pageSize: 1000 }],
-    queryFn: () => http<any>('/api/hr/employees?pageSize=1000&status=active'),
+    queryFn: async () => {
+      const all: any[] = [];
+      let page = 1;
+      let totalPages = 1;
+      while (page <= totalPages && page <= 50) {
+        const res = await http<any>(`/api/hr/employees?page=${page}&pageSize=200&status=active`);
+        all.push(...(res?.employees || []));
+        totalPages = Number(res?.pagination?.totalPages || 1);
+        page += 1;
+      }
+      return { employees: all };
+    },
     enabled: isOpen && canAccess,
     staleTime: 60000,
   });
