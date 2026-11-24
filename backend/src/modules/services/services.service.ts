@@ -4,7 +4,7 @@ import { AuditService } from '../../core/audit/audit.service';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../common/errors/app-error';
-import { paginateRows } from '../../common/utils/pagination';
+import { boundedPage } from '../../common/utils/bounded-page';
 import { getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
@@ -196,6 +196,46 @@ export class ServicesService {
     // Book digits once per call; `db` is the transaction handle when the
     // caller runs inside runInTransaction, never the pool inside a txn.
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(db, scope.tenantId));
+    const search = String(query.search || '').trim().toLowerCase();
+    const filter = String(query.filter || 'all').trim().toLowerCase();
+    // INV-SERVICES-TODAY-COUNT: "today" is the TENANT-local day, and a row
+    // counts when its service_date falls on that day. The old code compared
+    // String(row.serviceDate).slice(0, 10) with a UTC ISO date -- but
+    // service_date is TIMESTAMPTZ, which pg returns as a JS Date, so
+    // String(date) is "Wed Nov 05 ..." and the comparison could never
+    // match (todayCount was always 0); and the UTC day itself was wrong
+    // for 00:00-02:00 Cairo. Format the row's date in the tenant timezone.
+    const businessTz = await getTenantTimezone(db, scope.tenantId);
+    const today = todayTenantDate(businessTz);
+    // INV-RETURNS-SERVICES-USERS-SQL-PAGINATION: the page is fetched
+    // from SQL — the old in-memory pagination semantics are preserved
+    // (defaultSize 20, page clamped to [1, totalPages], cap 200), and
+    // the summary stays exact over the FULL filtered set. The filter is
+    // lowercased ('today' = the tenant-local day of service_date;
+    // 'high' = amount >= 100; 'notes' = notes trim().length > 0). The
+    // payment channel normalizes in SQL (trim() === 'card' ? 'card' :
+    // 'cash'). The internal callers pass ({}, auth, trx) and still see
+    // page 1 of 20; `db` stays the transaction handle throughout.
+    const channel = sql<string>`CASE WHEN btrim(coalesce(s.payment_channel, '')) = 'card' THEN 'card' ELSE 'cash' END`;
+    const where = sql<boolean>`s.tenant_id = ${scope.tenantId}${filter === 'today' ? sql` AND (s.service_date AT TIME ZONE ${businessTz})::date = ${today}::date` : sql``}${filter === 'high' ? sql` AND s.amount >= 100` : sql``}${filter === 'notes' ? sql` AND btrim(coalesce(s.notes, ''), E' \t\n\r\f\v') <> ''` : sql``}${search ? sql` AND (strpos(lower(coalesce(s.name, '')), ${search}) > 0 OR strpos(lower(coalesce(s.notes, '')), ${search}) > 0 OR strpos(lower(coalesce(u.username, '')), ${search}) > 0 OR strpos(lower(coalesce(b.name, '')), ${search}) > 0 OR strpos(lower(coalesce(l.name, '')), ${search}) > 0)` : sql``}`;
+    const counts = await sql<{ total_items: string; total_amount: string; cash_amount: string; card_amount: string; today_count: string; max_amount: string | null }>`
+      SELECT COUNT(*) AS total_items,
+        coalesce(SUM(s.amount), 0) AS total_amount,
+        coalesce(SUM(s.amount) FILTER (WHERE ${channel} = 'cash'), 0) AS cash_amount,
+        coalesce(SUM(s.amount) FILTER (WHERE ${channel} = 'card'), 0) AS card_amount,
+        COUNT(*) FILTER (WHERE (s.service_date AT TIME ZONE ${businessTz})::date = ${today}::date) AS today_count,
+        MAX(s.amount) AS max_amount
+      FROM services s
+      LEFT JOIN branches b ON b.id = s.branch_id AND b.tenant_id = ${scope.tenantId}
+      LEFT JOIN stock_locations l ON l.id = s.location_id AND l.tenant_id = ${scope.tenantId}
+      LEFT JOIN users u ON u.id = s.created_by AND u.tenant_id = ${scope.tenantId}
+      WHERE ${where}
+    `.execute(db);
+    const totalItems = Number(counts.rows[0]?.total_items || 0);
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 20);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
     const result = await sql<{
       id: number;
       name: string;
@@ -215,27 +255,11 @@ export class ServicesService {
       left join branches b on b.id = s.branch_id and b.tenant_id = ${scope.tenantId}
       left join stock_locations l on l.id = s.location_id and l.tenant_id = ${scope.tenantId}
       left join users u on u.id = s.created_by and u.tenant_id = ${scope.tenantId}
-      where s.tenant_id = ${scope.tenantId}
+      where ${where}
       order by s.id desc
+      limit ${pageSize} offset ${offset}
     `.execute(db);
-
-    const search = String(query.search || '').trim().toLowerCase();
-    const filter = String(query.filter || 'all').trim().toLowerCase();
-    // INV-SERVICES-TODAY-COUNT: "today" is the TENANT-local day, and a row
-    // counts when its service_date falls on that day. The old code compared
-    // String(row.serviceDate).slice(0, 10) with a UTC ISO date -- but
-    // service_date is TIMESTAMPTZ, which pg returns as a JS Date, so
-    // String(date) is "Wed Nov 05 ..." and the comparison could never
-    // match (todayCount was always 0); and the UTC day itself was wrong
-    // for 00:00-02:00 Cairo. Format the row's date in the tenant timezone.
-    const businessTz = await getTenantTimezone(db, scope.tenantId);
-    const today = todayTenantDate(businessTz);
-    const isToday = (value: unknown): boolean => {
-      const date = value instanceof Date ? value : new Date(String(value ?? ''));
-      return Number.isFinite(date.getTime()) && todayTenantDate(businessTz, date) === today;
-    };
-
-    let rows = result.rows.map((row) => ({
+    const rows = result.rows.map((row) => ({
       id: String(row.id),
       name: row.name || '',
       amount: Number(row.amount || 0),
@@ -248,36 +272,36 @@ export class ServicesService {
       locationName: row.location_name || '',
       createdByName: row.created_by_name || '',
     }));
-
-    if (filter === 'today') rows = rows.filter((row) => isToday(row.serviceDate));
-    else if (filter === 'high') rows = rows.filter((row) => Number(row.amount || 0) >= 100);
-    else if (filter === 'notes') rows = rows.filter((row) => String(row.notes || '').trim().length > 0);
-
-    if (search) {
-      rows = rows.filter((row) => [row.name, row.notes, row.createdByName, row.branchName, row.locationName].some((value) => String(value || '').toLowerCase().includes(search)));
-    }
-
-    const paged = paginateRows(rows, query, { defaultSize: 20 });
-    const totalAmount = roundMoney(rows.reduce((sum, row) => sum + Number(row.amount || 0), 0), moneyDigits);
-    const cashAmount = roundMoney(rows.filter((row) => row.paymentChannel === 'cash').reduce((sum, row) => sum + Number(row.amount || 0), 0), moneyDigits);
-    const cardAmount = roundMoney(rows.filter((row) => row.paymentChannel === 'card').reduce((sum, row) => sum + Number(row.amount || 0), 0), moneyDigits);
-    const todayRows = rows.filter((row) => isToday(row.serviceDate));
-    const highestAmount = rows.length ? Math.max(...rows.map((row) => Number(row.amount || 0))) : 0;
-    const latest = rows[0] || null;
+    const latest = await sql<{ name: string | null; created_by_name: string | null }>`
+      SELECT s.name, u.username AS created_by_name
+      FROM services s
+      LEFT JOIN branches b ON b.id = s.branch_id AND b.tenant_id = ${scope.tenantId}
+      LEFT JOIN stock_locations l ON l.id = s.location_id AND l.tenant_id = ${scope.tenantId}
+      LEFT JOIN users u ON u.id = s.created_by AND u.tenant_id = ${scope.tenantId}
+      WHERE ${where}
+      ORDER BY s.id DESC
+      LIMIT 1
+    `.execute(db);
+    // The summary is exact over the FULL filtered set, never page-scoped;
+    // averageAmount keeps the division in JS on the rounded total.
+    const totalAmount = roundMoney(Number(counts.rows[0]?.total_amount || 0), moneyDigits);
+    const cashAmount = roundMoney(Number(counts.rows[0]?.cash_amount || 0), moneyDigits);
+    const cardAmount = roundMoney(Number(counts.rows[0]?.card_amount || 0), moneyDigits);
+    const latestRow = latest.rows[0] || null;
 
     return {
-      services: paged.rows,
-      pagination: paged.pagination,
+      services: rows,
+      pagination: { page: safePage, pageSize, totalItems, totalPages },
       summary: {
-        totalItems: rows.length,
+        totalItems,
         totalAmount,
         cashAmount,
         cardAmount,
-        todayCount: todayRows.length,
-        averageAmount: rows.length ? roundMoney(totalAmount / rows.length, moneyDigits) : 0,
-        highestAmount,
-        latestServiceName: latest?.name || '',
-        latestCreatedByName: latest?.createdByName || '',
+        todayCount: Number(counts.rows[0]?.today_count || 0),
+        averageAmount: totalItems ? roundMoney(totalAmount / totalItems, moneyDigits) : 0,
+        highestAmount: counts.rows[0]?.max_amount == null ? 0 : Number(counts.rows[0].max_amount),
+        latestServiceName: latestRow?.name || '',
+        latestCreatedByName: latestRow?.created_by_name || '',
       },
       scope,
     };

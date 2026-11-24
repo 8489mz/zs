@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
 import { AppError } from '../../common/errors/app-error';
-import { paginateRows } from '../../common/utils/pagination';
+import { boundedPage } from '../../common/utils/bounded-page';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { AuditService } from '../../core/audit/audit.service';
@@ -10,7 +10,7 @@ import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { isPlatformTenantId, requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/password-hasher';
 import { assertStrongPassword } from '../../core/auth/utils/password-policy';
-import { ensureUsersPayload, filterUsers, mapUserRow, normalizeBranchIds, normalizeUserId, normalizeUserListQuery, summarizeUsers } from './helpers/users.helper';
+import { ensureUsersPayload, mapUserRow, normalizeBranchIds, normalizeUserId, normalizeUserListQuery } from './helpers/users.helper';
 import { TransactionHelper } from '../../database/helpers/transaction.helper';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -228,19 +228,60 @@ export class UsersService {
 
   async listUsers(query: Record<string, unknown>, actor: AuthContext): Promise<Record<string, unknown>> {
     const normalizedQuery = normalizeUserListQuery(query);
-
-    const allRows = await this.db.selectFrom('users').selectAll().where(this.tenantPredicate(actor)).orderBy('id', 'asc').execute();
-    const branchMap = await this.loadBranchMap(allRows.map((row) => Number(row.id)), actor);
-    const allMappedUsers = allRows.map((row) => mapUserRow(row, branchMap.get(Number(row.id)) ?? []));
-    const users = filterUsers(
-      allMappedUsers,
-      normalizedQuery,
-    );
+    const now = new Date();
+    // INV-RETURNS-SERVICES-USERS-SQL-PAGINATION: the summary is over ALL
+    // tenant users (UNFILTERED) — one aggregate query; the page is
+    // fetched from SQL with the same predicates (role exact, includeInactive,
+    // search over username/name/phone). The old in-memory pagination
+    // semantics are preserved (defaultSize 10, page clamped to
+    // [1, totalPages], cap 200); pagination.total is the FILTERED count.
+    // Sanitization for non-managers stays in JS on the page rows, and the
+    // branch map is fetched only for the page ids.
+    const summaryRows = await sql<{ total_items: string; active_count: string; super_admins: string; admins: string; cashiers: string; locked_count: string; active_privileged: string }>`
+      SELECT COUNT(*) AS total_items,
+        COUNT(*) FILTER (WHERE is_active IS TRUE) AS active_count,
+        COUNT(*) FILTER (WHERE role = 'super_admin') AS super_admins,
+        COUNT(*) FILTER (WHERE role = 'admin') AS admins,
+        COUNT(*) FILTER (WHERE role = 'cashier') AS cashiers,
+        COUNT(*) FILTER (WHERE failed_login_count >= 5 OR locked_until > ${now}) AS locked_count,
+        COUNT(*) FILTER (WHERE is_active IS TRUE AND role IN ('super_admin', 'admin')) AS active_privileged
+      FROM users
+      WHERE ${this.tenantPredicate(actor)}
+    `.execute(this.db);
+    const totalUsers = Number(summaryRows.rows[0]?.total_items || 0);
+    const activeUsers = Number(summaryRows.rows[0]?.active_count || 0);
+    const summary = {
+      total: totalUsers,
+      totalItems: totalUsers,
+      active: activeUsers,
+      inactive: totalUsers - activeUsers,
+      superAdmins: Number(summaryRows.rows[0]?.super_admins || 0),
+      admins: Number(summaryRows.rows[0]?.admins || 0),
+      cashiers: Number(summaryRows.rows[0]?.cashiers || 0),
+      locked: Number(summaryRows.rows[0]?.locked_count || 0),
+      activePrivilegedUsers: Number(summaryRows.rows[0]?.active_privileged || 0),
+    };
+    const scope = this.scope(actor);
+    const planLimit = await this.getPlanLimitForTenant(scope.tenantId, actor, activeUsers);
+    const filterPredicate = sql<boolean>`true${normalizedQuery.includeInactive ? sql`` : sql` AND is_active IS TRUE`}${normalizedQuery.role ? sql` AND role = ${normalizedQuery.role}` : sql``}${normalizedQuery.search ? sql` AND (strpos(lower(coalesce(username, '')), ${normalizedQuery.search}) > 0 OR strpos(lower(coalesce(nullif(display_name, ''), username)), ${normalizedQuery.search}) > 0 OR strpos(lower(coalesce(phone, '')), ${normalizedQuery.search}) > 0)` : sql``}`;
+    const totalRows = await sql<{ n: string }>`
+      SELECT COUNT(*) AS n FROM users WHERE ${this.tenantPredicate(actor)} AND ${filterPredicate}
+    `.execute(this.db);
+    const totalItems = Number(totalRows.rows[0]?.n || 0);
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 10);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
+    const pageResult = await sql<Record<string, unknown>>`
+      SELECT * FROM users WHERE ${this.tenantPredicate(actor)} AND ${filterPredicate} ORDER BY id ASC LIMIT ${pageSize} OFFSET ${offset}
+    `.execute(this.db);
+    const branchMap = await this.loadBranchMap(pageResult.rows.map((row) => Number(row.id)), actor);
+    const mapped = pageResult.rows.map((row) => mapUserRow(row as never, branchMap.get(Number(row.id)) ?? []));
 
     const canManageUsers = actor.role === 'super_admin' || actor.role === 'admin' || (actor.permissions && (actor.permissions.includes('canManageUsers') || actor.permissions.includes('canEditUsers')));
     const sanitizedUsers = canManageUsers
-      ? users
-      : users.map((u) => ({
+      ? mapped
+      : mapped.map((u) => ({
           id: u.id,
           username: u.username,
           phone: u.phone || null,
@@ -256,24 +297,34 @@ export class UsersService {
           lastLoginAt: null,
         }));
 
-    const paged = paginateRows(sanitizedUsers, query, { defaultSize: 10 });
-    const summary = summarizeUsers(allMappedUsers);
-    const activeCount = allMappedUsers.filter((u) => u.isActive !== false).length;
-    const scope = this.scope(actor);
-    const planLimit = await this.getPlanLimitForTenant(scope.tenantId, actor, activeCount);
-
     return {
-      users: paged.rows,
+      users: sanitizedUsers,
       pagination: {
-        page: paged.pagination.page,
-        pageSize: paged.pagination.pageSize,
-        total: sanitizedUsers.length,
-        totalPages: paged.pagination.totalPages,
+        page: safePage,
+        pageSize,
+        total: totalItems,
+        totalPages,
       },
       summary,
       planLimit,
       scope,
     };
+  }
+
+  // INV-RETURNS-SERVICES-USERS-SQL-PAGINATION: the five internal refresh
+  // callers (create/update/bulk/delete/unlock) need the FULL user list
+  // for the frontend refresh — page through listUsers (50-page safety
+  // bound) instead of silently shrinking to 200.
+  private async listAllUsersForRefresh(query: Record<string, unknown>, actor: AuthContext): Promise<{ users: unknown[] }> {
+    const all: unknown[] = [];
+    let page = 1;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const res = (await this.listUsers({ ...query, page, pageSize: 200 }, actor)) as { users: unknown[]; pagination: { totalPages: number } };
+      all.push(...res.users);
+      if (page >= res.pagination.totalPages) break;
+      page++;
+    }
+    return { users: all };
   }
 
   // INV-USER-GRANT-SUBSET: no actor may grant a permission they do not
@@ -446,7 +497,7 @@ export class UsersService {
     const created = await this.db.selectFrom('users').selectAll().where('id', '=', newId).where(this.tenantPredicate(actor)).executeTakeFirstOrThrow();
     await this.audit.log('إضافة مستخدم', `تمت إضافة المستخدم ${created.username} بواسطة ${actor.username}`, actor);
 
-    const usersState = await this.listUsers({ includeInactive: true, page: 1, pageSize: 1000 }, actor);
+    const usersState = await this.listAllUsersForRefresh({ includeInactive: true }, actor);
     const branchMap = await this.loadBranchMap([newId], actor);
     return {
       ok: true,
@@ -599,7 +650,7 @@ export class UsersService {
 
     await this.audit.log('تعديل مستخدم', `تم تحديث المستخدم ${updated.username} بواسطة ${actor.username}`, actor);
 
-    const usersState = await this.listUsers({ includeInactive: true, page: 1, pageSize: 1000 }, actor);
+    const usersState = await this.listAllUsersForRefresh({ includeInactive: true }, actor);
     const branchMap = await this.loadBranchMap([id], actor);
     return {
       ok: true,
@@ -728,7 +779,7 @@ export class UsersService {
     }
 
     await this.audit.log('تعديل المستخدمين', `تم تحديث ${usersPayload.length} مستخدم/صلاحية بواسطة ${actor.username}`, actor);
-    const usersState = await this.listUsers({ includeInactive: true, page: 1, pageSize: 1000 }, actor);
+    const usersState = await this.listAllUsersForRefresh({ includeInactive: true }, actor);
 
     return {
       ok: true,
@@ -776,7 +827,7 @@ export class UsersService {
     }
     await this.audit.log('حذف مستخدم', `تم حذف المستخدم ${existing.username} بواسطة ${actor.username}`, actor);
 
-    const usersState = await this.listUsers({ includeInactive: true, page: 1, pageSize: 1000 }, actor);
+    const usersState = await this.listAllUsersForRefresh({ includeInactive: true }, actor);
     return {
       ok: true,
       removedUserId: String(existing.id),
@@ -803,7 +854,7 @@ export class UsersService {
     const updated = await this.db.selectFrom('users').selectAll().where('id', '=', id).where(this.tenantPredicate(actor)).executeTakeFirstOrThrow();
     await this.audit.log('فتح مستخدم', `تم فتح المستخدم ${updated.username} بواسطة ${actor.username}`, actor);
 
-    const usersState = await this.listUsers({ includeInactive: true, page: 1, pageSize: 1000 }, actor);
+    const usersState = await this.listAllUsersForRefresh({ includeInactive: true }, actor);
     const branchMap = await this.loadBranchMap([id], actor);
     return {
       ok: true,
