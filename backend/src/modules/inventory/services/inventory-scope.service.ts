@@ -20,6 +20,14 @@ export class InventoryScopeService {
     return ['owner', 'admin', 'super_admin'].includes(auth.role);
   }
 
+  // INV-INV-COUNT-TRANSFER-SQL-PAGINATION: the SQL pagination needs to
+  // know whether the caller is unrestricted (all branches) — branchScope()
+  // returns [] for BOTH unrestricted users and restricted users with no
+  // branches, so the distinction needs its own accessor.
+  isUnrestrictedBranchScope(auth: AuthContext): boolean {
+    return this.canAccessEveryBranch(auth);
+  }
+
   async branchScope(auth: AuthContext, executor: Kysely<Database> = this.db): Promise<number[]> {
     const tenantId = this.tenantId(auth);
     if (this.canAccessEveryBranch(auth)) return [];

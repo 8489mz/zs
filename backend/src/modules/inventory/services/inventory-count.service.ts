@@ -5,14 +5,14 @@ import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
-import { paginateRows } from '../../../common/utils/pagination';
+import { boundedPage } from '../../../common/utils/bounded-page';
 import { applyStockDelta, lockStockProducts, previewAssignedLocationOnHandQty, previewAssignedLocationStockQty, previewConsumableStockQty, setScopedStockQty } from '../../../common/utils/location-stock-ledger';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { Database } from '../../../database/database.types';
 import { CreateDamagedStockDto } from '../dto/create-damaged-stock.dto';
 import { CreateStockCountSessionDto, RecountStockCountItemDto } from '../dto/create-stock-count-session.dto';
-import { buildDamagedStockSummary, buildStockCountSummary, buildStockMovementSummary, groupStockCountItemsBySession, mapDamagedStockRow, mapStockCountSessionRow, mapStockMovementRow } from '../helpers/inventory-count-listing.helper';
+import { buildDamagedStockSummary, buildStockMovementSummary, groupStockCountItemsBySession, mapDamagedStockRow, mapStockCountSessionRow, mapStockMovementRow } from '../helpers/inventory-count-listing.helper';
 import { assertInventoryLocationBranchMatch, buildDamagedStockWriteModels, buildDamageRecordFromCount, buildStockCountItemValues, buildStockCountPostingMovement, buildStockCountSessionDocNo, shouldCreateDamageRecordFromCount } from '../helpers/inventory-count-write.helper';
 import { InventoryScopeService } from './inventory-scope.service';
 import { IdempotencyService } from '../../../core/idempotency/idempotency.service';
@@ -22,10 +22,26 @@ import { assertUntrackedStockMutation } from '../helpers/inventory-tracked-stock
 import { dispatchTrackedStock } from '../helpers/stock-transfer-trace.helper';
 import { reconcileStockCountTrace } from '../helpers/stock-count-trace.helper';
 import { verifyPassword } from '../../../core/auth/utils/password-hasher';
-import { normalizeArabicSearch, matchesArabic } from '../../../common/utils/arabic-search.util';
+import { normalizeArabicSearch } from '../../../common/utils/arabic-search.util';
 import { syncImportLotsOnStockDeduction } from '../../import-sales/helpers/import-lot-allocation.helper';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+
+// INV-INV-COUNT-TRANSFER-SQL-PAGINATION: keep-list for the SQL
+// matchesArabic noise class — the exact set of characters
+// normalizeArabicSearch keeps, derived empirically from the real JS
+// function over the Arabic / Latin / Greek / Cyrillic / presentation
+// ranges (probe: hr-pagination-p3-norm-probe.ts, 30/30). PostgreSQL
+// AREs have no \p{...} classes, so the ranges are explicit. The
+// ASCII letters/digits/space and the whitespace escapes come first.
+const ARABIC_SEARCH_KEEP =
+  'A-Za-z0-9 \\t\\n\\r\\f\\v' +
+  '\u0620\u0622-\u063F\u0641-\u064A\u066E-\u066F\u0671-\u06D3\u06D5\u06EE-\u06FC\u06FF' +
+  '\u0750-\u077F\u08A0-\u08C9' +
+  '\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F\u1E00-\u1EFF' +
+  '\u0370-\u0374\u0376-\u0377\u037A-\u037D\u037F\u0386\u0388-\u038A\u038C\u038E-\u03A1\u03A3-\u03F5\u03F7-\u03FF' +
+  '\u0400-\u0481\u048A-\u04FF' +
+  '\uFB50-\uFBB1\uFBD3-\uFD3D\uFD50-\uFD8F\uFD92-\uFDC7\uFDF0-\uFDFB\uFE70-\uFE74\uFE76-\uFEFC';
 
 @Injectable()
 export class InventoryCountService {
@@ -116,6 +132,9 @@ export class InventoryCountService {
   }
 
   async listStockCountSessions(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
+    // INV-INV-COUNT-TRANSFER-SQL-PAGINATION: a paged request never loads
+    // the whole tenant set — the page is fetched from SQL below.
+    if (query.page || query.pageSize || query.search || query.filter || query.view) return this.listStockCountSessionsPage(query, auth);
     const sessions = await this.db
       .selectFrom('stock_count_sessions as s')
       .leftJoin('branches as b', (join) => join.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id'))
@@ -133,12 +152,94 @@ export class InventoryCountService {
     let mapped = sessions.map((row) => mapStockCountSessionRow(row as never, bySession));
     mapped = await this.scope.filterByScope(mapped, auth);
 
-    if (!query.page && !query.pageSize && !query.search && !query.filter && !query.view) return { stockCountSessions: mapped, damagedStockRecords: (await this.listDamagedStock({}, auth)).damagedStockRecords, scope: this.tenantScope(auth) };
+    return { stockCountSessions: mapped, damagedStockRecords: (await this.listDamagedStock({}, auth)).damagedStockRecords, scope: this.tenantScope(auth) };
+  }
+
+  // SQL equivalent of normalizeArabicSearch
+  // (common/utils/arabic-search.util.ts) — proven equal on the 30-case
+  // probe (hr-pagination-p3-norm-probe.ts). PostgreSQL AREs have no
+  // \p{...} classes, so the noise class is the explicit ARABIC_SEARCH_KEEP
+  // list above. `expr` is a SQL expression producing the raw text.
+  private normalizedArabicSearch(expr: string) {
+    return sql<string>`btrim(regexp_replace(regexp_replace(lower(regexp_replace(translate(translate(${sql.raw(expr)}, '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789'), 'أإآٱٲٳؤئىةء', 'ااااااوييه'), '[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]', '', 'g')), '[^${sql.raw(ARABIC_SEARCH_KEEP)}]+', ' ', 'g'), '\\s+', ' ', 'g'))`;
+  }
+
+  private async listStockCountSessionsPage(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
+    // INV-INV-COUNT-TRANSFER-SQL-PAGINATION: the page is fetched from
+    // SQL — the old in-memory pagination semantics are preserved
+    // (defaultSize 8, page clamped to [1, totalPages], cap 200), and the
+    // summary stays exact over the FULL filtered set. The search is the
+    // Arabic-normalized whole-substring match over docNo (fallback
+    // 'COUNT-' + id), note, locationName, branchName; the filter is the
+    // lowercased status compare with the 'draft'-also-matches-'posting'
+    // quirk. The unpaginated path above is untouched.
     const search = String(query.search || query.q || '').trim();
     const filter = String(query.filter || query.view || 'all').toLowerCase();
-    const filtered = mapped.filter((row) => (filter === 'all' || String(row.status).toLowerCase() === filter || (filter === 'draft' && String(row.status).toLowerCase() === 'posting')) && (!search || [row.docNo, row.note, row.locationName, row.branchName].some((x) => matchesArabic(x, search))));
-    const paged = paginateRows(filtered, query, { defaultSize: 8 });
-    return { stockCountSessions: paged.rows, pagination: paged.pagination, summary: buildStockCountSummary(filtered as unknown as Array<{ status: string; items: Array<{ varianceQty: number }> }>), scope: this.tenantScope(auth) };
+    const normalizedSearch = normalizeArabicSearch(search);
+    const scopeIds = await this.scope.branchScope(auth);
+    const unrestricted = this.scope.isUnrestrictedBranchScope(auth);
+    const scopePredicate = unrestricted
+      ? sql<boolean>`true`
+      : scopeIds.length === 0
+        ? sql<boolean>`false`
+        : sql<boolean>`(s.branch_id IS NULL OR s.branch_id = ANY(${scopeIds}))`;
+    const filterPredicate = filter === 'all'
+      ? null
+      : filter === 'draft'
+        ? sql<boolean>`(lower(coalesce(nullif(s.status, ''), 'draft')) = 'draft' OR lower(coalesce(nullif(s.status, ''), 'draft')) = 'posting')`
+        : sql<boolean>`lower(coalesce(nullif(s.status, ''), 'draft')) = ${filter}`;
+    const searchPredicate = normalizedSearch
+      ? sql<boolean>`(
+        strpos(${this.normalizedArabicSearch(`coalesce(nullif(s.doc_no, ''), 'COUNT-' || s.id)`)}, ${normalizedSearch}) > 0
+        OR strpos(${this.normalizedArabicSearch(`coalesce(s.note, '')`)}, ${normalizedSearch}) > 0
+        OR strpos(${this.normalizedArabicSearch(`coalesce(l.name, '')`)}, ${normalizedSearch}) > 0
+        OR strpos(${this.normalizedArabicSearch(`coalesce(b.name, '')`)}, ${normalizedSearch}) > 0
+      )`
+      : null;
+    const where = sql<boolean>`${this.tenantPredicate(auth, 's')} AND ${scopePredicate}${filterPredicate ? sql` AND ${filterPredicate}` : sql``}${searchPredicate ? sql` AND ${searchPredicate}` : sql``}`;
+    const counts = await sql<{ total_items: string; draft_count: string; posted_count: string; total_variance: string }>`
+      SELECT COUNT(DISTINCT s.id) AS total_items,
+        COUNT(DISTINCT s.id) FILTER (WHERE coalesce(nullif(s.status, ''), 'draft') = 'draft') AS draft_count,
+        COUNT(DISTINCT s.id) FILTER (WHERE coalesce(nullif(s.status, ''), 'draft') = 'posted') AS posted_count,
+        coalesce(SUM(i.variance_qty), 0) AS total_variance
+      FROM stock_count_sessions s
+      LEFT JOIN branches b ON b.id = s.branch_id AND b.tenant_id = s.tenant_id
+      LEFT JOIN stock_locations l ON l.id = s.location_id AND l.tenant_id = s.tenant_id
+      LEFT JOIN stock_count_items i ON i.session_id = s.id AND i.tenant_id = s.tenant_id
+      WHERE ${where}
+    `.execute(this.db);
+    const totalItems = Number(counts.rows[0]?.total_items || 0);
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 8);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
+    const result = await sql<Record<string, unknown>>`
+      SELECT s.id, s.doc_no, s.branch_id, s.location_id, s.status, s.note, s.posted_at, s.created_at,
+        b.name AS branch_name, l.name AS location_name,
+        cu.username AS counted_by_name, au.username AS approved_by_name
+      FROM stock_count_sessions s
+      LEFT JOIN branches b ON b.id = s.branch_id AND b.tenant_id = s.tenant_id
+      LEFT JOIN stock_locations l ON l.id = s.location_id AND l.tenant_id = s.tenant_id
+      LEFT JOIN users cu ON cu.id = s.counted_by AND cu.tenant_id = s.tenant_id
+      LEFT JOIN users au ON au.id = s.approved_by AND au.tenant_id = s.tenant_id
+      WHERE ${where}
+      ORDER BY s.id DESC
+      LIMIT ${pageSize} OFFSET ${offset}
+    `.execute(this.db);
+    const pageIds = result.rows.map((row) => Number(row.id || 0)).filter((id) => id > 0);
+    const pageItems = pageIds.length
+      ? await this.db.selectFrom('stock_count_items').selectAll().where('session_id', 'in', pageIds).where(this.tenantPredicate(auth)).orderBy('session_id', 'asc').execute()
+      : [];
+    const bySession = groupStockCountItemsBySession(pageItems as never);
+    const mapped = result.rows.map((row) => mapStockCountSessionRow(row as never, bySession));
+    // The summary is exact over the FULL filtered set, never page-scoped.
+    const summary = {
+      totalItems,
+      draft: Number(counts.rows[0]?.draft_count || 0),
+      posted: Number(counts.rows[0]?.posted_count || 0),
+      totalVariance: Number(Number(counts.rows[0]?.total_variance || 0).toFixed(3)),
+    };
+    return { stockCountSessions: mapped, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary, scope: this.tenantScope(auth) };
   }
 
   async createStockCountSession(payload: CreateStockCountSessionDto, auth: AuthContext): Promise<Record<string, unknown>> {

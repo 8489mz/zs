@@ -4,7 +4,7 @@ import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
-import { paginateRows } from '../../../common/utils/pagination';
+import { boundedPage } from '../../../common/utils/bounded-page';
 import { ensureNonNegativeStock, ensureUniqueFlowItems } from '../../../common/utils/financial-integrity';
 import { applyStockDelta, lockStockProducts, previewAssignedLocationStockQty } from '../../../common/utils/location-stock-ledger';
 import { KYSELY_DB } from '../../../database/database.constants';
@@ -49,6 +49,9 @@ export class InventoryTransferService {
 
   async listStockTransfers(query: Record<string, unknown>, auth: AuthContext, executor: Kysely<Database> = this.db): Promise<Record<string, unknown>> {
     if (!auth.permissions.includes('inventory') && !auth.permissions.includes('canAdjustInventory')) throw new ForbiddenException('Missing required permissions');
+    // INV-INV-COUNT-TRANSFER-SQL-PAGINATION: a paged request never loads
+    // the whole tenant set — the page is fetched from SQL below.
+    if (query.page || query.pageSize || query.search || query.q || query.filter || query.view) return this.listStockTransfersPage(query, auth, executor);
     let transfersQuery = executor
       .selectFrom('stock_transfers as t')
       .leftJoin('stock_locations as fl', (join) => join.onRef('fl.id', '=', 't.from_location_id').onRef('fl.tenant_id', '=', 't.tenant_id'))
@@ -96,9 +99,108 @@ export class InventoryTransferService {
     const search = String(query.search || query.q || '').toLowerCase();
     const filter = String(query.filter || query.view || 'all').toLowerCase();
     const filtered = rows.filter((row) => (filter === 'all' || String(row.status).toLowerCase() === filter) && (!search || [row.docNo, row.note, row.fromLocationName, row.toLocationName].some((val) => String(val).toLowerCase().includes(search))));
-    if (!query.page && !query.pageSize && !query.search && !query.q && !query.filter && !query.view) return { stockTransfers: filtered, scope: this.tenantScope(auth) };
-    const paged = paginateRows(filtered, query, { defaultSize: 10 });
-    return { stockTransfers: paged.rows, pagination: paged.pagination, summary: { totalItems: filtered.length, sent: filtered.filter((r) => r.status === 'sent').length, received: filtered.filter((r) => r.status === 'received').length, cancelled: filtered.filter((r) => r.status === 'cancelled').length, totalQty: Number(filtered.reduce((sum, row) => sum + Number((row.items as Array<{ qty: number }>).reduce((x, i) => x + Number(i.qty || 0), 0)), 0).toFixed(3)) }, scope: this.tenantScope(auth) };
+    return { stockTransfers: filtered, scope: this.tenantScope(auth) };
+  }
+
+  private async listStockTransfersPage(query: Record<string, unknown>, auth: AuthContext, executor: Kysely<Database> = this.db): Promise<Record<string, unknown>> {
+    // INV-INV-COUNT-TRANSFER-SQL-PAGINATION: the page is fetched from
+    // SQL — the old in-memory pagination semantics are preserved
+    // (defaultSize 10, page clamped to [1, totalPages], cap 200), and the
+    // summary stays exact over the FULL filtered set. The search is the
+    // PLAIN lowercase substring (no Arabic normalization, NO trim) over
+    // docNo (fallback 'TR-' + id), note, fromLocationName,
+    // toLocationName; the filter is the lowercased status compare, no
+    // posting quirk; locationId filters from OR to location. The
+    // unpaginated path above is untouched, and the executor (transaction
+    // handle) is threaded through every query.
+    const search = String(query.search || query.q || '').toLowerCase();
+    const filter = String(query.filter || query.view || 'all').toLowerCase();
+    const locId = query.locationId ? Number(query.locationId) : null;
+    const scopeIds = await this.scope.branchScope(auth, executor);
+    const unrestricted = this.scope.isUnrestrictedBranchScope(auth);
+    const scopePredicate = unrestricted
+      ? sql<boolean>`true`
+      : scopeIds.length === 0
+        ? sql<boolean>`false`
+        : sql<boolean>`(t.from_branch_id IS NULL OR t.from_branch_id = ANY(${scopeIds})) AND (t.to_branch_id IS NULL OR t.to_branch_id = ANY(${scopeIds}))`;
+    const locationPredicate = locId === null
+      ? null
+      : Number.isFinite(locId)
+        ? sql<boolean>`(t.from_location_id = ${locId} OR t.to_location_id = ${locId})`
+        : sql<boolean>`false`;
+    const filterPredicate = filter === 'all'
+      ? null
+      : sql<boolean>`lower(coalesce(nullif(t.status, ''), 'sent')) = ${filter}`;
+    const searchPredicate = search
+      ? sql<boolean>`(
+        strpos(lower(coalesce(nullif(t.doc_no, ''), 'TR-' || t.id)), ${search}) > 0
+        OR strpos(lower(coalesce(t.note, '')), ${search}) > 0
+        OR strpos(lower(coalesce(fl.name, '')), ${search}) > 0
+        OR strpos(lower(coalesce(tl.name, '')), ${search}) > 0
+      )`
+      : null;
+    const where = sql<boolean>`${this.tenantPredicate(auth, 't')} AND ${scopePredicate}${locationPredicate ? sql` AND ${locationPredicate}` : sql``}${filterPredicate ? sql` AND ${filterPredicate}` : sql``}${searchPredicate ? sql` AND ${searchPredicate}` : sql``}`;
+    const counts = await sql<{ total_items: string; sent_count: string; received_count: string; cancelled_count: string; total_qty: string }>`
+      SELECT COUNT(DISTINCT t.id) AS total_items,
+        COUNT(DISTINCT t.id) FILTER (WHERE coalesce(nullif(t.status, ''), 'sent') = 'sent') AS sent_count,
+        COUNT(DISTINCT t.id) FILTER (WHERE coalesce(nullif(t.status, ''), 'sent') = 'received') AS received_count,
+        COUNT(DISTINCT t.id) FILTER (WHERE coalesce(nullif(t.status, ''), 'sent') = 'cancelled') AS cancelled_count,
+        coalesce(SUM(it.qty), 0) AS total_qty
+      FROM stock_transfers t
+      LEFT JOIN stock_locations fl ON fl.id = t.from_location_id AND fl.tenant_id = t.tenant_id
+      LEFT JOIN stock_locations tl ON tl.id = t.to_location_id AND tl.tenant_id = t.tenant_id
+      LEFT JOIN stock_transfer_items it ON it.transfer_id = t.id AND it.tenant_id = t.tenant_id
+      WHERE ${where}
+    `.execute(executor);
+    const totalItems = Number(counts.rows[0]?.total_items || 0);
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 10);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
+    const result = await sql<Record<string, unknown>>`
+      SELECT t.id, t.doc_no, t.from_location_id, t.to_location_id, t.from_branch_id, t.to_branch_id, t.status, t.note, t.recipient_name, t.received_at, t.cancelled_at, t.created_at,
+        fl.name AS from_location_name, tl.name AS to_location_name,
+        fb.name AS from_branch_name, tb.name AS to_branch_name,
+        cu.username AS created_by_name, ru.username AS received_by_name, xu.username AS cancelled_by_name
+      FROM stock_transfers t
+      LEFT JOIN stock_locations fl ON fl.id = t.from_location_id AND fl.tenant_id = t.tenant_id
+      LEFT JOIN stock_locations tl ON tl.id = t.to_location_id AND tl.tenant_id = t.tenant_id
+      LEFT JOIN branches fb ON fb.id = t.from_branch_id AND fb.tenant_id = t.tenant_id
+      LEFT JOIN branches tb ON tb.id = t.to_branch_id AND tb.tenant_id = t.tenant_id
+      LEFT JOIN users cu ON cu.id = t.created_by AND cu.tenant_id = t.tenant_id
+      LEFT JOIN users ru ON ru.id = t.received_by AND ru.tenant_id = t.tenant_id
+      LEFT JOIN users xu ON xu.id = t.cancelled_by AND xu.tenant_id = t.tenant_id
+      WHERE ${where}
+      ORDER BY t.id DESC
+      LIMIT ${pageSize} OFFSET ${offset}
+    `.execute(executor);
+    const pageIds = result.rows.map((row) => Number(row.id || 0)).filter((id) => id > 0);
+    const pageItems = pageIds.length
+      ? await executor.selectFrom('stock_transfer_items').select(['id', 'transfer_id', 'product_id', 'product_name', 'qty', 'serial_tracking', 'batch_tracking']).where('transfer_id', 'in', pageIds).where(this.tenantPredicate(auth)).orderBy('transfer_id', 'asc').execute()
+      : [];
+    const byTransfer = new Map<string, Record<string, unknown>[]>();
+    for (const item of pageItems) {
+      const key = String(item.transfer_id);
+      if (!byTransfer.has(key)) byTransfer.set(key, []);
+      const serialTracking: unknown = typeof item.serial_tracking === 'string' ? JSON.parse(item.serial_tracking) : item.serial_tracking;
+      const batchTracking: unknown = typeof item.batch_tracking === 'string' ? JSON.parse(item.batch_tracking) : item.batch_tracking;
+      byTransfer.get(key)!.push({
+        id: String(item.id), productId: String(item.product_id),
+        productName: item.product_name || '', qty: Number(item.qty || 0),
+        serialTracking: Array.isArray(serialTracking) ? serialTracking : [],
+        batchTracking: Array.isArray(batchTracking) ? batchTracking : [],
+      });
+    }
+    const mapped = result.rows.map((t) => ({ id: String(t.id), docNo: t.doc_no || `TR-${t.id}`, fromLocationId: String(t.from_location_id), toLocationId: t.to_location_id ? String(t.to_location_id) : '', fromBranchId: t.from_branch_id ? String(t.from_branch_id) : '', toBranchId: t.to_branch_id ? String(t.to_branch_id) : '', fromLocationName: t.from_location_name || '', toLocationName: t.to_location_name || '', fromBranchName: t.from_branch_name || '', toBranchName: t.to_branch_name || '', status: t.status || 'sent', note: t.note || '', recipientName: t.recipient_name || '', receivedAt: t.received_at || '', cancelledAt: t.cancelled_at || '', createdBy: t.created_by_name || '', receivedBy: t.received_by_name || '', cancelledBy: t.cancelled_by_name || '', date: t.created_at, items: byTransfer.get(String(t.id)) || [] }));
+    // The summary is exact over the FULL filtered set, never page-scoped.
+    const summary = {
+      totalItems,
+      sent: Number(counts.rows[0]?.sent_count || 0),
+      received: Number(counts.rows[0]?.received_count || 0),
+      cancelled: Number(counts.rows[0]?.cancelled_count || 0),
+      totalQty: Number(Number(counts.rows[0]?.total_qty || 0).toFixed(3)),
+    };
+    return { stockTransfers: mapped, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary, scope: this.tenantScope(auth) };
   }
 
   async createStockTransfer(payload: CreateStockTransferDto, auth: AuthContext): Promise<Record<string, unknown>> {
