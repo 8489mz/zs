@@ -91,7 +91,7 @@ export class HrLeaveService {
       SELECT COUNT(*)::text AS total FROM (${base}) s
     `.execute(this.db);
     const totalItems = Number(totals.rows[0]?.total || 0);
-    // paginateRows semantics preserved: defaultSize 50, page clamped
+    // Old in-memory pagination semantics preserved: defaultSize 50, page clamped
     // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
     // The cap is now 200 (boundedPage), not 100.
     const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 50);
@@ -192,7 +192,7 @@ export class HrLeaveService {
         AND (${search} = '' OR strpos(lower(btrim(name)), ${search}) > 0)
     `.execute(this.db);
     const totalItems = Number(totals.rows[0]?.total || 0);
-    // paginateRows semantics preserved: defaultSize 50, page clamped
+    // Old in-memory pagination semantics preserved: defaultSize 50, page clamped
     // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
     // The cap is now 200 (boundedPage), not 100.
     const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 50);
@@ -256,7 +256,7 @@ export class HrLeaveService {
         AND (${search} = '' OR strpos(lower(btrim(COALESCE(name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(code, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(description, ''))), ${search}) > 0)
     `.execute(this.db);
     const totalItems = Number(totals.rows[0]?.total || 0);
-    // paginateRows semantics preserved: defaultSize 50, page clamped
+    // Old in-memory pagination semantics preserved: defaultSize 50, page clamped
     // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
     // The cap is now 200 (boundedPage), not 100.
     const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 50);
@@ -353,7 +353,7 @@ export class HrLeaveService {
         AND ${employeeFilter} AND ${statusFilter} AND ${fromFilter} AND ${toFilter} AND ${searchFilter}
     `.execute(this.db);
     const totalItems = Number(totals.rows[0]?.total || 0);
-    // paginateRows semantics preserved: defaultSize 25, page clamped
+    // Old in-memory pagination semantics preserved: defaultSize 25, page clamped
     // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
     // The cap is now 200 (boundedPage), not 100.
     const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 25);

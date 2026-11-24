@@ -5,8 +5,8 @@
  * THE BUG: listEmployees ran an UNBOUNDED SELECT over hr_employees +
  * 6 LEFT JOINs + 1 correlated subquery, mapped ALL rows in memory,
  * filtered `search` in memory, reconciled leave balances over ALL ids,
- * then sliced one page with paginateRows(..., { defaultSize: 25,
- * maxSize: 5000 }) — so a client asking pageSize=5000 received 5,000
+ * then sliced one page with the former in-memory slicer (defaultSize
+ * 25, maxSize 5000) — so a client asking pageSize=5000 received 5,000
  * fully mapped rows in one response.
  *
  * RULES PINNED HERE, driving the REAL HrService (facade) on PGlite:

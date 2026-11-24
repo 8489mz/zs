@@ -5,7 +5,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
-import { mapHeldSalesRows, mapSaleRows, filterSales, paginateRows, summarizeSales } from '../helpers/sales-query.helper';
+import { mapHeldSalesRows, mapSaleRows, filterSales, summarizeSales } from '../helpers/sales-query.helper';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';

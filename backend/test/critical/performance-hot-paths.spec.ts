@@ -664,11 +664,11 @@ function testLoadSuiteIsUsable(): void {
       /is on tenant \$\{String\(owner\.tenantId/.test(full) && /session\.tenantId/.test(full),
       'setup must refuse to run when the sessions are split across tenants: one reads while the other writes',
     );
-    // `paginateRows` caps pageSize at 100. Asking for 500 returns 100 and quietly narrows the run —
+    // `boundedPage` caps pageSize at 200. Asking for 500 returns 200 and quietly narrows the run —
     // it is why a hundred customers absorbed every credit sale until their limits filled.
     assert.ok(
       !/pageSize=[2-9]\d\d/.test(full),
-      'pageSize is capped at 100 by paginateRows; page through instead of asking for a number you cannot get',
+      'pageSize is capped at 200 by boundedPage; page through instead of asking for a number you cannot get',
     );
     // Reports are the least important path. A missing permission must disable them with one line,
     // not abort a three-minute run, and not fail 244 checks in silence either.

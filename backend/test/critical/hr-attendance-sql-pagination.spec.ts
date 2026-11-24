@@ -8,7 +8,7 @@
  * memory (the exceptions method ran the pure `calculateAttendancePenalty`
  * engine per row; the attendance method reduced status counts +
  * workedMinutes + payableMinutes over every row), then sliced one page
- * with paginateRows(rows, query, { defaultSize: 50 }) — maxSize defaults
+ * with the former in-memory slicer (defaultSize 50) — maxSize defaults
  * to 100, so a client asking pageSize=150 silently received 100 rows.
  *
  * RULES PINNED HERE, driving the REAL HrService (facade) on PGlite:

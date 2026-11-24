@@ -186,19 +186,6 @@ export function filterSales(rows: SaleRow[], query: Record<string, unknown>): Sa
   });
 }
 
-export function paginateRows(rows: SaleRow[], query: Record<string, unknown>, defaultSize = 30) {
-  const page = Math.max(1, Number(query.page || 1));
-  const pageSize = Math.min(100, Math.max(1, Number(query.pageSize || defaultSize)));
-  const totalItems = rows.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const start = (safePage - 1) * pageSize;
-  return {
-    rows: rows.slice(start, start + pageSize),
-    pagination: { page: safePage, pageSize, totalItems, totalPages },
-  };
-}
-
 export function summarizeSales(rows: SaleRow[], digits: MoneyDigits = 2, todayKey?: string): SaleListSummary {
   const today = todayKey ?? new Date().toISOString().slice(0, 10);
   const todayRows = rows.filter((row) => String(row.date || '').slice(0, 10) === today);

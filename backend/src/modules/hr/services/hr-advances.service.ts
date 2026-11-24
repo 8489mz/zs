@@ -226,7 +226,7 @@ export class HrAdvancesService {
       FROM hr_employee_loans l
       WHERE l.employee_id = ${employeeId} AND l.tenant_id = ${tenantId}
     `.execute(this.db);
-    // paginateRows semantics preserved: defaultSize 50, page clamped
+    // Old in-memory pagination semantics preserved: defaultSize 50, page clamped
     // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
     // The cap is now 200 (boundedPage), not 100.
     const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 50);

@@ -5,9 +5,9 @@
  * it in memory.
  *
  * THE BUG: both methods ran unbounded SELECTs, mapped the full set in
- * memory, then sliced one page with paginateRows(rows, query,
- * { defaultSize: 8 }) / ({ defaultSize: 10 }) — maxSize defaults to
- * 100, so a client asking pageSize=150 silently received 100 rows.
+ * memory, then sliced one page with the former in-memory slicer
+ * (defaultSize 8 / 10) — maxSize defaults to 100, so a client asking
+ * pageSize=150 silently received 100 rows.
  *
  * RULES PINNED HERE, driving the REAL InventoryCountService and
  * InventoryTransferService on PGlite:

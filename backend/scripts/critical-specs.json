@@ -315,6 +315,7 @@
     "test/critical/hr-assets-leave-sql-pagination.spec.ts",
     "test/critical/hr-loans-payroll-sql-pagination.spec.ts",
     "test/critical/inventory-count-transfer-sql-pagination.spec.ts",
-    "test/critical/returns-services-users-sql-pagination.spec.ts"
+    "test/critical/returns-services-users-sql-pagination.spec.ts",
+    "test/critical/no-paginate-rows.spec.ts"
   ]
 }

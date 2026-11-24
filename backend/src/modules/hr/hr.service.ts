@@ -2,7 +2,6 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { CashDrawerService } from '../cash-drawer/cash-drawer.service';
 import { Kysely, sql } from '../../database/kysely';
 import { AppError } from '../../common/errors/app-error';
-import { paginateRows } from '../../common/utils/pagination';
 import { AuditService } from '../../core/audit/audit.service';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';

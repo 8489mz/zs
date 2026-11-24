@@ -7,9 +7,9 @@
  *
  * THE BUG: all five methods ran one unbounded SELECT, mapped the full
  * set in memory, filtered employee/status/date/search in memory,
- * reduced the summary counts in memory, then sliced one page with
- * paginateRows(rows, query, { defaultSize: 25 | 50 }) — maxSize defaults
- * to 100, so a client asking pageSize=150 silently received 100 rows.
+ * reduced the summary counts in memory, then sliced one page with the
+ * former in-memory slicer (defaultSize 25 | 50) — maxSize defaults to
+ * 100, so a client asking pageSize=150 silently received 100 rows.
  *
  * RULES PINNED HERE, driving the REAL HrService (facade) on PGlite:
  * 1. The page-size cap is 200: pageSize=150 returns 150 rows (the old

@@ -4,8 +4,8 @@
  * whole tenant set and slice one page out of it in memory.
  *
  * THE BUG: both methods ran one unbounded SELECT, mapped the full set in
- * memory, then sliced one page with paginateRows(rows, query,
- * { defaultSize: 25 }) — maxSize defaults to 100, so a client asking
+ * memory, then sliced one page with the former in-memory slicer
+ * (defaultSize 25) — maxSize defaults to 100, so a client asking
  * pageSize=150 silently received 100 rows.
  *
  * RULES PINNED HERE, driving the REAL HrService (facade) on PGlite:

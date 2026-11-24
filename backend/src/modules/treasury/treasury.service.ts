@@ -13,7 +13,6 @@ import { CreateTreasuryTransferDto } from './dto/create-treasury-transfer.dto';
 import { AppError } from '../../common/errors/app-error';
 import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_PAST_DAYS } from '../../common/utils/client-date-bounds.util';
-import { paginateRows } from '../../common/utils/pagination';
 import { canonicalLockIds } from '../../common/utils/canonical-lock-order';
 import { lockAccountingPeriod } from '../accounting/accounting-period-lock';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';

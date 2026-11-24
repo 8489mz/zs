@@ -5,9 +5,9 @@
  * page out of it in memory.
  *
  * THE BUG: all three methods ran unbounded SELECTs, mapped the full
- * set in memory, then sliced one page with paginateRows(rows, query,
- * { defaultSize: 20 }) / ({ defaultSize: 10 }) — maxSize defaults to
- * 100, so a client asking pageSize=150 silently received 100 rows.
+ * set in memory, then sliced one page with the former in-memory
+ * slicer (defaultSize 20 / 10) — maxSize defaults to 100, so a client
+ * asking pageSize=150 silently received 100 rows.
  *
  * RULES PINNED HERE, driving the REAL ReturnsReadsService,
  * ServicesService and UsersService on PGlite:

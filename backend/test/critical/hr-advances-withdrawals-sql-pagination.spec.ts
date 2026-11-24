@@ -6,9 +6,9 @@
  * THE BUG: withdrawals ran TWO unbounded SELECTs (all loans + all ledger
  * repayments for one employee), merged them in memory, applied the
  * status filter, the period filter and the sort in memory, reduced 7
- * money sums over the full merged set, then sliced one page with
- * paginateRows(rows, query, { defaultSize: 50 }) — maxSize defaults to
- * 100, so a client asking pageSize=150 silently received 100 rows, and
+ * money sums over the full merged set, then sliced one page with the
+ * former in-memory slicer (defaultSize 50) — maxSize defaults to 100,
+ * so a client asking pageSize=150 silently received 100 rows, and
  * every request paid for the employee's whole loan history.
  *
  * RULES PINNED HERE, driving the REAL HrService (facade) on PGlite:

@@ -321,7 +321,7 @@ export class HrAttendanceRecordsService {
       ) t
     `.execute(this.db);
     const totalItems = Number(totals.rows[0]?.total || 0);
-    // paginateRows semantics preserved: defaultSize 50, page clamped
+    // Old in-memory pagination semantics preserved: defaultSize 50, page clamped
     // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
     // The cap is now 200 (boundedPage), not 100.
     const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 50);
