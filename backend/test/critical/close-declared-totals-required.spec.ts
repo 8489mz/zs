@@ -24,6 +24,12 @@
  * - The same rule covers drawer cash: cash operations with no
  *   countedCash refuse the close; a shift with zero operations on
  *   every method closes with no declarations at all.
+ * - NOTE (INV-ADMIN-CLOSE-DECLARED-TOTALS-WAIVER): the refusal
+ *   pins below run as CASHIER-closes-own-shift. An admin/super_admin
+ *   closer skips this gate (the close form renders the declaration
+ *   rows only for a cashier closer) and the waiver is stamped into
+ *   the close note — pinned by
+ *   admin-close-declared-totals-waiver.spec.ts.
  */
 
 import 'reflect-metadata';
@@ -47,7 +53,6 @@ async function main() {
   const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
-  const admin1 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin1', permissions: [] } as unknown as AuthContext;
   const cashier3 = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 3, username: 'cashier3', permissions: [] } as unknown as AuthContext;
 
   const shiftRow = async (id: number) => {
@@ -153,59 +158,59 @@ async function main() {
     await pg.query(`INSERT INTO user_branches VALUES ('t1',3,1)`);
 
     // ---------- Card: a card sale with no declared card total refuses, posts nothing. ----------
-    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
-    const shiftCard = await shiftIdOf(1);
-    await seedSale(1, 'card', 100);
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
+    const shiftCard = await shiftIdOf(3);
+    await seedSale(1, 'card', 100, 3);
     const journalsBeforeCard = await journalCount();
     await expectCode(
-      drawer.closeCashierShift(shiftCard, { countedCash: 100, managerPin: 'pw-admin-1' }, admin1),
+      drawer.closeCashierShift(shiftCard, { countedCash: 100, managerPin: 'pw-cashier-3' }, cashier3),
       'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED',
       'a card sale with no cardDeclaredTotal must refuse the close',
     );
     assert.equal((await shiftRow(shiftCard)).status, 'open', 'a refused close must leave the shift open');
     assert.equal(await journalCount(), journalsBeforeCard, 'a refused close must post no variance journal');
     // The SAME shift closes once the total is declared — even an explicit 0.00.
-    await drawer.closeCashierShift(shiftCard, { countedCash: 100, cardDeclaredTotal: 0, managerPin: 'pw-admin-1' }, admin1);
-    assert.equal((await shiftRow(shiftCard)).status, 'closed', 'an explicitly entered 0.00 card total must let the close proceed');
+    await drawer.closeCashierShift(shiftCard, { countedCash: 100, cardDeclaredTotal: 0, managerPin: 'pw-cashier-3' }, cashier3);
+    assert.equal((await shiftRow(shiftCard)).status, 'pending_review', 'an explicitly entered 0.00 card total must let the close proceed to review');
 
     // ---------- Wallet: same shape. ----------
-    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
-    const shiftWallet = await shiftIdOf(1);
-    await seedSale(2, 'wallet', 50);
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
+    const shiftWallet = await shiftIdOf(3);
+    await seedSale(2, 'wallet', 50, 3);
     await expectCode(
-      drawer.closeCashierShift(shiftWallet, { countedCash: 100, managerPin: 'pw-admin-1' }, admin1),
+      drawer.closeCashierShift(shiftWallet, { countedCash: 100, managerPin: 'pw-cashier-3' }, cashier3),
       'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED',
       'a wallet sale with no walletDeclaredTotal must refuse the close',
     );
     assert.equal((await shiftRow(shiftWallet)).status, 'open', 'a refused close must leave the shift open');
-    await drawer.closeCashierShift(shiftWallet, { countedCash: 100, walletDeclaredTotal: 0, managerPin: 'pw-admin-1' }, admin1);
-    assert.equal((await shiftRow(shiftWallet)).status, 'closed', 'an explicitly entered 0.00 wallet total must let the close proceed');
+    await drawer.closeCashierShift(shiftWallet, { countedCash: 100, walletDeclaredTotal: 0, managerPin: 'pw-cashier-3' }, cashier3);
+    assert.equal((await shiftRow(shiftWallet)).status, 'pending_review', 'an explicitly entered 0.00 wallet total must let the close proceed to review');
 
     // ---------- InstaPay: same shape. ----------
-    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
-    const shiftInstapay = await shiftIdOf(1);
-    await seedSale(3, 'instapay', 70);
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
+    const shiftInstapay = await shiftIdOf(3);
+    await seedSale(3, 'instapay', 70, 3);
     await expectCode(
-      drawer.closeCashierShift(shiftInstapay, { countedCash: 100, managerPin: 'pw-admin-1' }, admin1),
+      drawer.closeCashierShift(shiftInstapay, { countedCash: 100, managerPin: 'pw-cashier-3' }, cashier3),
       'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED',
       'an InstaPay sale with no instapayDeclaredTotal must refuse the close',
     );
     assert.equal((await shiftRow(shiftInstapay)).status, 'open', 'a refused close must leave the shift open');
-    await drawer.closeCashierShift(shiftInstapay, { countedCash: 100, instapayDeclaredTotal: 0, managerPin: 'pw-admin-1' }, admin1);
-    assert.equal((await shiftRow(shiftInstapay)).status, 'closed', 'an explicitly entered 0.00 InstaPay total must let the close proceed');
+    await drawer.closeCashierShift(shiftInstapay, { countedCash: 100, instapayDeclaredTotal: 0, managerPin: 'pw-cashier-3' }, cashier3);
+    assert.equal((await shiftRow(shiftInstapay)).status, 'pending_review', 'an explicitly entered 0.00 InstaPay total must let the close proceed to review');
 
     // ---------- Drawer cash: cash operations with no countedCash refuse; with it, proceed. ----------
-    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
-    const shiftCash = await shiftIdOf(1);
-    await seedSale(4, 'cash', 50);
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
+    const shiftCash = await shiftIdOf(3);
+    await seedSale(4, 'cash', 50, 3);
     await expectCode(
-      drawer.closeCashierShift(shiftCash, { managerPin: 'pw-admin-1' }, admin1),
+      drawer.closeCashierShift(shiftCash, { managerPin: 'pw-cashier-3' }, cashier3),
       'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED',
       'a cash sale with no countedCash must refuse the close',
     );
     assert.equal((await shiftRow(shiftCash)).status, 'open', 'a refused close must leave the shift open');
-    await drawer.closeCashierShift(shiftCash, { countedCash: 150, managerPin: 'pw-admin-1' }, admin1);
-    assert.equal((await shiftRow(shiftCash)).status, 'closed', 'counted cash 150 (opening 100 + cash sale 50) must close clean');
+    await drawer.closeCashierShift(shiftCash, { countedCash: 150, managerPin: 'pw-cashier-3' }, cashier3);
+    assert.equal((await shiftRow(shiftCash)).status, 'pending_review', 'counted cash 150 (opening 100 + cash sale 50) must close clean to review');
 
     // ---------- Zero operations on every method: no declarations needed at all. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
@@ -214,45 +219,45 @@ async function main() {
     assert.equal((await shiftRow(shiftEmpty)).status, 'pending_review', 'a shift with zero operations must close with no declared totals at all');
 
     // ---------- Collections count too: a card receipt alone requires the card total. ----------
-    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
-    const shiftColl = await shiftIdOf(1);
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
+    const shiftColl = await shiftIdOf(3);
     await pg.query(`INSERT INTO customer_payments(id,tenant_id,account_id,amount,payment_channel,created_by,created_at,branch_id)
-      VALUES (1,'t1','a1',50,'card',1,now(),1)`);
+      VALUES (1,'t1','a1',50,'card',3,now(),1)`);
     await expectCode(
-      drawer.closeCashierShift(shiftColl, { countedCash: 100, managerPin: 'pw-admin-1' }, admin1),
+      drawer.closeCashierShift(shiftColl, { countedCash: 100, managerPin: 'pw-cashier-3' }, cashier3),
       'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED',
       'a card customer collection with no cardDeclaredTotal must refuse the close',
     );
     assert.equal((await shiftRow(shiftColl)).status, 'open', 'a refused close must leave the shift open');
-    await drawer.closeCashierShift(shiftColl, { countedCash: 100, cardDeclaredTotal: 50, managerPin: 'pw-admin-1' }, admin1);
-    assert.equal((await shiftRow(shiftColl)).status, 'closed', 'declaring the collected card total must let the close proceed');
+    await drawer.closeCashierShift(shiftColl, { countedCash: 100, cardDeclaredTotal: 50, managerPin: 'pw-cashier-3' }, cashier3);
+    assert.equal((await shiftRow(shiftColl)).status, 'pending_review', 'declaring the collected card total must let the close proceed to review');
 
     // ---------- The gate never trusts caller-supplied counts. ----------
-    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
-    const shiftLie = await shiftIdOf(1);
-    await seedSale(5, 'card', 100);
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
+    const shiftLie = await shiftIdOf(3);
+    await seedSale(5, 'card', 100, 3);
     await expectCode(
-      drawer.closeCashierShift(shiftLie, { countedCash: 100, cardOperationCount: 0, managerPin: 'pw-admin-1' }, admin1),
+      drawer.closeCashierShift(shiftLie, { countedCash: 100, cardOperationCount: 0, managerPin: 'pw-cashier-3' }, cashier3),
       'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED',
       'a payload claiming cardOperationCount 0 while a card sale exists must still refuse the close',
     );
     assert.equal((await shiftRow(shiftLie)).status, 'open', 'a refused close must leave the shift open');
-    await drawer.closeCashierShift(shiftLie, { countedCash: 100, cardDeclaredTotal: 100, cardOperationCount: 0, managerPin: 'pw-admin-1' }, admin1);
-    assert.equal((await shiftRow(shiftLie)).status, 'closed', 'declaring the card total must let the close proceed even with a caller count of 0');
+    await drawer.closeCashierShift(shiftLie, { countedCash: 100, cardDeclaredTotal: 100, cardOperationCount: 0, managerPin: 'pw-cashier-3' }, cashier3);
+    assert.equal((await shiftRow(shiftLie)).status, 'pending_review', 'declaring the card total must let the close proceed to review even with a caller count of 0');
 
     // ---------- Service card alone (no card sale) requires the card total. ----------
-    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
-    const shiftService = await shiftIdOf(1);
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
+    const shiftService = await shiftIdOf(3);
     await pg.query(`INSERT INTO services(id,tenant_id,account_id,name,amount,payment_channel,created_by,created_at,branch_id,location_id)
-      VALUES (1,'t1','a1','خدمة',10,'card',1,now(),1,NULL)`);
+      VALUES (1,'t1','a1','خدمة',10,'card',3,now(),1,NULL)`);
     await expectCode(
-      drawer.closeCashierShift(shiftService, { countedCash: 100, managerPin: 'pw-admin-1' }, admin1),
+      drawer.closeCashierShift(shiftService, { countedCash: 100, managerPin: 'pw-cashier-3' }, cashier3),
       'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED',
       'a service card payment with no cardDeclaredTotal must refuse the close',
     );
     assert.equal((await shiftRow(shiftService)).status, 'open', 'a refused close must leave the shift open');
-    await drawer.closeCashierShift(shiftService, { countedCash: 100, cardDeclaredTotal: 10, managerPin: 'pw-admin-1' }, admin1);
-    assert.equal((await shiftRow(shiftService)).status, 'closed', 'declaring the service card total must let the close proceed');
+    await drawer.closeCashierShift(shiftService, { countedCash: 100, cardDeclaredTotal: 10, managerPin: 'pw-cashier-3' }, cashier3);
+    assert.equal((await shiftRow(shiftService)).status, 'pending_review', 'declaring the service card total must let the close proceed to review');
 
     console.log('Close declared-totals-required tests passed');
   } finally {

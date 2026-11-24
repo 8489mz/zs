@@ -535,7 +535,12 @@ export class CashDrawerWriteService {
       // the cashier never declared the method at all — the retrial
       // close of 2026-11-15 went through with Visa / wallets /
       // InstaPay all 0.00 although the shift had operations on all
-      // three. Counts come from the server-computed breakdowns on
+      // three. An admin/super_admin closer skips this gate
+      // (INV-ADMIN-CLOSE-DECLARED-TOTALS-WAIVER): the declaration
+      // rows render only for a cashier closer, and for a non-blind
+      // close the declared values are discarded anyway — the
+      // waiver is stamped into the close note below instead.
+      // Counts come from the server-computed breakdowns on
       // this transaction, never from the caller-supplied operation
       // counts in the payload (a gate that trusts caller flags is
       // bypassed by omitting them). The sales and collections
@@ -558,10 +563,33 @@ export class CashDrawerWriteService {
         + (serverServices.serviceCashTotal > 0 ? 1 : 0)
         + (serverReturns.saleReturnCashRefundTotal > 0 ? 1 : 0);
       const hasDeclaredTotal = (value: unknown): boolean => typeof value === 'number' && Number.isFinite(value);
-      if (serverCardOperations > 0 && !hasDeclaredTotal(payload.cardDeclaredTotal)) throw new AppError('أدخل إجمالي الفيزا المعلن قبل الإغلاق — توجد عمليات فيزا في هذه الوردية', 'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED', 400);
-      if (serverWalletOperations > 0 && !hasDeclaredTotal(payload.walletDeclaredTotal)) throw new AppError('أدخل إجمالي المحافظ المعلن قبل الإغلاق — توجد عمليات محافظ في هذه الوردية', 'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED', 400);
-      if (serverInstapayOperations > 0 && !hasDeclaredTotal(payload.instapayDeclaredTotal)) throw new AppError('أدخل إجمالي InstaPay المعلن قبل الإغلاق — توجد عمليات InstaPay في هذه الوردية', 'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED', 400);
-      if (serverCashOperations > 0 && !hasDeclaredTotal(payload.countedCash)) throw new AppError('أدخل النقدية المعدودة قبل الإغلاق — توجد عمليات نقدية في هذه الوردية', 'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED', 400);
+      // INV-ADMIN-CLOSE-DECLARED-TOTALS-WAIVER: the declared-totals
+      // presence gate was meant for the cashier only — the close
+      // form renders the declaration rows only when the closer is
+      // a cashier, so an admin closer has no input to satisfy it,
+      // and for a non-blind close the declared values are discarded
+      // anyway (blindCloseMeta is null unless the opener is a
+      // cashier). An admin/super_admin closer therefore skips the
+      // gate; every method whose total is missing is named in a
+      // waiver stamp on the close note, so the audit trail shows
+      // the missing declaration instead of silently dropping it.
+      // The cashier path below is byte-identical.
+      const isPrivilegedCloser = ['admin', 'super_admin'].includes(String(auth.role || '').trim());
+      const waivedDeclaredMethods: string[] = [];
+      if (serverCardOperations > 0 && !hasDeclaredTotal(payload.cardDeclaredTotal)) waivedDeclaredMethods.push('الفيزا');
+      if (serverWalletOperations > 0 && !hasDeclaredTotal(payload.walletDeclaredTotal)) waivedDeclaredMethods.push('المحافظ');
+      if (serverInstapayOperations > 0 && !hasDeclaredTotal(payload.instapayDeclaredTotal)) waivedDeclaredMethods.push('InstaPay');
+      if (serverCashOperations > 0 && !hasDeclaredTotal(payload.countedCash)) waivedDeclaredMethods.push('النقدية');
+      if (isPrivilegedCloser) {
+        if (waivedDeclaredMethods.length > 0) {
+          noteStamps.push(`إقرار معفى بقرار إداري — أغلق ${String(auth.username || '')} الوردية دون إقرار ${waivedDeclaredMethods.join(' / ')} المعلن`);
+        }
+      } else {
+        if (serverCardOperations > 0 && !hasDeclaredTotal(payload.cardDeclaredTotal)) throw new AppError('أدخل إجمالي الفيزا المعلن قبل الإغلاق — توجد عمليات فيزا في هذه الوردية', 'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED', 400);
+        if (serverWalletOperations > 0 && !hasDeclaredTotal(payload.walletDeclaredTotal)) throw new AppError('أدخل إجمالي المحافظ المعلن قبل الإغلاق — توجد عمليات محافظ في هذه الوردية', 'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED', 400);
+        if (serverInstapayOperations > 0 && !hasDeclaredTotal(payload.instapayDeclaredTotal)) throw new AppError('أدخل إجمالي InstaPay المعلن قبل الإغلاق — توجد عمليات InstaPay في هذه الوردية', 'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED', 400);
+        if (serverCashOperations > 0 && !hasDeclaredTotal(payload.countedCash)) throw new AppError('أدخل النقدية المعدودة قبل الإغلاق — توجد عمليات نقدية في هذه الوردية', 'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED', 400);
+      }
 
       // Any real variance needs a note: the old 0.01 cutoff let a KWD
       // cashier close a shift 9 fils short with no explanation at all.
