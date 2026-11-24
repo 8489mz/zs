@@ -8,7 +8,8 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const electron = readFileSync(path.join(root, 'frontend/electron/main.cjs'), 'utf8');
 const updater = readFileSync(path.join(root, 'portable/tools/launcher/scripts/ApplyAndRestart.ps1'), 'utf8');
-const service = readFileSync(path.join(root, 'backend/src/modules/settings/services/offline-releases.service.ts'), 'utf8');
+const service = readFileSync(path.join(root, 'backend/src/modules/settings/services/offline-releases/offline-releases-apply.ts'), 'utf8')
+  + readFileSync(path.join(root, 'backend/src/modules/settings/services/offline-releases/offline-releases-zip-version.ts'), 'utf8');
 
 const updateHandler = electron.match(/backendProcess\.on\('exit',[\s\S]*?\n\s*}\);/)?.[0];
 assert.ok(updateHandler, 'Electron backend exit event missing');
