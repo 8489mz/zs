@@ -19,7 +19,6 @@
     "src/features/settings/components/user-management/UnifiedAccessDirectoryPanel.tsx": 1144,
     "src/features/settings/components/workspace-sections/SystemUpdatesSection.tsx": 1129,
     "src/features/storefront/components/MerchantOrdersTable.tsx": 1028,
-    "src/features/storefront/lib/storefront-photo-matcher/storefront-photo-matcher-rules.ts": 1135,
-    "src/lib/pos-printing/template.ts": 1148
+    "src/features/storefront/lib/storefront-photo-matcher/storefront-photo-matcher-rules.ts": 1135
   }
 }

@@ -409,12 +409,12 @@ canonical money engines.
 
 ## Frontend layout
 
-- `frontend/src/` total: 1958 files.
+- `frontend/src/` total: 1966 files.
   - `frontend/src/features/`: 1530 files
     in feature directories (table below).
   - `frontend/src/shared/`: 163 files.
   - `frontend/src/styles/`: 63 files;
-    `frontend/src/lib/`: 66 files;
+    `frontend/src/lib/`: 74 files;
     `frontend/src/types/`: 29 files;
     `frontend/src/app/`: 14 files;
     `frontend/src/locales/`: 8 files;
