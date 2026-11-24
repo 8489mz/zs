@@ -409,7 +409,7 @@ canonical money engines.
 
 ## Frontend layout
 
-- `frontend/src/` total: 1992 files.
+- `frontend/src/` total: 1999 files.
   - `frontend/src/features/`: 1530 files
     in feature directories (table below).
   - `frontend/src/shared/`: 163 files.
@@ -590,7 +590,7 @@ financial logic.
 - Files in this directory: `routes.tsx`
 - Subdirectories: `api`, `components`, `hooks`, `pages`
 
-### `frontend/src/features/sales/` (63 files)
+### `frontend/src/features/sales/` (70 files)
 
 - Files in this directory: `contracts.ts`, `index.ts`, `routes.tsx`
 - Subdirectories: `api`, `components`, `hooks`, `lib`, `pages`, `utils`
