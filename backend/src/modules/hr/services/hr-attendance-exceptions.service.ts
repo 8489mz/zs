@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
-import { paginateRows } from '../../../common/utils/pagination';
+import { boundedPage } from '../../../common/utils/bounded-page';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -329,7 +329,15 @@ export class HrAttendanceExceptionsService {
     try {
       const globalPolicies = await this.getPayrollPolicies(this.db, tenantId);
 
-      const result = await sql<Record<string, unknown>>`
+      // INV-HR-ATTENDANCE-SQL-PAGINATION: the incident_index_in_month
+      // window is computed over the FULL pre-filter set — the old code ran
+      // ROW_NUMBER() in SQL and applied the status/search filters in JS
+      // afterwards, so a status-filtered incident keeps its true index
+      // (and its progressive penalty tier). The window therefore lives in
+      // an inner query and the status/search filters apply in an outer
+      // query; the COUNT and the page read the same outer predicates.
+      // The per-row penalty engine runs only on the page's rows.
+      const base = sql<Record<string, unknown>>`
         SELECT
           ex.id,
           ex.employee_id,
@@ -374,10 +382,36 @@ export class HrAttendanceExceptionsService {
           AND ${monthCondition}
           AND ${employeeCondition}
           AND ${departmentCondition}
-        ORDER BY ex.work_date DESC, e.display_name ASC, ex.id DESC
+      `;
+      // The status filter matches the RAW trimmed status against the
+      // LOWERCASED query (the old JS compared clean(row.status) with the
+      // lowercased query, no lowercase on the stored value).
+      const statusFilter = status
+        ? sql<boolean>`btrim(s.status) = ${status}`
+        : sql<boolean>`1=1`;
+      const searchFilter = search
+        ? sql<boolean>`strpos(lower(btrim(s.employee_no)), ${search}) > 0 OR strpos(lower(btrim(s.employee_name)), ${search}) > 0 OR strpos(lower(btrim(s.exception_type)), ${search}) > 0`
+        : sql<boolean>`1=1`;
+      const totals = await sql<{ total: string }>`
+        SELECT COUNT(*)::text AS total FROM (${base}) s
+        WHERE ${statusFilter} AND ${searchFilter}
+      `.execute(this.db);
+      const totalItems = Number(totals.rows[0]?.total || 0);
+      // paginateRows semantics preserved: defaultSize 50, page clamped
+      // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
+      // The cap is now 200 (boundedPage), not 100.
+      const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 50);
+      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+      const safePage = Math.min(page, totalPages);
+      const offset = (safePage - 1) * pageSize;
+      const result = await sql<Record<string, unknown>>`
+        SELECT * FROM (${base}) s
+        WHERE ${statusFilter} AND ${searchFilter}
+        ORDER BY s.work_date DESC, s.employee_name ASC, s.id DESC
+        LIMIT ${pageSize} OFFSET ${offset}
       `.execute(this.db);
 
-      let rows = result.rows.map((row) => {
+      const rows = result.rows.map((row) => {
         const penalty = calculateAttendancePenalty({
           exceptionType: clean(row.exception_type),
           durationMinutes: Number(row.duration_minutes || 0),
@@ -420,16 +454,10 @@ export class HrAttendanceExceptionsService {
         };
       });
 
-      if (status) rows = rows.filter((row) => row.status === status);
-      if (search) {
-        rows = rows.filter((row) => [row.employeeNo, row.employeeName, row.exceptionType].some((value) => value.toLowerCase().includes(search)));
-      }
-
-      const paged = paginateRows(rows, query, { defaultSize: 50 });
-      return { rows: paged.rows, pagination: paged.pagination, summary: { totalItems: rows.length } };
+      return { rows, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary: { totalItems } };
     } catch {
-      const paged = paginateRows([], query, { defaultSize: 50 });
-      return { rows: paged.rows, pagination: paged.pagination, summary: { totalItems: 0 } };
+      const { pageSize } = boundedPage(query.page, query.pageSize, 200, 50);
+      return { rows: [], pagination: { page: 1, pageSize, totalItems: 0, totalPages: 1 }, summary: { totalItems: 0 } };
     }
   }
 

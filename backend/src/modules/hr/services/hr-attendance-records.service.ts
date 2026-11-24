@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
-import { paginateRows } from '../../../common/utils/pagination';
+import { boundedPage } from '../../../common/utils/bounded-page';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -16,7 +16,6 @@ import {
   startsNewSession,
   type AttendancePunchResolution,
 } from '../attendance-punch.engine';
-import { calculatePayableMinutes, resolveExpectedDailyMinutes } from '../engines/hourly-attendance-pay.engine';
 import { type RawBuilder } from 'kysely';
 import { buildAttendanceDayAuditKey, clean, combineNotes, normalizeAttendanceSource, normalizeAttendanceStatus, normalizeDateOnly, toId } from '../hr-helpers';
 
@@ -43,7 +42,11 @@ import { buildAttendanceDayAuditKey, clean, combineNotes, normalizeAttendanceSou
  * it (prep §7.7). Attendance punches resolve through the
  * resolveAttendancePunch engine (./attendance-punch.engine); payable
  * minutes through calculatePayableMinutes / resolveExpectedDailyMinutes
- * (./engines/hourly-attendance-pay.engine).
+ * (./engines/hourly-attendance-pay.engine) — INV-HR-ATTENDANCE-SQL-
+ * PAGINATION moved the single-day summary into SQL, translating those
+ * two engines faithfully (wall-clock elapsed minutes, scheduled-times
+ * expected minutes with overnight wrap, the payable policy branches);
+ * the range path above already aggregates in SQL and is untouched.
  * PGLITE TRAP (prep §7.6): this slice holds the file's ONLY 2
  * this.db.transaction() sites — upsertAttendanceRecord (pristine L5198)
  * and bulkImportAttendanceRecords (pristine L5343). They move
@@ -213,7 +216,22 @@ export class HrAttendanceRecordsService {
       };
     }
 
-    const result = await sql<Record<string, unknown>>`
+    // INV-HR-ATTENDANCE-SQL-PAGINATION: the single-day path loaded every
+    // employee for the day, mapped the full set in JS and reduced the
+    // summary (status counts + workedMinutes + payableMinutes) over it.
+    // The page query and the summary aggregates now share one inner row
+    // select. The per-row math is translated faithfully from the JS
+    // engine, NOT from the range path's approximation:
+    // - elapsed_minutes is the tenant-timezone WALL-CLOCK difference
+    //   (what `new Date()` on the to_char() strings computes);
+    // - expected minutes follow resolveExpectedDailyMinutes
+    //   (expected_daily_hours, else the scheduled HH:MM pair with the
+    //   overnight wrap, else 480);
+    // - payable follows calculatePayableMinutes (actual <= expected ->
+    //   actual; auto_approved -> actual; disabled -> expected; else
+    //   expected + min(extra, approved)).
+    // The range path above is already bounded DB pagination — untouched.
+    const dayRows = sql<Record<string, unknown>>`
       SELECT
         e.id AS employee_id,
         e.employee_no,
@@ -223,7 +241,7 @@ export class HrAttendanceRecordsService {
         j.name AS job_title_name,
         a.id AS attendance_id,
         to_char(a.work_date, 'YYYY-MM-DD') AS work_date_text,
-        a.status,
+        CASE WHEN a.status IS NULL OR a.status NOT IN ('present', 'absent', 'late', 'half_day', 'leave', 'excused', 'early_leave') THEN 'unmarked' ELSE a.status END AS status,
         to_char(a.check_in_at AT TIME ZONE ${tenantTimezone}, 'YYYY-MM-DD"T"HH24:MI:SS') AS check_in_at_text,
         to_char(a.check_out_at AT TIME ZONE ${tenantTimezone}, 'YYYY-MM-DD"T"HH24:MI:SS') AS check_out_at_text,
         a.source,
@@ -247,7 +265,16 @@ export class HrAttendanceRecordsService {
           WHERE ex.tenant_id = e.tenant_id AND ex.employee_id = e.id
             AND ex.work_date = ${workDate}::date AND ex.exception_type IN ('late_check_out', 'extra_hours')
             AND ex.status IN ('pending', 'needs_review')
-        ), 0) AS pending_overtime_minutes
+        ), 0) AS pending_overtime_minutes,
+        CASE WHEN a.check_in_at IS NOT NULL AND a.check_out_at IS NOT NULL
+          THEN FLOOR(EXTRACT(EPOCH FROM ((a.check_out_at AT TIME ZONE ${tenantTimezone})::timestamp - (a.check_in_at AT TIME ZONE ${tenantTimezone})::timestamp)) / 60)
+          ELSE NULL END AS elapsed_minutes,
+        CASE WHEN substring(btrim(e.scheduled_check_in_time) from 1 for 5) ~ '^[0-9]{1,2}:[0-9]{1,2}$'
+          THEN split_part(substring(btrim(e.scheduled_check_in_time) from 1 for 5), ':', 1)::int * 60 + split_part(substring(btrim(e.scheduled_check_in_time) from 1 for 5), ':', 2)::int
+          ELSE NULL END AS sched_in_min,
+        CASE WHEN substring(btrim(e.scheduled_check_out_time) from 1 for 5) ~ '^[0-9]{1,2}:[0-9]{1,2}$'
+          THEN split_part(substring(btrim(e.scheduled_check_out_time) from 1 for 5), ':', 1)::int * 60 + split_part(substring(btrim(e.scheduled_check_out_time) from 1 for 5), ':', 2)::int
+          ELSE NULL END AS sched_out_min
       FROM hr_employees e
       LEFT JOIN hr_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id AND d.tenant_id = e.tenant_id
       LEFT JOIN hr_job_titles j ON j.id = e.job_title_id AND j.tenant_id = e.tenant_id AND j.tenant_id = e.tenant_id
@@ -256,10 +283,58 @@ export class HrAttendanceRecordsService {
         AND e.status IN ('active', 'inactive')
         AND (${requestedEmployeeId}::BIGINT IS NULL OR e.id = ${requestedEmployeeId})
         AND (${requestedDepartmentId}::BIGINT IS NULL OR e.department_id = ${requestedDepartmentId})
-      ORDER BY e.display_name ASC, e.id ASC
+        AND (${search} = '' OR strpos(lower(btrim(COALESCE(e.employee_no, ''))), ${search}) > 0 OR strpos(lower(btrim(e.display_name)), ${search}) > 0 OR strpos(lower(btrim(COALESCE(d.name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(j.name, ''))), ${search}) > 0)
+    `;
+    const totals = await sql<{ total: string; present: string; absent: string; late: string; leave: string; unmarked: string; minutes: string; payable_minutes: string }>`
+      SELECT
+        COUNT(*)::text AS total,
+        COUNT(*) FILTER (WHERE status = 'present')::text AS present,
+        COUNT(*) FILTER (WHERE status = 'absent')::text AS absent,
+        COUNT(*) FILTER (WHERE status = 'late')::text AS late,
+        COUNT(*) FILTER (WHERE status = 'leave')::text AS leave,
+        COUNT(*) FILTER (WHERE status = 'unmarked')::text AS unmarked,
+        COALESCE(SUM(CASE WHEN elapsed_minutes IS NOT NULL AND status NOT IN ('absent', 'leave') AND elapsed_minutes > 0 AND elapsed_minutes <= 1440 THEN elapsed_minutes ELSE 0 END), 0)::text AS minutes,
+        COALESCE(SUM(CASE WHEN compensation_type = 'hourly' AND elapsed_minutes IS NOT NULL AND status NOT IN ('absent', 'leave') AND elapsed_minutes > 0 AND elapsed_minutes <= 1440 THEN
+          CASE
+            WHEN elapsed_minutes <= expected_minutes THEN elapsed_minutes
+            WHEN policy_norm = 'auto_approved' THEN elapsed_minutes
+            WHEN policy_norm = 'disabled' THEN expected_minutes
+            ELSE expected_minutes + LEAST(elapsed_minutes - expected_minutes, GREATEST(0, FLOOR(COALESCE(approved_overtime_minutes, 0))))
+          END
+          ELSE 0 END), 0)::text AS payable_minutes
+      FROM (
+        SELECT *,
+          CASE
+            WHEN expected_daily_hours IS NOT NULL AND expected_daily_hours > 0
+              THEN GREATEST(1, ROUND(expected_daily_hours * 60)::int)
+            WHEN shift_minutes BETWEEN 1 AND 1440 THEN shift_minutes
+            ELSE 480
+          END AS expected_minutes,
+          lower(COALESCE(NULLIF(btrim(overtime_policy), ''), 'review_only')) AS policy_norm
+        FROM (
+          SELECT *,
+            CASE WHEN sched_in_min IS NOT NULL AND sched_out_min IS NOT NULL
+              THEN CASE WHEN sched_out_min <= sched_in_min THEN sched_out_min + 1440 - sched_in_min ELSE sched_out_min - sched_in_min END
+              ELSE NULL END AS shift_minutes
+          FROM (${dayRows}) s
+        ) s2
+      ) t
+    `.execute(this.db);
+    const totalItems = Number(totals.rows[0]?.total || 0);
+    // paginateRows semantics preserved: defaultSize 50, page clamped
+    // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
+    // The cap is now 200 (boundedPage), not 100.
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 50);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
+    const result = await sql<Record<string, unknown>>`
+      SELECT * FROM (${dayRows}) s
+      ORDER BY s.employee_name ASC, s.employee_id ASC
+      LIMIT ${pageSize} OFFSET ${offset}
     `.execute(this.db);
 
-    let rows = result.rows.map((row) => {
+    const rows = result.rows.map((row) => {
       const status = normalizeAttendanceStatus(row.status);
       return {
         id: row.attendance_id ? String(row.attendance_id) : '',
@@ -286,47 +361,19 @@ export class HrAttendanceRecordsService {
       };
     });
 
-    if (search) {
-      rows = rows.filter((row) => [row.employeeNo, row.employeeName, row.departmentName, row.jobTitleName].some((value) => value.toLowerCase().includes(search)));
-    }
-
-    const summary = rows.reduce(
-      (acc, row) => {
-        const status = normalizeAttendanceStatus(row.status);
-        acc.totalItems += 1;
-        if (status === 'present') acc.presentCount += 1;
-        else if (status === 'absent') acc.absentCount += 1;
-        else if (status === 'late') acc.lateCount += 1;
-        else if (status === 'leave') acc.leaveCount += 1;
-        else if (status === 'unmarked') acc.unmarkedCount += 1;
-        return acc;
-      },
-      { totalItems: 0, presentCount: 0, absentCount: 0, lateCount: 0, leaveCount: 0, unmarkedCount: 0 },
-    );
-
-    const workedMinutes = rows.reduce((total, row) => {
-      if (!row.checkInAt || !row.checkOutAt || ['absent', 'leave'].includes(row.status)) return total;
-      const elapsed = Math.floor((new Date(row.checkOutAt).getTime() - new Date(row.checkInAt).getTime()) / 60000);
-      return total + (Number.isFinite(elapsed) && elapsed > 0 && elapsed <= 1440 ? elapsed : 0);
-    }, 0);
-    const payableMinutes = rows.reduce((total, row) => {
-      if (row.compensationType !== 'hourly' || !row.checkInAt || !row.checkOutAt || ['absent', 'leave'].includes(row.status)) return total;
-      const elapsed = Math.floor((new Date(row.checkOutAt).getTime() - new Date(row.checkInAt).getTime()) / 60000);
-      if (!Number.isFinite(elapsed) || elapsed <= 0 || elapsed > 1440) return total;
-      const expectedDailyMinutes = resolveExpectedDailyMinutes(row);
-      const { payableMinutes: rowPayable } = calculatePayableMinutes({
-        actualMinutes: elapsed,
-        expectedDailyMinutes,
-        overtimePolicy: row.overtimePolicy,
-        approvedOvertimeMinutes: row.approvedOvertimeMinutes,
-      });
-      return total + rowPayable;
-    }, 0);
-    const paged = paginateRows(rows, query, { defaultSize: 50 });
     return {
-      rows: paged.rows,
-      pagination: paged.pagination,
-      summary: { ...summary, workedMinutes, payableMinutes },
+      rows,
+      pagination: { page: safePage, pageSize, totalItems, totalPages },
+      summary: {
+        totalItems,
+        presentCount: Number(totals.rows[0]?.present || 0),
+        absentCount: Number(totals.rows[0]?.absent || 0),
+        lateCount: Number(totals.rows[0]?.late || 0),
+        leaveCount: Number(totals.rows[0]?.leave || 0),
+        unmarkedCount: Number(totals.rows[0]?.unmarked || 0),
+        workedMinutes: Number(totals.rows[0]?.minutes || 0),
+        payableMinutes: Number(totals.rows[0]?.payable_minutes || 0),
+      },
       serverTime: new Date().toISOString(),
       serverTimezone: tenantTimezone,
       workDate,
