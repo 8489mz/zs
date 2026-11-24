@@ -20,6 +20,8 @@ import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { resolveFxRate } from '../../accounting/fx-rate-resolution';
 import { isPaymentMethod } from '../engines/import-payment-method.engine';
+import { isSoloAdminOverride } from '../../../common/utils/manager-approval';
+import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 
 /**
  * ImportCommercialService — slice S7 of the import-sales split.
@@ -842,21 +844,66 @@ export class ImportCommercialService {
         .forUpdate()
         .executeTakeFirstOrThrow();
 
+      // INV-SOLO-ADMIN-IMPORT-APPROVAL-OVERRIDE: a shop with only
+      // ONE admin could never decide an import approval request they
+      // created — the old ban refused the requester outright, so the
+      // gated action (shipment, broker, trip-expense, payment
+      // method, partner payout, project close) sat blocked forever
+      // with no second admin to decide it. When the decider is an
+      // admin/super_admin AND no other active admin/super_admin
+      // exists in the tenant, the requester may decide alone — but
+      // never silently: the override is stamped into the approval
+      // row's rejection_reason (the row's only free-text audit
+      // field, already the carrier for decision notes on both
+      // decisions) with requester == decider, the decision, and
+      // that no second admin was available; any supplied reason or
+      // notes are preserved in front of the stamp. The decider's
+      // role is read from the `users` row in this same transaction
+      // — the decide path carries only userId, no auth context —
+      // and the shared isSoloAdminOverride helper (created by P5,
+      // reused by P6; no third copy) is consulted lazily, only
+      // when a self-decision would otherwise be refused, so a
+      // decision by a different admin costs no extra query and
+      // behaves byte-identically. When a second active admin
+      // exists, the old ban stands; a non-admin requester is still
+      // refused. The gate (verifyAndConsumeApprovalRequest) reads
+      // only status / action_type / reference_id / request_payload,
+      // never rejection_reason, so the stamp cannot change
+      // consumption, and it survives it (the consume update
+      // touches only status + decided_at).
+      let soloOverride = false;
       if (req.requested_by === userId) {
-        throw new BadRequestException('مبدأ الرقابة الثنائية (Maker-Checker): لا يجوز للمستخدم الذي أنشأ الطلب اعتماده بنفسه.');
+        const decider = await trx
+          .selectFrom('users')
+          .select('role')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', userId)
+          .where('is_active', '=', true)
+          .executeTakeFirst();
+        soloOverride = await isSoloAdminOverride(trx, tenantId, {
+          userId,
+          role: decider?.role,
+        } as AuthContext);
+        if (!soloOverride) {
+          throw new BadRequestException('مبدأ الرقابة الثنائية (Maker-Checker): لا يجوز للمستخدم الذي أنشأ الطلب اعتماده بنفسه.');
+        }
       }
 
       if (req.status !== 'pending') {
         throw new BadRequestException('تم البت في هذا الطلب مسبقاً.');
       }
 
+      const decisionNotes = dto.rejectionReason || dto.decisionNotes || dto.comments || null;
       return await trx
         .updateTable('import_approval_requests')
         .set({
           status: dto.decision,
           approved_by: userId,
           decided_at: new Date(),
-          rejection_reason: dto.rejectionReason || dto.decisionNotes || dto.comments || null,
+          rejection_reason: soloOverride
+            ? (decisionNotes ? `${decisionNotes} — ` : '') +
+              `اعتماد منفرد بقرار إداري — صاحب الطلب ${userId} قرر طلبه بنفسه (${dto.decision}) — لا يوجد مدير ثانٍ متاح`
+            : decisionNotes,
         })
         .where('id', '=', requestId)
         .where('tenant_id', '=', tenantId)
