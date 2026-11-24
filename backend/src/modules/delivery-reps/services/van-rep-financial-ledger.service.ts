@@ -57,8 +57,8 @@ export class VanRepFinancialLedgerService {
   private settleRepFinancialItemInstance?: SettleRepFinancialItemSlice;
   private get settleRepFinancialItemSlice(): SettleRepFinancialItemSlice {
     return (this.settleRepFinancialItemInstance ??= new SettleRepFinancialItemSlice(this.ledgerDeps, {
-      assertRepWaiverApproval: (trxAny, tenantId, accountId, item, payload, actorUserId) =>
-        this.waiverClusterSlice.assertRepWaiverApproval(trxAny, tenantId, accountId, item, payload, actorUserId),
+      assertRepWaiverApproval: (trxAny, tenantId, accountId, item, payload, actorUserId, auth) =>
+        this.waiverClusterSlice.assertRepWaiverApproval(trxAny, tenantId, accountId, item, payload, actorUserId, auth),
       assertRepStockShortageCustodyLeg: (trx, tenantId, item, amount, bookDigits) =>
         this.shortageCustodySlice.assertRepStockShortageCustodyLeg(trx, tenantId, item, amount, bookDigits),
       resolveRepShortageReceivingShift: (trx, params) =>

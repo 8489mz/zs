@@ -18,7 +18,8 @@ export type SettleRepFinancialItemBoundDeps = {
     item: { rep_id?: number | null; trip_id?: number | null; amount?: number | string | null },
     payload: { reason?: string; notes?: string; supervisorPin?: string },
     actorUserId: number | null,
-  ): Promise<void>;
+    auth: AuthContext,
+  ): Promise<{ soloOverrideUsed: boolean; waiverAmount: number }>;
   assertRepStockShortageCustodyLeg(
     trx: any,
     tenantId: string,
@@ -68,8 +69,9 @@ export class SettleRepFinancialItemSlice {
     item: { rep_id?: number | null; trip_id?: number | null; amount?: number | string | null },
     payload: { reason?: string; notes?: string; supervisorPin?: string },
     actorUserId: number | null,
-  ): Promise<void> {
-    return this.bound.assertRepWaiverApproval(trxAny, tenantId, accountId, item, payload, actorUserId);
+    auth: AuthContext,
+  ): Promise<{ soloOverrideUsed: boolean; waiverAmount: number }> {
+    return this.bound.assertRepWaiverApproval(trxAny, tenantId, accountId, item, payload, actorUserId, auth);
   }
 
   private async assertRepStockShortageCustodyLeg(
@@ -143,8 +145,13 @@ export class SettleRepFinancialItemSlice {
    * waiver needs a PIN) requires a supervisor PIN verified via the
    * shared authorizeManagerSecret, and neither the acting user nor
    * an attributed approver may be the user who settled the trip
-   * (maker-checker). The cash branch is untouched: PD3 is
-   * waiver-only.
+   * (maker-checker). INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE: when the
+   * actor is the tenant's only admin and he settled the trip
+   * himself, the maker-checker legs are excused for that same person
+   * with a logged override — the waived item's notes carry a stamp
+   * naming who settled, who approved, the amount, and that no second
+   * admin was available, plus one audit_logs row in this same
+   * transaction. The cash branch is untouched: PD3 is waiver-only.
    */
   async settleRepFinancialItem(
     tenantId: string,
@@ -191,9 +198,13 @@ export class SettleRepFinancialItemSlice {
         // approver may be the user who settled the trip
         // (maker-checker). This gate runs BEFORE the M4 custody guard
         // below: authorization is decided before posting validity.
-        await this.assertRepWaiverApproval(trxAny, tenantId, accountId, item, payload, actorUserId);
+        // INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE: the gate reports
+        // whether the solo-admin override bit; the stamp (who settled,
+        // who approved, the amount, no second admin available) is
+        // appended to the waived item's notes only then.
+        const waiverGate = await this.assertRepWaiverApproval(trxAny, tenantId, accountId, item, payload, actorUserId, authContext);
         const waiverReason = String(payload.reason ?? payload.notes ?? '').trim();
-        const waiverNotes = `${item.notes ? item.notes + ' | ' : ''}${waiverReason}`;
+        const waiverNotes = `${item.notes ? item.notes + ' | ' : ''}${waiverReason}` + (waiverGate.soloOverrideUsed ? ` — اعتماد منفرد بقرار إداري — سوّى ${authContext.username} الرحلة واعتمد إعفاء عجز ${waiverGate.waiverAmount} بنفسه — لا يوجد مدير ثانٍ متاح` : '');
         // INV-VAN-REP-SHORTAGE-WAIVER-REVERSAL: a pending stock
         // shortage was charged to the rep at trip settlement
         // (Dr 1160 / Cr 1140). Waiving it must reverse that custody
@@ -263,6 +274,18 @@ export class SettleRepFinancialItemSlice {
           .execute();
         if (waived.length !== 1) {
           throw new AppError('تمت تسوية هذا البند أو إعفاؤه مسبقاً', 'ALREADY_SETTLED', 400);
+        }
+        if (waiverGate.soloOverrideUsed) {
+          // INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE: the override audit row
+          // commits in this same transaction, so a rolled-back waiver
+          // leaves no override record behind.
+          await this.audit.logWithExecutor(
+            trxAny,
+            'إعفاء عجز مندوب باعتماد منفرد',
+            `اعتمد ${authContext.username} إعفاء عجز ${waiverGate.waiverAmount} للمندوب بعد أن سوّى الرحلة بنفسه (المسوّي ${actorUserId} / المعتمد ${actorUserId}) — لا يوجد مدير ثانٍ متاح`,
+            authContext,
+            { eventCode: 'REP_WAIVER_SOLO_ADMIN_OVERRIDE' },
+          );
         }
         return {
           ok: true,

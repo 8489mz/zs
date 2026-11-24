@@ -1,5 +1,7 @@
 import { sql } from '../../../../database/kysely';
 import { AppError } from '../../../../common/errors/app-error';
+import { isSoloAdminOverride } from '../../../../common/utils/manager-approval';
+import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import { resolveRepLinkedUserId } from '../van-common.util';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../../accounting/engines/money-minor-units.engine';
@@ -70,6 +72,21 @@ export class RepWaiverClusterSlice {
    * posting validity, so an unauthorized request is refused as
    * unauthorized, not as a custody problem.
    *
+   * INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE: legs (2) and (4) are excused
+   * for the SAME person when he is the tenant's only admin — the
+   * shared isSoloAdminOverride helper (manager-approval.ts, created
+   * by P5; no second copy here) returns true only when the actor is
+   * an admin/super_admin and no OTHER active admin/super_admin
+   * exists in the tenant. The actor leg is excused when the actor is
+   * the settler; the approver leg only when the attributed approver
+   * is the actor himself (supervisorId === actorUserId) — a different
+   * approver who happens to be the settler is still refused. The rep
+   * leg is never excused. The gate reports whether the override bit
+   * (soloOverrideUsed) plus the rounded waiver amount, so the caller
+   * can stamp the waiver with a logged override instead of acting
+   * silently; a waiver that passes without either leg biting reports
+   * false and is stamped with nothing.
+   *
    * Who "decided the load": the trip row records no loader
    * (van_sales_trips has no created_by; the load insert records no
    * actor and its stock movements carry userId null), so no
@@ -92,7 +109,8 @@ export class RepWaiverClusterSlice {
     item: { rep_id?: number | null; trip_id?: number | null; amount?: number | string | null },
     payload: { reason?: string; notes?: string; supervisorPin?: string },
     actorUserId: number | null,
-  ): Promise<void> {
+    auth: AuthContext,
+  ): Promise<{ soloOverrideUsed: boolean; waiverAmount: number }> {
     const reason = String(payload.reason ?? payload.notes ?? '').trim();
     if (!reason) {
       throw new AppError(
@@ -114,12 +132,20 @@ export class RepWaiverClusterSlice {
         .executeTakeFirst();
       tripSettledBy = tripRow?.settled_by ? Number(tripRow.settled_by) : null;
     }
+    let soloOverrideUsed = false;
     if (actorUserId && tripSettledBy && actorUserId === tripSettledBy) {
-      throw new AppError(
-        'لا يجوز لمن اعتمد تصفية الرحلة أن يعفي عجزها بنفسه — يعتمد الإعفاء مشرف آخر (فصل المهام)',
-        'REP_WAIVER_MAKER_CHECKER',
-        403,
-      );
+      // INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE: the tenant's only admin
+      // settled the trip himself, so a different-admin waiver is
+      // unsatisfiable — he may waive alone with a logged override.
+      if (await isSoloAdminOverride(trxAny, tenantId, auth)) {
+        soloOverrideUsed = true;
+      } else {
+        throw new AppError(
+          'لا يجوز لمن اعتمد تصفية الرحلة أن يعفي عجزها بنفسه — يعتمد الإعفاء مشرف آخر (فصل المهام)',
+          'REP_WAIVER_MAKER_CHECKER',
+          403,
+        );
+      }
     }
     if (actorUserId && repUserId && actorUserId === repUserId) {
       throw new AppError(
@@ -156,11 +182,20 @@ export class RepWaiverClusterSlice {
       supervisorId = approval.supervisorId ? Number(approval.supervisorId) : null;
     }
     if (supervisorId && tripSettledBy && supervisorId === tripSettledBy) {
-      throw new AppError(
-        'لا يجوز لمن اعتمد تصفية الرحلة أن يعتمد إعفاء عجزها — يعتمد الإعفاء مشرف آخر (فصل المهام)',
-        'REP_WAIVER_MAKER_CHECKER',
-        403,
-      );
+      // INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE: the attributed approver
+      // is the solo admin actor himself (his own password as the PIN)
+      // — excused only for that same person, never for a different
+      // approver who happens to be the settler.
+      if (supervisorId === actorUserId && (await isSoloAdminOverride(trxAny, tenantId, auth))) {
+        soloOverrideUsed = true;
+      } else {
+        throw new AppError(
+          'لا يجوز لمن اعتمد تصفية الرحلة أن يعتمد إعفاء عجزها — يعتمد الإعفاء مشرف آخر (فصل المهام)',
+          'REP_WAIVER_MAKER_CHECKER',
+          403,
+        );
+      }
     }
+    return { soloOverrideUsed, waiverAmount };
   }
 }

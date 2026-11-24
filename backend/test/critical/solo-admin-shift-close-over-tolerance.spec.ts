@@ -231,17 +231,17 @@ async function main() {
     );
     assert.equal((await shiftRow(shiftShort)).status, 'open', 'a refused close must leave the shift open');
 
-    // ---------- Wiring: this spec is in both critical lists, in identical order (322 specs — the solo-admin-transfer-shortage-override spec is the last entry). ----------
+    // ---------- Wiring: this spec is in both critical lists, in identical order (323 specs — the solo-admin-rep-waiver-override spec is the last entry). ----------
     {
       const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 322);
-      assert.equal(chain.length, 322);
+      assert.equal(specs.length, 323);
+      assert.equal(chain.length, 323);
       assert.deepEqual(chain, specs);
       assert.ok(specs.includes('test/critical/solo-admin-shift-close-over-tolerance.spec.ts'));
-      console.log('wiring: evidence spec in both critical lists (322 = 322, identical order), passed');
+      console.log('wiring: evidence spec in both critical lists (323 = 323, identical order), passed');
     }
 
     console.log('Solo-admin shift-close over-tolerance tests passed');
