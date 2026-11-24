@@ -323,6 +323,7 @@
     "test/critical/solo-admin-po-self-approval-override.spec.ts",
     "test/critical/solo-admin-transfer-shortage-override.spec.ts",
     "test/critical/solo-admin-rep-waiver-override.spec.ts",
-    "test/critical/solo-admin-import-approval-override.spec.ts"
+    "test/critical/solo-admin-import-approval-override.spec.ts",
+    "test/critical/solo-admin-broker-expense-override.spec.ts"
   ]
 }

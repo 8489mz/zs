@@ -15,6 +15,8 @@ import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-
 import { resolveFxRate } from '../../accounting/fx-rate-resolution';
 import { isPaymentMethod } from '../engines/import-payment-method.engine';
 import { resolveBrokerCapitalizationBucket } from '../engines/import-broker-capitalization.engine';
+import { isSoloAdminOverride } from '../../../common/utils/manager-approval';
+import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 
 /**
  * ImportTreasuryService — slice S9 of the import-sales split.
@@ -538,15 +540,65 @@ export class ImportTreasuryService {
       if (expense.is_verified) {
         throw new ConflictException('تم التحقق من مصروف المخلص مسبقاً.');
       }
+      // INV-SOLO-ADMIN-BROKER-EXPENSE-OVERRIDE: a shop with only
+      // ONE admin could never verify a broker expense they settled —
+      // the old ban refused the settler outright, so the expense sat
+      // unverified (blocking project closure) forever with no second
+      // admin to verify it. When the verifier is an admin/super_admin
+      // AND no other active admin/super_admin exists in the tenant,
+      // the settler may verify alone — but never silently: the
+      // override is stamped into the expense row's `notes` (the row's
+      // free-text field) with settler == verifier and that no second
+      // admin was available; any pre-existing notes are preserved in
+      // front of the stamp, and verified_by / verified_at already
+      // record who verified and when. The verifier's role is read
+      // from the `users` row in this same transaction — the verify
+      // path carries only userId, no auth context — and the shared
+      // isSoloAdminOverride helper (created by P5, reused by P6–P7;
+      // no third copy) is consulted lazily, only when a
+      // self-verification would otherwise be refused, so a
+      // verification by a different admin costs no extra query and
+      // behaves byte-identically. When a second active admin exists,
+      // the old ban stands; a non-admin settler is still refused.
+      // The identity comparison is unchanged
+      // (`Number(expense.created_by) === userId`): it already
+      // coerces, so unlike P7's bare `===` the ban DOES fire against
+      // live Postgres (pg returns bigint as string, no setTypeParser
+      // anywhere in src — Number("1") === 1), and the override is
+      // reached exactly when the ban would have fired. The approved
+      // token requirement is untouched: the gate still consumes only
+      // an approved token bound to this expense, and the stamp lands
+      // only on a successful verification (the update runs after the
+      // gate consumes the token).
+      let soloOverride = false;
       if (expense.created_by !== null && expense.created_by !== undefined && Number(expense.created_by) === userId) {
-        throw new BadRequestException('مبدأ الرقابة الثنائية (Maker-Checker): لا يجوز لمن سوّى المصروف التحقق منه بنفسه. [IMPORT_BROKER_EXPENSE_SELF_VERIFICATION]');
+        const verifier = await trx
+          .selectFrom('users')
+          .select('role')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', userId)
+          .where('is_active', '=', true)
+          .executeTakeFirst();
+        soloOverride = await isSoloAdminOverride(trx, tenantId, {
+          userId,
+          role: verifier?.role,
+        } as AuthContext);
+        if (!soloOverride) {
+          throw new BadRequestException('مبدأ الرقابة الثنائية (Maker-Checker): لا يجوز لمن سوّى المصروف التحقق منه بنفسه. [IMPORT_BROKER_EXPENSE_SELF_VERIFICATION]');
+        }
       }
       await this.verifyAndConsumeApprovalRequest(trx, tenantId, 'broker_expense_verification', expenseId, dto.approvalRequestId, {
         brokerExpenseId: expenseId,
         amount: Number(expense.amount_egp),
       });
+      const soloStamp = `تحقق منفرد بقرار إداري — من سوّى المصروف ${userId} تحقق منه بنفسه — لا يوجد مدير ثانٍ متاح`;
       return await trx.updateTable('import_broker_expenses')
-        .set({ is_verified: true, verified_by: userId, verified_at: new Date() })
+        .set({
+          is_verified: true,
+          verified_by: userId,
+          verified_at: new Date(),
+          ...(soloOverride ? { notes: expense.notes ? `${expense.notes} — ${soloStamp}` : soloStamp } : {}),
+        })
         .where('tenant_id', '=', tenantId).where('id', '=', expenseId)
         .returningAll()
         .executeTakeFirstOrThrow();

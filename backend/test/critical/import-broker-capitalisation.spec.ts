@@ -70,6 +70,7 @@ async function makeDb(): Promise<Kysely<Database>> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
   await pg.exec(`
+    CREATE TABLE users (id bigint PRIMARY KEY, tenant_id text, role text, is_active boolean DEFAULT true);
     CREATE TABLE settings (tenant_id text, key text, value text);
     CREATE TABLE currency_exchange_rates (id bigserial PRIMARY KEY, tenant_id text, currency_code text, exchange_rate numeric, is_base boolean);
     CREATE TABLE accounting_accounts (id bigint PRIMARY KEY, tenant_id text, account_id text, code text, name_ar text, name_en text, account_type text, account_group text, is_active boolean, is_cash_bank boolean, is_inventory boolean, is_payable boolean, is_receivable boolean, is_tax boolean);
@@ -421,11 +422,20 @@ async function main(): Promise<void> {
 
   // Case 8: maker-checker verification — the liquidator cannot
   // verify, a foreign token cannot verify, a second user can,
-  // and a second verification conflicts.
+  // and a second verification conflicts. (INV-SOLO-ADMIN-
+  // BROKER-EXPENSE-OVERRIDE: the liquidator is refused here
+  // because a SECOND active admin exists in the tenant — users 1
+  // and 2 are both seeded as admins — so the solo-admin override
+  // does not apply; the solo-admin case is pinned by
+  // solo-admin-broker-expense-override.spec.ts.)
   {
     const db = await makeDb();
     try {
       const service = makeService(db);
+      await db.insertInto('users').values([
+        { id: 1, tenant_id: 't1', role: 'admin', is_active: true },
+        { id: 2, tenant_id: 't1', role: 'admin', is_active: true },
+      ] as any).execute();
       await seedShipment(db);
       const advance = await disburse(db, service, 10000, 'sh-1');
       const expenseA = await liquidate(service, advance.id, { receiptNo: 'RC-V1', category: 'broker_fee', amountEgp: 1000, isCapitalized: false });
