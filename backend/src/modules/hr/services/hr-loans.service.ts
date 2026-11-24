@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
-import { paginateRows } from '../../../common/utils/pagination';
+import { boundedPage } from '../../../common/utils/bounded-page';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -102,6 +102,22 @@ export class HrLoansService {
     const listBookDigits = await tenantBookDigits(this.db, tenantId);
     const employeeId = toId(query.employeeId);
     const periodMonth = normalizePayrollMonth(query.month || query.periodMonth);
+    // INV-HR-LOANS-PAYROLL-SQL-PAGINATION: the summary stays exact over the
+    // FULL filtered set — COUNT + SUM with the same predicates as the page
+    // query. The JS rounding stays in JS on the SQL sum.
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 25);
+    const totalsResult = await sql<Record<string, unknown>>`
+      SELECT
+        COUNT(*)::text AS total,
+        COALESCE(SUM(l.remaining_amount), 0)::text AS outstanding
+      FROM hr_employee_loans l
+      WHERE l.tenant_id = ${tenantId}
+        AND (${employeeId}::BIGINT IS NULL OR l.employee_id = ${employeeId})
+    `.execute(this.db);
+    const totalItems = Number(totalsResult.rows[0]?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
     const result = await sql<Record<string, unknown>>`
       SELECT
         l.*,
@@ -124,6 +140,7 @@ export class HrLoansService {
       WHERE l.tenant_id = ${tenantId}
         AND (${employeeId}::BIGINT IS NULL OR l.employee_id = ${employeeId})
       ORDER BY l.id DESC
+      LIMIT ${pageSize} OFFSET ${offset}
     `.execute(this.db);
     const rows = result.rows.map((row) => ({
       id: String(row.id),
@@ -154,8 +171,7 @@ export class HrLoansService {
       dueInstallmentsCount: 0,
       installments: [] as Array<Record<string, unknown>>,
     }));
-    const paged = paginateRows(rows, query, { defaultSize: 25 });
-    const pagedRows = paged.rows as Array<Record<string, unknown>>;
+    const pagedRows = rows;
     const loanIds = pagedRows
       .map((row) => Number(row.id || 0))
       .filter((value) => Number.isSafeInteger(value) && value > 0);
@@ -291,10 +307,10 @@ export class HrLoansService {
 
     return {
       loans: mappedRows,
-      pagination: paged.pagination,
+      pagination: { page: safePage, pageSize, totalItems, totalPages },
       summary: {
-        totalItems: rows.length,
-        outstandingAmount: roundMoney(rows.reduce((sum, row) => sum + row.remainingAmount, 0), listBookDigits),
+        totalItems,
+        outstandingAmount: roundMoney(Number(totalsResult.rows[0]?.outstanding || 0), listBookDigits),
       },
     };
   }

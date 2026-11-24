@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
-import { paginateRows } from '../../../common/utils/pagination';
+import { boundedPage } from '../../../common/utils/bounded-page';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -242,7 +242,10 @@ export class HrPayrollRunsService {
     // clock — the list response carries it, the HR attendance list precedent.
     const tenantTimezone = await getTenantTimezone(this.db, auth.tenantId);
     const month = normalizePayrollMonth(query.month);
-    const result = await sql<Record<string, unknown>>`
+    // INV-HR-LOANS-PAYROLL-SQL-PAGINATION: the per-run aggregates were
+    // already in SQL; the COUNT is taken over the grouped set and the page
+    // reads the same grouped query with LIMIT/OFFSET.
+    const runsQuery = sql<Record<string, unknown>>`
       SELECT
         r.*,
         to_char(r.start_date, 'YYYY-MM-DD') AS start_date_text,
@@ -268,12 +271,23 @@ export class HrPayrollRunsService {
       LEFT JOIN hr_payroll_run_items i ON i.run_id = r.id AND i.tenant_id = r.tenant_id AND i.status <> 'excluded'
       WHERE r.tenant_id = ${auth.tenantId} AND (${month} = '' OR r.period_month = ${month})
       GROUP BY r.id
-      ORDER BY r.period_month DESC, r.id DESC
+    `;
+    const countResult = await sql<Record<string, unknown>>`
+      SELECT COUNT(*)::text AS total FROM (${runsQuery}) s
+    `.execute(this.db);
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 25);
+    const totalItems = Number(countResult.rows[0]?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
+    const result = await sql<Record<string, unknown>>`
+      SELECT * FROM (${runsQuery}) s
+      ORDER BY s.period_month DESC, s.id DESC
+      LIMIT ${pageSize} OFFSET ${offset}
     `.execute(this.db);
     const runs = result.rows.map((row) => this.mapPayrollRun(row));
-    const paged = paginateRows(runs, query, { defaultSize: 25 });
     // P8 (RC-7): the payroll page's month default comes from the server clock.
-    return { runs: paged.rows, pagination: paged.pagination, summary: { totalItems: runs.length }, serverTime: new Date().toISOString(), serverTimezone: tenantTimezone };
+    return { runs, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary: { totalItems }, serverTime: new Date().toISOString(), serverTimezone: tenantTimezone };
   }
 
   async getPayrollRun(id: number, auth: AuthContext): Promise<Record<string, unknown>> {

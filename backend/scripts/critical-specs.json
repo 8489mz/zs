@@ -312,6 +312,7 @@
     "test/critical/hr-employees-sql-pagination.spec.ts",
     "test/critical/hr-advances-withdrawals-sql-pagination.spec.ts",
     "test/critical/hr-attendance-sql-pagination.spec.ts",
-    "test/critical/hr-assets-leave-sql-pagination.spec.ts"
+    "test/critical/hr-assets-leave-sql-pagination.spec.ts",
+    "test/critical/hr-loans-payroll-sql-pagination.spec.ts"
   ]
 }
