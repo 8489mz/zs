@@ -4,8 +4,8 @@
  * contains the helper's name, and that the shared util file itself is
  * gone.
  *
- * WHY THIS SHAPE: the repo-wide `git grep paginateRows` must return zero
- * hits, and this spec is the living proof of that. The needle is built
+ * WHY THIS SHAPE: the repo-wide grep for the helper's name must return
+ * zero hits, and this spec is the living proof of that. The needle is built
  * by joining two halves so this file itself never contains the literal
  * name — otherwise the spec would be its own first violation. The walk
  * covers backend/src only, so the spec's own directory can never
