@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CashDrawerService } from '../../cash-drawer/cash-drawer.service';
 import { Kysely, sql } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
-import { paginateRows } from '../../../common/utils/pagination';
+import { boundedPage } from '../../../common/utils/bounded-page';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -140,16 +140,36 @@ export class HrAdvancesService {
           ? ''
           : monthTo;
 
-    const loanResult = await sql<Record<string, unknown>>`
+    // INV-HR-WITHDRAWALS-SQL-PAGINATION: the two unbounded queries are
+    // merged in SQL (UNION ALL). The movement-date rule, the loan status
+    // filter, the period filter and the sort are all pushed to the
+    // database; the JS mappers below run only on the page's rows, with
+    // byte-identical bodies. The summary sums come from two aggregate
+    // queries: the 4 period-filtered sums over the merged set, and the
+    // 3 loan-set sums over hr_employee_loans (never period-filtered).
+    const loanStatus = sql<string>`COALESCE(NULLIF(btrim(l.status), ''), 'draft')`;
+    const merged = sql`
       SELECT
-        l.*,
-        e.display_name AS employee_name,
+        'loan' AS kind, l.id AS id, ('loan-' || l.id) AS display_id,
+        l.employee_id AS employee_id, e.display_name AS employee_name,
         COALESCE(NULLIF(actor.display_name, ''), actor.username, 'النظام') AS recorded_by_name,
-        latest_paid.latest_paid_at,
-        to_char(l.issue_date, 'YYYY-MM-DD') AS issue_date_text,
-        to_char(l.created_at, 'YYYY-MM-DD HH24:MI') AS created_at_text,
-        to_char(l.disbursed_at, 'YYYY-MM-DD HH24:MI') AS disbursed_at_text,
-        to_char(latest_paid.latest_paid_at, 'YYYY-MM-DD HH24:MI') AS paid_at_text
+        CASE WHEN ${loanStatus} IN ('paid', 'disbursed', 'partially_repaid', 'repaid')
+          THEN COALESCE(NULLIF(to_char(l.disbursed_at, 'YYYY-MM-DD HH24:MI'), ''), NULLIF(to_char(l.created_at, 'YYYY-MM-DD HH24:MI'), ''), NULLIF(CASE WHEN l.issue_date IS NULL THEN '' ELSE to_char(l.issue_date, 'YYYY-MM-DD') || ' 00:00' END, ''))
+          ELSE COALESCE(NULLIF(CASE WHEN l.issue_date IS NULL THEN '' ELSE to_char(l.issue_date, 'YYYY-MM-DD') || ' 00:00' END, ''), NULLIF(to_char(l.created_at, 'YYYY-MM-DD HH24:MI'), ''))
+        END AS movement_at,
+        CASE WHEN btrim(COALESCE(l.loan_type, '')) = 'loan' THEN 'loan' ELSE 'advance' END AS row_type,
+        COALESCE(l.principal_amount, 0) AS amount,
+        ${loanStatus} AS status,
+        '' AS repayment_method,
+        COALESCE(NULLIF(btrim(l.repayment_mode), ''), 'manual_cash') AS repayment_mode,
+        COALESCE(l.remaining_amount, 0) AS remaining_amount,
+        NULL::numeric AS balance_after,
+        to_char(l.issue_date, 'YYYY-MM-DD') AS issue_date_text, l.issue_date AS issue_date,
+        to_char(l.created_at, 'YYYY-MM-DD HH24:MI') AS created_at_text, l.created_at AS created_at,
+        to_char(l.disbursed_at, 'YYYY-MM-DD HH24:MI') AS disbursed_at_text, l.disbursed_at AS disbursed_at,
+        to_char(latest_paid.latest_paid_at, 'YYYY-MM-DD HH24:MI') AS paid_at_text, latest_paid.latest_paid_at AS latest_paid_at,
+        l.loan_type AS loan_type, l.principal_amount AS principal_amount,
+        NULL::bigint AS reference_id, NULL::text AS note, l.notes AS notes, NULL::text AS movement_at_text
       FROM hr_employee_loans l
       JOIN hr_employees e ON e.id = l.employee_id AND e.tenant_id = l.tenant_id
       LEFT JOIN users actor ON actor.id = l.created_by AND actor.tenant_id = l.tenant_id
@@ -160,21 +180,64 @@ export class HrAdvancesService {
         GROUP BY loan_id
       ) latest_paid ON latest_paid.loan_id = l.id
       WHERE l.employee_id = ${employeeId} AND l.tenant_id = ${tenantId}
-      ORDER BY l.id DESC
-    `.execute(this.db);
-
-    const ledgerResult = await sql<Record<string, unknown>>`
+        AND ${loanStatus} IN ('paid', 'disbursed', 'partially_repaid', 'repaid')
+      UNION ALL
       SELECT
-        le.*,
-        e.display_name AS employee_name,
+        'repayment' AS kind, le.id AS id, ('ledger-' || le.id) AS display_id,
+        le.employee_id AS employee_id, e.display_name AS employee_name,
         COALESCE(NULLIF(actor.display_name, ''), actor.username, 'النظام') AS recorded_by_name,
+        COALESCE(to_char(le.created_at, 'YYYY-MM-DD HH24:MI'), '') AS movement_at,
+        'repayment' AS row_type,
+        ABS(COALESCE(le.amount, 0)) AS amount,
+        'recorded' AS status,
+        COALESCE(NULLIF(btrim(le.repayment_method), ''), 'manual_cash') AS repayment_method,
+        '' AS repayment_mode,
+        NULL::numeric AS remaining_amount,
+        COALESCE(le.balance_after, 0) AS balance_after,
+        NULL::text AS issue_date_text, NULL::date AS issue_date,
+        to_char(le.created_at, 'YYYY-MM-DD HH24:MI') AS created_at_text, le.created_at AS created_at,
+        NULL::text AS disbursed_at_text, NULL::timestamptz AS disbursed_at,
+        NULL::text AS paid_at_text, NULL::timestamptz AS latest_paid_at,
+        NULL::text AS loan_type, NULL::numeric AS principal_amount,
+        le.reference_id AS reference_id, le.note AS note, NULL::text AS notes,
         to_char(le.created_at, 'YYYY-MM-DD HH24:MI') AS movement_at_text
       FROM hr_employee_ledger le
       JOIN hr_employees e ON e.id = le.employee_id AND e.tenant_id = le.tenant_id
       LEFT JOIN users actor ON actor.id = le.created_by AND actor.tenant_id = le.tenant_id
       WHERE le.employee_id = ${employeeId} AND le.tenant_id = ${tenantId}
         AND le.entry_type = 'loan_repayment'
-      ORDER BY le.id DESC
+    `;
+    const periodFilter = sql<boolean>`movement_at <> '' AND (${fromDate} = '' OR substr(movement_at, 1, 10) >= ${fromDate}) AND (${toDate} = '' OR substr(movement_at, 1, 10) <= ${toDate})`;
+    const totals = await sql<{ total_items: string; total_withdrawals: string; total_repayments: string; total_manual_cash: string; total_salary_deduction: string }>`
+      SELECT COUNT(*)::text AS total_items,
+        COALESCE(SUM(amount) FILTER (WHERE row_type <> 'repayment'), 0)::text AS total_withdrawals,
+        COALESCE(SUM(amount) FILTER (WHERE row_type = 'repayment'), 0)::text AS total_repayments,
+        COALESCE(SUM(amount) FILTER (WHERE row_type = 'repayment' AND repayment_method = 'manual_cash'), 0)::text AS total_manual_cash,
+        COALESCE(SUM(amount) FILTER (WHERE row_type = 'repayment' AND repayment_method = 'salary_deduction'), 0)::text AS total_salary_deduction
+      FROM (${merged}) AS m
+      WHERE ${periodFilter}
+    `.execute(this.db);
+    const totalItems = Number(totals.rows[0]?.total_items || 0);
+    const loanTotals = await sql<{ total_remaining: string; total_due: string; open_count: string }>`
+      SELECT
+        COALESCE(SUM(COALESCE(remaining_amount, 0)) FILTER (WHERE ${loanStatus} IN ('paid', 'disbursed', 'partially_repaid')), 0)::text AS total_remaining,
+        COALESCE(SUM(COALESCE(remaining_amount, 0)) FILTER (WHERE ${loanStatus} IN ('paid', 'disbursed', 'partially_repaid') AND COALESCE(NULLIF(btrim(repayment_mode), ''), 'manual_cash') <> 'manual_cash'), 0)::text AS total_due,
+        COUNT(*) FILTER (WHERE ${loanStatus} IN ('paid', 'disbursed', 'partially_repaid') AND COALESCE(remaining_amount, 0) > 0)::text AS open_count
+      FROM hr_employee_loans l
+      WHERE l.employee_id = ${employeeId} AND l.tenant_id = ${tenantId}
+    `.execute(this.db);
+    // paginateRows semantics preserved: defaultSize 50, page clamped
+    // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
+    // The cap is now 200 (boundedPage), not 100.
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 50);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
+    const pageResult = await sql<Record<string, unknown>>`
+      SELECT * FROM (${merged}) AS m
+      WHERE ${periodFilter}
+      ORDER BY movement_at DESC, display_id DESC
+      LIMIT ${pageSize} OFFSET ${offset}
     `.execute(this.db);
 
     const movementDateForLoan = (row: Record<string, unknown>): string => {
@@ -194,16 +257,7 @@ export class HrAdvancesService {
       return issueDateTime || createdAt;
     };
 
-    const isInsideRequestedPeriod = (movementAt: string): boolean => {
-      if (!movementAt) return false;
-      if (!fromDate && !toDate) return true;
-      const datePart = movementAt.slice(0, 10);
-      if (fromDate && datePart < fromDate) return false;
-      if (toDate && datePart > toDate) return false;
-      return true;
-    };
-
-    const allLoanRows = loanResult.rows.map((row) => {
+    const toLoanRow = (row: Record<string, unknown>) => {
       const movementAt = movementDateForLoan(row);
       return {
         id: `loan-${String(row.id)}`,
@@ -222,9 +276,9 @@ export class HrAdvancesService {
         note: clean(row.notes),
         recordedByName: clean(row.recorded_by_name),
       };
-    });
+    };
 
-    const repaymentRows = ledgerResult.rows.map((row) => {
+    const toRepaymentRow = (row: Record<string, unknown>) => {
       const movementAt = clean(row.movement_at_text) || (row.created_at ? String(row.created_at).replace('T', ' ').slice(0, 16) : '');
       const repaymentMethod = clean(row.repayment_method) || 'manual_cash';
       return {
@@ -244,47 +298,21 @@ export class HrAdvancesService {
         note: clean(row.note),
         recordedByName: clean(row.recorded_by_name),
       };
-    });
+    };
 
-    const rows = [...allLoanRows.filter(row => ['paid', 'disbursed', 'partially_repaid', 'repaid'].includes(row.status)), ...repaymentRows]
-      .filter((row) => isInsideRequestedPeriod(row.movementAt))
-      .sort((a, b) => {
-        const byDate = String(b.movementAt || '').localeCompare(String(a.movementAt || ''));
-        if (byDate !== 0) return byDate;
-        return String(b.id).localeCompare(String(a.id));
-      });
+    const rows = pageResult.rows.map((row) => (row.kind === 'loan' ? toLoanRow(row) : toRepaymentRow(row)));
 
-    const totalWithdrawals = Number(rows
-      .filter((row) => row.type !== 'repayment')
-      .reduce((sum, row) => sum + Number(row.amount || 0), 0)
-      .toFixed(2));
-    const totalRepayments = Number(rows
-      .filter((row) => row.type === 'repayment')
-      .reduce((sum, row) => sum + Number(row.amount || 0), 0)
-      .toFixed(2));
-    const totalManualCashRepayments = Number(rows
-      .filter((row) => row.type === 'repayment' && row.repaymentMethod === 'manual_cash')
-      .reduce((sum, row) => sum + Number(row.amount || 0), 0)
-      .toFixed(2));
-    const totalSalaryDeductionRepayments = Number(rows
-      .filter((row) => row.type === 'repayment' && row.repaymentMethod === 'salary_deduction')
-      .reduce((sum, row) => sum + Number(row.amount || 0), 0)
-      .toFixed(2));
-    const totalRemaining = Number(allLoanRows
-      .filter(row => ['paid', 'disbursed', 'partially_repaid'].includes(row.status))
-      .reduce((sum, row) => sum + Number(row.remainingAmount || 0), 0)
-      .toFixed(2));
-    const totalSalaryDeductionDue = Number(allLoanRows
-      .filter((row) => ['paid', 'disbursed', 'partially_repaid'].includes(row.status) && row.repaymentMode !== 'manual_cash')
-      .reduce((sum, row) => sum + Number(row.remainingAmount || 0), 0)
-      .toFixed(2));
-    const openLoanCount = allLoanRows.filter((row) => ['paid', 'disbursed', 'partially_repaid'].includes(String(row.status || '')) && Number(row.remainingAmount || 0) > 0).length;
-
-    const paged = paginateRows(rows, query, { defaultSize: 50 });
+    const totalWithdrawals = Number(Number(totals.rows[0]?.total_withdrawals || 0).toFixed(2));
+    const totalRepayments = Number(Number(totals.rows[0]?.total_repayments || 0).toFixed(2));
+    const totalManualCashRepayments = Number(Number(totals.rows[0]?.total_manual_cash || 0).toFixed(2));
+    const totalSalaryDeductionRepayments = Number(Number(totals.rows[0]?.total_salary_deduction || 0).toFixed(2));
+    const totalRemaining = Number(Number(loanTotals.rows[0]?.total_remaining || 0).toFixed(2));
+    const totalSalaryDeductionDue = Number(Number(loanTotals.rows[0]?.total_due || 0).toFixed(2));
+    const openLoanCount = Number(loanTotals.rows[0]?.open_count || 0);
 
     return {
-      rows: paged.rows,
-      pagination: paged.pagination,
+      rows,
+      pagination: { page: safePage, pageSize, totalItems, totalPages },
       summary: {
         employeeId: String(employeeId),
         employeeName: clean(employee.display_name),
