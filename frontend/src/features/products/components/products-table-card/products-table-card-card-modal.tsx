@@ -3,7 +3,7 @@ import { getProductLocationDisplayName } from '../../utils/product-location.util
 import type { Product } from '@/types/domain';
 
 export interface ProductsTableCardCardModalProps {
-  activeCardProduct: Product;
+  activeCardProduct: Product | null;
   setActiveCardProduct: (val: Product | null) => void;
   categoryNames: Record<string, string>;
   supplierNames: Record<string, string>;
