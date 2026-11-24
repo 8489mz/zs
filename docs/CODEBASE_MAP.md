@@ -409,7 +409,7 @@ canonical money engines.
 
 ## Frontend layout
 
-- `frontend/src/` total: 1934 files.
+- `frontend/src/` total: 1947 files.
   - `frontend/src/features/`: 1530 files
     in feature directories (table below).
   - `frontend/src/shared/`: 163 files.
@@ -505,7 +505,7 @@ financial logic.
 - Files in this directory: `routes.tsx`
 - Subdirectories: `api`, `components`, `hooks`, `offline`, `pages`, `utils`
 
-### `frontend/src/features/hr/` (121 files)
+### `frontend/src/features/hr/` (134 files)
 
 - Files in this directory: `HR_ATTENDANCE_BACKEND_INVENTORY.md`, `HR_BACKEND_INVENTORY.md`, `HR_BACKEND_SCOPE.md`, `HR_REBUILD_PLAN.md`, `routes.tsx`
 - Subdirectories: `api`, `components`, `hooks`, `pages`, `utils`

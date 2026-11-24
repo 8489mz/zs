@@ -199,7 +199,8 @@ async function main() {
     assert.ok(attPage.includes('calculatePeriodRange(mode, date, serverToday)'), 'HrAttendancePage: period ranges must be bounded by the server day');
 
     const payPage = read('features/hr/pages/HrPayrollPage.tsx');
-    assert.ok(payPage.includes('serverTime={workspace.payrollRuns.data?.serverTime}'), 'HrPayrollPage: the create modal must receive the list serverTime');
+    const payCreateModal = read('features/hr/pages/hr-payroll-page/hr-payroll-create-run-modal.tsx');
+    assert.ok(payCreateModal.includes('serverTime={workspace.payrollRuns.data?.serverTime}'), 'HrPayrollPage: the create modal must receive the list serverTime');
     assert.ok(payPage.includes('serverMonth'), 'HrPayrollPage: the month filter must adopt the server month');
 
     const jePage = read('features/accounting/pages/AccountingJournalEntriesPage.tsx');
