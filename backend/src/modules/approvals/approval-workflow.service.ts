@@ -342,7 +342,23 @@ export class ApprovalWorkflowService {
       if (!request) throw new NotFoundException('طلب الاعتماد غير موجود.');
       if (request.status !== 'pending') throw new BadRequestException(`لا يمكن اعتماد هذا الطلب لأن حالته الحالية هي: ${request.status}`);
       if (request.module !== 'purchase_orders') throw new BadRequestException('مسار اعتماد هذا النوع غير مفعل.');
-      if (Number(request.requested_by) === auth.userId) throw new ForbiddenException('لا يجوز لصاحب الطلب اعتماد مستنده.');
+      // INV-SOLO-ADMIN-PO-SELF-APPROVAL-OVERRIDE: a shop with only
+      // ONE admin could never decide a purchase-order approval
+      // request they created — the old ban refused the requester
+      // outright, so the order sat in `pending_approval` forever
+      // with no second admin to approve it. When the decider is an
+      // admin/super_admin AND no other active admin/super_admin
+      // exists in the tenant, the requester may decide alone — but
+      // never silently: the override is stamped into the approval
+      // audit trail (`approval_request_logs.notes`) with who decided
+      // (requester == decider) and that no second admin was
+      // available. When a second active admin exists, the old ban
+      // stands; a non-admin requester is still refused.
+      let soloOverride = false;
+      if (Number(request.requested_by) === auth.userId) {
+        soloOverride = await this.isSoloAdminOverride(trx, tenantId, auth);
+        if (!soloOverride) throw new ForbiddenException('لا يجوز لصاحب الطلب اعتماد مستنده.');
+      }
 
       const currentTier = Number(request.current_tier || 1);
       const maxTier = Number(request.max_tier || 1);
@@ -353,7 +369,8 @@ export class ApprovalWorkflowService {
       await trx.insertInto('approval_request_logs').values({
         tenant_id: tenantId, request_id: String(request.id), tier_level: currentTier,
         action: 'approved', action_by: auth.userId, action_by_name: auth.username,
-        action_role: auth.role, notes: notes || `تمت الموافقة على المستوى ${currentTier}.`,
+        action_role: auth.role, notes: (notes || `تمت الموافقة على المستوى ${currentTier}.`)
+          + (soloOverride ? ` — اعتماد منفرد بقرار إداري — صاحب الطلب ${auth.username} اعتمد مستنده بنفسه — لا يوجد مدير ثانٍ متاح` : ''),
       } as any).execute();
       await trx.updateTable('approval_requests').set({
         status: final ? 'approved' : 'pending', current_tier: final ? currentTier : currentTier + 1,
@@ -373,18 +390,49 @@ export class ApprovalWorkflowService {
       if (!request) throw new NotFoundException('طلب الاعتماد غير موجود.');
       if (request.status !== 'pending') throw new BadRequestException(`لا يمكن رفض هذا الطلب لأن حالته الحالية هي: ${request.status}`);
       if (request.module !== 'purchase_orders') throw new BadRequestException('مسار رفض هذا النوع غير مفعل.');
-      if (Number(request.requested_by) === auth.userId) throw new ForbiddenException('لا يجوز لصاحب الطلب رفض مستنده.');
+      // INV-SOLO-ADMIN-PO-SELF-APPROVAL-OVERRIDE: same solo-admin
+      // override as approveRequest — the requester may reject alone
+      // only when they are an admin/super_admin and no other active
+      // admin/super_admin exists in the tenant; the override is
+      // stamped into the rejection log row.
+      let soloOverride = false;
+      if (Number(request.requested_by) === auth.userId) {
+        soloOverride = await this.isSoloAdminOverride(trx, tenantId, auth);
+        if (!soloOverride) throw new ForbiddenException('لا يجوز لصاحب الطلب رفض مستنده.');
+      }
       await this.assertApprover(trx, tenantId, request, auth);
       await this.transitionPurchaseOrder(trx, tenantId, request.record_id, 'draft');
       await trx.insertInto('approval_request_logs').values({
         tenant_id: tenantId, request_id: String(request.id), tier_level: Number(request.current_tier || 1),
         action: 'rejected', action_by: auth.userId, action_by_name: auth.username,
-        action_role: auth.role, notes: reason.trim(),
+        action_role: auth.role, notes: reason.trim()
+          + (soloOverride ? ` — رفض منفرد بقرار إداري — صاحب الطلب ${auth.username} رفض مستنده بنفسه — لا يوجد مدير ثانٍ متاح` : ''),
       } as any).execute();
       await trx.updateTable('approval_requests').set({ status: 'rejected', updated_at: sql`NOW()` } as any)
         .where('tenant_id', '=', tenantId).where('id', '=', request.id as any).execute();
       return { ok: true, status: 'rejected' };
     });
+  }
+
+  /**
+   * INV-SOLO-ADMIN-PO-SELF-APPROVAL-OVERRIDE: true only when the
+   * decider is an admin/super_admin AND no OTHER active
+   * admin/super_admin exists in the tenant. The check reads the
+   * `users` table directly — no schema change: tenant scope via
+   * `tenant_id`, privilege via `role`, liveness via `is_active`.
+   * An inactive second admin does not count, and an admin in another
+   * tenant does not count. A non-admin decider is never a solo
+   * override (they are refused by the caller).
+   */
+  private async isSoloAdminOverride(trx: Transaction<Database>, tenantId: string, auth: AuthContext): Promise<boolean> {
+    if (auth.role !== 'admin' && auth.role !== 'super_admin') return false;
+    const secondAdmin = await trx.selectFrom('users').select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('role', 'in', ['admin', 'super_admin'])
+      .where('is_active', '=', true)
+      .where('id', '!=', Number(auth.userId))
+      .limit(1).executeTakeFirst();
+    return !secondAdmin;
   }
 
   private async assertApprover(trx: Transaction<Database>, tenantId: string,
