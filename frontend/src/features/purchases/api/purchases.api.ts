@@ -102,7 +102,7 @@ export const purchasesApi = {
     return { rows: allRows, summary: firstPage.summary, pagination: firstPage.pagination };
   },
   products: async () => unwrapArray<Product>(await http<Product[] | { products: Product[] }>('/api/products?pageSize=5000'), 'products'),
-  searchProducts: async (query: string) => unwrapArray<Product>(await http<Product[] | { products: Product[] }>(`/api/products?q=${encodeURIComponent(query)}&pageSize=50`), 'products'),
+  searchProducts: async (query: string) => unwrapArray<Product>(await http<Product[] | { products: Product[] }>(`/api/products?q=${encodeURIComponent(query)}&pageSize=100&identityOnly=true`), 'products'),
   suppliers: async () => unwrapArray<Supplier>(await http<Supplier[] | { suppliers: Supplier[] }>('/api/suppliers'), 'suppliers'),
   getById: async (purchaseId: string) => unwrapEntity<Purchase>(await http<Purchase | PurchaseEnvelope>(`/api/purchases/${purchaseId}`), 'purchase'),
   create: async (payload: unknown, headers?: Record<string, string>) => {

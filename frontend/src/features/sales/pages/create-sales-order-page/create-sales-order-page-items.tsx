@@ -220,6 +220,7 @@ export function CreateSalesOrderPageItems({ t, items, handleAddItem, handleAddSe
                       if (open) schedulePickerAvailabilityRefresh(line.productName);
                     }}
                     showDropdownOnEmpty={true}
+                    maxResults={20}
                     emptyLabel={t('sales.create_sales_order_page.s60', "صنف جديد (يمكنك المتابعة بالاسم المدخل)")}
                   />
                 </td>

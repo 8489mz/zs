@@ -8,7 +8,7 @@ import { resolveSalesOrderBarcodeScan } from '../lib/sales-order-barcode-scan';
 import { useAppToolbar } from '@/stores/toolbar-store';
 import { toast } from '@/shared/components/system-alert';
 import { useFormDraft } from '@/shared/hooks/use-form-draft';
-import { matchesArabic } from '@/lib/arabic-normalization';
+import { matchesArabic, scoreArabicSearchRelevance } from '@/lib/arabic-normalization';
 import { addDaysLocalDateKey, todayLocalDateKey } from '@/lib/format';
 import type { Product } from '@/types/domain';
 import type { SalesOrderFormItem } from './create-sales-order-page/create-sales-order-page-shared';
@@ -150,7 +150,18 @@ export function CreateSalesOrderPage() {
           (p.barcode ? p.barcode.includes(q) : false) ||
           (p.sku ? p.sku.toLowerCase().includes(q.toLowerCase()) : false),
       );
-      return matched.slice(0, 8).map((p) => p.rawId);
+      if (!q) {
+        return matched.slice(0, 20).map((p) => p.rawId);
+      }
+      return matched
+        .map((p, idx) => ({
+          p,
+          idx,
+          score: scoreArabicSearchRelevance(p.name, q, [p.barcode, p.sku]) || 100,
+        }))
+        .sort((a, b) => (b.score !== a.score ? b.score - a.score : a.idx - b.idx))
+        .slice(0, 20)
+        .map((entry) => entry.p.rawId);
     },
     [productOptions],
   );

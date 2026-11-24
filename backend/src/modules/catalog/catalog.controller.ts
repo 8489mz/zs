@@ -52,7 +52,7 @@ export class CatalogController {
   }
 
   @Get('products')
-  @RequirePermissions('products')
+  @RequireAnyPermission('products', 'inventory', 'canAdjustInventory', 'purchases', 'manufacturing')
   listProducts(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.catalogService.listProducts(query, req.authContext!);
   }

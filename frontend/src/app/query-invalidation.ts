@@ -32,6 +32,7 @@ export async function invalidateCatalogDomain(
   const tasks = [];
   if (includeProducts) {
     tasks.push(queryClient.invalidateQueries({ queryKey: queryKeys.products }));
+    tasks.push(queryClient.invalidateQueries({ queryKey: queryKeys.locationStocks }));
     tasks.push(queryClient.invalidateQueries({ queryKey: ['signage-products'] }));
     tasks.push(queryClient.invalidateQueries({ queryKey: ['storefront-catalog'] }));
     tasks.push(queryClient.invalidateQueries({ queryKey: ['storefront-info'] }));
@@ -134,6 +135,7 @@ export async function invalidatePurchasesDomain(
     queryClient.invalidateQueries({ queryKey: queryKeys.purchases, refetchType: 'active' }),
     queryClient.invalidateQueries({ queryKey: queryKeys.suppliers, refetchType: 'active' }),
     queryClient.invalidateQueries({ queryKey: queryKeys.supplierBalances, refetchType: 'active' }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.locationStocks, refetchType: 'active' }),
   ];
   if (purchaseId) immediateTasks.push(queryClient.invalidateQueries({ queryKey: queryKeys.purchaseDetail(purchaseId) }));
 
@@ -142,7 +144,6 @@ export async function invalidatePurchasesDomain(
     queryClient.invalidateQueries({ queryKey: ['catalogProducts'], refetchType: 'none' }),
     queryClient.invalidateQueries({ queryKey: queryKeys.inventoryReport, refetchType: 'none' }),
     queryClient.invalidateQueries({ queryKey: queryKeys.stockMovements, refetchType: 'none' }),
-    queryClient.invalidateQueries({ queryKey: ['location-stocks'], refetchType: 'none' }),
     queryClient.invalidateQueries({ queryKey: queryKeys.treasury, refetchType: 'none' }),
     queryClient.invalidateQueries({ queryKey: ['reports-summary'], refetchType: 'none' }),
     queryClient.invalidateQueries({ queryKey: ['accounting-journals'], refetchType: 'none' }),

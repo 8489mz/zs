@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useInventoryActionCatalog } from '@/features/inventory/hooks/useInventoryActionCatalog';
@@ -7,6 +7,8 @@ import { inventoryApi } from '@/features/inventory/api/inventory.api';
 import { withIdempotency } from '@/lib/idempotency';
 import { referenceDataApi } from '@/services/reference-data.api';
 import { queryKeys } from '@/app/query-keys';
+import { invalidateInventoryDomain } from '@/app/query-invalidation';
+import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
 import { useFormDraft } from '@/shared/hooks/use-form-draft';
 import { toast } from '@/shared/components/system-alert';
 import {
@@ -16,7 +18,46 @@ import {
   type IssueOrderDestinationKind,
   type IssueOrderDestinationOption,
 } from './issue-order-destination.helpers';
-import { LineItem } from './types';
+import { LineItem, IssueOrderProductOption } from './types';
+
+function getEffectiveStockQty(stockRow: { qty: number; availableQty?: number }): number {
+  const val = typeof stockRow.availableQty === 'number' ? stockRow.availableQty : Number(stockRow.qty || 0);
+  return Math.max(0, Number(val.toFixed(3)));
+}
+
+function scoreClientProductIdentity(rawQuery: string, product: Record<string, any>): number {
+  const rawLower = rawQuery.trim().toLowerCase();
+  const q = normalizeArabicSearchKey(rawQuery);
+  if (!q) return 1;
+  const tokens = q.split(/\s+/).filter(Boolean);
+
+  const normName = normalizeArabicSearchKey(product.name);
+  const normNameEn = normalizeArabicSearchKey(product.nameEn || product.name_en);
+  const rawCodes = [product.barcode, product.sku, product.styleCode]
+    .map((v) => String(v ?? '').trim().toLowerCase())
+    .filter(Boolean);
+
+  if ((rawLower && rawCodes.includes(rawLower)) || normName === q || normNameEn === q) return 1000;
+  if ((normName && normName.startsWith(`${q} `)) || (normNameEn && normNameEn.startsWith(`${q} `))) return 900;
+  if ((normName && ` ${normName} `.includes(` ${q} `)) || (normNameEn && ` ${normNameEn} `.includes(` ${q} `))) return 800;
+  if ((normName && normName.startsWith(q)) || (normNameEn && normNameEn.startsWith(q))) return 720;
+  if ((normName && ` ${normName}`.includes(` ${q}`)) || (normNameEn && ` ${normNameEn}`.includes(` ${q}`))) return 650;
+
+  const combinedNames = [normName, normNameEn].filter(Boolean).join(' ');
+  if (tokens.length > 1 && combinedNames && tokens.every((t) => ` ${combinedNames}`.includes(` ${t}`))) return 550;
+  if (rawLower && rawCodes.some((c) => c.startsWith(rawLower))) return 500;
+  if (rawLower && rawCodes.some((c) => c.includes(rawLower))) return 450;
+  if (combinedNames && tokens.every((t) => combinedNames.includes(t))) return 350;
+
+  const normIdentity = normalizeArabicSearchKey(
+    [product.name, product.nameEn, product.barcode, product.sku, product.styleCode, product.color, product.size]
+      .filter(Boolean)
+      .join(' '),
+  );
+  if (normIdentity && tokens.every((t) => normIdentity.includes(t))) return 250;
+
+  return 0;
+}
 
 export function useNewIssueOrderController() {
   const navigate = useNavigate();
@@ -149,21 +190,125 @@ export function useNewIssueOrderController() {
     }
   }, []);
 
-  const availableProductIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (fromLocationId === 'all') {
-      for (const s of stocks) {
-        if (s.qty > 0) ids.add(String(s.productId));
+  const operationalLocations = useMemo(
+    () => locations.filter((l: any) => l.locationType !== 'in_transit'),
+    [locations],
+  );
+
+  const locationNamesById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const loc of operationalLocations) {
+      map.set(String(loc.id), loc.name);
+    }
+    return map;
+  }, [operationalLocations]);
+
+  // Single O(N) pass over stocks (PERF-2 compliant — never scan stocks inside a product loop)
+  const stockSummaryByProduct = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        totalAvailable: number;
+        byLocation: Map<string, number>;
+        bestLocationId: string;
+        bestLocationQty: number;
+        positiveLocationCount: number;
       }
-    } else {
-      for (const s of stocks) {
-        if (String(s.locationId) === String(fromLocationId) && s.qty > 0) {
-          ids.add(String(s.productId));
-        }
+    >();
+    const restrictToKnownLocations = locationNamesById.size > 0;
+
+    for (const s of stocks) {
+      const locId = String(s.locationId || '');
+      if (!locId) continue;
+      if (restrictToKnownLocations && !locationNamesById.has(locId)) continue;
+
+      const avail = getEffectiveStockQty(s);
+      const pKey = String(s.productId);
+      let entry = map.get(pKey);
+      if (!entry) {
+        entry = {
+          totalAvailable: 0,
+          byLocation: new Map<string, number>(),
+          bestLocationId: '',
+          bestLocationQty: 0,
+          positiveLocationCount: 0,
+        };
+        map.set(pKey, entry);
+      }
+
+      const prevLocAvail = entry.byLocation.get(locId) || 0;
+      const nextLocAvail = Number((prevLocAvail + avail).toFixed(3));
+      entry.byLocation.set(locId, nextLocAvail);
+      entry.totalAvailable = Number((entry.totalAvailable + avail).toFixed(3));
+
+      if (prevLocAvail <= 0 && nextLocAvail > 0) {
+        entry.positiveLocationCount += 1;
+      }
+      if (nextLocAvail > entry.bestLocationQty) {
+        entry.bestLocationQty = nextLocAvail;
+        entry.bestLocationId = locId;
       }
     }
-    return ids;
-  }, [stocks, fromLocationId]);
+    return map;
+  }, [stocks, locationNamesById]);
+
+  const stocksLoaded = locationStocksQuery.isFetched;
+
+  const buildProductOption = useCallback(
+    (p: any): IssueOrderProductOption => {
+      const id = String(p.id);
+      const summaryEntry = stockSummaryByProduct.get(id);
+      const totalAvailable = Number((summaryEntry?.totalAvailable || 0).toFixed(3));
+      const availableInScope =
+        fromLocationId === 'all'
+          ? totalAvailable
+          : Number((summaryEntry?.byLocation.get(String(fromLocationId)) || 0).toFixed(3));
+      const otherLocationsAvailable = Math.max(0, Number((totalAvailable - availableInScope).toFixed(3)));
+      const globalStock = Number(p.stock ?? 0);
+      const isOutOfStock = stocksLoaded && availableInScope <= 0;
+
+      const codePart = p.barcode || p.sku || '';
+      let stockPart = '';
+      if (availableInScope > 0) {
+        if (fromLocationId === 'all') {
+          if (summaryEntry?.positiveLocationCount === 1 && summaryEntry.bestLocationId) {
+            const locName = locationNamesById.get(summaryEntry.bestLocationId) || '';
+            stockPart = locName ? `المتاح: ${availableInScope} · ${locName}` : `المتاح: ${availableInScope}`;
+          } else {
+            stockPart = `المتاح: ${availableInScope} (${summaryEntry?.positiveLocationCount || 1} مخازن)`;
+          }
+        } else {
+          stockPart = `المتاح: ${availableInScope}`;
+        }
+      } else if (stocksLoaded) {
+        if (otherLocationsAvailable > 0) {
+          stockPart = `الرصيد هنا: 0 (متاح بمخازن أخرى: ${otherLocationsAvailable})`;
+        } else if (globalStock > 0) {
+          stockPart = `رصيد غير مسند لمخزن (${globalStock})`;
+        } else {
+          stockPart = 'الرصيد بالمخازن: 0';
+        }
+      }
+
+      const meta = [codePart, stockPart].filter(Boolean).join(' · ') || undefined;
+
+      return {
+        id,
+        name: p.name,
+        code: p.barcode || '',
+        searchTerms: [p.name, p.nameEn, p.barcode || '', p.sku || '', p.styleCode || '']
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase(),
+        meta,
+        availableInScope,
+        otherLocationsAvailable,
+        globalStock,
+        isOutOfStock,
+      };
+    },
+    [fromLocationId, locationNamesById, stockSummaryByProduct, stocksLoaded],
+  );
 
   const selectedProductIds = useMemo(() => {
     return new Set(lines.map(l => String(l.productId || '')).filter(Boolean));
@@ -171,40 +316,122 @@ export function useNewIssueOrderController() {
 
   const productOptions = useMemo(() => {
     return products
-      .filter(p => availableProductIds.has(String(p.id)) && !selectedProductIds.has(String(p.id)))
-      .map(p => ({
-        id: String(p.id),
-        name: p.name,
-        code: p.barcode || '',
-        searchTerms: [p.name, p.barcode || ''].filter(Boolean).join(' ').toLowerCase(),
-      }));
-  }, [products, availableProductIds, selectedProductIds]);
+      .filter((p) => {
+        if (selectedProductIds.has(String(p.id))) return false;
+        if (!stocksLoaded) return true;
+        const summaryEntry = stockSummaryByProduct.get(String(p.id));
+        const avail =
+          fromLocationId === 'all'
+            ? (summaryEntry?.totalAvailable || 0)
+            : (summaryEntry?.byLocation.get(String(fromLocationId)) || 0);
+        return avail > 0;
+      })
+      .map(buildProductOption);
+  }, [products, selectedProductIds, stocksLoaded, stockSummaryByProduct, fromLocationId, buildProductOption]);
 
-  const fetchProductOptions = async (query: string) => {
-    try {
-      const results = await inventoryApi.searchProducts(query);
-      return results
-        .filter(p => availableProductIds.has(String(p.id)) && !selectedProductIds.has(String(p.id)))
-        .map(p => ({
-          id: String(p.id),
-          name: p.name,
-          code: p.barcode || '',
-          searchTerms: [p.name, p.barcode].filter(Boolean).join(' ').toLowerCase(),
-        }));
-    } catch (e) {
-      console.error(e);
-      return [];
+  const searchCacheRef = useRef<Map<string, any[]>>(new Map());
+  useEffect(() => {
+    searchCacheRef.current.clear();
+  }, [productsQuery.dataUpdatedAt]);
+
+  const productSearchRefreshKey = useMemo(() => {
+    const selectedSignature = Array.from(selectedProductIds).sort().join(',');
+    return `${fromLocationId}:${stocksLoaded ? '1' : '0'}:${locationStocksQuery.dataUpdatedAt}:${stocks.length}:${products.length}:${selectedSignature}`;
+  }, [fromLocationId, stocksLoaded, locationStocksQuery.dataUpdatedAt, stocks.length, products.length, selectedProductIds]);
+
+  const fetchProductOptions = async (query: string): Promise<IssueOrderProductOption[]> => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      return productOptions;
     }
+
+    const cacheKey = normalizeArabicSearchKey(trimmed) || trimmed.toLowerCase();
+    let serverResults = searchCacheRef.current.get(cacheKey);
+    if (!serverResults) {
+      try {
+        serverResults = await inventoryApi.searchProducts(trimmed, {
+          pageSize: 200,
+          identityOnly: true,
+          preferInStock: true,
+          brief: true,
+        });
+        searchCacheRef.current.set(cacheKey, serverResults);
+      } catch (e) {
+        console.error(e);
+        serverResults = [];
+      }
+    }
+
+    // Merge server matches with in-memory catalog matches so results are complete even on slow connections
+    const mergedById = new Map<string, any>();
+    for (const p of serverResults) {
+      mergedById.set(String(p.id), p);
+    }
+    for (const p of products) {
+      const pId = String(p.id);
+      if (!mergedById.has(pId) && scoreClientProductIdentity(trimmed, p) > 0) {
+        mergedById.set(pId, p);
+      }
+    }
+
+    const ranked: Array<{ option: IssueOrderProductOption; score: number }> = [];
+    for (const p of mergedById.values()) {
+      const pId = String(p.id);
+      if (selectedProductIds.has(pId)) continue;
+      const score = scoreClientProductIdentity(trimmed, p) || 250;
+      ranked.push({ option: buildProductOption(p), score });
+    }
+
+    ranked.sort((a, b) => {
+      const aStrong = a.score >= 450 ? 1 : 0;
+      const bStrong = b.score >= 450 ? 1 : 0;
+      if (aStrong !== bStrong) return bStrong - aStrong;
+
+      const aInStock = a.option.availableInScope > 0 ? 1 : 0;
+      const bInStock = b.option.availableInScope > 0 ? 1 : 0;
+      if (aInStock !== bInStock) return bInStock - aInStock;
+
+      if (a.score !== b.score) return b.score - a.score;
+      return Number(b.option.id) - Number(a.option.id);
+    });
+
+    return ranked.map((entry) => entry.option);
   };
 
-  const locationOptions = [
-    { id: 'all', name: 'كل المخازن', searchTerms: 'كل المخازن all' },
-    ...locations.filter((l: any) => l.locationType !== 'in_transit').map((l) => ({
-      id: String(l.id),
-      name: l.name,
-      searchTerms: l.name.toLowerCase(),
-    })),
-  ];
+  // Reconcile any line selected before location-stocks finished initial load
+  useEffect(() => {
+    if (!stocksLoaded || fromLocationId !== 'all') return;
+    setLines((prevLines) => {
+      let changed = false;
+      const next = prevLines.map((line) => {
+        if (!line.productId || line.fromLocationId) return line;
+        const summaryEntry = stockSummaryByProduct.get(String(line.productId));
+        if (!summaryEntry || !summaryEntry.bestLocationId) return line;
+        changed = true;
+        const locName = locationNamesById.get(summaryEntry.bestLocationId) || '';
+        const clampedQty = Math.min(Number(line.qty || 1), Math.max(1, summaryEntry.bestLocationQty));
+        return {
+          ...line,
+          fromLocationId: summaryEntry.bestLocationId,
+          fromLocationName: locName,
+          qty: clampedQty,
+        };
+      });
+      return changed ? next : prevLines;
+    });
+  }, [stocksLoaded, fromLocationId, stockSummaryByProduct, locationNamesById]);
+
+  const locationOptions = useMemo(
+    () => [
+      { id: 'all', name: 'كل المخازن', searchTerms: 'كل المخازن all' },
+      ...operationalLocations.map((l: any) => ({
+        id: String(l.id),
+        name: l.name,
+        searchTerms: l.name.toLowerCase(),
+      })),
+    ],
+    [operationalLocations],
+  );
 
   const branchOptions = branches.map((b) => ({
     id: String(b.id),
@@ -240,7 +467,17 @@ export function useNewIssueOrderController() {
     setLines(lines.filter(l => l.id !== id));
   };
 
-  const handleSelectProduct = (lineId: number, productOption: { id: string; name: string }) => {
+  const handleSelectProduct = (
+    lineId: number,
+    productOption: {
+      id: string;
+      name: string;
+      availableInScope?: number;
+      otherLocationsAvailable?: number;
+      globalStock?: number;
+      isOutOfStock?: boolean;
+    },
+  ) => {
     const existingLine = lines.find(l => l.id !== lineId && String(l.productId) === String(productOption.id));
     if (existingLine) {
       toast.warning(`الصنف "${productOption.name}" تم اختياره مسبقاً في الإذن.`);
@@ -249,31 +486,55 @@ export function useNewIssueOrderController() {
       return;
     }
 
+    const summaryEntry = stockSummaryByProduct.get(String(productOption.id));
+    const computedAvail =
+      productOption.availableInScope ??
+      (fromLocationId === 'all'
+        ? (summaryEntry?.totalAvailable || 0)
+        : (summaryEntry?.byLocation.get(String(fromLocationId)) || 0));
+    const computedOtherAvail =
+      productOption.otherLocationsAvailable ??
+      Math.max(0, Number(((summaryEntry?.totalAvailable || 0) - computedAvail).toFixed(3)));
+
+    if (stocksLoaded && computedAvail <= 0) {
+      if (fromLocationId !== 'all' && computedOtherAvail > 0) {
+        toast.warning(
+          `الصنف "${productOption.name}" رصيده صفر في هذا المخزن (متاح في مخازن أخرى: ${computedOtherAvail}). اختر مخزناً آخر أو "كل المخازن".`,
+        );
+      } else if (Number(productOption.globalStock || 0) > 0) {
+        toast.warning(
+          `الصنف "${productOption.name}" له رصيد عام (${productOption.globalStock}) غير مسند لمخزن محدد بعد. يرجى إسناده لمخزن عبر تسوية المخزون أولاً.`,
+        );
+      } else {
+        toast.warning(`الصنف "${productOption.name}" رصيده المتاح بالمخازن صفر حالياً — لا يمكن صرفه قبل التوريد.`);
+      }
+      setLines(prevLines => prevLines.map(l => l.id === lineId && !l.productId ? { ...l, productName: '' } : l));
+      setPendingFocusProductLineId(lineId);
+      return;
+    }
+
     setLines(prevLines => {
       const lineToUpdate = prevLines.find(l => l.id === lineId);
       let newLines = prevLines.map(l => l.id === lineId ? { ...l, productId: productOption.id, productName: productOption.name } : l);
 
-      const stocksList = Array.isArray(locationStocksQuery.data) ? locationStocksQuery.data : [];
-      const productStocks = stocksList.filter(s => String(s.productId) === String(productOption.id) && s.qty > 0);
-
       let newLocationId = '';
       let newLocationName = '';
+      let maxAvailable = computedAvail > 0 ? computedAvail : 1;
 
-      if (fromLocationId === 'all') {
-        const bestStock = productStocks.sort((a, b) => b.qty - a.qty)[0];
-        if (bestStock) {
-          newLocationId = String(bestStock.locationId);
-          const loc = locationOptions.find(l => String(l.id) === newLocationId);
-          if (loc) newLocationName = loc.name;
-        }
+      if (fromLocationId === 'all' && summaryEntry?.bestLocationId) {
+        newLocationId = summaryEntry.bestLocationId;
+        newLocationName = locationNamesById.get(newLocationId) || '';
+        maxAvailable = summaryEntry.bestLocationQty > 0 ? summaryEntry.bestLocationQty : 1;
       }
 
       if (newLocationId) {
-        const bestStock = productStocks.sort((a, b) => b.qty - a.qty)[0];
-        const maxAvailable = bestStock ? bestStock.qty : 1;
         const currentQty = lineToUpdate ? Number(lineToUpdate.qty || 1) : 1;
         const newQty = Math.min(currentQty, maxAvailable);
         newLines = newLines.map(l => l.id === lineId ? { ...l, fromLocationId: newLocationId, fromLocationName: newLocationName, qty: newQty } : l);
+      } else if (fromLocationId !== 'all' && computedAvail > 0) {
+        const currentQty = lineToUpdate ? Number(lineToUpdate.qty || 1) : 1;
+        const newQty = Math.min(currentQty, computedAvail);
+        newLines = newLines.map(l => l.id === lineId ? { ...l, qty: newQty } : l);
       }
 
       const isLast = newLines[newLines.length - 1].id === lineId;
@@ -317,8 +578,7 @@ export function useNewIssueOrderController() {
           : (fromLocationId !== 'all' ? fromLocationId : null);
 
         if (locId && locId !== 'all') {
-          const locStock = stocks.find(s => String(s.productId) === String(lineToUpdate.productId) && String(s.locationId) === String(locId));
-          if (locStock) maxQty = locStock.qty;
+          maxQty = stockSummaryByProduct.get(String(lineToUpdate.productId))?.byLocation.get(String(locId)) ?? 0;
         } else {
           maxQty = 0;
         }
@@ -331,7 +591,13 @@ export function useNewIssueOrderController() {
         }
       }
 
-      let newLines = prevLines.map(l => l.id === id ? { ...l, [field]: actualValue } : l);
+      let newLines = prevLines.map(l => {
+        if (l.id !== id) return l;
+        if (field === 'productName' && l.productId && actualValue !== l.productName) {
+          return { ...l, productName: actualValue, productId: '' };
+        }
+        return { ...l, [field]: actualValue };
+      });
 
       if (field === 'productId' && value) {
         const existingLine = prevLines.find(l => l.id !== id && String(l.productId) === String(value));
@@ -381,9 +647,8 @@ export function useNewIssueOrderController() {
         if (loc) {
           const newLocationId = String(value);
           let maxQty = 0;
-          if (newLocationId !== 'all') {
-            const locStock = stocks.find(s => String(s.productId) === String(lineToUpdate?.productId) && String(s.locationId) === newLocationId);
-            if (locStock) maxQty = locStock.qty;
+          if (newLocationId !== 'all' && lineToUpdate?.productId) {
+            maxQty = stockSummaryByProduct.get(String(lineToUpdate.productId))?.byLocation.get(newLocationId) ?? 0;
           }
 
           const currentQty = Number(lineToUpdate?.qty || 1);
@@ -534,9 +799,7 @@ export function useNewIssueOrderController() {
         }
       });
 
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['stock-transfers'] });
-      queryClient.invalidateQueries({ queryKey: ['manager-actions'] });
+      await invalidateInventoryDomain(queryClient, { includeProducts: true, includeDashboard: true });
 
       if (errors.length > 0) {
         const uniqueErrors = Array.from(new Set(errors));
@@ -675,6 +938,7 @@ export function useNewIssueOrderController() {
     handleClearDestination,
     stocks,
     productOptions,
+    productSearchRefreshKey,
     fetchProductOptions,
     addLine,
     removeLine,

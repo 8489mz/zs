@@ -64,10 +64,24 @@ interface DamagedStockPageResponse {
 
 export const inventoryApi = {
   products: async () => unwrapArray<Product>(await http<Product[] | { products: Product[] }>('/api/products?pageSize=5000&brief=true'), 'products'),
-  searchProducts: async (query: string) => unwrapArray<Product>(await http<Product[] | { products: Product[] }>(`/api/products?q=${encodeURIComponent(query)}&pageSize=50`), 'products'),
+  searchProducts: async (
+    query: string,
+    options?: { pageSize?: number; identityOnly?: boolean; preferInStock?: boolean; brief?: boolean },
+  ) => {
+    const pageSize = options?.pageSize ?? 100;
+    const identityOnly = options?.identityOnly !== false;
+    const params = new URLSearchParams({
+      q: query,
+      pageSize: String(pageSize),
+      ...(identityOnly ? { identityOnly: 'true' } : {}),
+      ...(options?.preferInStock ? { preferInStock: 'true' } : {}),
+      ...(options?.brief ? { brief: 'true' } : {}),
+    });
+    return unwrapArray<Product>(await http<Product[] | { products: Product[] }>(`/api/products?${params.toString()}`), 'products');
+  },
   locations: async () => unwrapArray<Location>(await http<Location[] | { locations: Location[] }>('/api/locations?includeInactive=true'), 'locations'),
   report: async () => unwrapByKey<InventoryReport>(await http<InventoryReport | { inventory: InventoryReport }>('/api/reports/inventory'), 'inventory', {} as InventoryReport),
-  locationStocks: async () => unwrapArray<{ productId: string; locationId: string; qty: number }>(await http<{ stocks: { productId: string; locationId: string; qty: number }[] }>('/api/location-stocks'), 'stocks'),
+  locationStocks: async () => unwrapArray<{ productId: string; locationId: string; qty: number; availableQty?: number }>(await http<{ stocks: { productId: string; locationId: string; qty: number; availableQty?: number }[] }>('/api/location-stocks'), 'stocks'),
   // INV-VAN-GENERIC-FEFO: read-only list of the generic batch ledger
   // (inventory_batches) for the batches page's second tab. Same response
   // shape as pharmacyApi.listBatches; generic rows carry the same visible

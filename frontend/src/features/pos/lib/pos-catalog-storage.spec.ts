@@ -214,6 +214,24 @@ describe('pos-catalog-storage with mocked IndexedDB', () => {
     expect(chipsMatches[0].id).toBe('102');
   });
 
+  it('ranks whole-word and decimal product matches ahead of substring matches without early cursor truncation', async () => {
+    const richCatalog: Product[] = [
+      { id: '1', name: 'شيبسي عائلي بالجبنة', barcode: '1001', retailPrice: 20, wholesalePrice: 18, costPrice: 14, stock: 30, minStock: 3, categoryId: '1', supplierId: '1', notes: '', units: [] },
+      { id: '2', name: 'لبن جهينة كامل الدسم', barcode: '1002', retailPrice: 40, wholesalePrice: 36, costPrice: 30, stock: 25, minStock: 3, categoryId: '1', supplierId: '1', notes: '', units: [] },
+      { id: '3', name: 'بن العميد فاتح', barcode: '1003', retailPrice: 120, wholesalePrice: 110, costPrice: 95, stock: 15, minStock: 2, categoryId: '1', supplierId: '1', notes: '', units: [] },
+      { id: '4', name: 'كرتونه باهي 1.5 ك', barcode: '1004', retailPrice: 90, wholesalePrice: 80, costPrice: 70, stock: 12, minStock: 2, categoryId: '2', supplierId: '1', notes: '', units: [] },
+    ];
+    await saveCatalogToStorage(richCatalog, 'v1501-1789650001');
+
+    // Even with limit = 1, whole-word "بن العميد فاتح" (id 3) must beat earlier cursor rows "بالجبنة" (id 1) and "لبن" (id 2)
+    const topCoffee = await searchCatalogFromStorage('بن', 1);
+    expect(topCoffee.length).toBe(1);
+    expect(topCoffee[0].id).toBe('3');
+
+    const decimalMatch = await searchCatalogFromStorage('باهي 1.5', 5);
+    expect(decimalMatch.map((p) => p.id)).toEqual(['4']);
+  });
+
   it('retrieves all catalog products', async () => {
     await saveCatalogToStorage(sampleProducts, 'v1500-1789650000');
 

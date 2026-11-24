@@ -46,6 +46,7 @@ export function NewIssueOrderPage() {
     handleClearDestination,
     stocks,
     productOptions,
+    productSearchRefreshKey,
     fetchProductOptions,
     addLine,
     removeLine,
@@ -162,6 +163,7 @@ export function NewIssueOrderPage() {
               products={products}
               locationOptions={locationOptions}
               productOptions={productOptions}
+              productSearchRefreshKey={productSearchRefreshKey}
               fetchProductOptions={fetchProductOptions}
               stocks={stocks}
               onSelectProduct={handleSelectProduct}
@@ -177,6 +179,7 @@ export function NewIssueOrderPage() {
               products={products}
               locationOptions={locationOptions}
               productOptions={productOptions}
+              productSearchRefreshKey={productSearchRefreshKey}
               fetchProductOptions={fetchProductOptions}
               stocks={stocks}
               onSelectProduct={handleSelectProduct}

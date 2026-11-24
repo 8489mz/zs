@@ -6,3 +6,15 @@ export type LineItem = {
   fromLocationId?: string;
   fromLocationName?: string;
 };
+
+export type IssueOrderProductOption = {
+  id: string;
+  name: string;
+  code: string;
+  searchTerms: string;
+  meta?: string;
+  availableInScope: number;
+  otherLocationsAvailable: number;
+  globalStock: number;
+  isOutOfStock: boolean;
+};

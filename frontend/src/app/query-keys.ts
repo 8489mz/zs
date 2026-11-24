@@ -45,6 +45,7 @@ export const queryKeys = {
   backupSnapshots: ['backup-snapshots'] as const,
   branches: ['branches'] as const,
   locations: ['locations'] as const,
+  locationStocks: ['location-stocks'] as const,
   settingsLocations: ['settings-locations'] as const,
   inventoryReport: ['inventory-report'] as const,
   reportInventoryPage: (paramsKey: string) => ['inventory-report', 'page', paramsKey] as const,

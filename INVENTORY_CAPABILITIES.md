@@ -12,6 +12,28 @@
 
 ## التحديثات الحالية
 
+<a id="cap-294"></a>
+### 294. مزامنة أرصدة المخازن اللحظية ومنع سباق التوقيت والقطع المبكر في بحث أصناف «إذن صرف جديد» (Issue Order Product Picker Real-Time Stock Sync & Race-Free Combobox - 24 November 2026)
+* **حالة القدرة:** تم التحديث في الكود (24 نوفمبر 2026؛ التحقق الموسع مؤجل لنهاية الجلسة).
+* **المسارات المتأثرة:**
+  - `backend/src/modules/inventory/services/inventory-scope.service.ts` (`getAllLocationStocks`)
+  - `frontend/src/shared/ui/searchable-combobox.tsx`
+  - `frontend/src/shared/ui/async-searchable-combobox.tsx`
+  - `frontend/src/shared/hooks/use-inventory-action-catalog.ts`
+  - `frontend/src/shared/api/inventory.api.ts`
+  - `frontend/src/app/query-keys.ts`
+  - `frontend/src/app/query-invalidation.ts`
+  - `frontend/src/features/inventory/components/issue-order/types.ts`
+  - `frontend/src/features/inventory/components/issue-order/useNewIssueOrderController.ts`
+  - `frontend/src/features/inventory/components/issue-order/IssueOrderItemsTable.tsx`
+  - `frontend/src/features/inventory/components/issue-order/IssueOrderMobileCards.tsx`
+  - `frontend/src/features/inventory/pages/NewIssueOrderPage.tsx`
+  - يعتمد ترتيب هوية الأصناف واستبعاد ضوضاء الموردين على المحرك الموثق في [CATALOG_CAPABILITIES.md](CATALOG_CAPABILITIES.md#cap-263).
+* **السلوك والضوابط:**
+  1. **القضاء على سباق التوقيت والوميض القديم في `AsyncSearchableCombobox`:** إعادة تقييم نتائج البحث لحظياً (`0ms`) عبر `refreshKey` فور اكتمال جلب `/api/location-stocks` أو تغيير «من مخزن»، مع فلترة محلية فورية تمنع وميض خيارات سابقة غير مطابقة وعرض «جارٍ البحث...» أثناء انتظار الشبكة، ورفع سقف القائمة المنسدلة إلى `50` صنفاً (`maxResults=50`).
+  2. **دقة الأرصدة المتاحة وإبطال الكاش اللحظي:** توحيد شرط `account_id` في `getAllLocationStocks` وإرجاع `availableQty` صافية من المحجوزات (`reserved_qty`)، وضبط `staleTime: 0` و`refetchOnMount: 'always'` لمفتاح `queryKeys.locationStocks` مع إبطاله تلقائياً بعد فواتير المشتريات وإضافة الأصناف وأذونات الصرف.
+  3. **وضوح الأصناف الصفرية وغير المسندة:** تصدُّر الأصناف المتاحة في المخزن المحدد مع شارة رصيدها، وعرض الأصناف الصفرية أو المتاحة بمخازن أخرى أو غير المسندة لمخزن في أسفل القائمة بشارة توضيحية وتنبيه `toast.warning` عند النقر بدلاً من الإخفاء الصامت بعبارة «لا توجد نتائج».
+
 ### Foundation P1 — 26 October 2026 (verification pending)
 Inventory adjustment, physical count and damage source writes now use the tenant base-currency minor-unit scale (KWD/OMR 3, EGP 2) in the same transaction as GL posting. This removes the verified cent-rounding mismatch for a one-fil variance. Regression evidence: `backend/test/acceptance/core-accounting.postgres.spec.ts` exercises the real KWD adjustment, damaged stock and count source, matching inventory/expense GL, period-lock rollback and count retry; **written, not yet certified until new branch CI is green**.
 

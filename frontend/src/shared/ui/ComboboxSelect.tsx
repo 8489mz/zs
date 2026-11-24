@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useMemo, useState } from 'react';
-import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
+import { matchesArabic, normalizeArabicSearchKey, scoreArabicSearchRelevance } from '@/lib/arabic-normalization';
 import { translateUiText } from '@/lib/auto-translator';
 
 const normalizeLookupText = (value: unknown) => normalizeArabicSearchKey(value);
@@ -53,7 +53,11 @@ export function ComboboxSelect({
   const filteredOptions = useMemo(() => {
     const q = normalizeLookupText(query);
     if (!q || (selectedOption && normalizeLookupText(selectedOption.label) === q)) return options;
-    return options.filter((o) => normalizeLookupText(o.label).includes(q));
+    return options
+      .filter((o) => matchesArabic(o.label, query))
+      .map((o, idx) => ({ o, idx, score: scoreArabicSearchRelevance(o.label, query) || 100 }))
+      .sort((a, b) => (b.score !== a.score ? b.score - a.score : a.idx - b.idx))
+      .map((entry) => entry.o);
   }, [options, query, selectedOption]);
 
   const hasExactMatch = useMemo(() => {

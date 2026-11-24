@@ -226,16 +226,20 @@ export class InventoryScopeService {
     if (!this.canAccessEveryBranch(auth) && !scope.length) return { stocks: [] };
     let query = this.db
       .selectFrom('product_location_stock as s')
-      .leftJoin('products as p', 'p.id', 's.product_id')
-      .innerJoin('stock_locations as l', 'l.id', 's.location_id')
-      .select(['s.product_id', 's.location_id', 's.qty'])
+      .leftJoin('products as p', (join) => join.onRef('p.id', '=', 's.product_id').onRef('p.tenant_id', '=', 's.tenant_id'))
+      .innerJoin('stock_locations as l', (join) => join.onRef('l.id', '=', 's.location_id').onRef('l.tenant_id', '=', 's.tenant_id'))
+      .select([
+        's.product_id',
+        's.location_id',
+        's.qty',
+        sql<number>`COALESCE(s.reserved_qty, 0)`.as('reserved_qty'),
+      ])
       .where('p.is_active', '=', true)
       .where((eb) => eb.or([
         eb('l.is_active', '=', true),
         eb('s.qty', '>', 0)
       ]))
-      .where('s.tenant_id', '=', tenantId)
-      .where('s.account_id', '=', accountId);
+      .where(sql<boolean>`s.tenant_id = ${tenantId} AND (s.account_id = ${accountId} OR s.account_id = ${tenantId} OR s.account_id IS NULL)`);
 
     if (auth.role === 'storekeeper' && !auth.permissions?.includes('canManageBranchStock')) {
       query = query.where('l.location_type', '!=', 'branch_stock');
@@ -250,11 +254,16 @@ export class InventoryScopeService {
     
     const rows = await query.execute();
     return {
-      stocks: rows.map(r => ({
-        productId: String(r.product_id),
-        locationId: r.location_id ? String(r.location_id) : '',
-        qty: Number(r.qty || 0)
-      }))
+      stocks: rows.map(r => {
+        const qty = Number(r.qty || 0);
+        const reservedQty = Number((r as { reserved_qty?: unknown }).reserved_qty || 0);
+        return {
+          productId: String(r.product_id),
+          locationId: r.location_id ? String(r.location_id) : '',
+          qty,
+          availableQty: Math.max(0, Number((qty - reservedQty).toFixed(3))),
+        };
+      })
     };
   }
 

@@ -257,6 +257,7 @@ export function CreateQuotationPageItems(props: CreateQuotationPageItemsProps) {
                         if (open) schedulePickerAvailabilityRefresh(item.productName ?? '');
                       }}
                       showDropdownOnEmpty={true}
+                      maxResults={20}
                       emptyLabel={t('sales.create_quotation_page.s43', "صنف جديد (يمكنك المتابعة بالاسم المدخل)")}
                     />
                     <input

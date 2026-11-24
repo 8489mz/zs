@@ -40,13 +40,56 @@ export function normalizeArabicSearchKey(value: unknown): string {
 }
 
 /**
- * Checks if haystack matches needle with Arabic and case normalization
+ * Checks if haystack matches needle with Arabic, case, and multi-token normalization
  */
 export function matchesArabic(haystack: unknown, needle: unknown): boolean {
   const normNeedle = normalizeArabicSearchKey(needle);
   if (!normNeedle) return true;
   const normHaystack = normalizeArabicSearchKey(haystack);
-  return normHaystack.includes(normNeedle);
+  if (!normHaystack) return false;
+  if (normHaystack.includes(normNeedle)) return true;
+  const tokens = normNeedle.split(' ').filter(Boolean);
+  return tokens.length > 1 && tokens.every((token) => normHaystack.includes(token));
+}
+
+/**
+ * Computes relevance rank score (1000 down to 0) matching backend product-search-rank.engine.ts
+ * so exact / whole-word matches ("بن", "باهي 1.5") always rank ahead of partial substrings ("جبنة").
+ */
+export function scoreArabicSearchRelevance(
+  label: unknown,
+  query: unknown,
+  codes?: Array<string | null | undefined>,
+  extraIdentity?: Array<string | null | undefined>,
+): number {
+  const rawLower = String(query ?? '').trim().toLowerCase();
+  const q = normalizeArabicSearchKey(query);
+  if (!q) return 1;
+  const tokens = q.split(' ').filter(Boolean);
+
+  const normLabel = normalizeArabicSearchKey(label);
+  const rawCodes = (codes || [])
+    .map((c) => String(c ?? '').trim().toLowerCase())
+    .filter(Boolean);
+
+  if ((rawLower && rawCodes.includes(rawLower)) || normLabel === q) return 1000;
+  if (normLabel && normLabel.startsWith(`${q} `)) return 900;
+  if (normLabel && ` ${normLabel} `.includes(` ${q} `)) return 800;
+  if (normLabel && normLabel.startsWith(q)) return 720;
+  if (normLabel && ` ${normLabel}`.includes(` ${q}`)) return 650;
+  if (tokens.length > 1 && normLabel && tokens.every((t) => ` ${normLabel}`.includes(` ${t}`))) return 550;
+  if (rawLower && rawCodes.some((c) => c.startsWith(rawLower))) return 500;
+  if (rawLower && rawCodes.some((c) => c.includes(rawLower))) return 450;
+  if (normLabel && tokens.every((t) => normLabel.includes(t))) return 350;
+
+  if (extraIdentity && extraIdentity.length > 0) {
+    const normExtra = normalizeArabicSearchKey(
+      [label, ...rawCodes, ...extraIdentity].filter(Boolean).join(' '),
+    );
+    if (normExtra && tokens.every((t) => normExtra.includes(t))) return 250;
+  }
+
+  return 0;
 }
 
 const ARABIC_LETTERS_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;

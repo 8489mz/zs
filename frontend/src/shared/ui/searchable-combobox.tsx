@@ -3,7 +3,7 @@ import { CSSProperties, KeyboardEvent, RefObject, useCallback, useEffect, useMem
 import { createPortal } from 'react-dom';
 import { Field } from '@/shared/ui/field';
 
-import { matchesArabic } from '@/lib/arabic-normalization';
+import { matchesArabic, scoreArabicSearchRelevance } from '@/lib/arabic-normalization';
 import { translateUiText } from '@/lib/auto-translator';
 
 export type ComboboxOption = {
@@ -40,6 +40,9 @@ type SearchableComboboxProps<T extends ComboboxOption> = {
   idleHelperLabel?: string;
   showIdleHelper?: boolean;
   showDropdownOnEmpty?: boolean;
+  maxResults?: number;
+  preserveOrder?: boolean;
+  isOptionMuted?: (option: T) => boolean;
   disabled?: boolean;
   style?: CSSProperties;
   inputStyle?: CSSProperties;
@@ -77,6 +80,9 @@ export function SearchableCombobox<T extends ComboboxOption>({
   idleHelperLabel,
   showIdleHelper = true,
   showDropdownOnEmpty = true,
+  maxResults = 30,
+  preserveOrder = false,
+  isOptionMuted,
   disabled,
   style,
   inputStyle,
@@ -100,31 +106,64 @@ export function SearchableCombobox<T extends ComboboxOption>({
       if (!isOpen || !hasSearchIntent) {
         return EMPTY_OPTIONS as T[];
       }
-      const results: T[] = [];
+      const safeLimit = Math.max(1, maxResults);
+      if (!normalizedValue || preserveOrder) {
+        const results: T[] = [];
+        for (let i = 0; i < options.length; i++) {
+          const option = options[i];
+          if (search) {
+            if (search(option, value)) {
+              results.push(option);
+              if (results.length >= safeLimit) break;
+            }
+            continue;
+          }
+          const labelText = getLabel(option);
+          if (matchesArabic(labelText, value)) {
+            results.push(option);
+            if (results.length >= safeLimit) break;
+            continue;
+          }
+          const metaText = getMeta?.(option);
+          if (metaText && matchesArabic(metaText, value)) {
+            results.push(option);
+            if (results.length >= safeLimit) break;
+          }
+        }
+        return results;
+      }
+
+      const scored: Array<{ option: T; score: number; idx: number }> = [];
       for (let i = 0; i < options.length; i++) {
         const option = options[i];
-        if (search) {
-          if (search(option, value)) {
-            results.push(option);
-            if (results.length >= 8) break;
-          }
-          continue;
-        }
         const labelText = getLabel(option);
-        if (matchesArabic(labelText, value)) {
-          results.push(option);
-          if (results.length >= 8) break;
-          continue;
+        let matched = false;
+        if (search) {
+          matched = search(option, value);
+        } else {
+          matched = matchesArabic(labelText, value) || Boolean(getMeta && matchesArabic(getMeta(option) || '', value));
         }
-        const metaText = getMeta?.(option);
-        if (metaText && matchesArabic(metaText, value)) {
-          results.push(option);
-          if (results.length >= 8) break;
-        }
+        if (!matched) continue;
+
+        const rec = option as Record<string, unknown>;
+        const score =
+          scoreArabicSearchRelevance(
+            labelText,
+            value,
+            [
+              typeof rec.barcode === 'string' ? rec.barcode : undefined,
+              typeof rec.sku === 'string' ? rec.sku : undefined,
+              typeof rec.code === 'string' ? rec.code : undefined,
+            ],
+            [typeof rec.searchTerms === 'string' ? rec.searchTerms : undefined],
+          ) || 100;
+        scored.push({ option, score, idx: i });
       }
-      return results;
+
+      scored.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.idx - b.idx));
+      return scored.slice(0, safeLimit).map((entry) => entry.option);
     },
-    [getLabel, getMeta, hasSearchIntent, isOpen, options, search, value]
+    [getLabel, getMeta, hasSearchIntent, isOpen, maxResults, normalizedValue, options, preserveOrder, search, value]
   );
   const showCreate = Boolean(onCreate && normalizedValue && hasSearchIntent && filteredOptions.length === 0);
   const optionCount = filteredOptions.length + (showCreate ? 1 : 0);
@@ -376,19 +415,23 @@ export function SearchableCombobox<T extends ComboboxOption>({
     >
       {filteredOptions.length ? (
         <>
-          {filteredOptions.map((option, index) => (
-            <button
-              key={option.id}
-              type="button"
-              className={`purchase-prototype-combobox-option${index === highlightedIndex ? ' is-highlighted' : ''}`}
-              onMouseEnter={() => setHighlightedIndex(index)}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => selectOption(option)}
-            >
-              <span className="purchase-prototype-combobox-option-title">{isEn ? (translateUiText(getLabel(option)) || getLabel(option)) : getLabel(option)}</span>
-              {getMeta?.(option) ? <span className="purchase-prototype-combobox-option-meta">{getMeta(option)}</span> : null}
-            </button>
-          ))}
+          {filteredOptions.map((option, index) => {
+            const muted = Boolean(isOptionMuted?.(option));
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className={`purchase-prototype-combobox-option${index === highlightedIndex ? ' is-highlighted' : ''}`}
+                style={muted ? { opacity: 0.62 } : undefined}
+                onMouseEnter={() => setHighlightedIndex(index)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => selectOption(option)}
+              >
+                <span className="purchase-prototype-combobox-option-title">{isEn ? (translateUiText(getLabel(option)) || getLabel(option)) : getLabel(option)}</span>
+                {getMeta?.(option) ? <span className="purchase-prototype-combobox-option-meta">{getMeta(option)}</span> : null}
+              </button>
+            );
+          })}
           {hasCreateRow ? (
             <button
               type="button"

@@ -6,6 +6,11 @@ import { Database } from '../../../database/database.types';
 import { InventoryScopeService } from '../../inventory/services/inventory-scope.service';
 import { normalizeArabicSearch } from '../../../common/utils/arabic-search.util';
 import {
+  compileProductSearchQuery,
+  scoreProductSearchMatch,
+  compareRankedProductMatches,
+} from '../engines/product-search-rank.engine';
+import {
   ProductRow,
   ProductOfferColumnCapabilities,
   ProductOfferReadRow,
@@ -298,7 +303,7 @@ export class CatalogProductListService {
   }
 
   async listProducts(query: Record<string, unknown>, actor: AuthContext): Promise<Record<string, unknown>> {
-    const { page, pageSize, q, view, requestedLocationId, categoryId, supplierId, brief, sortBy, sortDir } = this.parseListProductsQuery(query);
+    const { page, pageSize, q, rawQuery, identityOnly, preferInStock, view, requestedLocationId, categoryId, supplierId, brief, sortBy, sortDir } = this.parseListProductsQuery(query);
     const canViewCost = this.canViewCostPrice(actor);
     const offerCapabilities = await this.getProductOfferColumnCapabilities();
     const scopedLocation = requestedLocationId > 0 && actor ? await this.inventoryScope.assertLocationScope(requestedLocationId, actor).catch(() => null) : null;
@@ -340,8 +345,12 @@ export class CatalogProductListService {
       ? { stock: new Map<string, number>(products.map((p) => [String(p.id), Number(p.stock_qty || 0)])), locations: new Map<string, number[]>() }
       : await this.resolveScopedStockByProduct(productIds, scopedLocation ? [scopedLocation.id] : [], products, actor);
     const listContext = await this.buildListProductsContext(productIds, q, categories, suppliers, locations, actor, { brief, view });
+    const searchScoresById = new Map<string, number>();
     const filteredBaseRows = this.filterListProducts(products, {
       q,
+      rawQuery,
+      identityOnly,
+      searchScoresById,
       view,
       scopedLocationId: scopedLocation?.id || null,
       scopedStockByProduct: scopedStockResult.stock,
@@ -351,7 +360,24 @@ export class CatalogProductListService {
       ...listContext,
     });
 
-    if (effectiveSortBy !== 'id' || effectiveSortDir !== 'desc') {
+    if (q && !sortBy && view === 'all') {
+      const scopedLocId = scopedLocation?.id || null;
+      filteredBaseRows.sort((a, b) =>
+        compareRankedProductMatches(
+          {
+            id: Number(a.id),
+            score: searchScoresById.get(String(a.id)) || 0,
+            stock: this.getListProductStock(a, scopedLocId, scopedStockResult.stock),
+          },
+          {
+            id: Number(b.id),
+            score: searchScoresById.get(String(b.id)) || 0,
+            stock: this.getListProductStock(b, scopedLocId, scopedStockResult.stock),
+          },
+          { preferInStock },
+        ),
+      );
+    } else if (effectiveSortBy !== 'id' || effectiveSortDir !== 'desc') {
       filteredBaseRows.sort((a, b) => {
         if (effectiveSortBy === 'name') {
           const comp = String(a.name || '').localeCompare(String(b.name || ''), 'ar');
@@ -455,6 +481,9 @@ export class CatalogProductListService {
       page: Math.max(1, Number(query.page || 1)),
       pageSize: Math.min(10000, Math.max(5, Number(query.pageSize || 20))),
       q: normalizeArabicSearch(query.q),
+      rawQuery: String(query.q ?? '').trim(),
+      identityOnly: String(query.identityOnly || '').toLowerCase() === 'true' || query.identityOnly === true,
+      preferInStock: String(query.preferInStock || '').toLowerCase() === 'true' || query.preferInStock === true,
       view: String(query.view || 'all'),
       requestedLocationId: Number(query.locationId || 0),
       categoryId: query.categoryId ? Number(query.categoryId) : undefined,
@@ -536,6 +565,9 @@ export class CatalogProductListService {
     products: ProductRow[],
     context: {
       q: string;
+      rawQuery?: string;
+      identityOnly?: boolean;
+      searchScoresById?: Map<string, number>;
       view: string;
       scopedLocationId: number | null;
       scopedStockByProduct: Map<string, number>;
@@ -550,6 +582,7 @@ export class CatalogProductListService {
       supplierId?: number;
     },
   ): ProductRow[] {
+    const compiledQuery = compileProductSearchQuery(context.rawQuery ?? context.q);
     return products.filter((product) => {
       const key = String(product.id);
       const stock = this.getListProductStock(product, context.scopedLocationId, context.scopedStockByProduct);
@@ -573,27 +606,41 @@ export class CatalogProductListService {
         if (context.view === 'special' && customerPriceCount <= 0) return false;
       }
 
-      if (!context.q) return true;
-      const activeLocIds = context.activeLocationsByProduct?.get(key) || [];
-      const activeLocNames = activeLocIds.map((id) => context.locationsById[String(id)] || '').filter(Boolean);
-      const defaultLocName = product.default_location_name || context.locationsById[String(product.default_location_id || '')] || '';
+      if (!compiledQuery.norm) return true;
 
-      const haystack = [
-        String(product.name || ''),
-        String(product.name_en || ''),
-        String(product.barcode || ''),
-        context.categoriesById[String(product.category_id || '')] || '',
-        context.suppliersById[String(product.supplier_id || '')] || '',
-        defaultLocName,
-        ...activeLocNames,
-        String(product.notes || ''),
-        String(product.style_code || ''),
-        String(product.sku || ''),
-        String(product.color || ''),
-        String(product.size || ''),
-        ...(context.unitSearchValuesByProduct.get(key) || []),
-      ].join(' ');
-      return normalizeArabicSearch(haystack).includes(context.q);
+      let secondaryValues: string[] | undefined;
+      if (!context.identityOnly) {
+        const activeLocIds = context.activeLocationsByProduct?.get(key) || [];
+        const activeLocNames = activeLocIds.map((id) => context.locationsById[String(id)] || '').filter(Boolean);
+        const defaultLocName = product.default_location_name || context.locationsById[String(product.default_location_id || '')] || '';
+        secondaryValues = [
+          context.categoriesById[String(product.category_id || '')] || '',
+          context.suppliersById[String(product.supplier_id || '')] || '',
+          defaultLocName,
+          ...activeLocNames,
+          String(product.notes || ''),
+        ];
+      }
+
+      const score = scoreProductSearchMatch(
+        compiledQuery,
+        {
+          name: product.name,
+          nameEn: product.name_en,
+          barcode: product.barcode,
+          sku: product.sku,
+          styleCode: product.style_code,
+          color: product.color,
+          size: product.size,
+          unitSearchValues: context.unitSearchValuesByProduct.get(key),
+          secondaryValues,
+        },
+        { identityOnly: context.identityOnly },
+      );
+
+      if (score <= 0) return false;
+      context.searchScoresById?.set(key, score);
+      return true;
     });
   }
 

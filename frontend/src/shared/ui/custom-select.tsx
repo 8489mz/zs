@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { matchesArabic, normalizeArabicDigits } from '@/lib/arabic-normalization';
+import { matchesArabic, normalizeArabicDigits, scoreArabicSearchRelevance } from '@/lib/arabic-normalization';
 import { translateUiText } from '@/lib/auto-translator';
 
 export interface SelectOption {
@@ -99,7 +99,7 @@ export function CustomSelect({
     const normalizedQ = normalizeArabicDigits(q);
     const isNumericSearch = /^\d+$/.test(normalizedQ);
 
-    return options.filter((opt) => {
+    const matched = options.filter((opt) => {
       if (isNumericSearch) {
         const rawCode = String(opt.code || opt.hint?.replace(/[^\d]/g, '') || opt.label.match(/\(([^)]+)\)$/)?.[1] || '').trim();
         if (rawCode) {
@@ -130,6 +130,15 @@ export function CustomSelect({
         (isEn && getOptionLabel(opt.label).toLowerCase().includes(query.toLowerCase()))
       );
     });
+    if (isNumericSearch) return matched;
+    return matched
+      .map((opt, idx) => ({
+        opt,
+        idx,
+        score: scoreArabicSearchRelevance(opt.label, query, [opt.code], [opt.hint]) || 100,
+      }))
+      .sort((a, b) => (b.score !== a.score ? b.score - a.score : a.idx - b.idx))
+      .map((entry) => entry.opt);
   }, [options, query, isSearching, isEn]);
 
   // Highlight selection

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { matchesArabic } from '@/lib/arabic-normalization';
+import { matchesArabic, scoreArabicSearchRelevance } from '@/lib/arabic-normalization';
 import {
   useDriverLoadRequisition,
   type DriverAvailableProduct,
@@ -365,7 +365,7 @@ export function DriverNewLoadRequisitionView({
 
   // Filter Catalog Products by search, company, category, and out of stock
   const displayedProducts = useMemo(() => {
-    return (availableProducts || []).filter((p) => {
+    const filteredList = (availableProducts || []).filter((p) => {
       // Out of stock filter
       if (!showOutOfStock && (p.availableQty ?? p.totalStock) <= 0) return false;
 
@@ -398,6 +398,17 @@ export function DriverNewLoadRequisitionView({
 
       return true;
     });
+
+    if (!catalogSearchQuery.trim()) return filteredList;
+
+    return filteredList
+      .map((p, idx) => ({
+        p,
+        idx,
+        score: scoreArabicSearchRelevance(p.name, catalogSearchQuery, [p.barcode, p.sku]) || 100,
+      }))
+      .sort((a, b) => (b.score !== a.score ? b.score - a.score : a.idx - b.idx))
+      .map((entry) => entry.p);
   }, [availableProducts, catalogSearchQuery, selectedCompany, selectedCategory, showOutOfStock]);
 
   const { handleGoBack, handleClearDraft, handleCancelPendingAndRestore, handleSubmit, handleAdminSubmit } =

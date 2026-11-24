@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React from 'react';
-import { LineItem } from './types';
+import { LineItem, IssueOrderProductOption } from './types';
 import { AsyncSearchableCombobox } from '@/shared/ui/async-searchable-combobox';
 import { SearchableCombobox } from '@/shared/ui/searchable-combobox';
 
@@ -9,10 +9,11 @@ interface IssueOrderItemsTableProps {
   fromLocationId: string;
   products: any[];
   locationOptions: { id: string; name: string; searchTerms: string }[];
-  productOptions: { id: string; name: string; code: string; searchTerms: string }[];
-  fetchProductOptions: (query: string) => Promise<{ id: string; name: string; code: string; searchTerms: string }[]>;
+  productOptions: IssueOrderProductOption[];
+  productSearchRefreshKey?: string;
+  fetchProductOptions: (query: string) => Promise<IssueOrderProductOption[]>;
   stocks: any[];
-  onSelectProduct: (lineId: number, product: { id: string; name: string }) => void;
+  onSelectProduct: (lineId: number, product: IssueOrderProductOption) => void;
   onUpdateLine: (lineId: number, field: keyof LineItem, value: any) => void;
   onRemoveLine: (lineId: number) => void;
   onQtyKeyDown: (e: React.KeyboardEvent<HTMLInputElement>, lineId: number) => void;
@@ -22,9 +23,9 @@ interface IssueOrderItemsTableProps {
 export const IssueOrderItemsTable: React.FC<IssueOrderItemsTableProps> = ({
   lines,
   fromLocationId,
-  products,
   locationOptions,
   productOptions,
+  productSearchRefreshKey,
   fetchProductOptions,
   stocks,
   onSelectProduct,
@@ -51,23 +52,25 @@ export const IssueOrderItemsTable: React.FC<IssueOrderItemsTableProps> = ({
           </thead>
           <tbody>
             {lines.map((line) => {
-              const product = products.find(p => String(p.id) === line.productId);
               let availableStock = '-';
 
-              if (product) {
+              if (line.productId) {
                 const locId = fromLocationId === 'all' ? line.fromLocationId : fromLocationId;
 
                 if (locId && locId !== 'all') {
                   const locStock = stocks.find(s => String(s.productId) === String(line.productId) && String(s.locationId) === String(locId));
                   if (locStock) {
-                    const remaining = Math.max(0, locStock.qty - (line.qty || 0));
+                    const baseAvail = typeof locStock.availableQty === 'number' ? locStock.availableQty : locStock.qty;
+                    const remaining = Math.max(0, Number((baseAvail - (line.qty || 0)).toFixed(3)));
                     availableStock = String(remaining);
                   } else {
                     availableStock = '0';
                   }
                 } else {
-                  const totalStock = stocks.filter(s => String(s.productId) === String(line.productId)).reduce((acc, s) => acc + s.qty, 0);
-                  availableStock = String(Math.max(0, totalStock - (line.qty || 0)));
+                  const totalStock = stocks
+                    .filter(s => String(s.productId) === String(line.productId))
+                    .reduce((acc, s) => acc + (typeof s.availableQty === 'number' ? s.availableQty : s.qty), 0);
+                  availableStock = String(Math.max(0, Number((totalStock - (line.qty || 0)).toFixed(3))));
                 }
               }
 
@@ -77,10 +80,14 @@ export const IssueOrderItemsTable: React.FC<IssueOrderItemsTableProps> = ({
                     <AsyncSearchableCombobox
                       inputId={`product-input-${line.id}`}
                       defaultOptions={productOptions}
+                      refreshKey={productSearchRefreshKey}
                       value={line.productName || ''}
                       onChange={(v) => onUpdateLine(line.id, 'productName', v)}
                       onSelect={(p) => onSelectProduct(line.id, p)}
                       getLabel={(p) => p.name}
+                      getMeta={(p) => p.meta}
+                      isOptionMuted={(p) => p.isOutOfStock}
+                      maxResults={50}
                       fetchOptions={fetchProductOptions}
                       createLabel={(q) => `إضافة "${q}"`}
                       placeholder={t('inventory.issue_order.issue_order_items_table.s4', "بحث عن صنف...")}

@@ -1,5 +1,5 @@
 import type { Product } from '@/types/domain';
-import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
+import { normalizeArabicSearchKey, scoreArabicSearchRelevance } from '@/lib/arabic-normalization';
 import { isLikelyBarcodeQuery } from './pos-product-lookup';
 import { requestStoragePersistence } from '@/lib/storage-persistence';
 
@@ -296,41 +296,44 @@ export async function searchCatalogFromStorage(rawTerm: string, limit: number = 
 
     // Text query with normalized tokens
     const normalizedQuery = normalizeArabicSearchKey(term);
-    const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+    if (!normalizedQuery) return [];
 
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_PRODUCTS, 'readonly');
       const store = tx.objectStore(STORE_PRODUCTS);
-      const results: Product[] = [];
+      const scoredResults: Array<{ product: Product; score: number }> = [];
       const cursorReq = store.openCursor();
 
       cursorReq.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
-        if (!cursor || results.length >= limit) {
-          resolve(results);
+        if (!cursor) {
+          scoredResults.sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            return String(a.product.name || '').localeCompare(String(b.product.name || ''), 'ar');
+          });
+          resolve(scoredResults.slice(0, limit).map((entry) => entry.product));
           return;
         }
 
         const product = cursor.value as Product;
-        const nameNorm = normalizeArabicSearchKey(product.name || '');
-        const barcodeNorm = String(product.barcode || '').toLowerCase();
-        const skuNorm = String(product.sku || '').toLowerCase();
-        const styleNorm = String(product.styleCode || '').toLowerCase();
-        const colorNorm = normalizeArabicSearchKey(product.color || '');
-        const sizeNorm = normalizeArabicSearchKey(product.size || '');
+        const unitCodes: string[] = [];
+        const unitNames: string[] = [];
+        if (product.units && Array.isArray(product.units)) {
+          for (const u of product.units) {
+            if (u.barcode) unitCodes.push(String(u.barcode));
+            if (u.name) unitNames.push(String(u.name));
+          }
+        }
 
-        const combinedHaystack = `${nameNorm} ${barcodeNorm} ${skuNorm} ${styleNorm} ${colorNorm} ${sizeNorm}`;
-        const matchesAllTokens = tokens.every((token) => combinedHaystack.includes(token));
+        const score = scoreArabicSearchRelevance(
+          product.name,
+          term,
+          [product.barcode, product.sku, product.styleCode, ...unitCodes],
+          [(product as any).nameEn, product.color, product.size, ...unitNames],
+        );
 
-        if (matchesAllTokens) {
-          results.push(product);
-        } else if (product.units && Array.isArray(product.units)) {
-          const unitMatches = product.units.some((u) => {
-            const unitNameNorm = normalizeArabicSearchKey(u.name || '');
-            const unitBarcode = String(u.barcode || '').toLowerCase();
-            return tokens.every((token) => unitNameNorm.includes(token) || unitBarcode.includes(token));
-          });
-          if (unitMatches) results.push(product);
+        if (score > 0) {
+          scoredResults.push({ product, score });
         }
 
         cursor.continue();

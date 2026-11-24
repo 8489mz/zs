@@ -313,10 +313,43 @@ export class CatalogProductPosService {
       )`);
     }
 
+    if (tokens.length > 0) {
+      const rawLower = q.trim().toLowerCase();
+      const normStartWord = `${normalized} %`;
+      const normWholeWord = `% ${normalized} %`;
+      const normPrefix = `${normalized}%`;
+      const normWordPrefix = `% ${normalized}%`;
+      const codePrefix = `${rawLower}%`;
+      productQuery = productQuery.orderBy(
+        sql<number>`CASE
+          WHEN LOWER(COALESCE(p.barcode, '')) = ${rawLower}
+            OR LOWER(COALESCE(p.sku, '')) = ${rawLower}
+            OR LOWER(COALESCE(p.style_code, '')) = ${rawLower}
+            OR LOWER(COALESCE(pu.barcode, '')) = ${rawLower}
+            OR TRANSLATE(LOWER(COALESCE(p.name, '')), 'أإآٱٲٳؤئىة', 'ااااااويهه') = ${normalized}
+          THEN 0
+          WHEN TRANSLATE(LOWER(COALESCE(p.name, '')), 'أإآٱٲٳؤئىة', 'ااااااويهه') LIKE ${normStartWord}
+          THEN 1
+          WHEN (' ' || TRANSLATE(LOWER(COALESCE(p.name, '')), 'أإآٱٲٳؤئىة', 'ااااااويهه') || ' ') LIKE ${normWholeWord}
+          THEN 2
+          WHEN TRANSLATE(LOWER(COALESCE(p.name, '')), 'أإآٱٲٳؤئىة', 'ااااااويهه') LIKE ${normPrefix}
+          THEN 3
+          WHEN (' ' || TRANSLATE(LOWER(COALESCE(p.name, '')), 'أإآٱٲٳؤئىة', 'ااااااويهه')) LIKE ${normWordPrefix}
+          THEN 4
+          WHEN LOWER(COALESCE(p.barcode, '')) LIKE ${codePrefix}
+            OR LOWER(COALESCE(p.sku, '')) LIKE ${codePrefix}
+          THEN 5
+          ELSE 6
+        END`,
+        'asc',
+      );
+    }
+
+    const sqlFetchLimit = tokens.length > 0 ? Math.min(25000, limit * 3) : limit;
     return productQuery
       .orderBy('p.name', 'asc')
       .orderBy('p.id', 'asc')
-      .limit(limit)
+      .limit(sqlFetchLimit)
       .execute() as Promise<PosProductLookupRow[]>;
   }
 

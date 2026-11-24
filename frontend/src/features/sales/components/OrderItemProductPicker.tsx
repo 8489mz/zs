@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { SearchIcon } from '@/shared/components/icons/AppIcons';
-import { matchesArabic } from '@/lib/arabic-normalization';
+import { matchesArabic, scoreArabicSearchRelevance } from '@/lib/arabic-normalization';
 import { formatCurrency } from '@/lib/format';
 import type { Product } from '@/types/domain';
 
@@ -121,7 +121,7 @@ export function OrderItemProductPicker({
   const query = value.trim();
   const filtered = useMemo(() => {
     if (!query) {
-      return products.slice(0, 15);
+      return products.slice(0, 20);
     }
     return products
       .filter((p) => {
@@ -131,7 +131,14 @@ export function OrderItemProductPicker({
         if (p.styleCode && p.styleCode.toLowerCase().includes(query.toLowerCase())) return true;
         return false;
       })
-      .slice(0, 20);
+      .map((p, idx) => ({
+        p,
+        idx,
+        score: scoreArabicSearchRelevance(p.name, query, [p.barcode, p.sku, p.styleCode]) || 100,
+      }))
+      .sort((a, b) => (b.score !== a.score ? b.score - a.score : a.idx - b.idx))
+      .slice(0, 30)
+      .map((entry) => entry.p);
   }, [products, query]);
 
   const isExceedingStock = selectedProductId > 0 && quantity > (stockOnHand || 0);

@@ -12,6 +12,33 @@
 
 ## التحديثات الحالية
 
+<a id="cap-263"></a>
+### 263. محرك البحث والترتيب الذكي الموحد للأصناف عبر كامل المنظومة وعزل بيانات الموردين في القوائم التشغيلية (System-Wide Unified Product Identity Search & Relevance Ranking Engine - 24 November 2026)
+* **حالة القدرة:** تم التحديث والتحقق بوحدات الاختبار المستهدفة (`backend/test/product-search-rank-engine.spec.ts` و`frontend/src/features/pos/lib/pos-catalog-storage.spec.ts` بتاريخ 24 نوفمبر 2026؛ أُجّل `typecheck` و `guards` لنهاية الجلسة حسب سياسة التنفيذ).
+* **المسارات المتأثرة:**
+  - `backend/src/modules/catalog/engines/product-search-rank.engine.ts`
+  - `backend/src/modules/catalog/services/catalog-product-list.service.ts`
+  - `backend/src/modules/catalog/services/catalog-product-pos.service.ts`
+  - `backend/src/modules/catalog/catalog.controller.ts`
+  - `frontend/src/lib/arabic-normalization.ts` (`matchesArabic`, `scoreArabicSearchRelevance`)
+  - `frontend/src/shared/ui/searchable-combobox.tsx`
+  - `frontend/src/shared/ui/async-searchable-combobox.tsx`
+  - `frontend/src/shared/ui/custom-select.tsx`
+  - `frontend/src/shared/ui/ComboboxSelect.tsx`
+  - `frontend/src/features/pos/lib/pos-catalog-storage.ts`
+  - `frontend/src/features/sales/pages/CreateQuotationPage.tsx`
+  - `frontend/src/features/sales/pages/CreateSalesOrderPage.tsx`
+  - `frontend/src/features/sales/components/OrderItemProductPicker.tsx`
+  - `frontend/src/features/delivery-reps/components/DriverNewLoadRequisitionView.tsx`
+  - `frontend/src/features/purchases/api/purchases.api.ts`
+  - `backend/test/product-search-rank-engine.spec.ts`
+  - التكامل مع شاشة إذن الصرف المخزني ومزامنة أرصدة المخازن موثق في [INVENTORY_CAPABILITIES.md](INVENTORY_CAPABILITIES.md#cap-294).
+* **السلوك والضوابط:**
+  1. **وضع هوية الصنف فقط (`identityOnly=true`):** حصر البحث في القوائم المنسدلة التشغيلية (إذن الصرف، فواتير المشتريات، التصنيع، فاحص الأسعار) على حقول هوية الصنف (`name`, `name_en`, `barcode`, `sku`, `style_code`, `color`, `size`, `product_units`) واستبعاد اسم المورد واسم القسم والمخزن والملاحظات تماماً لمنع ظهور أصناف غير ذات صلة تشترك في نفس المورد.
+  2. **الترتيب الهرمي بالأولوية (`scoreProductSearchMatch`) والبحث بالكلمات والأوزان العشرية المتفرقة:** ترتيب النتائج بدءاً من التطابق التام للباركود/الاسم (`1000`)، ثم بداية الاسم بكلمة كاملة (`900`)، ثم تطابق الكلمة الكاملة داخل الاسم (`800`)، ثم بادئة الاسم/الكلمة (`720`/`650`)، ثم تطابق كافة المقاطع النصية والرقمية المتفرقة مثل الأوزان العشرية `1.5` (`550`)، قبل التطابقات الجزئية الداخلية (`350`)، مع دعم تفضيل الأصناف ذات الرصيد المتاح (`preferInStock=true`).
+  3. **توسيع صلاحية القراءة التشغيلية:** السماح لأدوار المخزون والمشتريات والتصنيع (`@RequireAnyPermission('products', 'inventory', 'canAdjustInventory', 'purchases', 'manufacturing')`) بالبحث في `GET /api/products` مع بقاء حظر المستخدم المقتصر على `sales` فقط (`403`).
+* **القيود المعروفة:** البحث المفلتر بـ `q` في `CatalogProductListService` يعمل عبر مسار الفلترة والترتيب في الذاكرة بعد قراءة الكتالوج النشط للمستأجر، بينما تظل الصفحات غير المفلترة على مسار الترقيم المباشر في SQL (`listProductsPageInSql`).
+
 ### 262. توحيد محرك طباعة ملصقات الباركود والمقاسات الحرارية وورق A4 وعرض العملة والاتجاه ومتغيرات الملابس (Unified Barcode Label Print Engine, A4 Sheet Bounds, Currency, Thermal 180° Orientation & Fashion Variant Labels - 17 November 2026)
 * **حالة القدرة:** تم التحديث والتحقق بوحدات الاختبار المستهدفة (`44/44` نجاح عبر 6 ملفات في 17 نوفمبر 2026؛ لم يُشغَّل `typecheck` أو `guards` بناءً على سياسة التأجيل حتى نهاية الجلسة).
 * **المسارات المتأثرة:**
