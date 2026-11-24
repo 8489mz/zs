@@ -318,6 +318,7 @@
     "test/critical/returns-services-users-sql-pagination.spec.ts",
     "test/critical/no-paginate-rows.spec.ts",
     "test/critical/reports-home-open-shift.spec.ts",
-    "test/critical/admin-close-declared-totals-waiver.spec.ts"
+    "test/critical/admin-close-declared-totals-waiver.spec.ts",
+    "test/critical/solo-admin-shift-close-over-tolerance.spec.ts"
   ]
 }

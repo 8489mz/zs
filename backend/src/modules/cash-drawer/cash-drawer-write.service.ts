@@ -602,17 +602,40 @@ export class CashDrawerWriteService {
       // is passed into the variance posting, so
       // variance_approved_by is the approver, not the closer.
       // Blind closes skip this: the reviewer approves at review.
+      // INV-SOLO-ADMIN-SHIFT-CLOSE-OVER-TOLERANCE: a solo
+      // admin/super_admin closer may close alone with NO second
+      // approver — 99% of shops have only one admin, so the
+      // second-approval gate was unsatisfiable there. The override
+      // is NOT silent: it still needs the >=10-char note, and the
+      // override is stamped into the close note with who closed,
+      // the variance, the tolerance cap, and that no second admin
+      // was available; variance_approved_by stays the closer, so
+      // the approver of record is visible on the row. A supplied
+      // approver secret still must differ (self-approval via a
+      // secret is refused), and a non-privileged closer with no
+      // secret is still refused with
+      // SHIFT_SECOND_APPROVAL_REQUIRED — the cashier/manager path
+      // is unchanged.
       let postingAuth = auth;
-      if (closeStatus === 'closed' && requiresSecondApproval(variance, await this.getCashierShortageTolerance(trx, scope.tenantId, digits))) {
+      const toleranceCap = closeStatus === 'closed' ? await this.getCashierShortageTolerance(trx, scope.tenantId, digits) : 0;
+      if (closeStatus === 'closed' && requiresSecondApproval(variance, toleranceCap)) {
         const approverSecret = String(payload.approverSecret || '').trim();
-        if (!approverSecret) throw new AppError('الفرق فوق حد التسامح يتطلب اعتماد مدير ثانٍ', 'SHIFT_SECOND_APPROVAL_REQUIRED', 400);
-        const approval = await authorizeManagerSecret(trx, auth, approverSecret);
-        if (approval.mode !== 'account' || !approval.authorizedById || approval.authorizedById === Number(auth.userId)) {
-          throw new AppError('اعتماد الفرق يتطلب مديراً آخر غير من يغلق الوردية', 'SHIFT_SECOND_APPROVER_MUST_DIFFER', 400);
+        if (!approverSecret) {
+          if (['admin', 'super_admin'].includes(String(auth.role || '').trim())) {
+            assertCashDrawerNote(note, 'SHIFT_SECOND_APPROVAL_NOTE_REQUIRED', 10);
+            noteStamps.push(`اعتماد فرق منفرد بقرار إداري — أغلق ${String(auth.username || '')} الوردية دون اعتماد مدير ثانٍ — الفرق ${variance} وحد التسامح ${toleranceCap} — لا يوجد مدير ثانٍ متاح`);
+          } else {
+            throw new AppError('الفرق فوق حد التسامح يتطلب اعتماد مدير ثانٍ', 'SHIFT_SECOND_APPROVAL_REQUIRED', 400);
+          }
+        } else {
+          const approval = await authorizeManagerSecret(trx, auth, approverSecret);
+          if (approval.mode !== 'account' || !approval.authorizedById || approval.authorizedById === Number(auth.userId)) {
+            throw new AppError('اعتماد الفرق يتطلب مديراً آخر غير من يغلق الوردية', 'SHIFT_SECOND_APPROVER_MUST_DIFFER', 400);
+          }
+          assertCashDrawerNote(note, 'SHIFT_SECOND_APPROVAL_NOTE_REQUIRED', 10);
+          postingAuth = { ...auth, userId: approval.authorizedById, username: approval.authorizedByName };
+          noteStamps.push(`اعتماد فرق فوق حد التسامح بواسطة ${approval.authorizedByName}`);
         }
-        assertCashDrawerNote(note, 'SHIFT_SECOND_APPROVAL_NOTE_REQUIRED', 10);
-        postingAuth = { ...auth, userId: approval.authorizedById, username: approval.authorizedByName };
-        noteStamps.push(`اعتماد فرق فوق حد التسامح بواسطة ${approval.authorizedByName}`);
       }
 
       const stampedNote = [...(note ? [note] : []), ...noteStamps].join('\n\n');

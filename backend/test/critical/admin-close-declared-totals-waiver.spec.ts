@@ -194,17 +194,17 @@ async function main() {
     await drawer.closeCashierShift(shiftOwn, { countedCash: 100, cardDeclaredTotal: 0, managerPin: 'pw-cashier-3' }, cashier3);
     assert.equal((await shiftRow(shiftOwn)).status, 'pending_review', 'an explicitly entered 0.00 card total must let the cashier close proceed to review');
 
-    // ---------- Wiring: this spec is in both critical lists, in identical order (319 specs — this spec is the last entry). ----------
+    // ---------- Wiring: this spec is in both critical lists, in identical order (320 specs — the solo-admin-shift-close-over-tolerance spec is the last entry). ----------
     {
       const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 319);
-      assert.equal(chain.length, 319);
+      assert.equal(specs.length, 320);
+      assert.equal(chain.length, 320);
       assert.deepEqual(chain, specs);
       assert.ok(specs.includes('test/critical/admin-close-declared-totals-waiver.spec.ts'));
-      console.log('wiring: evidence spec in both critical lists (319 = 319, identical order), passed');
+      console.log('wiring: evidence spec in both critical lists (320 = 320, identical order), passed');
     }
 
     console.log('Admin close declared-totals waiver tests passed');

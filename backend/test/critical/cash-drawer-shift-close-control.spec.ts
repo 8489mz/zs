@@ -27,8 +27,18 @@
  *   approver (a manager/admin other than the closer, by account
  *   password — the shared PIN has no identity and cannot prove a
  *   second person) + a >=10-char note; variance_approved_by is the
- *   approver. Blind close keys off the OPENER's role, so a
- *   super_admin closing a cashier's shift goes to pending_review.
+ *   approver. INV-SOLO-ADMIN-SHIFT-CLOSE-OVER-TOLERANCE: a solo
+ *   admin/super_admin closer may close alone with NO second
+ *   approver when the >=10-char note is present — the override is
+ *   stamped into the close note (who, variance, cap, no second
+ *   admin available) and the closer stays the approver of record;
+ *   with a short note and no approver the close is still refused,
+ *   now with SHIFT_SECOND_APPROVAL_NOTE_REQUIRED (the recorded
+ *   reason is the missing piece, not a second person); a
+ *   non-privileged closer with no approver is still refused with
+ *   SHIFT_SECOND_APPROVAL_REQUIRED. Blind close keys off the
+ *   OPENER's role, so a super_admin closing a cashier's shift goes
+ *   to pending_review.
  * I22 — review takes a decision: approve with any declared/computed
  *   delta, count delta, or detail-total delta and no >=3-char note
  *   throws; reject reopens the shift with the reason stamped and
@@ -414,8 +424,8 @@ async function main() {
     const shiftC = await shiftIdOf(1);
     await assert.rejects(
       drawer.closeCashierShift(shiftC, { countedCash: 80, note: 'x', managerPin: 'pw-admin-1' }, admin1),
-      (err: unknown) => codeOf(err) === 'SHIFT_SECOND_APPROVAL_REQUIRED',
-      'a 20.000 variance over the default 0.001 cap with no approver must throw',
+      (err: unknown) => codeOf(err) === 'SHIFT_SECOND_APPROVAL_NOTE_REQUIRED',
+      'a solo admin over the default 0.001 cap with a <10-char note and no approver must still throw — the override needs a recorded reason',
     );
     await assert.rejects(
       drawer.closeCashierShift(shiftC, { countedCash: 80, note: 'فرق كبير في الدرج يستدعي المراجعة', managerPin: 'pw-admin-1', approverSecret: 'pw-admin-1' }, admin1),
