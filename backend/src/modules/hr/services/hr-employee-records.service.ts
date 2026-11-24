@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
-import { paginateRows } from '../../../common/utils/pagination';
+import { boundedPage } from '../../../common/utils/bounded-page';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -367,6 +367,39 @@ export class HrEmployeeRecordsService {
     const search = clean(query.search).toLowerCase();
     const employeeId = toId(query.employeeId);
     const status = clean(query.status).toLowerCase();
+
+    // INV-HR-ASSETS-LEAVE-SQL-PAGINATION: the filters (employee / status /
+    // search) and the status-count summary move to SQL with exact JS
+    // semantics — the status filter matches the RAW trimmed stored value
+    // against the LOWERCASED query, the search is a case-insensitive
+    // substring over the same eight fields, and the summary stays exact
+    // over the FULL filtered set, never page-scoped.
+    const employeeFilter = employeeId ? sql<boolean>`e.id = ${employeeId}` : sql<boolean>`1=1`;
+    const statusFilter = status ? sql<boolean>`btrim(a.status) = ${status}` : sql<boolean>`1=1`;
+    const searchFilter = search
+      ? sql<boolean>`strpos(lower(btrim(COALESCE(e.employee_no, ''))), ${search}) > 0 OR strpos(lower(btrim(e.display_name)), ${search}) > 0 OR strpos(lower(btrim(COALESCE(d.name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(j.name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(a.asset_type, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(a.asset_name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(a.asset_code, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(a.serial_no, ''))), ${search}) > 0`
+      : sql<boolean>`1=1`;
+    const totals = await sql<{ total: string; assigned: string; returned: string; lost: string; damaged: string }>`
+      SELECT COUNT(*)::text AS total,
+        COUNT(*) FILTER (WHERE btrim(a.status) = 'assigned')::text AS assigned,
+        COUNT(*) FILTER (WHERE btrim(a.status) = 'returned')::text AS returned,
+        COUNT(*) FILTER (WHERE btrim(a.status) = 'lost')::text AS lost,
+        COUNT(*) FILTER (WHERE btrim(a.status) = 'damaged')::text AS damaged
+      FROM hr_employee_assets a
+      JOIN hr_employees e ON e.id = a.employee_id AND e.tenant_id = a.tenant_id
+      LEFT JOIN hr_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id AND d.tenant_id = a.tenant_id
+      LEFT JOIN hr_job_titles j ON j.id = e.job_title_id AND j.tenant_id = e.tenant_id AND j.tenant_id = a.tenant_id
+      WHERE a.tenant_id = ${tenantId}
+        AND ${employeeFilter} AND ${statusFilter} AND ${searchFilter}
+    `.execute(this.db);
+    const totalItems = Number(totals.rows[0]?.total || 0);
+    // paginateRows semantics preserved: defaultSize 25, page clamped
+    // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
+    // The cap is now 200 (boundedPage), not 100.
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 25);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
     const result = await sql<Record<string, unknown>>`
       SELECT
         a.*,
@@ -382,10 +415,12 @@ export class HrEmployeeRecordsService {
       LEFT JOIN hr_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id AND d.tenant_id = a.tenant_id
       LEFT JOIN hr_job_titles j ON j.id = e.job_title_id AND j.tenant_id = e.tenant_id AND j.tenant_id = a.tenant_id
       WHERE a.tenant_id = ${tenantId}
+        AND ${employeeFilter} AND ${statusFilter} AND ${searchFilter}
       ORDER BY a.created_at DESC, a.id DESC
+      LIMIT ${pageSize} OFFSET ${offset}
     `.execute(this.db);
 
-    let rows = result.rows.map((row) => ({
+    const rows = result.rows.map((row) => ({
       id: String(row.id),
       employeeId: String(row.employee_id),
       employeeNo: clean(row.employee_no),
@@ -404,23 +439,15 @@ export class HrEmployeeRecordsService {
       createdAt: clean(row.created_at_text),
     }));
 
-    if (employeeId) rows = rows.filter((row) => row.employeeId === String(employeeId));
-    if (status) rows = rows.filter((row) => row.status === status);
-    if (search) {
-      rows = rows.filter((row) => [row.employeeNo, row.employeeName, row.departmentName, row.jobTitleName, row.assetType, row.assetName, row.assetCode, row.serialNo].some((value) => value.toLowerCase().includes(search)));
-    }
+    const summary = {
+      totalItems,
+      assignedCount: Number(totals.rows[0]?.assigned || 0),
+      returnedCount: Number(totals.rows[0]?.returned || 0),
+      lostCount: Number(totals.rows[0]?.lost || 0),
+      damagedCount: Number(totals.rows[0]?.damaged || 0),
+    };
 
-    const summary = rows.reduce((acc, row) => {
-      acc.totalItems += 1;
-      if (row.status === 'assigned') acc.assignedCount += 1;
-      if (row.status === 'returned') acc.returnedCount += 1;
-      if (row.status === 'lost') acc.lostCount += 1;
-      if (row.status === 'damaged') acc.damagedCount += 1;
-      return acc;
-    }, { totalItems: 0, assignedCount: 0, returnedCount: 0, lostCount: 0, damagedCount: 0 });
-
-    const paged = paginateRows(rows, query, { defaultSize: 25 });
-    return { assets: paged.rows, pagination: paged.pagination, summary };
+    return { assets: rows, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary };
   }
 
   async upsertEmployeeAsset(id: number | null, payload: UpsertEmployeeAssetDto, auth: AuthContext): Promise<Record<string, unknown>> {

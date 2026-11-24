@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Kysely, sql, type Transaction } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
-import { paginateRows } from '../../../common/utils/pagination';
+import { boundedPage } from '../../../common/utils/bounded-page';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -63,8 +63,15 @@ export class HrLeaveService {
   async listMasterData(kind: MasterKind, query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
     const config = masterConfig[kind];
-    const result = kind === 'positions'
-      ? await sql<Record<string, unknown>>`
+    const search = clean(query.search).toLowerCase();
+    // INV-HR-ASSETS-LEAVE-SQL-PAGINATION: the search moves to SQL with
+    // exact JS semantics (case-insensitive substring over name / code /
+    // description / departmentName / jobTitleName — the last two are
+    // always '' for non-positions rows, so only the positions branch
+    // searches them). The page and the COUNT read the same base query;
+    // internal callers (upsert/deactivate) still see page 1 of 50.
+    const base = kind === 'positions'
+      ? sql<Record<string, unknown>>`
           SELECT m.*, d.name AS department_name, j.name AS job_title_name, b.name AS branch_name, l.name AS location_name
           FROM hr_positions m
           LEFT JOIN hr_departments d ON d.id = m.department_id AND d.tenant_id = m.tenant_id
@@ -72,16 +79,31 @@ export class HrLeaveService {
           LEFT JOIN branches b ON b.id = m.branch_id AND b.tenant_id = m.tenant_id
           LEFT JOIN stock_locations l ON l.id = m.location_id AND l.tenant_id = m.tenant_id
           WHERE ${this.tenantPredicate(auth, 'm')}
-          ORDER BY m.id DESC
-        `.execute(this.db)
-      : await sql<Record<string, unknown>>`
+            AND (${search} = '' OR strpos(lower(btrim(COALESCE(m.name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(m.code, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(m.description, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(d.name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(j.name, ''))), ${search}) > 0)
+        `
+      : sql<Record<string, unknown>>`
           SELECT m.*
           FROM ${sql.table(config.table)} m
           WHERE ${this.tenantPredicate(auth, 'm')}
-          ORDER BY m.id DESC
-        `.execute(this.db);
-    const search = clean(query.search).toLowerCase();
-    let rows = result.rows.map((row) => ({
+            AND (${search} = '' OR strpos(lower(btrim(COALESCE(m.name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(m.code, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(m.description, ''))), ${search}) > 0)
+        `;
+    const totals = await sql<{ total: string }>`
+      SELECT COUNT(*)::text AS total FROM (${base}) s
+    `.execute(this.db);
+    const totalItems = Number(totals.rows[0]?.total || 0);
+    // paginateRows semantics preserved: defaultSize 50, page clamped
+    // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
+    // The cap is now 200 (boundedPage), not 100.
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 50);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
+    const result = await sql<Record<string, unknown>>`
+      SELECT * FROM (${base}) s
+      ORDER BY s.id DESC
+      LIMIT ${pageSize} OFFSET ${offset}
+    `.execute(this.db);
+    const rows = result.rows.map((row) => ({
       id: String(row.id),
       loanId: row.reference_id ? String(row.reference_id) : '',
       referenceId: row.reference_id ? String(row.reference_id) : '',
@@ -98,11 +120,7 @@ export class HrLeaveService {
       locationName: clean(row.location_name),
       isActive: row.is_active !== false,
     }));
-    if (search) {
-      rows = rows.filter((row) => [row.name, row.code, row.description, row.departmentName, row.jobTitleName].some((value) => value.toLowerCase().includes(search)));
-    }
-    const paged = paginateRows(rows, query, { defaultSize: 50 });
-    return { rows: paged.rows, pagination: paged.pagination, summary: { totalItems: rows.length } };
+    return { rows, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary: { totalItems } };
   }
 
   async upsertMasterData(kind: MasterKind, id: number | null, payload: UpsertHrMasterDataDto, auth: AuthContext): Promise<Record<string, unknown>> {
@@ -163,26 +181,40 @@ export class HrLeaveService {
 
   async listHolidays(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
+    const search = clean(query.search).toLowerCase();
+    // INV-HR-ASSETS-LEAVE-SQL-PAGINATION: the name search moves to SQL;
+    // the ORDER BY gains an id DESC tiebreaker — the old single-query
+    // order for same-start_date rows was unspecified, and paged queries
+    // need the determinism.
+    const totals = await sql<{ total: string }>`
+      SELECT COUNT(*)::text AS total FROM hr_holidays
+      WHERE ${this.tenantPredicate(auth)}
+        AND (${search} = '' OR strpos(lower(btrim(name)), ${search}) > 0)
+    `.execute(this.db);
+    const totalItems = Number(totals.rows[0]?.total || 0);
+    // paginateRows semantics preserved: defaultSize 50, page clamped
+    // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
+    // The cap is now 200 (boundedPage), not 100.
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 50);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
     const result = await sql<Record<string, unknown>>`
       SELECT * FROM hr_holidays
       WHERE ${this.tenantPredicate(auth)}
-      ORDER BY start_date DESC
+        AND (${search} = '' OR strpos(lower(btrim(name)), ${search}) > 0)
+      ORDER BY start_date DESC, id DESC
+      LIMIT ${pageSize} OFFSET ${offset}
     `.execute(this.db);
-    
-    let rows = result.rows.map((row) => ({
+
+    const rows = result.rows.map((row) => ({
       id: String(row.id),
       name: clean(row.name),
       startDate: row.start_date ? new Date(row.start_date as string).toISOString().split('T')[0] : '',
       endDate: row.end_date ? new Date(row.end_date as string).toISOString().split('T')[0] : '',
     }));
 
-    const search = clean(query.search).toLowerCase();
-    if (search) {
-      rows = rows.filter((row) => row.name.toLowerCase().includes(search));
-    }
-
-    const paged = paginateRows(rows, query, { defaultSize: 50 });
-    return { rows: paged.rows, pagination: paged.pagination, summary: { totalItems: rows.length } };
+    return { rows, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary: { totalItems } };
   }
 
   async upsertHoliday(id: number | null, payload: any, auth: AuthContext): Promise<Record<string, unknown>> {
@@ -211,14 +243,35 @@ export class HrLeaveService {
 
   async listLeaveTypes(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
+    const search = clean(query.search).toLowerCase();
+    // INV-HR-ASSETS-LEAVE-SQL-PAGINATION: the search moves to SQL and
+    // the activeCount stays exact over the FULL filtered set — a NULL
+    // is_active counts as active (IS DISTINCT FROM FALSE, the SQL form
+    // of the JS `!== false`).
+    const totals = await sql<{ total: string; active: string }>`
+      SELECT COUNT(*)::text AS total,
+        COUNT(*) FILTER (WHERE is_active IS DISTINCT FROM FALSE)::text AS active
+      FROM hr_leave_types
+      WHERE tenant_id = ${auth.tenantId}
+        AND (${search} = '' OR strpos(lower(btrim(COALESCE(name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(code, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(description, ''))), ${search}) > 0)
+    `.execute(this.db);
+    const totalItems = Number(totals.rows[0]?.total || 0);
+    // paginateRows semantics preserved: defaultSize 50, page clamped
+    // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
+    // The cap is now 200 (boundedPage), not 100.
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 50);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
     const result = await sql<Record<string, unknown>>`
       SELECT *
       FROM hr_leave_types
       WHERE tenant_id = ${auth.tenantId}
+        AND (${search} = '' OR strpos(lower(btrim(COALESCE(name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(code, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(description, ''))), ${search}) > 0)
       ORDER BY is_active DESC, name ASC, id ASC
+      LIMIT ${pageSize} OFFSET ${offset}
     `.execute(this.db);
-    const search = clean(query.search).toLowerCase();
-    let rows = result.rows.map((row) => ({
+    const rows = result.rows.map((row) => ({
       id: String(row.id),
       name: clean(row.name),
       code: clean(row.code),
@@ -229,16 +282,12 @@ export class HrLeaveService {
       deductsFromBalance: row.deducts_from_balance === true,
       isActive: row.is_active !== false,
     }));
-    if (search) {
-      rows = rows.filter((row) => [row.name, row.code, row.description].some((value) => value.toLowerCase().includes(search)));
-    }
-    const paged = paginateRows(rows, query, { defaultSize: 50 });
     return {
-      rows: paged.rows,
-      pagination: paged.pagination,
+      rows,
+      pagination: { page: safePage, pageSize, totalItems, totalPages },
       summary: {
-        totalItems: rows.length,
-        activeCount: rows.filter((row) => row.isActive).length,
+        totalItems,
+        activeCount: Number(totals.rows[0]?.active || 0),
       },
     };
   }
@@ -275,6 +324,42 @@ export class HrLeaveService {
     const employeeId = toId(query.employeeId);
     const from = normalizeDateOnly(query.from);
     const to = normalizeDateOnly(query.to);
+
+    // INV-HR-ASSETS-LEAVE-SQL-PAGINATION: the filters (employee / status /
+    // from / to / search) and the status-count summary move to SQL with
+    // exact JS semantics — end_date >= from, start_date <= to (both
+    // columns are NOT NULL in production), the status filter matches the
+    // RAW trimmed stored value against the LOWERCASED query, and the
+    // summary stays exact over the FULL filtered set, never page-scoped.
+    const employeeFilter = employeeId ? sql<boolean>`r.employee_id = ${employeeId}` : sql<boolean>`1=1`;
+    const statusFilter = status ? sql<boolean>`btrim(r.status) = ${status}` : sql<boolean>`1=1`;
+    const fromFilter = from ? sql<boolean>`r.end_date >= ${from}::date` : sql<boolean>`1=1`;
+    const toFilter = to ? sql<boolean>`r.start_date <= ${to}::date` : sql<boolean>`1=1`;
+    const searchFilter = search
+      ? sql<boolean>`strpos(lower(btrim(COALESCE(e.employee_no, ''))), ${search}) > 0 OR strpos(lower(btrim(e.display_name)), ${search}) > 0 OR strpos(lower(btrim(COALESCE(d.name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(j.name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(t.name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(r.leave_type, ''))), ${search}) > 0`
+      : sql<boolean>`1=1`;
+    const totals = await sql<{ total: string; pending: string; approved: string; rejected: string; cancelled: string }>`
+      SELECT COUNT(*)::text AS total,
+        COUNT(*) FILTER (WHERE btrim(r.status) = 'pending')::text AS pending,
+        COUNT(*) FILTER (WHERE btrim(r.status) = 'approved')::text AS approved,
+        COUNT(*) FILTER (WHERE btrim(r.status) = 'rejected')::text AS rejected,
+        COUNT(*) FILTER (WHERE btrim(r.status) = 'cancelled')::text AS cancelled
+      FROM hr_leave_requests r
+      JOIN hr_employees e ON e.id = r.employee_id AND e.tenant_id = r.tenant_id
+      LEFT JOIN hr_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id AND d.tenant_id = r.tenant_id
+      LEFT JOIN hr_job_titles j ON j.id = e.job_title_id AND j.tenant_id = e.tenant_id AND j.tenant_id = r.tenant_id
+      LEFT JOIN hr_leave_types t ON t.id = r.leave_type_id AND t.tenant_id = r.tenant_id
+      WHERE r.tenant_id = ${auth.tenantId}
+        AND ${employeeFilter} AND ${statusFilter} AND ${fromFilter} AND ${toFilter} AND ${searchFilter}
+    `.execute(this.db);
+    const totalItems = Number(totals.rows[0]?.total || 0);
+    // paginateRows semantics preserved: defaultSize 25, page clamped
+    // to [1, totalPages], totalPages = max(1, ceil(total / pageSize)).
+    // The cap is now 200 (boundedPage), not 100.
+    const { page, pageSize } = boundedPage(query.page, query.pageSize, 200, 25);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
     const result = await sql<Record<string, unknown>>`
       SELECT
         r.*,
@@ -293,10 +378,12 @@ export class HrLeaveService {
       LEFT JOIN hr_job_titles j ON j.id = e.job_title_id AND j.tenant_id = e.tenant_id AND j.tenant_id = r.tenant_id
       LEFT JOIN hr_leave_types t ON t.id = r.leave_type_id AND t.tenant_id = r.tenant_id
       WHERE r.tenant_id = ${auth.tenantId}
+        AND ${employeeFilter} AND ${statusFilter} AND ${fromFilter} AND ${toFilter} AND ${searchFilter}
       ORDER BY r.created_at DESC, r.id DESC
+      LIMIT ${pageSize} OFFSET ${offset}
     `.execute(this.db);
 
-    let rows = result.rows.map((row) => ({
+    const rows = result.rows.map((row) => ({
       id: String(row.id),
       employeeId: String(row.employee_id),
       employeeNo: clean(row.employee_no),
@@ -318,25 +405,15 @@ export class HrLeaveService {
       createdAt: clean(row.created_at_text),
     }));
 
-    if (employeeId) rows = rows.filter((row) => row.employeeId === String(employeeId));
-    if (status) rows = rows.filter((row) => row.status === status);
-    if (from) rows = rows.filter((row) => row.endDate >= from);
-    if (to) rows = rows.filter((row) => row.startDate <= to);
-    if (search) {
-      rows = rows.filter((row) => [row.employeeNo, row.employeeName, row.departmentName, row.jobTitleName, row.leaveTypeName, row.leaveType].some((value) => value.toLowerCase().includes(search)));
-    }
+    const summary = {
+      totalItems,
+      pendingCount: Number(totals.rows[0]?.pending || 0),
+      approvedCount: Number(totals.rows[0]?.approved || 0),
+      rejectedCount: Number(totals.rows[0]?.rejected || 0),
+      cancelledCount: Number(totals.rows[0]?.cancelled || 0),
+    };
 
-    const summary = rows.reduce((acc, row) => {
-      acc.totalItems += 1;
-      if (row.status === 'pending') acc.pendingCount += 1;
-      if (row.status === 'approved') acc.approvedCount += 1;
-      if (row.status === 'rejected') acc.rejectedCount += 1;
-      if (row.status === 'cancelled') acc.cancelledCount += 1;
-      return acc;
-    }, { totalItems: 0, pendingCount: 0, approvedCount: 0, rejectedCount: 0, cancelledCount: 0 });
-
-    const paged = paginateRows(rows, query, { defaultSize: 25 });
-    return { requests: paged.rows, pagination: paged.pagination, summary };
+    return { requests: rows, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary };
   }
 
   /**
