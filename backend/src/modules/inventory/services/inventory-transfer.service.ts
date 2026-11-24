@@ -20,7 +20,7 @@ import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { assertUntrackedStockMutation } from '../helpers/inventory-tracked-stock.helper';
 import { syncImportLotsOnLocationTransfer, syncImportLotsOnStockDeduction } from '../../import-sales/helpers/import-lot-allocation.helper';
-import { authorizeManagerSecret } from '../../../common/utils/manager-approval';
+import { authorizeManagerSecret, isSoloAdminOverride } from '../../../common/utils/manager-approval';
 import { dispatchTrackedStock, receiveTrackedStock, cancelTrackedStock, type TransferReceiptTraceRequest } from '../helpers/stock-transfer-trace.helper';
 import { moveDirectTrackedStock } from '../helpers/direct-tracked-stock-move.helper';
 
@@ -457,22 +457,22 @@ export class InventoryTransferService {
       // resolve to an admin user id different from the receiver: a
       // shared manager PIN identifies no approver, so it cannot
       // satisfy segregation of duties. Full receipts are unchanged.
+      // INV-SOLO-ADMIN-TRANSFER-SHORTAGE-OVERRIDE: a solo admin/super_admin receiver may accept alone with no secret — see ARCHITECTURE_INVARIANTS.md.
       const varianceReason = String(receiptPayload?.varianceReason || '').trim();
       const hasShortfall = receiptPlan.some((row) => row.shortfall > 0.0001);
+      let soloOverride = false;
       if (hasShortfall) {
         if (varianceReason.length < 8) {
           throw new AppError('A transfer shortfall needs a written variance reason of at least 8 characters', 'TRANSFER_SHORTAGE_REASON_REQUIRED', 400);
         }
         const approvalSecret = String(receiptPayload?.approvalSecret || '').trim();
         if (!approvalSecret) {
-          throw new AppError('A transfer shortfall needs approval by a different user than the receiver', 'TRANSFER_SHORTAGE_APPROVAL_REQUIRED', 400);
-        }
-        const approval = await authorizeManagerSecret(trx, auth, approvalSecret);
-        if (approval.mode !== 'account' || !approval.authorizedById) {
-          throw new AppError('A transfer shortfall must be approved with the password of a different admin user; the shared manager PIN does not identify who approved', 'TRANSFER_SHORTAGE_APPROVAL_REQUIRED', 400);
-        }
-        if (Number(approval.authorizedById) === Number(auth.userId)) {
-          throw new AppError('The receiver cannot approve their own transfer shortfall', 'TRANSFER_SHORTAGE_SELF_APPROVAL', 403);
+          soloOverride = await isSoloAdminOverride(trx, scope.tenantId, auth);
+          if (!soloOverride) throw new AppError('A transfer shortfall needs approval by a different user than the receiver', 'TRANSFER_SHORTAGE_APPROVAL_REQUIRED', 400);
+        } else {
+          const approval = await authorizeManagerSecret(trx, auth, approvalSecret);
+          if (approval.mode !== 'account' || !approval.authorizedById) throw new AppError('A transfer shortfall must be approved with the password of a different admin user; the shared manager PIN does not identify who approved', 'TRANSFER_SHORTAGE_APPROVAL_REQUIRED', 400);
+          if (Number(approval.authorizedById) === Number(auth.userId)) throw new AppError('The receiver cannot approve their own transfer shortfall', 'TRANSFER_SHORTAGE_SELF_APPROVAL', 403);
         }
       }
 
@@ -567,7 +567,7 @@ export class InventoryTransferService {
               before_qty: shrinkage.scopeBefore,
               after_qty: shrinkage.scopeAfter,
               reason: 'transit_shrinkage',
-              note: `فاقد نقل للتحويل TR-${transferId}: أُرسل ${dispatched} واستُلم ${received}`,
+              note: `فاقد نقل للتحويل TR-${transferId}: أُرسل ${dispatched} واستُلم ${received}` + (soloOverride ? ` — اعتماد منفرد بقرار إداري — المستلم ${auth.username} قبل الفاقد — لا يوجد مدير ثانٍ متاح` : ''),
               reference_type: 'transfer',
               reference_id: transferId,
               created_by: auth.userId,
@@ -608,7 +608,7 @@ export class InventoryTransferService {
       if (Number(effectiveToLocationId) !== Number(transfer.from_location_id)) headerUpdate.to_location_id = effectiveToLocationId;
       await trx.updateTable('stock_transfers').set(headerUpdate as any).where('id', '=', transferId).where(this.tenantPredicate(auth)).execute();
 
-      await this.audit.logWithExecutor(trx, 'استلام تحويل مخزون', `تم استلام التحويل TR-${transferId}`, auth);
+      await this.audit.logWithExecutor(trx, 'استلام تحويل مخزون', `تم استلام التحويل TR-${transferId}` + (soloOverride ? ` — اعتماد فاقد منفرد بقرار إداري — استلم ${auth.username} التحويل بفاقد ${Number(receiptPlan.reduce((sum, row) => sum + (row.shortfall > 0.0001 ? row.shortfall : 0), 0).toFixed(3))} — ${varianceReason} — لا يوجد مدير ثانٍ متاح` : ''), auth);
 
       const responsePayload = { ok: true, stockTransfers: (await this.listStockTransfers({}, auth, trx)).stockTransfers };
 
