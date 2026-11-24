@@ -10,6 +10,7 @@ import { type Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { calculateFreightAudit, validateMakerCheckerOverride } from './engines/freight-audit.engine';
+import { isSoloAdminOverride } from '../../common/utils/manager-approval';
 
 /**
  * MaritimeFreightCarrierInvoicesService — slice S19 of the
@@ -456,8 +457,59 @@ export class MaritimeFreightCarrierInvoicesService {
         reason: dto.reason,
       });
 
+      // INV-SOLO-ADMIN-CARRIER-INVOICE-OVERRIDE: a shop with only
+      // ONE admin could never approve an overcharge override on an
+      // invoice they recorded — the engine's maker-checker ban
+      // refused the creator outright, so the invoice sat in
+      // `overcharge` forever with no second approver to turn to.
+      // When the actor IS the invoice creator AND no other active
+      // admin/super_admin exists in the tenant, the creator may
+      // approve alone — but never silently: the override is stamped
+      // into the invoice row's `override_reason` (the row's
+      // free-text field for the override decision) with creator ==
+      // approver, the overcharge amount and that no second eligible
+      // approver was available; the supplied reason is preserved in
+      // front of the stamp, and override_approved_by /
+      // override_approved_at already record who approved and when.
+      // The shared isSoloAdminOverride helper (created by P5, reused
+      // by P6–P8; no fourth copy) is consulted lazily, only when the
+      // engine validation failed on the self-approval leg, so an
+      // approval by a different approver costs no extra query and
+      // behaves byte-identically. The helper is NOT extended with a
+      // roles parameter: the engine's third eligible role,
+      // finance_manager, is not a storable users role
+      // (users_role_valid CHECK + UserTable.role union + session
+      // role derivation all agree), so no second finance_manager
+      // approver and no finance_manager creator can exist — the
+      // helper already answers exactly the right question, and a
+      // finance_manager creator stays fail-closed on the old ban.
+      // The identity comparison is unchanged
+      // (`Number(invoice.created_by)`, as the service already passes
+      // it to the engine, and the engine itself compares with
+      // String()): it already coerces, so unlike P7's bare `===`
+      // the ban DOES fire against live Postgres (pg returns bigint
+      // as string, no setTypeParser anywhere in src — Number("1")
+      // === 1, String(1) === String("1")), and the override is
+      // reached exactly when the ban would have fired. The reason
+      // leg still applies on the solo path with the engine's exact
+      // message — a solo override without a reason is still refused.
+      // When a second active admin exists, the old ban stands; a
+      // non-admin creator is still refused. The audit_status gate
+      // above still runs first.
+      let soloOverride = false;
       if (!validation.valid) {
-        throw new BadRequestException(validation.error);
+        const createdBy = invoice.created_by ? Number(invoice.created_by) : null;
+        if (createdBy !== null && Number(auth.userId) === createdBy) {
+          soloOverride = await isSoloAdminOverride(trx, tenantId, auth);
+          if (soloOverride && !(dto.reason || '').trim()) {
+            throw new BadRequestException(
+              'يجب تقديم مبرر مالي لاعتماد التجاوز يوضح سبب قبول الزيادة عن التعرفة.',
+            );
+          }
+        }
+        if (!soloOverride) {
+          throw new BadRequestException(validation.error);
+        }
       }
 
       const job = await this.getJobById(auth, String(invoice.job_id));
@@ -484,13 +536,14 @@ export class MaritimeFreightCarrierInvoicesService {
         });
       }
 
+      const soloStamp = `تجاوز منفرد بقرار إداري — من سجل الفاتورة ${auth.userId} اعتمد التجاوز بنفسه — الزيادة ${Number(invoice.variance_amount)} — لا يوجد مدقق ثانٍ مؤهل متاح`;
       const [row] = await trx
         .updateTable('maritime_carrier_invoices')
         .set({
           audit_status: 'approved_override',
           override_approved_by: auth.userId ? Number(auth.userId) : null,
           override_approved_at: sql`NOW()`,
-          override_reason: dto.reason.trim(),
+          override_reason: soloOverride ? `${dto.reason.trim()} — ${soloStamp}` : dto.reason.trim(),
           journal_entry_id: entryId,
           updated_at: sql`NOW()`,
         })
