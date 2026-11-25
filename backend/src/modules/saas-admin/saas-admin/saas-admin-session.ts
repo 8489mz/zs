@@ -2,7 +2,7 @@ import type { Kysely, Selectable } from '../../../database/kysely';
 import type { Database } from '../../../database/database.types';
 import { type AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import type { ConfigService } from '@nestjs/config';
-import type { SessionService } from '../../../core/auth/services/session.service';
+import { SESSION_TTL_MS, type SessionService } from '../../../core/auth/services/session.service';
 import type { SettingsDemoDataService } from '../../settings/services/settings-demo-data.service';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -110,7 +110,7 @@ export class SaasAdminSession {
     const owner = await this.getOwnerUserForTenant(tenant.id);
     const sessionId = randomUUID();
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+    const expiresAt = new Date(now.getTime() + SESSION_TTL_MS); // 7 days — same TTL as regular sessions (S1)
 
     await this.db
       .insertInto('sessions')
@@ -174,7 +174,10 @@ export class SaasAdminSession {
       await this.db.deleteFrom('sessions').where('id', '=', currentAuth.sessionId).execute();
     }
 
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    // Return the original session's real stored expiry (as resolved — and
+    // possibly renewed — by resolveAuthContext, S2), never a freshly
+    // computed 30 days: this value becomes the cookie expiry.
+    const expiresAt = originalAuth.expiresAt ?? new Date(Date.now() + SESSION_TTL_MS);
 
     await this.audit.log(
       'إنهاء تصفح نسخة',
