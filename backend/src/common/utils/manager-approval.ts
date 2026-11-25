@@ -153,6 +153,33 @@ async function migrateManagerPinToHash(queryable: DbOrTx, tenantId: string, key:
 }
 
 /**
+ * INV-BROKER-MAKER-CHECKER-RESTORED: the maker-checker tenant-size
+ * leg for broker-expense verification ONLY — true when ANOTHER active
+ * admin/super_admin exists in the tenant. This is NOT the
+ * second-manager rule (INV-SECOND-MANAGER-PASSWORD-REMOVED): no
+ * second-manager password or approval is required by it; it only
+ * decides whether the settler may verify their own expense
+ * (maker-checker: creator != verifier). Exact semantics of the
+ * tenant-size leg the original isSoloAdminOverride carried before
+ * the admin-mod (role in admin/super_admin, is_active, same tenant,
+ * id != actor). An inactive second admin does not count, and an
+ * admin in another tenant does not count. Used by exactly one site:
+ * verifyBrokerExpense in import-treasury.service.ts.
+ */
+export async function hasOtherActiveAdmin(queryable: DbOrTx, tenantId: string, userId: number): Promise<boolean> {
+  const secondAdmin = await queryable
+    .selectFrom('users')
+    .select('id')
+    .where('tenant_id', '=', tenantId)
+    .where('role', 'in', ['admin', 'super_admin'])
+    .where('is_active', '=', true)
+    .where('id', '!=', Number(userId))
+    .limit(1)
+    .executeTakeFirst();
+  return !!secondAdmin;
+}
+
+/**
  * INV-SECOND-MANAGER-PASSWORD-REMOVED: true when the actor is an
  * admin/super_admin — no second-manager approval is ever required,
  * so there is no tenant-size check: whether or not another active

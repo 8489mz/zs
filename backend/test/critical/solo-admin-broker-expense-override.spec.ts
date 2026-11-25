@@ -1,9 +1,18 @@
 /*
  * S6 (INV-SOLO-ADMIN-BROKER-EXPENSE-OVERRIDE) — an admin who
  * settled (liquidated) a broker expense may verify it alone, with a
- * logged override. No second-manager approval may block any admin,
- * ever (INV-SECOND-MANAGER-PASSWORD-REMOVED) — the override applies whether
- * or not a second admin exists in the tenant.
+ * logged override, ONLY when no other active admin/super_admin
+ * exists in the tenant. When a second active admin exists, the
+ * maker-checker ban stands: the settler cannot verify their own
+ * expense — a different admin verifies it (no second-manager
+ * PASSWORD is ever required; verification by a different admin is
+ * never blocked). Maker-checker (creator != verifier) is a money
+ * control, distinct from the second-manager rule cancelled by
+ * INV-SECOND-MANAGER-PASSWORD-REMOVED; the solo-admin override is
+ * restored to its original tenant-size condition by
+ * INV-BROKER-MAKER-CHECKER-RESTORED after the admin-mod widened
+ * the shared helper to role-only and let the settler self-verify
+ * even with a second admin present (ci-full 340/341).
  *
  * THE DEFECT (S6): verifyBrokerExpense in
  * import-treasury.service.ts refused the settler outright
@@ -15,23 +24,27 @@
  * second admin to verify it.
  *
  * THE FIX: when verifier === settler (expense.created_by), the
- * verification is allowed only through the shared exported
- * isSoloAdminOverride helper (manager-approval.ts, created by P5,
- * reused by P6–P7 — no third copy): true only when the verifier is
- * an admin/super_admin AND no OTHER active admin/super_admin exists
+ * verification is allowed only through TWO shared helpers in
+ * manager-approval.ts: isSoloAdminOverride (created by P5, reused
+ * by P6–P7 — no third copy; role-only since
+ * INV-SECOND-MANAGER-PASSWORD-REMOVED) AND the maker-checker
+ * tenant-size leg hasOtherActiveAdmin (new, same file — true when
+ * another ACTIVE admin/super_admin exists in the same tenant).
+ * The solo override applies only when the verifier is an
+ * admin/super_admin AND no other active admin/super_admin exists
  * in the tenant. The verifier's role is read from the `users` row in
  * the same transaction (the verify path carries only userId, no auth
  * context), and the check runs lazily — only when a self-verification
  * would otherwise be refused — so a verification by a different admin
  * costs no extra query and behaves byte-identically. The override is
  * never silent: the expense row's `notes` TEXT column carries the
- * stamp naming settler == verifier and that no second admin was
- * available (verified_by / verified_at already record who verified
- * and when); any pre-existing notes are preserved in front of the
- * stamp. The approved-token requirement is untouched — the solo
- * override never bypasses the bound single-use approval token, and
- * the gate (verifyAndConsumeApprovalRequest) is unchanged: it checks
- * only token status / action / reference / payload, never identity.
+ * stamp naming settler == verifier (no second-manager reference —
+ * INV-SECOND-MANAGER-PASSWORD-REMOVED); any pre-existing notes are
+ * preserved in front of the stamp. The approved-token requirement
+ * is untouched — the solo override never bypasses the bound
+ * single-use approval token, and the gate
+ * (verifyAndConsumeApprovalRequest) is unchanged: it checks only
+ * token status / action / reference / payload, never identity.
  *
  * DECISIONS PINNED HERE: (1) the comparison stays byte-identical
  * (`Number(expense.created_by) === userId`) — no hardening smuggled
@@ -45,15 +58,22 @@
  * expense row's free-text field, and verified_by/verified_at carry
  * the verifier identity; (3) the is_verified check still runs before
  * the self-check, so re-verifying an already-verified own expense
- * still conflicts; (4) the second-admin condition is removed
- * entirely (INV-SECOND-MANAGER-PASSWORD-REMOVED): an active, inactive or
- * other-tenant second admin changes nothing — the only leg that
- * still refuses is the role leg (a non-admin settler); (5) a non-admin
+ * still conflicts; (4) the tenant-size condition is RESTORED for
+ * this flow only (INV-BROKER-MAKER-CHECKER-RESTORED): an ACTIVE
+ * second admin in the same tenant refuses self-verification
+ * (maker-checker — a money control, not a second-manager
+ * password); an inactive second admin does not count, and a second
+ * admin in another tenant does not count; (5) a non-admin
  * settler is never a solo override; (6) a missing approval token is
  * still refused before any override logic runs.
  *
- * BASE-RED: at base, cases 1, 2, 6, 7 and 8 fail with the exact old
- * refusal; cases 3, 4, 5, 9, 10 and 11 already pass at base.
+ * BASE-RED (this package): at 061e0ce83 the admin-mod had made
+ * self-verification succeed with a second admin present, so case 3
+ * fails (allowed instead of refused) and
+ * import-broker-capitalisation.spec.ts Case 8 fails with 'Missing
+ * expected rejection: The liquidator must not verify their own
+ * expense' (ci-full 340/341 on 3b45aff2d); all other cases pass at
+ * base.
  *
  * Run: npx ts-node test/critical/solo-admin-broker-expense-override.spec.ts
  * (from backend/). One fresh in-memory database per case,
@@ -262,22 +282,24 @@ async function main(): Promise<void> {
     }
   });
 
-  // 3. Second active admin present -> self-verification now allowed, stamped.
-  await run('3 second admin present, self-verification now allowed and stamped', async () => {
+  // 3. Second active admin present -> self-verification still refused, byte-identical.
+  await run('3 second admin present, self-verification still refused', async () => {
     const { pg, db, service, expenseId } = await makeDb({ secondAdmin: 'active' });
     try {
       await insertToken(db, 'tok-1', expenseId);
-      const out = await service.verifyBrokerExpense(TENANT, 1, expenseId, { approvalRequestId: 'tok-1' });
-      assert.equal(out.is_verified, true, 'the expense must be verified');
-      assert.equal(Number(out.verified_by), 1, 'verified_by must be the settler');
-      assert.ok(out.verified_at, 'verified_at must be set');
-      assert.equal(Number(out.created_by), Number(out.verified_by), 'settler == verifier must be on the row');
-      const stamp = String(out.notes || '');
-      assert.ok(stamp.includes(STAMP_HEAD), 'the override stamp must be on the expense row');
-      assert.ok(stamp.includes('من سوّى المصروف 1'), 'the stamp must name the settler');
-      assert.ok(stamp.includes('تحقق منه بنفسه'), 'the stamp must record self-verification');
-      assert.ok(!stamp.includes('ثانٍ'), 'the stamp must carry no second-manager reference at all');
-      assert.equal(await tokenStatus(db, 'tok-1'), 'executed', 'the token is single-use and consumed');
+      await assert.rejects(
+        service.verifyBrokerExpense(TENANT, 1, expenseId, { approvalRequestId: 'tok-1' }),
+        (e: Error) => e.message === OLD_MSG,
+      );
+      const row = await expenseRow(db, expenseId);
+      assert.equal(row.is_verified, false, 'the expense must stay unverified');
+      assert.equal(row.verified_by, null);
+      assert.equal(row.notes, null, 'nothing must be logged on a refused verification');
+      assert.equal(
+        await tokenStatus(db, 'tok-1'),
+        'approved',
+        'the refused self-verification does not consume the token',
+      );
     } finally {
       await db.destroy();
     }
@@ -417,10 +439,11 @@ async function main(): Promise<void> {
     console.log('wiring: evidence spec in both critical lists (342 = 342, identical order), passed');
   }
 
-  // 13. Source pins: the override reuses the shared helper (no third
-  // copy), the old ban message is still present, and the identity
-  // comparison keeps its Number() coercion (the P7 bigint hazard does
-  // not apply here — see the header).
+  // 13. Source pins: the override reuses the shared helpers (role
+  // leg + maker-checker tenant-size leg), the old ban message is
+  // still present, and the identity comparison keeps its Number()
+  // coercion (the P7 bigint hazard does not apply here — see the
+  // header).
   {
     const serviceSource = readFileSync(
       resolve(__dirname, '../../src/modules/import-sales/services/import-treasury.service.ts'),
@@ -437,12 +460,20 @@ async function main(): Promise<void> {
     );
     assert.ok(serviceSource.includes('isSoloAdminOverride'), 'the service consults the shared solo-admin helper');
     assert.ok(
+      serviceSource.includes('hasOtherActiveAdmin'),
+      'the service consults the shared maker-checker tenant-size helper',
+    );
+    assert.ok(
       serviceSource.includes("from '../../../common/utils/manager-approval'"),
-      'the service imports the shared helper, it does not redefine it',
+      'the service imports the shared helpers, it does not redefine them',
     );
     assert.ok(
       helperSource.split('export async function isSoloAdminOverride').length - 1 === 1,
       'the shared helper is defined exactly once',
+    );
+    assert.ok(
+      helperSource.split('export async function hasOtherActiveAdmin').length - 1 === 1,
+      'the maker-checker helper is defined exactly once',
     );
     assert.ok(
       serviceSource.includes(OLD_MSG),
