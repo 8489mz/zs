@@ -82,10 +82,11 @@ export class ImportProjectsPartnersService {
     amount: number,
     movementDate: Date,
     requestedCashAccountId: string,
-    note: string
+    note: string,
   ): Promise<number> {
     const cashAccountId = await this.resolveTenantAccount(trx, tenantId, 'bank', Number(requestedCashAccountId));
-    const cashAccount = await trx.selectFrom('accounting_accounts')
+    const cashAccount = await trx
+      .selectFrom('accounting_accounts')
       .select(['id', 'account_id'])
       .where('tenant_id', '=', tenantId)
       .where('id', '=', cashAccountId)
@@ -94,21 +95,26 @@ export class ImportProjectsPartnersService {
     const equityAccountId = await this.resolveTenantAccount(trx, tenantId, 'equity');
     const cashIsDebit = type === 'DEPOSIT';
 
-    const posted = await trx.insertInto('treasury_transactions').values({
-      tenant_id: tenantId,
-      account_id: cashAccount.account_id,
-      txn_type: cashIsDebit ? 'partner_capital_deposit' : 'partner_capital_withdrawal',
-      amount: cashIsDebit ? amount : -amount,
-      note: `${cashIsDebit ? 'إيداع' : 'سحب'} رأس مال الشريك: ${partnerName}${note ? ' - ' + note : ''} (سجل ${partnerId})`,
-      reference_type: 'partner_capital',
-      reference_id: null,
-      return_document_id: null,
-      branch_id: null,
-      location_id: null,
-      created_by: userId,
-    }).returning('id').executeTakeFirstOrThrow();
+    const posted = await trx
+      .insertInto('treasury_transactions')
+      .values({
+        tenant_id: tenantId,
+        account_id: cashAccount.account_id,
+        txn_type: cashIsDebit ? 'partner_capital_deposit' : 'partner_capital_withdrawal',
+        amount: cashIsDebit ? amount : -amount,
+        note: `${cashIsDebit ? 'إيداع' : 'سحب'} رأس مال الشريك: ${partnerName}${note ? ' - ' + note : ''} (سجل ${partnerId})`,
+        reference_type: 'partner_capital',
+        reference_id: null,
+        return_document_id: null,
+        branch_id: null,
+        location_id: null,
+        created_by: userId,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
 
-    const postingService = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
+    const postingService =
+      this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
     await postingService.postDomainJournal(trx, {
       sourceType: 'import_partner_capital',
       sourceId: Number(posted.id),
@@ -156,7 +162,14 @@ export class ImportProjectsPartnersService {
       .execute();
   }
 
-  async createPartner(tenantId: string, userId: number, name: string, percentage: number, capitalAmount: number = 0, accountId?: string) {
+  async createPartner(
+    tenantId: string,
+    userId: number,
+    name: string,
+    percentage: number,
+    capitalAmount: number = 0,
+    accountId?: string,
+  ) {
     if (!name?.trim()) throw new BadRequestException('اسم الشريك مطلوب.');
     const cleanPercentage = Number(percentage);
     const cleanCapital = Number(capitalAmount);
@@ -175,25 +188,33 @@ export class ImportProjectsPartnersService {
     // import_project_partners, which enforces its own <= 100.001
     // ceiling per project. No global sum is enforced here.
     return await this.db.transaction().execute(async (trx) => {
-      const partner = await trx.insertInto('import_partners').values({
-        tenant_id: tenantId,
-        name: name.trim(),
-        profit_share_percentage: cleanPercentage,
-        capital_amount: cleanCapital,
-        withdrawn_profit: 0,
-      }).returningAll().executeTakeFirstOrThrow();
+      const partner = await trx
+        .insertInto('import_partners')
+        .values({
+          tenant_id: tenantId,
+          name: name.trim(),
+          profit_share_percentage: cleanPercentage,
+          capital_amount: cleanCapital,
+          withdrawn_profit: 0,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
 
       if (cleanCapital > 0) {
-        const ledger = await trx.insertInto('import_partner_ledger').values({
-          tenant_id: tenantId,
-          partner_id: partner.id,
-          type: 'DEPOSIT',
-          amount: cleanCapital,
-          transaction_date: new Date(),
-          note: 'إيداع رأس مال افتتاحي',
-          created_by: userId,
-          idempotency_key: null,
-        }).returning('id').executeTakeFirstOrThrow();
+        const ledger = await trx
+          .insertInto('import_partner_ledger')
+          .values({
+            tenant_id: tenantId,
+            partner_id: partner.id,
+            type: 'DEPOSIT',
+            amount: cleanCapital,
+            transaction_date: new Date(),
+            note: 'إيداع رأس مال افتتاحي',
+            created_by: userId,
+            idempotency_key: null,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
 
         await this.postPartnerCapitalMovement(
           trx,
@@ -205,7 +226,7 @@ export class ImportProjectsPartnersService {
           cleanCapital,
           new Date(),
           accountId!,
-          String(ledger.id)
+          String(ledger.id),
         );
       }
 
@@ -227,9 +248,9 @@ export class ImportProjectsPartnersService {
 
     return await this.db.transaction().execute(async (trx) => {
       if (percentage !== undefined) {
-        await trx.selectFrom('tenants').select('id')
-          .where('id', '=', tenantId).forUpdate().executeTakeFirstOrThrow();
-        const payout = await trx.selectFrom('import_partner_ledger')
+        await trx.selectFrom('tenants').select('id').where('id', '=', tenantId).forUpdate().executeTakeFirstOrThrow();
+        const payout = await trx
+          .selectFrom('import_partner_ledger')
           .select('id')
           .where('tenant_id', '=', tenantId)
           .where('partner_id', '=', id)
@@ -238,7 +259,6 @@ export class ImportProjectsPartnersService {
         if (payout) {
           throw new BadRequestException('لا يمكن تعديل نسبة شريك بعد توزيع أرباح فعلية دون نظام نسب تاريخية معتمد.');
         }
-
       }
 
       const updateData: any = {};
@@ -261,24 +281,35 @@ export class ImportProjectsPartnersService {
     return await this.db.transaction().execute(async (trx) => {
       // The ledger and project associations are ON DELETE CASCADE in the schema.
       // Relying on an FK violation would silently ERASE financial history.
-      const partner = await trx.selectFrom('import_partners').select('id')
-        .where('tenant_id', '=', tenantId).where('id', '=', id)
-        .forUpdate().executeTakeFirst();
+      const partner = await trx
+        .selectFrom('import_partners')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id)
+        .forUpdate()
+        .executeTakeFirst();
       if (!partner) throw new NotFoundException('الشريك غير موجود.');
 
       const [ledger, projectLink] = await Promise.all([
-        trx.selectFrom('import_partner_ledger').select('id')
-          .where('tenant_id', '=', tenantId).where('partner_id', '=', id).executeTakeFirst(),
-        trx.selectFrom('import_project_partners').select('id')
-          .where('tenant_id', '=', tenantId).where('partner_id', '=', id).executeTakeFirst(),
+        trx
+          .selectFrom('import_partner_ledger')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('partner_id', '=', id)
+          .executeTakeFirst(),
+        trx
+          .selectFrom('import_project_partners')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('partner_id', '=', id)
+          .executeTakeFirst(),
       ]);
       if (ledger || projectLink) {
         throw new BadRequestException(
-          'لا يمكن حذف شريك له سجل رأس مال أو أرباح أو ارتباط بمشروع؛ احتفظ بالتاريخ واستخدم حالة عدم النشاط عند إتاحتها.'
+          'لا يمكن حذف شريك له سجل رأس مال أو أرباح أو ارتباط بمشروع؛ احتفظ بالتاريخ واستخدم حالة عدم النشاط عند إتاحتها.',
         );
       }
-      await trx.deleteFrom('import_partners')
-        .where('tenant_id', '=', tenantId).where('id', '=', id).execute();
+      await trx.deleteFrom('import_partners').where('tenant_id', '=', tenantId).where('id', '=', id).execute();
       return { success: true };
     });
   }
@@ -309,7 +340,7 @@ export class ImportProjectsPartnersService {
       .execute();
 
     const countByProject = new Map<string, number>(
-      shipmentCounts.map((sc) => [String(sc.project_id), Number(sc.shipment_count)])
+      shipmentCounts.map((sc) => [String(sc.project_id), Number(sc.shipment_count)]),
     );
 
     const arrivedShipments = await this.db
@@ -479,7 +510,7 @@ export class ImportProjectsPartnersService {
       } catch (err: any) {
         if (err?.code === '23505') {
           throw new ConflictException(
-            `رقم المشروع (${projectNo}) مستخدم بالفعل لهذه المنشأة؛ اختر رقماً آخر أو اترك الترقيم التلقائي.`
+            `رقم المشروع (${projectNo}) مستخدم بالفعل لهذه المنشأة؛ اختر رقماً آخر أو اترك الترقيم التلقائي.`,
           );
         }
         throw err;
@@ -549,7 +580,7 @@ export class ImportProjectsPartnersService {
                   profit_percentage: Number(p.profitPercentage || 0),
                   is_active: true,
                   effective_from: todayKey,
-                })
+                }),
               )
               .execute();
           }
@@ -647,7 +678,7 @@ export class ImportProjectsPartnersService {
     amount: number,
     approvalRequestId?: string,
     projectId?: string,
-    treasuryAccountId?: string
+    treasuryAccountId?: string,
   ) {
     const cleanAmount = Number(amount);
     if (!Number.isFinite(cleanAmount) || cleanAmount <= 0) {
@@ -655,7 +686,9 @@ export class ImportProjectsPartnersService {
     }
 
     if (!approvalRequestId) {
-      throw new BadRequestException('صرف أرباح الشركاء يخضع لحوكمة Maker-Checker الإلزامية ويتطلب معرّف موافقة معتمد (approvalRequestId).');
+      throw new BadRequestException(
+        'صرف أرباح الشركاء يخضع لحوكمة Maker-Checker الإلزامية ويتطلب معرّف موافقة معتمد (approvalRequestId).',
+      );
     }
 
     return await this.db.transaction().execute(async (trx) => {
@@ -673,60 +706,73 @@ export class ImportProjectsPartnersService {
       // NoResultError — the trial's distribution step demanded an
       // approval UUID with no approval behind it, and the generic
       // failure hid which field was wrong.
-      const approved = await trx.selectFrom('import_approval_requests').select('request_payload')
-        .where('tenant_id', '=', tenantId).where('id', '=', approvalRequestId).executeTakeFirst();
+      const approved = await trx
+        .selectFrom('import_approval_requests')
+        .select('request_payload')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', approvalRequestId)
+        .executeTakeFirst();
       if (!approved) {
         throw new BadRequestException('طلب الاعتماد (Maker-Checker) المحدد غير موجود.');
       }
       let approvalDetails: any;
       try {
-        approvalDetails = typeof approved.request_payload === 'string'
-          ? JSON.parse(approved.request_payload || '{}') : approved.request_payload;
+        approvalDetails =
+          typeof approved.request_payload === 'string'
+            ? JSON.parse(approved.request_payload || '{}')
+            : approved.request_payload;
       } catch {
         throw new BadRequestException('تفاصيل الموافقة غير صالحة.');
       }
       const targetProjectId = projectId || String(approvalDetails?.projectId || '');
       if (!targetProjectId) throw new BadRequestException('يجب تحديد مشروع أرباح معتمد.');
-      const projectPartner = await trx.selectFrom('import_project_partners').select('project_id')
-        .where('tenant_id', '=', tenantId).where('project_id', '=', targetProjectId)
-        .where('partner_id', '=', partnerId).where('is_active', '=', true).executeTakeFirst();
+      const projectPartner = await trx
+        .selectFrom('import_project_partners')
+        .select('project_id')
+        .where('tenant_id', '=', tenantId)
+        .where('project_id', '=', targetProjectId)
+        .where('partner_id', '=', partnerId)
+        .where('is_active', '=', true)
+        .executeTakeFirst();
       if (!projectPartner) throw new BadRequestException('الشريك غير مرتبط بمشروع الأرباح المعتمد.');
 
-      await this.verifyAndConsumeApprovalRequest(
-        trx,
-        tenantId,
-        'partner_distribution',
+      await this.verifyAndConsumeApprovalRequest(trx, tenantId, 'partner_distribution', partnerId, approvalRequestId, {
+        amount: cleanAmount,
+        projectId: targetProjectId,
         partnerId,
-        approvalRequestId,
-        { amount: cleanAmount, projectId: targetProjectId, partnerId }
-      );
+      });
 
       const profitReport = await this.generatePeriodProfitReport(
         tenantId,
         new Date('2020-01-01'),
         new Date(),
         targetProjectId,
-        trx
+        trx,
       );
       if (!profitReport.data.profitAttributionVerified) {
         throw new UnprocessableEntityException(
-          'صرف الأرباح موقوف لحين إتمام تتبع مصدر البضاعة واعتماد أرباح كل مشروع؛ التقرير الحالي تقديري وغير صالح للتوزيع.'
+          'صرف الأرباح موقوف لحين إتمام تتبع مصدر البضاعة واعتماد أرباح كل مشروع؛ التقرير الحالي تقديري وغير صالح للتوزيع.',
         );
       }
       const partnerShare = profitReport.data.partnerShares.find((p: any) => p.partnerId === partnerId);
       const totalEntitled = Number(partnerShare?.shareAmount || 0);
-      const allAttributed = await trx.selectFrom('import_partner_project_payouts')
+      const allAttributed = await trx
+        .selectFrom('import_partner_project_payouts')
         .select(sql<number>`coalesce(sum(amount_egp), 0)`.as('total'))
-        .where('tenant_id', '=', tenantId).where('partner_id', '=', partnerId).executeTakeFirst();
+        .where('tenant_id', '=', tenantId)
+        .where('partner_id', '=', partnerId)
+        .executeTakeFirst();
       if (Number(partner.withdrawn_profit || 0) > Number(allAttributed?.total || 0) + 0.01) {
-        throw new UnprocessableEntityException('توجد توزيعات تاريخية غير مرتبطة بمشروع؛ يجب تسويتها قبل صرف أرباح إضافية.');
+        throw new UnprocessableEntityException(
+          'توجد توزيعات تاريخية غير مرتبطة بمشروع؛ يجب تسويتها قبل صرف أرباح إضافية.',
+        );
       }
       const withdrawn = Number(partnerShare?.withdrawnProfit || 0);
       const maxAvailable = Math.max(0, totalEntitled - withdrawn);
 
       if (cleanAmount > maxAvailable) {
         throw new BadRequestException(
-          `لا يمكن صرف أرباح تتجاوز المستحق المعتمد للشريك. المتاح للصرف حالياً: ${maxAvailable.toFixed(2)} ج.م (المطلوب: ${cleanAmount.toFixed(2)} ج.م).`
+          `لا يمكن صرف أرباح تتجاوز المستحق المعتمد للشريك. المتاح للصرف حالياً: ${maxAvailable.toFixed(2)} ج.م (المطلوب: ${cleanAmount.toFixed(2)} ج.م).`,
         );
       }
 
@@ -734,7 +780,7 @@ export class ImportProjectsPartnersService {
         trx,
         tenantId,
         'bank',
-        treasuryAccountId ? Number(treasuryAccountId) : null
+        treasuryAccountId ? Number(treasuryAccountId) : null,
       );
       const bankScope = await trx
         .selectFrom('accounting_accounts')
@@ -761,11 +807,17 @@ export class ImportProjectsPartnersService {
         .returning('id')
         .executeTakeFirstOrThrow();
 
-      await trx.insertInto('import_partner_project_payouts').values({
-        tenant_id: tenantId, partner_id: partnerId, project_id: targetProjectId,
-        treasury_transaction_id: postedTreasury.id, amount_egp: cleanAmount,
-        created_by: userId,
-      }).execute();
+      await trx
+        .insertInto('import_partner_project_payouts')
+        .values({
+          tenant_id: tenantId,
+          partner_id: partnerId,
+          project_id: targetProjectId,
+          treasury_transaction_id: postedTreasury.id,
+          amount_egp: cleanAmount,
+          created_by: userId,
+        })
+        .execute();
       await trx
         .updateTable('import_partners')
         .set((eb) => ({
@@ -789,7 +841,8 @@ export class ImportProjectsPartnersService {
         .returning('id')
         .executeTakeFirstOrThrow();
 
-      const postingService = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
+      const postingService =
+        this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
       const journalEntryId = await postingService.postDomainJournal(trx, {
         sourceType: 'import_partner_payout',
         sourceId: Number(postedTreasury.id),
@@ -849,7 +902,14 @@ export class ImportProjectsPartnersService {
     tenantId: string,
     userId: number,
     partnerId: string,
-    dto: { type: 'DEPOSIT' | 'WITHDRAWAL'; amount: number; date: string; note?: string; accountId?: string; idempotencyKey?: string }
+    dto: {
+      type: 'DEPOSIT' | 'WITHDRAWAL';
+      amount: number;
+      date: string;
+      note?: string;
+      accountId?: string;
+      idempotencyKey?: string;
+    },
   ) {
     const cleanAmount = Number(dto.amount);
     const movementDate = new Date(dto.date);
@@ -878,7 +938,7 @@ export class ImportProjectsPartnersService {
 
       if (dto.type === 'WITHDRAWAL' && Number(partner.capital_amount || 0) < cleanAmount) {
         throw new BadRequestException(
-          `رصيد رأس المال الحالي (${partner.capital_amount}) لا يكفي لسحب مبلغ ${cleanAmount}.`
+          `رصيد رأس المال الحالي (${partner.capital_amount}) لا يكفي لسحب مبلغ ${cleanAmount}.`,
         );
       }
 
@@ -947,7 +1007,7 @@ export class ImportProjectsPartnersService {
         cleanAmount,
         movementDate,
         requiredCashAccountId,
-        dto.note || ''
+        dto.note || '',
       );
 
       return { success: true, ledgerId: ledgerInsert.id, treasuryTransactionId };

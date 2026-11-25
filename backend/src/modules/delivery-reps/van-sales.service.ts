@@ -127,21 +127,36 @@ export class VanSalesService {
   private fieldSaleInstance?: FieldSaleService;
   private get fieldSale(): FieldSaleService {
     if (!this.fieldSaleInstance) {
-      this.fieldSaleInstance = new FieldSaleService(this.db, this.getFieldSales.bind(this), VanSalesService.inFlightSalePromises, VanSalesService.recentSalesCache, () => this.executeFieldSaleInternal.bind(this));
+      this.fieldSaleInstance = new FieldSaleService(
+        this.db,
+        this.getFieldSales.bind(this),
+        VanSalesService.inFlightSalePromises,
+        VanSalesService.recentSalesCache,
+        () => this.executeFieldSaleInternal.bind(this),
+      );
     }
     return this.fieldSaleInstance;
   }
   private fieldCollectionInstance?: FieldCollectionService;
   private get fieldCollection(): FieldCollectionService {
     if (!this.fieldCollectionInstance) {
-      this.fieldCollectionInstance = new FieldCollectionService(this.db, this.getCollectionsAndSwaps.bind(this), VanSalesService.inFlightCollectionPromises, VanSalesService.recentCollectionsCache, () => this.recordFieldCollectionInternal.bind(this));
+      this.fieldCollectionInstance = new FieldCollectionService(
+        this.db,
+        this.getCollectionsAndSwaps.bind(this),
+        VanSalesService.inFlightCollectionPromises,
+        VanSalesService.recentCollectionsCache,
+        () => this.recordFieldCollectionInternal.bind(this),
+      );
     }
     return this.fieldCollectionInstance;
   }
   private tripDelegatesInstance?: TripDelegatesService;
   private get tripDelegates(): TripDelegatesService {
     if (!this.tripDelegatesInstance) {
-      this.tripDelegatesInstance = new TripDelegatesService(this.getTripLifecycle.bind(this), this.getFieldSales.bind(this));
+      this.tripDelegatesInstance = new TripDelegatesService(
+        this.getTripLifecycle.bind(this),
+        this.getFieldSales.bind(this),
+      );
     }
     return this.tripDelegatesInstance;
   }
@@ -155,7 +170,10 @@ export class VanSalesService {
   private requisitionsInstance?: RequisitionsService;
   private get requisitions(): RequisitionsService {
     if (!this.requisitionsInstance) {
-      this.requisitionsInstance = new RequisitionsService(this.getRequisitionDispatch.bind(this), this.vanRequisitionsService);
+      this.requisitionsInstance = new RequisitionsService(
+        this.getRequisitionDispatch.bind(this),
+        this.vanRequisitionsService,
+      );
     }
     return this.requisitionsInstance;
   }
@@ -190,14 +208,18 @@ export class VanSalesService {
   private expensesPackagingCustomersSliceInstance?: ExpensesPackagingCustomersService;
   private get expensesPackagingCustomersSlice(): ExpensesPackagingCustomersService {
     if (!this.expensesPackagingCustomersSliceInstance) {
-      this.expensesPackagingCustomersSliceInstance = new ExpensesPackagingCustomersService(this.getExpensesPackagingCustomers.bind(this));
+      this.expensesPackagingCustomersSliceInstance = new ExpensesPackagingCustomersService(
+        this.getExpensesPackagingCustomers.bind(this),
+      );
     }
     return this.expensesPackagingCustomersSliceInstance;
   }
   private repFinancialLedgerSliceInstance?: RepFinancialLedgerService;
   private get repFinancialLedgerSlice(): RepFinancialLedgerService {
     if (!this.repFinancialLedgerSliceInstance) {
-      this.repFinancialLedgerSliceInstance = new RepFinancialLedgerService(this.getRepFinancialLedgerService.bind(this));
+      this.repFinancialLedgerSliceInstance = new RepFinancialLedgerService(
+        this.getRepFinancialLedgerService.bind(this),
+      );
     }
     return this.repFinancialLedgerSliceInstance;
   }
@@ -232,10 +254,12 @@ export class VanSalesService {
     this.vanFraudRadarService = vanFraudRadarService ?? new VanFraudRadarService(db);
     this.vanFleetService = vanFleetService ?? new VanFleetService(db);
     this.vanRequisitionsService = vanRequisitionsService ?? new VanRequisitionsService(db);
-    this.vanReturnsService = vanReturnsService ?? new VanReturnsService(db, accountingPosting, this.vanFraudRadarService, this.audit);
+    this.vanReturnsService =
+      vanReturnsService ?? new VanReturnsService(db, accountingPosting, this.vanFraudRadarService, this.audit);
     this.vanTargetsService = vanTargetsService ?? new VanTargetsService(db);
     this.vanTransfersService = vanTransfersService ?? new VanTransfersService(db, this.audit);
-    this.vanRoutesService = vanRoutesService ?? new VanRoutesService(db, this.vanFleetService, this.vanFraudRadarService);
+    this.vanRoutesService =
+      vanRoutesService ?? new VanRoutesService(db, this.vanFleetService, this.vanFraudRadarService);
     this.tripLifecycle = this.getTripLifecycle();
     this.getCollectionsAndSwaps();
   }
@@ -409,10 +433,7 @@ export class VanSalesService {
     return this.fraudRadar.getFraudRadarSummary(tenantId, options);
   }
 
-  async getFraudRadarEvents(
-    tenantId: string,
-    options?: GetFraudRadarEventsOptions,
-  ) {
+  async getFraudRadarEvents(tenantId: string, options?: GetFraudRadarEventsOptions) {
     return this.fraudRadar.getFraudRadarEvents(tenantId, options);
   }
 
@@ -420,21 +441,31 @@ export class VanSalesService {
     return this.db as any;
   }
 
-  private async resolveSystemAuthContext(tenantId: string, accountId: string, repId?: number | null): Promise<AuthContext> {
+  private async resolveSystemAuthContext(
+    tenantId: string,
+    accountId: string,
+    repId?: number | null,
+  ): Promise<AuthContext> {
     return this.authAndPin.resolveSystemAuthContext(tenantId, accountId, repId);
   }
 
-    async verifySupervisorPin(tenantId: string, pinInput?: string | null, repId?: number | null, queryable?: any, accountId?: string | null): Promise<VerifySupervisorPinResult> {
-      return this.authAndPin.verifySupervisorPin(tenantId, pinInput, repId, queryable, accountId);
-    }
+  async verifySupervisorPin(
+    tenantId: string,
+    pinInput?: string | null,
+    repId?: number | null,
+    queryable?: any,
+    accountId?: string | null,
+  ): Promise<VerifySupervisorPinResult> {
+    return this.authAndPin.verifySupervisorPin(tenantId, pinInput, repId, queryable, accountId);
+  }
 
-    async isSupervisorPinRequiredForSettlement(tenantId: string): Promise<boolean> {
-      return this.authAndPin.isSupervisorPinRequiredForSettlement(tenantId);
-    }
+  async isSupervisorPinRequiredForSettlement(tenantId: string): Promise<boolean> {
+    return this.authAndPin.isSupervisorPinRequiredForSettlement(tenantId);
+  }
 
-    async isBlindSettlementEnabled(tenantId: string): Promise<boolean> {
-      return this.authAndPin.isBlindSettlementEnabled(tenantId);
-    }
+  async isBlindSettlementEnabled(tenantId: string): Promise<boolean> {
+    return this.authAndPin.isBlindSettlementEnabled(tenantId);
+  }
 
   private sortItemsByProductId<T extends { productId: number }>(items: T[]): T[] {
     return this.stockBatchHelpers.sortItemsByProductId(items);
@@ -491,7 +522,11 @@ export class VanSalesService {
     return this.stockBatchHelpers.deductVanSaleInventoryBatches(trx, productId, qty, scope, vanLocationId, failClosed);
   }
 
-  async getOrCreateVanLocation(repId: number, tenantId: string, accountId: string): Promise<{ id: number; name: string }> {
+  async getOrCreateVanLocation(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+  ): Promise<{ id: number; name: string }> {
     return this.stockBatchHelpers.getOrCreateVanLocation(repId, tenantId, accountId);
   }
 
@@ -506,17 +541,28 @@ export class VanSalesService {
     return this.stockBatchHelpers.generateDailySequenceNumber(trxOrDb, tableName, columnName, prefix, tenantId, date);
   }
 
-    async getActiveTrip(repId: number, tenantId: string, accountId: string): Promise<GetActiveTripResult> {
-      return this.tripDelegates.getActiveTrip(repId, tenantId, accountId);
-    }
+  async getActiveTrip(repId: number, tenantId: string, accountId: string): Promise<GetActiveTripResult> {
+    return this.tripDelegates.getActiveTrip(repId, tenantId, accountId);
+  }
 
-    async openTripAndLoad(repId: number, tenantId: string, accountId: string, payload: OpenTripAndLoadPayload): Promise<{ ok: boolean; tripId: number; totalLoadedValue: number; itemsCount: number }> {
-      return this.tripDelegates.openTripAndLoad(repId, tenantId, accountId, payload);
-    }
+  async openTripAndLoad(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+    payload: OpenTripAndLoadPayload,
+  ): Promise<{ ok: boolean; tripId: number; totalLoadedValue: number; itemsCount: number }> {
+    return this.tripDelegates.openTripAndLoad(repId, tenantId, accountId, payload);
+  }
 
-    async loadSupplementaryStockToActiveTrip(repId: number, tenantId: string, accountId: string, tripId: number, payload: LoadSupplementaryStockToActiveTripPayload): Promise<{ ok: boolean; tripId: number; totalLoadedValue: number; itemsCount: number }> {
-      return this.tripDelegates.loadSupplementaryStockToActiveTrip(repId, tenantId, accountId, tripId, payload);
-    }
+  async loadSupplementaryStockToActiveTrip(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+    tripId: number,
+    payload: LoadSupplementaryStockToActiveTripPayload,
+  ): Promise<{ ok: boolean; tripId: number; totalLoadedValue: number; itemsCount: number }> {
+    return this.tripDelegates.loadSupplementaryStockToActiveTrip(repId, tenantId, accountId, tripId, payload);
+  }
 
   async executeFieldSale(
     repId: number,
@@ -541,23 +587,34 @@ export class VanSalesService {
     tenantId: string,
     accountId: string,
     payload: RecordFieldCollectionPayload,
-  ): Promise<{ ok: boolean; receiptNo: string; amount: number; customerName: string; previousBalance: number; newBalance: number }> {
+  ): Promise<{
+    ok: boolean;
+    receiptNo: string;
+    amount: number;
+    customerName: string;
+    previousBalance: number;
+    newBalance: number;
+  }> {
     return this.fieldCollection.recordFieldCollection(repId, tenantId, accountId, payload);
   }
 
-  private async recordFieldCollectionInternal(repId: number, tenantId: string, accountId: string, payload: RecordFieldCollectionInternalPayload) {
+  private async recordFieldCollectionInternal(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+    payload: RecordFieldCollectionInternalPayload,
+  ) {
     return this.fieldCollection.recordFieldCollectionInternal(repId, tenantId, accountId, payload);
   }
 
-  async executeDamagedSwap(repId: number, tenantId: string, accountId: string, payload: ExecuteDamagedSwapPayload): Promise<ExecuteDamagedSwapResult> {
+  async executeDamagedSwap(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+    payload: ExecuteDamagedSwapPayload,
+  ): Promise<ExecuteDamagedSwapResult> {
     return this.fieldCollection.executeDamagedSwap(repId, tenantId, accountId, payload);
   }
-
-
-
-
-
-
 
   private async assertTripOwnedByRep(tenantId: string, tripId: number, repId: number): Promise<void> {
     return this.fieldCollection.assertTripOwnedByRep(tenantId, tripId, repId);
@@ -590,32 +647,41 @@ export class VanSalesService {
   // so a driver (or a stale app build) could still skip it completely. Removed rather than kept
   // alongside, since the whole point of the approval workflow is that no return posts unreviewed.
 
-    async submitTripSettlement(repId: number, tenantId: string, accountId: string, payload: SubmitTripSettlementPayload): Promise<SubmitTripSettlementResult> {
-      return this.tripDelegates.submitTripSettlement(repId, tenantId, accountId, payload);
-    }
+  async submitTripSettlement(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+    payload: SubmitTripSettlementPayload,
+  ): Promise<SubmitTripSettlementResult> {
+    return this.tripDelegates.submitTripSettlement(repId, tenantId, accountId, payload);
+  }
 
-    async settleTrip(repId: number, tenantId: string, accountId: string, payload: SettleTripPayload, authContext?: AuthContext): Promise<SettleTripResult> {
-      return this.tripDelegates.settleTrip(repId, tenantId, accountId, payload, authContext);
-    }
+  async settleTrip(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+    payload: SettleTripPayload,
+    authContext?: AuthContext,
+  ): Promise<SettleTripResult> {
+    return this.tripDelegates.settleTrip(repId, tenantId, accountId, payload, authContext);
+  }
 
   async getTripDueByDay(repId: number, tenantId: string, tripId: number) {
     return this.tripDelegates.getTripDueByDay(repId, tenantId, tripId);
   }
 
-  
-    async listTripsForAdmin(tenantId: string, filters?: { repId?: number; status?: string; dateFrom?: string; dateTo?: string }): Promise<VanTripSummary[]> {
-      return this.tripDelegates.listTripsForAdmin(tenantId, filters);
-    }
-
-    async getTripDetailsForAdmin(tenantId: string, tripId: number, pagination?: { page?: number; pageSize?: number }) {
-      return this.tripDelegates.getTripDetailsForAdmin(tenantId, tripId, pagination);
-    }
-
-  async listDriverSales(
+  async listTripsForAdmin(
     tenantId: string,
-    repId: number,
-    filters?: ListDriverSalesFilters,
-  ) {
+    filters?: { repId?: number; status?: string; dateFrom?: string; dateTo?: string },
+  ): Promise<VanTripSummary[]> {
+    return this.tripDelegates.listTripsForAdmin(tenantId, filters);
+  }
+
+  async getTripDetailsForAdmin(tenantId: string, tripId: number, pagination?: { page?: number; pageSize?: number }) {
+    return this.tripDelegates.getTripDetailsForAdmin(tenantId, tripId, pagination);
+  }
+
+  async listDriverSales(tenantId: string, repId: number, filters?: ListDriverSalesFilters) {
     return this.tripDelegates.listDriverSales(tenantId, repId, filters);
   }
 
@@ -623,20 +689,11 @@ export class VanSalesService {
     return this.fleet.listFleetVehicles(tenantId);
   }
 
-  async createFleetVehicle(
-    tenantId: string,
-    accountId: string,
-    payload: CreateFleetVehiclePayload,
-  ) {
+  async createFleetVehicle(tenantId: string, accountId: string, payload: CreateFleetVehiclePayload) {
     return this.fleet.createFleetVehicle(tenantId, accountId, payload);
   }
 
-  async updateFleetVehicle(
-    tenantId: string,
-    accountId: string,
-    id: number,
-    payload: UpdateFleetVehiclePayload,
-  ) {
+  async updateFleetVehicle(tenantId: string, accountId: string, id: number, payload: UpdateFleetVehiclePayload) {
     return this.fleet.updateFleetVehicle(tenantId, accountId, id, payload);
   }
 
@@ -644,12 +701,7 @@ export class VanSalesService {
     return this.fleet.assignVehicleRep(tenantId, vehicleId, repId, shiftName);
   }
 
-  async recordFuelLog(
-    tenantId: string,
-    accountId: string,
-    repId: number | null,
-    payload: RecordFuelLogPayload,
-  ) {
+  async recordFuelLog(tenantId: string, accountId: string, repId: number | null, payload: RecordFuelLogPayload) {
     return this.fleet.recordFuelLog(tenantId, accountId, repId, payload);
   }
 
@@ -660,12 +712,7 @@ export class VanSalesService {
     return this.fleet.listFuelLogs(tenantId, filters);
   }
 
-  async recordOilChange(
-    tenantId: string,
-    accountId: string,
-    repId: number | null,
-    payload: RecordOilChangePayload,
-  ) {
+  async recordOilChange(tenantId: string, accountId: string, repId: number | null, payload: RecordOilChangePayload) {
     return this.fleet.recordOilChange(tenantId, accountId, repId, payload);
   }
 
@@ -681,11 +728,7 @@ export class VanSalesService {
     return this.fleet.listVehicleDrivers(tenantId, vehicleId);
   }
 
-  async assignVehicleDriver(
-    tenantId: string,
-    accountId: string,
-    payload: AssignVehicleDriverPayload,
-  ) {
+  async assignVehicleDriver(tenantId: string, accountId: string, payload: AssignVehicleDriverPayload) {
     return this.fleet.assignVehicleDriver(tenantId, accountId, payload);
   }
 
@@ -702,7 +745,12 @@ export class VanSalesService {
     return this.requisitions.submitLoadRequisition(repId, tenantId, accountId, payload);
   }
 
-  async createLoadRequisitionByAdmin(tenantId: string, accountId: string, userId: number, payload: CreateLoadRequisitionByAdminPayload) {
+  async createLoadRequisitionByAdmin(
+    tenantId: string,
+    accountId: string,
+    userId: number,
+    payload: CreateLoadRequisitionByAdminPayload,
+  ) {
     return this.requisitions.createLoadRequisitionByAdmin(tenantId, accountId, userId, payload);
   }
 
@@ -720,11 +768,21 @@ export class VanSalesService {
     return this.requisitions.reviewLoadRequisition(tenantId, requisitionId, approvedItems, notes, sourceWarehouseId);
   }
 
-  async approveAndDispatchRequisition(tenantId: string, accountId: string, requisitionId: number, reviewedByUserId: number) {
+  async approveAndDispatchRequisition(
+    tenantId: string,
+    accountId: string,
+    requisitionId: number,
+    reviewedByUserId: number,
+  ) {
     return this.requisitions.approveAndDispatchRequisition(tenantId, accountId, requisitionId, reviewedByUserId);
   }
 
-  async rejectLoadRequisition(tenantId: string, requisitionId: number, rejectionReason: string, reviewedByUserId: number) {
+  async rejectLoadRequisition(
+    tenantId: string,
+    requisitionId: number,
+    rejectionReason: string,
+    reviewedByUserId: number,
+  ) {
     return this.requisitions.rejectLoadRequisition(tenantId, requisitionId, rejectionReason, reviewedByUserId);
   }
 
@@ -748,12 +806,7 @@ export class VanSalesService {
     return this.returns.getCustomerEligibleSales(tenantId, customerId, repId);
   }
 
-  async submitFieldReturn(
-    repId: number,
-    tenantId: string,
-    accountId: string,
-    payload: SubmitFieldReturnPayload,
-  ) {
+  async submitFieldReturn(repId: number, tenantId: string, accountId: string, payload: SubmitFieldReturnPayload) {
     return this.returns.submitFieldReturn(repId, tenantId, accountId, payload);
   }
 
@@ -782,7 +835,16 @@ export class VanSalesService {
     visitsTarget?: number | null,
     commissionRates?: SetRepTargetCommissionRates,
   ) {
-    return this.targets.setRepTarget(tenantId, accountId, repId, periodMonth, targetAmount, collectionTarget, visitsTarget, commissionRates);
+    return this.targets.setRepTarget(
+      tenantId,
+      accountId,
+      repId,
+      periodMonth,
+      targetAmount,
+      collectionTarget,
+      visitsTarget,
+      commissionRates,
+    );
   }
 
   async getRepTarget(tenantId: string, repId: number, periodMonth?: string) {
@@ -797,11 +859,7 @@ export class VanSalesService {
     return this.targets.getCommissionConfig(tenantId);
   }
 
-  async saveCommissionConfig(
-    tenantId: string,
-    accountId: string,
-    payload: SaveCommissionConfigPayload,
-  ) {
+  async saveCommissionConfig(tenantId: string, accountId: string, payload: SaveCommissionConfigPayload) {
     return this.targets.saveCommissionConfig(tenantId, accountId, payload);
   }
 
@@ -831,10 +889,7 @@ export class VanSalesService {
     return this.transfers.rejectInterVanTransfer(tenantId, toRepId, transferId, reason);
   }
 
-  async listInterVanTransfers(
-    tenantId: string,
-    filters?: { repId?: number; status?: string },
-  ) {
+  async listInterVanTransfers(tenantId: string, filters?: { repId?: number; status?: string }) {
     return this.transfers.listInterVanTransfers(tenantId, filters);
   }
 
@@ -846,12 +901,7 @@ export class VanSalesService {
     return this.routes.getDriverTodayItinerary(tenantId, repId, tripId);
   }
 
-  async recordFieldVisit(
-    arg1: string | number,
-    arg2: string,
-    arg3: string | number,
-    payload: RecordFieldVisitPayload,
-  ) {
+  async recordFieldVisit(arg1: string | number, arg2: string, arg3: string | number, payload: RecordFieldVisitPayload) {
     return this.routes.recordFieldVisit(arg1, arg2, arg3, payload);
   }
 
@@ -866,25 +916,15 @@ export class VanSalesService {
     return this.routes.getSupervisorRouteKpis(tenantId, dateFrom, dateTo);
   }
 
-  async setCustomerRouteSchedule(
-    tenantId: string,
-    customerId: number,
-    payload: SetCustomerRouteSchedulePayload,
-  ) {
+  async setCustomerRouteSchedule(tenantId: string, customerId: number, payload: SetCustomerRouteSchedulePayload) {
     return this.routes.setCustomerRouteSchedule(tenantId, customerId, payload);
   }
 
-  async bulkAssignCustomerRoutes(
-    tenantId: string,
-    payload: BulkAssignCustomerRoutesPayload,
-  ) {
+  async bulkAssignCustomerRoutes(tenantId: string, payload: BulkAssignCustomerRoutesPayload) {
     return this.routes.bulkAssignCustomerRoutes(tenantId, payload);
   }
 
-  async getSupervisorCustomerRoutes(
-    tenantId: string,
-    filters?: GetSupervisorCustomerRoutesFilters,
-  ) {
+  async getSupervisorCustomerRoutes(tenantId: string, filters?: GetSupervisorCustomerRoutesFilters) {
     return this.routes.getSupervisorCustomerRoutes(tenantId, filters);
   }
 
@@ -919,12 +959,7 @@ export class VanSalesService {
     return this.expensesPackagingCustomersSlice.getCustomerPackagingBalance(customerId, tenantId, repId);
   }
 
-  async createDriverCustomer(
-    repId: number,
-    tenantId: string,
-    accountId: string,
-    body: CreateDriverCustomerBody,
-  ) {
+  async createDriverCustomer(repId: number, tenantId: string, accountId: string, body: CreateDriverCustomerBody) {
     return this.expensesPackagingCustomersSlice.createDriverCustomer(repId, tenantId, accountId, body);
   }
 
@@ -944,37 +979,39 @@ export class VanSalesService {
     return this.repFinancialLedgerSlice.getRepFinancialLedger(tenantId, filters);
   }
 
-  async settleRepFinancialItem(tenantId: string, accountId: string, id: number, payload: SettleRepFinancialItemPayload, authContext: AuthContext) {
+  async settleRepFinancialItem(
+    tenantId: string,
+    accountId: string,
+    id: number,
+    payload: SettleRepFinancialItemPayload,
+    authContext: AuthContext,
+  ) {
     return this.repFinancialLedgerSlice.settleRepFinancialItem(tenantId, accountId, id, payload, authContext);
   }
-
-
 
   private async resolveRepLinkedUserId(dbConn: any, tenantId: string, repId: number | null): Promise<number | null> {
     return this.repFinancialLedgerSlice.resolveRepLinkedUserId(dbConn, tenantId, repId);
   }
 
-
-
-
-
-
-
-
-
-  async pushRepShortagesToPayroll(tenantId: string, accountId: string, payload: PushRepShortagesToPayrollPayload, authContext: AuthContext) {
+  async pushRepShortagesToPayroll(
+    tenantId: string,
+    accountId: string,
+    payload: PushRepShortagesToPayrollPayload,
+    authContext: AuthContext,
+  ) {
     return this.repFinancialLedgerSlice.pushRepShortagesToPayroll(tenantId, accountId, payload, authContext);
   }
 
-  async addRepBonusOrCommission(tenantId: string, accountId: string, payload: AddRepBonusOrCommissionPayload, authContext: AuthContext) {
+  async addRepBonusOrCommission(
+    tenantId: string,
+    accountId: string,
+    payload: AddRepBonusOrCommissionPayload,
+    authContext: AuthContext,
+  ) {
     return this.repFinancialLedgerSlice.addRepBonusOrCommission(tenantId, accountId, payload, authContext);
   }
 
-  async linkRepToEmployee(
-    tenantId: string,
-    repId: number,
-    employeeId: number | null,
-  ) {
+  async linkRepToEmployee(tenantId: string, repId: number, employeeId: number | null) {
     return this.repEmployeeLinkSlice.linkRepToEmployee(tenantId, repId, employeeId);
   }
 
@@ -982,13 +1019,7 @@ export class VanSalesService {
     return this.repEmployeeLinkSlice.listCandidateEmployees(tenantId);
   }
 
-  async autoCreateEmployeeForRep(
-    tenantId: string,
-    accountId: string,
-    repId: number,
-    authContext: AuthContext,
-  ) {
+  async autoCreateEmployeeForRep(tenantId: string, accountId: string, repId: number, authContext: AuthContext) {
     return this.repEmployeeLinkSlice.autoCreateEmployeeForRep(tenantId, accountId, repId, authContext);
   }
 }
-

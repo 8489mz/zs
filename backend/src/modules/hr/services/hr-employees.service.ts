@@ -15,7 +15,19 @@ import { createPasswordRecord } from '../../../core/auth/utils/password-hasher';
 import { assertSecurePasscode } from '../../../core/auth/utils/password-policy';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { type RawBuilder } from 'kysely';
-import { toId, clean, normalizeEmployeeNo, isUniqueViolation, normalizeDateOnly, tenantBookDigits, hasHrPermission, canViewSalary, normalizeTimeOnly, type CompensationType, type OvertimePolicy } from '../hr-helpers';
+import {
+  toId,
+  clean,
+  normalizeEmployeeNo,
+  isUniqueViolation,
+  normalizeDateOnly,
+  tenantBookDigits,
+  hasHrPermission,
+  canViewSalary,
+  normalizeTimeOnly,
+  type CompensationType,
+  type OvertimePolicy,
+} from '../hr-helpers';
 
 /**
  * HrEmployeesService — slice H1 of the hr split.
@@ -83,8 +95,18 @@ export interface HrEmployeesDeps {
   listDocuments: (employeeId: number, auth: AuthContext) => Promise<Record<string, unknown>>;
   listLoans: (query: Record<string, unknown>, auth: AuthContext) => Promise<Record<string, unknown>>;
   deductibleApprovedLeaveDaysByEmployee: (employeeIds: number[], tenantId: string) => Promise<Map<number, number>>;
-  reconciledUsedAnnualLeaves: (executor: Kysely<Database> | Transaction<Database>, employeeId: number, tenantId: string, storedUsed: number) => Promise<number>;
-  invalidateReviewedPayrollForNewHire: (db: Kysely<Database>, tenantId: string, hireDate: string, payFrequency: string) => Promise<void>;
+  reconciledUsedAnnualLeaves: (
+    executor: Kysely<Database> | Transaction<Database>,
+    employeeId: number,
+    tenantId: string,
+    storedUsed: number,
+  ) => Promise<number>;
+  invalidateReviewedPayrollForNewHire: (
+    db: Kysely<Database>,
+    tenantId: string,
+    hireDate: string,
+    payFrequency: string,
+  ) => Promise<void>;
 }
 
 @Injectable()
@@ -100,9 +122,22 @@ export class HrEmployeesService {
   private readonly listContracts: (employeeId: number, auth: AuthContext) => Promise<Record<string, unknown>>;
   private readonly listDocuments: (employeeId: number, auth: AuthContext) => Promise<Record<string, unknown>>;
   private readonly listLoans: (query: Record<string, unknown>, auth: AuthContext) => Promise<Record<string, unknown>>;
-  private readonly deductibleApprovedLeaveDaysByEmployee: (employeeIds: number[], tenantId: string) => Promise<Map<number, number>>;
-  private readonly reconciledUsedAnnualLeaves: (executor: Kysely<Database> | Transaction<Database>, employeeId: number, tenantId: string, storedUsed: number) => Promise<number>;
-  private readonly invalidateReviewedPayrollForNewHire: (db: Kysely<Database>, tenantId: string, hireDate: string, payFrequency: string) => Promise<void>;
+  private readonly deductibleApprovedLeaveDaysByEmployee: (
+    employeeIds: number[],
+    tenantId: string,
+  ) => Promise<Map<number, number>>;
+  private readonly reconciledUsedAnnualLeaves: (
+    executor: Kysely<Database> | Transaction<Database>,
+    employeeId: number,
+    tenantId: string,
+    storedUsed: number,
+  ) => Promise<number>;
+  private readonly invalidateReviewedPayrollForNewHire: (
+    db: Kysely<Database>,
+    tenantId: string,
+    hireDate: string,
+    payFrequency: string,
+  ) => Promise<void>;
 
   constructor(deps: HrEmployeesDeps) {
     this.db = deps.db;
@@ -140,7 +175,12 @@ export class HrEmployeesService {
     return String(next).padStart(3, '0');
   }
 
-  private async ensureEmployeeNoAvailable(db: Kysely<Database>, employeeNo: string, excludeEmployeeId: number | null, auth: AuthContext): Promise<void> {
+  private async ensureEmployeeNoAvailable(
+    db: Kysely<Database>,
+    employeeNo: string,
+    excludeEmployeeId: number | null,
+    auth: AuthContext,
+  ): Promise<void> {
     const { tenantId } = this.scope(auth);
     if (!employeeNo) return;
     const duplicate = await sql<{ id: number }>`
@@ -176,9 +216,11 @@ export class HrEmployeesService {
         OR strpos(lower(btrim(coalesce(u.username, ''))), ${search}) > 0
         OR strpos(lower(btrim(coalesce(d.name, ''))), ${search}) > 0
         OR strpos(lower(btrim(coalesce(j.name, ''))), ${search}) > 0
-        ${canViewEmployeeFiles
-          ? sql`OR strpos(lower(btrim(coalesce((SELECT c.value FROM hr_employee_contacts c WHERE c.employee_id = e.id AND c.tenant_id = e.tenant_id ORDER BY c.is_primary DESC, c.id ASC LIMIT 1), ''))), ${search}) > 0`
-          : sql``}
+        ${
+          canViewEmployeeFiles
+            ? sql`OR strpos(lower(btrim(coalesce((SELECT c.value FROM hr_employee_contacts c WHERE c.employee_id = e.id AND c.tenant_id = e.tenant_id ORDER BY c.is_primary DESC, c.id ASC LIMIT 1), ''))), ${search}) > 0`
+            : sql``
+        }
       )`
       : null;
     const where = searchPredicate ? sql<boolean>`${tenant} AND ${searchPredicate}` : tenant;
@@ -261,7 +303,7 @@ export class HrEmployeesService {
       graceMinutes: Number(row.grace_minutes || 0),
       overtimePolicy: clean(row.overtime_policy) || 'review_only',
       attendancePolicy: clean(row.attendance_policy) || 'strict',
-      commissionType: canViewSalaryFields ? (clean(row.commission_type) || 'inherit') : 'inherit',
+      commissionType: canViewSalaryFields ? clean(row.commission_type) || 'inherit' : 'inherit',
       commissionValue: canViewSalaryFields && row.commission_value != null ? Number(row.commission_value) : null,
       commissionTarget: canViewSalaryFields && row.commission_target != null ? Number(row.commission_target) : null,
       delayPolicy: clean(row.delay_policy) || 'inherit',
@@ -281,7 +323,11 @@ export class HrEmployeesService {
       ),
       notes: canViewEmployeeFiles ? clean(row.notes) : '',
     }));
-    return { employees: rows, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary: { totalItems, activeCount } };
+    return {
+      employees: rows,
+      pagination: { page: safePage, pageSize, totalItems, totalPages },
+      summary: { totalItems, activeCount },
+    };
   }
 
   async getEmployeeProfile(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
@@ -360,10 +406,7 @@ export class HrEmployeesService {
       notes: clean(row.notes),
     };
 
-    const [contacts, documents] = await Promise.all([
-      this.listContacts(id, auth),
-      this.listDocuments(id, auth),
-    ]);
+    const [contacts, documents] = await Promise.all([this.listContacts(id, auth), this.listDocuments(id, auth)]);
 
     const response: Record<string, unknown> = {
       employee,
@@ -381,10 +424,7 @@ export class HrEmployeesService {
     }
 
     if (hasHrPermission(auth, 'hrLoans')) {
-      const [loans, ledger] = await Promise.all([
-        this.listLoans({ employeeId: id }, auth),
-        this.listLedger(id, auth),
-      ]);
+      const [loans, ledger] = await Promise.all([this.listLoans({ employeeId: id }, auth), this.listLedger(id, auth)]);
       response.loans = loans.loans;
       response.ledger = ledger.rows;
     }
@@ -392,7 +432,11 @@ export class HrEmployeesService {
     return response;
   }
 
-  async getEndOfServicePreview(id: number, dateStr: string | undefined, auth: AuthContext): Promise<Record<string, unknown>> {
+  async getEndOfServicePreview(
+    id: number,
+    dateStr: string | undefined,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
     await this.assertEmployeeBelongsToTenant(id, auth);
     // Retired: the previous endpoint fabricated a universal Egyptian
@@ -415,9 +459,13 @@ export class HrEmployeesService {
     // future notice period. Future dates would exclude earned future wages.
     const companyToday = todayTenantDate(await getTenantTimezone(this.db, tenantId));
     if (terminationDate > companyToday) {
-      throw new AppError('لا يمكن إنهاء خدمة الموظف فعليًا بتاريخ مستقبلي؛ استخدم جدولة منفصلة', 'HR_EOS_FUTURE_TERMINATION_INVALID', 400);
+      throw new AppError(
+        'لا يمكن إنهاء خدمة الموظف فعليًا بتاريخ مستقبلي؛ استخدم جدولة منفصلة',
+        'HR_EOS_FUTURE_TERMINATION_INVALID',
+        400,
+      );
     }
-    await this.tx.runInTransaction(this.db, async trx => {
+    await this.tx.runInTransaction(this.db, async (trx) => {
       // Lock in the same order as payroll approval and statutory settlement.
       // A concurrent approval must not use an employee state that termination
       // rewrites while its financial snapshot is being accrued.
@@ -448,7 +496,8 @@ export class HrEmployeesService {
       if (postedSalary.rows.length) {
         throw new AppError(
           'لا يمكن إنهاء خدمة الموظف بأثر رجعي داخل فترة مرتبات معتمدة؛ يلزم تسوية مالية منفصلة',
-          'HR_EOS_APPROVED_PAYROLL_CONFLICT', 409,
+          'HR_EOS_APPROVED_PAYROLL_CONFLICT',
+          409,
         );
       }
       const unpaidLoans = await sql<{ id: number }>`
@@ -468,7 +517,11 @@ export class HrEmployeesService {
         LIMIT 1
       `.execute(trx);
       if (unpaidLoans.rows.length || openAssets.rows.length || unsettled.rows.length) {
-        throw new AppError('يجب تسوية السلف والعهد والمخالصات المفتوحة قبل الإنهاء المباشر', 'HR_EOS_CLEARANCE_REQUIRED', 400);
+        throw new AppError(
+          'يجب تسوية السلف والعهد والمخالصات المفتوحة قبل الإنهاء المباشر',
+          'HR_EOS_CLEARANCE_REQUIRED',
+          400,
+        );
       }
       await sql`
         UPDATE hr_employees
@@ -503,17 +556,29 @@ export class HrEmployeesService {
     const { tenantId, accountId } = requireTenantScope(auth);
     const salary = Number(input.salary);
     if (!Number.isFinite(salary) || salary <= 0) {
-      throw new AppError('يجب تحديد راتب أساسي صحيح أكبر من صفر قبل تعيين المرشح', 'HR_RECRUITMENT_SALARY_REQUIRED', 400);
+      throw new AppError(
+        'يجب تحديد راتب أساسي صحيح أكبر من صفر قبل تعيين المرشح',
+        'HR_RECRUITMENT_SALARY_REQUIRED',
+        400,
+      );
     }
-    try { requireStoredHrMoney(salary, 2); } catch {
-      throw new AppError('راتب المرشح يجب أن يكون بدقة منزلتين دون تقريب', 'HR_RECRUITMENT_SALARY_PRECISION_INVALID', 400);
+    try {
+      requireStoredHrMoney(salary, 2);
+    } catch {
+      throw new AppError(
+        'راتب المرشح يجب أن يكون بدقة منزلتين دون تقريب',
+        'HR_RECRUITMENT_SALARY_PRECISION_INVALID',
+        400,
+      );
     }
     const firstName = clean(input.firstName);
     const lastName = clean(input.lastName);
     if (!firstName) throw new AppError('اسم الموظف مطلوب', 'HR_EMPLOYEE_NAME_REQUIRED', 400);
     const branchId = toId(input.branchId);
     if (branchId) {
-      const branches = await sql<{ id: number }>`SELECT id FROM branches WHERE id = ${branchId} AND tenant_id = ${tenantId} LIMIT 1`.execute(trx);
+      const branches = await sql<{
+        id: number;
+      }>`SELECT id FROM branches WHERE id = ${branchId} AND tenant_id = ${tenantId} LIMIT 1`.execute(trx);
       if (!branches.rows.length) throw new AppError('فرع الموظف غير تابع للمنشأة', 'HR_BRANCH_INVALID', 400);
     }
     // Payroll approval reads the active employee roster under the same lock.
@@ -528,7 +593,7 @@ export class HrEmployeesService {
         tenant_id, account_id, employee_no, first_name, last_name, display_name,
         status, branch_id, hire_date, compensation_type, pay_frequency, created_by, updated_by
       ) VALUES (
-        ${tenantId}, ${accountId}, ${employeeNo}, ${firstName}, ${lastName}, ${(firstName+' '+lastName).trim()},
+        ${tenantId}, ${accountId}, ${employeeNo}, ${firstName}, ${lastName}, ${(firstName + ' ' + lastName).trim()},
         'active', ${branchId}, ${hireDate}::date, 'monthly', 'monthly', ${auth.userId}, ${auth.userId}
       ) RETURNING id
     `.execute(trx);
@@ -584,7 +649,11 @@ export class HrEmployeesService {
     return employeeId;
   }
 
-  async upsertEmployee(id: number | null, payload: UpsertEmployeeDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertEmployee(
+    id: number | null,
+    payload: UpsertEmployeeDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const firstName = clean(payload.firstName);
     const lastName = clean(payload.lastName);
     const displayName = `${firstName} ${lastName}`.trim();
@@ -594,11 +663,12 @@ export class HrEmployeesService {
     const hireDate = normalizeDateOnly(payload.hireDate);
     const compensationType: CompensationType = clean(payload.compensationType) === 'hourly' ? 'hourly' : 'monthly';
     const payFrequency = clean(payload.payFrequency) || 'monthly';
-    const overtimePolicy: OvertimePolicy = clean(payload.overtimePolicy) === 'disabled'
-      ? 'disabled'
-      : clean(payload.overtimePolicy) === 'auto_approved'
-        ? 'auto_approved'
-        : 'review_only';
+    const overtimePolicy: OvertimePolicy =
+      clean(payload.overtimePolicy) === 'disabled'
+        ? 'disabled'
+        : clean(payload.overtimePolicy) === 'auto_approved'
+          ? 'auto_approved'
+          : 'review_only';
     const hourlyRate = payload.hourlyRate == null ? null : Number(payload.hourlyRate);
     const expectedDailyHours = payload.expectedDailyHours == null ? null : Number(payload.expectedDailyHours);
     const scheduledCheckInTime = normalizeTimeOnly(payload.scheduledCheckInTime);
@@ -614,30 +684,62 @@ export class HrEmployeesService {
     }
     const bookDigits = await tenantBookDigits(this.db, auth.tenantId || '');
     if (compensationType === 'hourly') {
-      if (hourlyRate == null || !Number.isFinite(hourlyRate) || hourlyRate <= 0
-        || expectedDailyHours == null || !Number.isFinite(expectedDailyHours)
-        || expectedDailyHours <= 0 || expectedDailyHours > 24) {
-        throw new AppError('موظف الساعة يحتاج أجر ساعة موجبًا وساعات عمل يومية بين صفر و24 (غير شاملة الصفر)', 'HR_HOURLY_WAGE_SCHEDULE_INVALID', 400);
+      if (
+        hourlyRate == null ||
+        !Number.isFinite(hourlyRate) ||
+        hourlyRate <= 0 ||
+        expectedDailyHours == null ||
+        !Number.isFinite(expectedDailyHours) ||
+        expectedDailyHours <= 0 ||
+        expectedDailyHours > 24
+      ) {
+        throw new AppError(
+          'موظف الساعة يحتاج أجر ساعة موجبًا وساعات عمل يومية بين صفر و24 (غير شاملة الصفر)',
+          'HR_HOURLY_WAGE_SCHEDULE_INVALID',
+          400,
+        );
       }
-      try { requireStoredHrMoney(hourlyRate, bookDigits); } catch {
-        throw new AppError('أجر الساعة يجب أن يكون بدقة دفاتر المنشأة دون تقريب', 'HR_HOURLY_MONEY_PRECISION_INVALID', 400);
+      try {
+        requireStoredHrMoney(hourlyRate, bookDigits);
+      } catch {
+        throw new AppError(
+          'أجر الساعة يجب أن يكون بدقة دفاتر المنشأة دون تقريب',
+          'HR_HOURLY_MONEY_PRECISION_INVALID',
+          400,
+        );
       }
     }
-    if (![commissionValue, commissionTarget, insuranceSalary].every(x => x == null || (Number.isFinite(x) && x >= 0))) {
+    if (
+      ![commissionValue, commissionTarget, insuranceSalary].every((x) => x == null || (Number.isFinite(x) && x >= 0))
+    ) {
       throw new AppError('مبلغ العمولة أو الهدف أو الأجر التأميني غير صحيح', 'HR_EMPLOYEE_PAY_FIELDS_INVALID', 400);
     }
-    if (commissionValue !== null && clean(payload.commissionType) === 'percentage' && commissionValue > 100
-      || commissionValue !== null && clean(payload.commissionType) === 'target_percentage' && commissionValue > 100) {
+    if (
+      (commissionValue !== null && clean(payload.commissionType) === 'percentage' && commissionValue > 100) ||
+      (commissionValue !== null && clean(payload.commissionType) === 'target_percentage' && commissionValue > 100)
+    ) {
       throw new AppError('نسبة العمولة يجب أن تكون من صفر إلى 100', 'HR_COMMISSION_PERCENT_INVALID', 400);
     }
     if (commissionValue !== null && clean(payload.commissionType) === 'fixed') {
-      try { requireStoredHrMoney(commissionValue, bookDigits); } catch {
-        throw new AppError('العمولة الثابتة يجب أن تكون بدقة دفاتر المنشأة دون تقريب', 'HR_COMMISSION_MONEY_PRECISION_INVALID', 400);
+      try {
+        requireStoredHrMoney(commissionValue, bookDigits);
+      } catch {
+        throw new AppError(
+          'العمولة الثابتة يجب أن تكون بدقة دفاتر المنشأة دون تقريب',
+          'HR_COMMISSION_MONEY_PRECISION_INVALID',
+          400,
+        );
       }
     }
     if (insuranceSalary !== null) {
-      try { requireStoredHrMoney(insuranceSalary, bookDigits); } catch {
-        throw new AppError('الأجر التأميني يجب أن يكون بدقة دفاتر المنشأة دون تقريب', 'HR_INSURANCE_WAGE_PRECISION_INVALID', 400);
+      try {
+        requireStoredHrMoney(insuranceSalary, bookDigits);
+      } catch {
+        throw new AppError(
+          'الأجر التأميني يجب أن يكون بدقة دفاتر المنشأة دون تقريب',
+          'HR_INSURANCE_WAGE_PRECISION_INVALID',
+          400,
+        );
       }
     }
     if (!Number.isFinite(graceMinutes) || graceMinutes > 1440) {
@@ -651,13 +753,23 @@ export class HrEmployeesService {
     // The HR employee identifier can be an Egyptian ID, GCC civil/national ID,
     // or residency number. Fixed 14-digit Egyptian validation rejected GCC hires.
     if (nationalId && !/^\d{6,20}$/.test(nationalId)) {
-      throw new AppError('رقم الهوية الوطنية أو الإقامة يجب أن يكون من 6 إلى 20 رقمًا.', 'HR_EMPLOYEE_NATIONAL_ID_INVALID', 400);
+      throw new AppError(
+        'رقم الهوية الوطنية أو الإقامة يجب أن يكون من 6 إلى 20 رقمًا.',
+        'HR_EMPLOYEE_NATIONAL_ID_INVALID',
+        400,
+      );
     }
     if (payload.status === 'terminated') {
-      throw new AppError('إنهاء الخدمة لا يتم بتعديل ملف الموظف؛ استخدم مسار نهاية الخدمة والمخالصات', 'HR_TERMINATION_WORKFLOW_REQUIRED', 400);
+      throw new AppError(
+        'إنهاء الخدمة لا يتم بتعديل ملف الموظف؛ استخدم مسار نهاية الخدمة والمخالصات',
+        'HR_TERMINATION_WORKFLOW_REQUIRED',
+        400,
+      );
     }
-    if (payload.annualLeaveBalance !== undefined &&
-      (!Number.isFinite(Number(payload.annualLeaveBalance)) || Number(payload.annualLeaveBalance) < 0)) {
+    if (
+      payload.annualLeaveBalance !== undefined &&
+      (!Number.isFinite(Number(payload.annualLeaveBalance)) || Number(payload.annualLeaveBalance) < 0)
+    ) {
       throw new AppError('رصيد الإجازة السنوية غير صحيح', 'HR_ANNUAL_LEAVE_BALANCE_INVALID', 400);
     }
     if (id && payload.initialContractBaseSalary !== undefined) {
@@ -675,7 +787,7 @@ export class HrEmployeesService {
 
     try {
       if (id) {
-        await this.tx.runInTransaction(this.db, async trx => {
+        await this.tx.runInTransaction(this.db, async (trx) => {
           // Payroll approval takes this lock before all employee snapshots.
           // Without it salary/attendance/insurance profile fields could change
           // between a reviewed snapshot recalculation and final ledger posting.
@@ -684,14 +796,18 @@ export class HrEmployeesService {
             SELECT status FROM hr_employees
             WHERE id = ${id} AND tenant_id = ${auth.tenantId} FOR UPDATE
           `.execute(trx);
-        if (!existingStatus.rows.length) throw new NotFoundException('Employee not found');
-        if (existingStatus.rows[0].status === 'terminated' && payload.status && payload.status !== 'terminated') {
-          throw new AppError('لا يمكن إعادة تفعيل موظف انتهت خدمته بمجرد تعديل ملفه', 'HR_TERMINATED_EMPLOYEE_REACTIVATE_LOCKED', 400);
-        }
-        if (employeeNo) {
-          await this.ensureEmployeeNoAvailable(trx, employeeNo, id, auth);
-        }
-        await sql`
+          if (!existingStatus.rows.length) throw new NotFoundException('Employee not found');
+          if (existingStatus.rows[0].status === 'terminated' && payload.status && payload.status !== 'terminated') {
+            throw new AppError(
+              'لا يمكن إعادة تفعيل موظف انتهت خدمته بمجرد تعديل ملفه',
+              'HR_TERMINATED_EMPLOYEE_REACTIVATE_LOCKED',
+              400,
+            );
+          }
+          if (employeeNo) {
+            await this.ensureEmployeeNoAvailable(trx, employeeNo, id, auth);
+          }
+          await sql`
           UPDATE hr_employees
           SET employee_no = COALESCE(NULLIF(${employeeNo}, ''), employee_no), user_id = CASE WHEN ${payload.userId === undefined} THEN user_id ELSE ${toId(payload.userId)} END, first_name = ${firstName}, last_name = ${lastName}, display_name = ${displayName},
               national_id = CASE WHEN ${payload.nationalId === undefined} THEN national_id ELSE ${nationalId || null} END,
@@ -729,14 +845,22 @@ export class HrEmployeesService {
           WHERE id = ${id} AND tenant_id = ${auth.tenantId}
         `.execute(trx);
 
-        if (cleanPhone) {
-          const existing = await sql<{ id: number }>`SELECT id FROM hr_employee_contacts WHERE employee_id = ${id} AND tenant_id = ${auth.tenantId} ORDER BY is_primary DESC, id ASC LIMIT 1`.execute(trx);
-          if (existing.rows.length > 0) {
-            await sql`UPDATE hr_employee_contacts SET value = ${cleanPhone}, contact_type = 'mobile', is_primary = true, updated_by = ${auth.userId}, updated_at = NOW() WHERE id = ${existing.rows[0].id} AND tenant_id = ${auth.tenantId}`.execute(trx);
-          } else {
-            await sql`INSERT INTO hr_employee_contacts (tenant_id, account_id, employee_id, contact_type, value, label, is_primary, notes, created_by, updated_by) VALUES (${auth.tenantId}, ${auth.accountId}, ${id}, 'mobile', ${cleanPhone}, 'الموبايل الأساسي', true, '', ${auth.userId}, ${auth.userId})`.execute(trx);
+          if (cleanPhone) {
+            const existing = await sql<{
+              id: number;
+            }>`SELECT id FROM hr_employee_contacts WHERE employee_id = ${id} AND tenant_id = ${auth.tenantId} ORDER BY is_primary DESC, id ASC LIMIT 1`.execute(
+              trx,
+            );
+            if (existing.rows.length > 0) {
+              await sql`UPDATE hr_employee_contacts SET value = ${cleanPhone}, contact_type = 'mobile', is_primary = true, updated_by = ${auth.userId}, updated_at = NOW() WHERE id = ${existing.rows[0].id} AND tenant_id = ${auth.tenantId}`.execute(
+                trx,
+              );
+            } else {
+              await sql`INSERT INTO hr_employee_contacts (tenant_id, account_id, employee_id, contact_type, value, label, is_primary, notes, created_by, updated_by) VALUES (${auth.tenantId}, ${auth.accountId}, ${id}, 'mobile', ${cleanPhone}, 'الموبايل الأساسي', true, '', ${auth.userId}, ${auth.userId})`.execute(
+                trx,
+              );
+            }
           }
-        }
         });
       } else {
         await this.tx.runInTransaction(this.db, async (trx) => {
@@ -745,7 +869,7 @@ export class HrEmployeesService {
           await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
           await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-employee:' + auth.tenantId}))`.execute(trx);
           const businessTz = await getTenantTimezone(trx, auth.tenantId || '');
-          const nextEmployeeNo = employeeNo || await this.nextAvailableEmployeeNo(trx, auth);
+          const nextEmployeeNo = employeeNo || (await this.nextAvailableEmployeeNo(trx, auth));
           await this.ensureEmployeeNoAvailable(trx, nextEmployeeNo, null, auth);
           const insertResult = await sql<{ id: number }>`
             INSERT INTO hr_employees (tenant_id, account_id, employee_no, national_id, pin_hash, pin_salt, user_id, first_name, last_name, display_name, status, department_id, job_title_id, position_id, branch_id, location_id, hire_date, notes, compensation_type, pay_frequency, hourly_rate, expected_daily_hours, scheduled_check_in_time, scheduled_check_out_time, grace_minutes, overtime_policy, attendance_policy, commission_type, commission_value, commission_target, delay_policy, has_social_insurance, insurance_salary, has_income_tax, bank_name, bank_account_number, iban, bank_swift_code, annual_leave_balance, created_by, updated_by)
@@ -756,26 +880,51 @@ export class HrEmployeesService {
           if (newId) {
             savedEmployeeId = String(newId);
             if (cleanPhone) {
-              await sql`INSERT INTO hr_employee_contacts (tenant_id, account_id, employee_id, contact_type, value, label, is_primary, notes, created_by, updated_by) VALUES (${auth.tenantId}, ${auth.accountId}, ${newId}, 'mobile', ${cleanPhone}, 'الموبايل الأساسي', true, '', ${auth.userId}, ${auth.userId})`.execute(trx);
+              await sql`INSERT INTO hr_employee_contacts (tenant_id, account_id, employee_id, contact_type, value, label, is_primary, notes, created_by, updated_by) VALUES (${auth.tenantId}, ${auth.accountId}, ${newId}, 'mobile', ${cleanPhone}, 'الموبايل الأساسي', true, '', ${auth.userId}, ${auth.userId})`.execute(
+                trx,
+              );
             }
             if (payload.initialContractBaseSalary !== undefined) {
               const contractSalary = Number(payload.initialContractBaseSalary);
               const contractCurrency = clean(payload.initialContractCurrency).toUpperCase();
-              if (!Number.isFinite(contractSalary) || contractSalary < 0 || !hireDate || !/^[A-Z]{3}$/.test(contractCurrency)) {
-                throw new AppError('تاريخ التعيين وقيمة المرتب والعملة مطلوبة للعقد الأولي', 'HR_INITIAL_CONTRACT_INVALID', 400);
+              if (
+                !Number.isFinite(contractSalary) ||
+                contractSalary < 0 ||
+                !hireDate ||
+                !/^[A-Z]{3}$/.test(contractCurrency)
+              ) {
+                throw new AppError(
+                  'تاريخ التعيين وقيمة المرتب والعملة مطلوبة للعقد الأولي',
+                  'HR_INITIAL_CONTRACT_INVALID',
+                  400,
+                );
               }
               if (compensationType === 'monthly' && contractSalary <= 0) {
-                throw new AppError('العقد الشهري يحتاج راتبًا أساسيًا أكبر من صفر', 'HR_INITIAL_CONTRACT_SALARY_REQUIRED', 400);
+                throw new AppError(
+                  'العقد الشهري يحتاج راتبًا أساسيًا أكبر من صفر',
+                  'HR_INITIAL_CONTRACT_SALARY_REQUIRED',
+                  400,
+                );
               }
               const tenantCurrency = await sql<{ value: string }>`
                 SELECT value FROM settings WHERE tenant_id = ${auth.tenantId} AND key = 'currency' LIMIT 1
               `.execute(trx);
               const currencySetting = clean(tenantCurrency.rows[0]?.value).replace(/^"|"$/g, '').toUpperCase();
               if (!currencySetting || currencySetting !== contractCurrency) {
-                throw new AppError('عملة العقد يجب أن تطابق عملة المنشأة المحددة في الإعدادات', 'HR_INITIAL_CONTRACT_CURRENCY_MISMATCH', 400);
+                throw new AppError(
+                  'عملة العقد يجب أن تطابق عملة المنشأة المحددة في الإعدادات',
+                  'HR_INITIAL_CONTRACT_CURRENCY_MISMATCH',
+                  400,
+                );
               }
-              try { requireStoredHrMoney(contractSalary, currencyMoneyDigits(currencySetting)); } catch {
-                throw new AppError('راتب العقد الأولي يجب أن يكون بدقة دفاتر المنشأة دون تقريب', 'HR_INITIAL_CONTRACT_MONEY_PRECISION_INVALID', 400);
+              try {
+                requireStoredHrMoney(contractSalary, currencyMoneyDigits(currencySetting));
+              } catch {
+                throw new AppError(
+                  'راتب العقد الأولي يجب أن يكون بدقة دفاتر المنشأة دون تقريب',
+                  'HR_INITIAL_CONTRACT_MONEY_PRECISION_INVALID',
+                  400,
+                );
               }
               const insertedContract = await sql<{ id: number }>`
                 INSERT INTO hr_employment_contracts (
@@ -809,35 +958,55 @@ export class HrEmployeesService {
       throw error;
     }
 
-    await this.audit.log(`${id ? 'Update' : 'Create'} HR employee`, `Employee ${displayName} saved by ${auth.username}`, auth);
+    await this.audit.log(
+      `${id ? 'Update' : 'Create'} HR employee`,
+      `Employee ${displayName} saved by ${auth.username}`,
+      auth,
+    );
     return { ok: true, id: savedEmployeeId, ...(await this.listEmployees({}, auth)) };
   }
 
   async updateEmployeeStatus(id: number, status: string, auth: AuthContext): Promise<Record<string, unknown>> {
     await this.assertEmployeeBelongsToTenant(id, auth);
     if (status === 'terminated') {
-      throw new AppError('استخدم إجراء إنهاء الخدمة المعتمد وليس تعديل حالة الموظف', 'HR_TERMINATION_WORKFLOW_REQUIRED', 400);
+      throw new AppError(
+        'استخدم إجراء إنهاء الخدمة المعتمد وليس تعديل حالة الموظف',
+        'HR_TERMINATION_WORKFLOW_REQUIRED',
+        400,
+      );
     }
     const validStatus = ['active', 'inactive', 'deactivated'].includes(status) ? status : 'active';
-    await this.tx.runInTransaction(this.db, async trx => {
+    await this.tx.runInTransaction(this.db, async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
       const existing = await sql<{ status: string }>`
         SELECT status FROM hr_employees WHERE id = ${id} AND tenant_id = ${auth.tenantId} FOR UPDATE
       `.execute(trx);
       if (!existing.rows.length) throw new NotFoundException('Employee not found');
       if (existing.rows[0].status === 'terminated') {
-        throw new AppError('لا يمكن إعادة تفعيل موظف انتهت خدمته بدون إجراءات إعادة تعيين', 'HR_TERMINATED_EMPLOYEE_REACTIVATE_LOCKED', 409);
+        throw new AppError(
+          'لا يمكن إعادة تفعيل موظف انتهت خدمته بدون إجراءات إعادة تعيين',
+          'HR_TERMINATED_EMPLOYEE_REACTIVATE_LOCKED',
+          409,
+        );
       }
       await sql`
         UPDATE hr_employees SET status = ${validStatus}, updated_by = ${auth.userId}, updated_at = NOW()
         WHERE id = ${id} AND tenant_id = ${auth.tenantId} AND status <> 'terminated'
       `.execute(trx);
     });
-    await this.audit.log('Update HR employee status', `Employee #${id} status changed to ${validStatus} by ${auth.username}`, auth);
+    await this.audit.log(
+      'Update HR employee status',
+      `Employee #${id} status changed to ${validStatus} by ${auth.username}`,
+      auth,
+    );
     return { ok: true, ...(await this.listEmployees({}, auth)) };
   }
 
-  async updateEmployeeCredentials(employeeId: number, payload: UpdateEmployeeCredentialsDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async updateEmployeeCredentials(
+    employeeId: number,
+    payload: UpdateEmployeeCredentialsDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const { tenantId, accountId } = requireTenantScope(auth);
     const cleanPin = String(payload.pinCode || '').trim();
     const cleanPhone = String(payload.phone || '').trim();
@@ -845,7 +1014,7 @@ export class HrEmployeesService {
     // block other employee punch/profile operations.
     if (cleanPin) assertSecurePasscode(cleanPin, { phone: cleanPhone });
     const pinRecord = cleanPin ? await createPasswordRecord(cleanPin) : null;
-    await this.tx.runInTransaction(this.db, async trx => {
+    await this.tx.runInTransaction(this.db, async (trx) => {
       const employee = await sql<{ id: number }>`
         SELECT id FROM hr_employees WHERE id = ${employeeId} AND tenant_id = ${tenantId} FOR UPDATE
       `.execute(trx);
@@ -882,12 +1051,16 @@ export class HrEmployeesService {
         }
       }
     });
-    await this.audit.log('Update HR employee credentials', `Employee #${employeeId} credentials updated by ${auth.username}`, auth);
+    await this.audit.log(
+      'Update HR employee credentials',
+      `Employee #${employeeId} credentials updated by ${auth.username}`,
+      auth,
+    );
     return { ok: true, ...(await this.listEmployees({}, auth)) };
   }
 
   async deactivateEmployee(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
-    await this.tx.runInTransaction(this.db, async trx => {
+    await this.tx.runInTransaction(this.db, async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
       const status = await sql<{ status: string }>`
         SELECT status FROM hr_employees WHERE id = ${id} AND tenant_id = ${auth.tenantId} FOR UPDATE
@@ -912,6 +1085,19 @@ export class HrEmployeesService {
       WHERE employee_id = ${employeeId} AND tenant_id = ${auth.tenantId} 
       ORDER BY id DESC
     `.execute(this.db);
-    return { rows: result.rows.map((row) => ({ id: String(row.id), employeeId: String(row.employee_id), entryType: clean(row.entry_type), amount: Number(row.amount || 0), balanceAfter: Number(row.balance_after || 0), note: clean(row.note), repaymentMethod: clean(row.repayment_method), referenceType: clean(row.reference_type), referenceId: row.reference_id ? String(row.reference_id) : '', createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at) })) };
+    return {
+      rows: result.rows.map((row) => ({
+        id: String(row.id),
+        employeeId: String(row.employee_id),
+        entryType: clean(row.entry_type),
+        amount: Number(row.amount || 0),
+        balanceAfter: Number(row.balance_after || 0),
+        note: clean(row.note),
+        repaymentMethod: clean(row.repayment_method),
+        referenceType: clean(row.reference_type),
+        referenceId: row.reference_id ? String(row.reference_id) : '',
+        createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      })),
+    };
   }
 }

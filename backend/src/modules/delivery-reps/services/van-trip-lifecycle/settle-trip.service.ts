@@ -5,10 +5,25 @@ import { AppError } from '../../../../common/errors/app-error';
 import { Database } from '../../../../database/database.types';
 import { AccountingPostingService } from '../../../accounting/accounting-posting.service';
 import { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
-import { evaluateOdometerReadings, evaluateMakerCheckerSettlement, evaluateNightStockRetention, reconcileVanStockAudit } from '../../van-trip-reconciliation.engine';
-import { allocateDayRemittance, normalizePerDayCash, parseSubmittedPerDayCash, sumPerDayCash, type PerDayCashInput } from '../../van-settlement-split.engine';
+import {
+  evaluateOdometerReadings,
+  evaluateMakerCheckerSettlement,
+  evaluateNightStockRetention,
+  reconcileVanStockAudit,
+} from '../../van-trip-reconciliation.engine';
+import {
+  allocateDayRemittance,
+  normalizePerDayCash,
+  parseSubmittedPerDayCash,
+  sumPerDayCash,
+  type PerDayCashInput,
+} from '../../van-settlement-split.engine';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
+import {
+  currencyMoneyDigits,
+  roundMoney,
+  type MoneyDigits,
+} from '../../../accounting/engines/money-minor-units.engine';
 import { computeCashDrawerVariance } from '../../../cash-drawer/helpers/cash-drawer.helper';
 import { getTenantTimezone, normalizePgDateOnly, todayTenantDate } from '../../../../common/utils/tenant-timezone.util';
 import type { VanTripLifecycleDeps } from './van-trip-types';
@@ -35,7 +50,7 @@ export class SettleTripService {
     return this.db as any;
   }
 
-/**
+  /**
    * Final audit and settlement of a van trip.
    * Can be executed by supervisor/cashier (with Maker-Checker check against the rep).
    * Performs physical stock audit, handles overnight stock (Night Stock), unloads inventory
@@ -145,8 +160,12 @@ export class SettleTripService {
     // the approver is unknown (legacy direct call) and stays null.
     const hasExplicitSupervisor = payload.supervisorId !== undefined;
     const actorUserId = hasExplicitSupervisor
-      ? (payload.supervisorId != null && Number(payload.supervisorId) > 0 ? Number(payload.supervisorId) : 0)
-      : (authContext?.userId ? Number(authContext.userId) : 0);
+      ? payload.supervisorId != null && Number(payload.supervisorId) > 0
+        ? Number(payload.supervisorId)
+        : 0
+      : authContext?.userId
+        ? Number(authContext.userId)
+        : 0;
     // The approval method, for the trip notes and the settlement
     // audit row: explicit when the caller recorded it, 'account'
     // when a named session settled it, 'unrecorded' otherwise.
@@ -182,9 +201,7 @@ export class SettleTripService {
       const isSupervisor =
         ['admin', 'super_admin'].includes(authContext.role) ||
         (authContext.permissions &&
-          authContext.permissions.some((p: string) =>
-            ['deliveryReps', 'accounting'].includes(p),
-          ));
+          authContext.permissions.some((p: string) => ['deliveryReps', 'accounting'].includes(p)));
 
       const makerChecker = evaluateMakerCheckerSettlement({
         repUserId,
@@ -235,7 +252,12 @@ export class SettleTripService {
           : Boolean(payload.chargeStockVarianceToRep);
 
     // Odometer validation
-    const effectiveEndOdometer = payload.endOdometer !== undefined ? payload.endOdometer : (trip.end_odometer !== null ? Number(trip.end_odometer) : undefined);
+    const effectiveEndOdometer =
+      payload.endOdometer !== undefined
+        ? payload.endOdometer
+        : trip.end_odometer !== null
+          ? Number(trip.end_odometer)
+          : undefined;
     const odometerResult = evaluateOdometerReadings({
       startOdometer: trip.start_odometer,
       endOdometer: effectiveEndOdometer,
@@ -250,7 +272,9 @@ export class SettleTripService {
         eventCode: AUDIT_EVENT_CODES.VAN_SUSPICION_ODOMETER_ROLLBACK,
         severity: 'high',
         titleAr: 'تلاعب في قراءة عداد الكيلومترات عند التصفية النهائية',
-        detailsAr: odometerResult.errorMessageAr || `قراءة العداد النهائية (${effectiveEndOdometer}) أقل من قراءة البداية (${trip.start_odometer}).`,
+        detailsAr:
+          odometerResult.errorMessageAr ||
+          `قراءة العداد النهائية (${effectiveEndOdometer}) أقل من قراءة البداية (${trip.start_odometer}).`,
         // M18: the actor is the rep settling the trip.
         actorUserId: repUserId ?? (actorUserId > 0 ? actorUserId : null),
         metadata: {
@@ -303,7 +327,22 @@ export class SettleTripService {
       // 'settled' and fails closed instead of repeating the effects.
       const lockedTrip = await trxAny
         .selectFrom('van_sales_trips')
-        .select(['id', 'status', 'van_location_id', 'source_warehouse_id', 'cash_collected', 'vehicle_id', 'sales_amount', 'credit_sales', 'returns_amount', 'cash_refunds', 'total_instapay_sales', 'total_instapay_collections', 'business_day', 'submitted_per_day_cash'])
+        .select([
+          'id',
+          'status',
+          'van_location_id',
+          'source_warehouse_id',
+          'cash_collected',
+          'vehicle_id',
+          'sales_amount',
+          'credit_sales',
+          'returns_amount',
+          'cash_refunds',
+          'total_instapay_sales',
+          'total_instapay_collections',
+          'business_day',
+          'submitted_per_day_cash',
+        ])
         .where('id', '=', payload.tripId)
         .where('tenant_id', '=', tenantId)
         .where('rep_id', '=', repId)
@@ -356,25 +395,45 @@ export class SettleTripService {
         try {
           effectivePerDay = parseSubmittedPerDayCash((lockedTrip as any).submitted_per_day_cash, bookDigits);
         } catch (e: any) {
-          throw new AppError('تفصيل النقدية بالأيام المحفوظ غير صالح', String(e?.message || 'SETTLEMENT_PER_DAY_INVALID'), 400);
+          throw new AppError(
+            'تفصيل النقدية بالأيام المحفوظ غير صالح',
+            String(e?.message || 'SETTLEMENT_PER_DAY_INVALID'),
+            400,
+          );
         }
       }
       if (spannedDays.length > 1 && !effectivePerDay) {
-        throw new AppError('هذه الرحلة تمتد على أكثر من يوم؛ يجب إدخال النقدية المعدودة لكل يوم على حدة قبل التصفية', 'SETTLEMENT_REQUIRES_PER_DAY_BREAKDOWN', 400);
+        throw new AppError(
+          'هذه الرحلة تمتد على أكثر من يوم؛ يجب إدخال النقدية المعدودة لكل يوم على حدة قبل التصفية',
+          'SETTLEMENT_REQUIRES_PER_DAY_BREAKDOWN',
+          400,
+        );
       }
       if (effectivePerDay) {
         if (sumPerDayCash(effectivePerDay, bookDigits) !== roundMoney(countedCash, bookDigits)) {
-          throw new AppError('مجموع النقدية بالأيام لا يساوي إجمالي النقدية المعدودة', 'SETTLEMENT_PER_DAY_MISMATCH', 400);
+          throw new AppError(
+            'مجموع النقدية بالأيام لا يساوي إجمالي النقدية المعدودة',
+            'SETTLEMENT_PER_DAY_MISMATCH',
+            400,
+          );
         }
         const spannedKeys = new Set(spannedDays.map((b) => b.businessDay));
         for (const day of effectivePerDay) {
           if (!spannedKeys.has(day.businessDay) && day.countedCash > 0) {
-            throw new AppError(`لا توجد حركة نقدية في يوم ${day.businessDay} ضمن هذه الرحلة`, 'SETTLEMENT_PER_DAY_UNKNOWN_DAY', 400);
+            throw new AppError(
+              `لا توجد حركة نقدية في يوم ${day.businessDay} ضمن هذه الرحلة`,
+              'SETTLEMENT_PER_DAY_UNKNOWN_DAY',
+              400,
+            );
           }
         }
         for (const b of spannedDays) {
           if (!effectivePerDay.some((d) => d.businessDay === b.businessDay)) {
-            throw new AppError(`يوم ${b.businessDay} له حركة نقدية ولم يُدخل له مبلغ معدود`, 'SETTLEMENT_PER_DAY_MISSING_DAY', 400);
+            throw new AppError(
+              `يوم ${b.businessDay} له حركة نقدية ولم يُدخل له مبلغ معدود`,
+              'SETTLEMENT_PER_DAY_MISSING_DAY',
+              400,
+            );
           }
         }
       }
@@ -426,9 +485,7 @@ export class SettleTripService {
       // same false certification this fix removes. A van with no
       // remaining stock has no uncounted items and settles normally.
       if (stockAuditResult.hasUncountedItems) {
-        const names = stockAuditResult.uncountedItems
-          .map((u) => `${u.productName} (#${u.productId})`)
-          .join('، ');
+        const names = stockAuditResult.uncountedItems.map((u) => `${u.productName} (#${u.productId})`).join('، ');
         throw new AppError(
           `لا يمكن تصفية الرحلة قبل اكتمال الجرد: الأصناف التالية لم تُعدّ بعد — ${names}. أعدّ كل صنف في السيارة (أو أكّد كميته بعد الفحص الفعلي) ثم أعد التصفية.`,
           'VAN_STOCK_AUDIT_INCOMPLETE',
@@ -566,9 +623,23 @@ export class SettleTripService {
           });
 
           // INV-VAN-FEFO-BATCHES: the batches return with the goods.
-          await this.moveVanPharmacyBatches(trx, { tenantId, accountId }, pid, qty, vanLocationId, Number(lockedTrip.source_warehouse_id));
+          await this.moveVanPharmacyBatches(
+            trx,
+            { tenantId, accountId },
+            pid,
+            qty,
+            vanLocationId,
+            Number(lockedTrip.source_warehouse_id),
+          );
           // INV-VAN-GENERIC-FEFO: the generic batches return too.
-          await this.moveVanInventoryBatches(trx, { tenantId, accountId }, pid, qty, vanLocationId, Number(lockedTrip.source_warehouse_id));
+          await this.moveVanInventoryBatches(
+            trx,
+            { tenantId, accountId },
+            pid,
+            qty,
+            vanLocationId,
+            Number(lockedTrip.source_warehouse_id),
+          );
 
           // In to warehouse
           await this.moveVanStock(trx, {
@@ -611,7 +682,9 @@ export class SettleTripService {
       // the per-day rows below, not on the trip).
       const tripBusinessDay = (lockedTrip as any).business_day
         ? normalizePgDateOnly((lockedTrip as any).business_day)
-        : (spannedDays.length === 1 ? spannedDays[0].businessDay : '');
+        : spannedDays.length === 1
+          ? spannedDays[0].businessDay
+          : '';
       await trxAny
         .updateTable('van_sales_trips')
         .set({
@@ -622,9 +695,11 @@ export class SettleTripService {
           settled_by: actorUserId || null,
           supervisor_id: actorUserId || null,
           stock_variance_amount: totalStockVarianceCost,
-          stock_variance_details: stockAuditResult?.itemVariances?.length ? JSON.stringify(stockAuditResult.itemVariances) : null,
+          stock_variance_details: stockAuditResult?.itemVariances?.length
+            ? JSON.stringify(stockAuditResult.itemVariances)
+            : null,
           night_stock_approved: Boolean(payload.nightStockApproved),
-          night_stock_approved_by: payload.nightStockApproved ? (actorUserId || null) : null,
+          night_stock_approved_by: payload.nightStockApproved ? actorUserId || null : null,
           night_stock_notes: payload.nightStockNotes || null,
           end_odometer: effectiveEndOdometer ?? null,
           distance_km: odometerResult.distanceKm,
@@ -693,7 +768,7 @@ export class SettleTripService {
             amount: totalStockVarianceCost,
             status: effectiveChargeToRep ? 'pending' : 'waived',
             settled_at: effectiveChargeToRep ? null : sql`NOW()`,
-            settled_by: effectiveChargeToRep ? null : (actorUserId || null),
+            settled_by: effectiveChargeToRep ? null : actorUserId || null,
             settlement_method: effectiveChargeToRep ? null : 'waiver',
             notes: `عجز جرد بضاعة رحلة #${payload.tripId} ${effectiveChargeToRep ? '(محمل على المندوب)' : '(خسائر مستودع معفاة)'}`,
             created_at: sql`NOW()`,
@@ -823,12 +898,15 @@ export class SettleTripService {
       // allocations only. A day with zero counted cash writes no rows.
       const remittanceDays: PerDayCashInput[] = effectivePerDay
         ? effectivePerDay.filter((d) => d.countedCash > 0)
-        : [{
-            businessDay: spannedDays.length === 1
-              ? spannedDays[0].businessDay
-              : (normalizePgDateOnly((lockedTrip as any).business_day) || todayTenantDate(tenantTimezone)),
-            countedCash,
-          }];
+        : [
+            {
+              businessDay:
+                spannedDays.length === 1
+                  ? spannedDays[0].businessDay
+                  : normalizePgDateOnly((lockedTrip as any).business_day) || todayTenantDate(tenantTimezone),
+              countedCash,
+            },
+          ];
       const dailySplitEcho: Array<{ businessDay: string; due: number; countedCash: number; remittedCash: number }> = [];
       for (const day of remittanceDays) {
         const remittedCash = roundMoney(day.countedCash, bookDigits);
@@ -846,7 +924,7 @@ export class SettleTripService {
           amount: remittedCash,
           branchId,
           actorUserId,
-          createdBy: actorUserId > 0 ? actorUserId : (systemAuth.userId ? Number(systemAuth.userId) : null),
+          createdBy: actorUserId > 0 ? actorUserId : systemAuth.userId ? Number(systemAuth.userId) : null,
           businessDay: effectivePerDay ? day.businessDay : undefined,
         });
         const insertedSettlement = await trxAny
@@ -988,7 +1066,10 @@ export class SettleTripService {
       creditReturns,
       totalInstapaySales: Number(lockedTripTotals.total_instapay_sales || 0),
       totalInstapayCollections: Number(lockedTripTotals.total_instapay_collections || 0),
-      expectedBankTransfers: roundMoney(Number(lockedTripTotals.total_instapay_sales || 0) + Number(lockedTripTotals.total_instapay_collections || 0), bookDigits),
+      expectedBankTransfers: roundMoney(
+        Number(lockedTripTotals.total_instapay_sales || 0) + Number(lockedTripTotals.total_instapay_collections || 0),
+        bookDigits,
+      ),
       stockVariances: (stockAuditResult as any)?.itemVariances || [],
     };
   }

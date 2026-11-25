@@ -19,18 +19,18 @@
  * 1012; execute-field-sale-internal 1466 -> 1606, grown from
  * baseline 1468; employee-portal 1010 -> 1072, grown from baseline
  * 1010; full table in ~/workspace/audit/lint-prettier-log.md L5).
- * 9 of the 19 land at or below the user's 1110-line split cutoff
- * after formatting (ai-agent 1025, settle-trip 1076, van-sales
- * 1025, employee-portal 1072, biometric-log-parser 1035,
- * hr-employees 1103, import-commercial 1093,
- * import-projects-partners 1016, manufacturing 1102) and could be
- * formatted + baselined under the L4b precedent — but that decision
- * belongs to the parent, so they are STOPPED here like the other
- * 10. The guard pins the exception set exactly: if a 20th file
- * fails, or one of the 19 gets formatted, this spec goes red until
- * the list is updated deliberately. L8 deletes this spec when the
- * global backend-format-clean guard lands — the global guard
- * inherits the same exclusion until the 19 are resolved.
+ * L5b (parent decision 2026-11-25 05:24 EET, P3a/L4b precedent)
+ * formatted the 9 of the 19 that land at or below the user's
+ * 1110-line split cutoff after formatting (ai-agent 1025,
+ * settle-trip 1076, van-sales 1025, employee-portal 1072,
+ * biometric-log-parser 1035, hr-employees 1103, import-commercial
+ * 1093, import-projects-partners 1016, manufacturing 1102) and
+ * baselined them at their formatted counts, so exactly 10 remain
+ * excluded below. The guard pins the exception set exactly: if an
+ * 11th file fails, or one of the 10 gets formatted, this spec goes
+ * red until the list is updated deliberately. L8 deletes this spec
+ * when the global backend-format-clean guard lands — the global
+ * guard inherits the same exclusion until the 10 are resolved.
  *
  * This spec invokes `npx prettier --check` on the module globs so
  * the exact tool CI runs is what is asserted — in CI, `npm ci`
@@ -39,9 +39,11 @@
  *
  * Fail-first: on the pre-L5 tree this spec exits 1 (533 files fail,
  * not the 19); after L5 it exits 1 with exactly the 19 excluded
- * files failing. A second shape is proven by reverting one
- * formatted file (see the log): the spec goes red until it is
- * restored.
+ * files failing. On the pre-L5b tree this spec (with the exclusion
+ * set cut to 10) exits 1 (19 files fail, not the 10); after L5b it
+ * exits 1 with exactly the 10 excluded files failing. A second
+ * shape is proven by reverting one formatted file (see the log):
+ * the spec goes red until it is restored.
  */
 
 import { strict as assert } from 'node:assert';
@@ -85,20 +87,11 @@ const MODULES = [
 
 /** Files prettier --write would grow past the file-size cap. */
 const EXCLUDED: string[] = [
-  'src/modules/ai-copilot/services/ai-agent.service.ts',
   'src/modules/cash-drawer/cash-drawer-write.service.ts',
   'src/modules/contracting/services/contracting-pricing.service.ts',
   'src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts',
-  'src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts',
-  'src/modules/delivery-reps/van-sales.service.ts',
-  'src/modules/hr/employee-portal.service.ts',
-  'src/modules/hr/engines/biometric-log-parser.engine.ts',
-  'src/modules/hr/services/hr-employees.service.ts',
-  'src/modules/import-sales/services/import-commercial.service.ts',
-  'src/modules/import-sales/services/import-projects-partners.service.ts',
   'src/modules/import-sales/services/import-receipt-posting.service.ts',
   'src/modules/import-sales/services/import-shipments.service.ts',
-  'src/modules/manufacturing/services/manufacturing.service.ts',
   'src/modules/pricing/pricing.service.ts',
   'src/modules/reports/reports.service.ts',
   'src/modules/settings/services/demo-data/settings-demo-data-seed.ts',

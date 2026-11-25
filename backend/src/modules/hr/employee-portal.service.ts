@@ -6,7 +6,11 @@ import { AppError } from '../../common/errors/app-error';
 import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
 import { assertPortalTenantAllowed } from '../../core/auth/utils/portal-tenant-status';
 import { deductibleApprovedLeaveDays, type ApprovedLeaveDeductionRow } from './engines/leave-balance.engine';
-import { calculateLoanInstallmentSchedule, addLoanInstallmentMonths, requireLoanMoney } from './payroll-loan-allocation.engine';
+import {
+  calculateLoanInstallmentSchedule,
+  addLoanInstallmentMonths,
+  requireLoanMoney,
+} from './payroll-loan-allocation.engine';
 import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
 import { getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
@@ -150,7 +154,10 @@ export class EmployeePortalService {
     try {
       return await this.loginInternal(payload, rawIdentifier, rawPin);
     } catch (error) {
-      if (error instanceof AppError && ['EMPLOYEE_NOT_FOUND', 'INVALID_PIN', 'NO_ACTIVE_EMPLOYEES'].includes(error.code)) {
+      if (
+        error instanceof AppError &&
+        ['EMPLOYEE_NOT_FOUND', 'INVALID_PIN', 'NO_ACTIVE_EMPLOYEES'].includes(error.code)
+      ) {
         this.loginLimiter.recordFailure(rateLimitKey);
       }
       throw error;
@@ -166,8 +173,8 @@ export class EmployeePortalService {
     const cleanNoCountry = cleanDigits.startsWith('20')
       ? cleanDigits.slice(2)
       : cleanDigits.startsWith('0')
-      ? cleanDigits.slice(1)
-      : cleanDigits;
+        ? cleanDigits.slice(1)
+        : cleanDigits;
 
     const companyScope = payload?.companyCode || payload?.tenantId;
     let resolvedTenantId = companyScope ? String(companyScope).trim() : undefined;
@@ -188,21 +195,32 @@ export class EmployeePortalService {
 
     let contacts: Array<{ employee_id: number; value: string; contact_type: string }> = [];
     if (cleanNoCountry.length >= 8) {
-      let contactQuery = this.anyDb.selectFrom('hr_employee_contacts')
+      let contactQuery = this.anyDb
+        .selectFrom('hr_employee_contacts')
         .select(['employee_id', 'value', 'contact_type'])
         .where('contact_type', '=', 'phone')
-        .where(sql<boolean>`RIGHT(REGEXP_REPLACE(value, '[^0-9]', '', 'g'), ${cleanNoCountry.length}) = ${cleanNoCountry}`);
+        .where(
+          sql<boolean>`RIGHT(REGEXP_REPLACE(value, '[^0-9]', '', 'g'), ${cleanNoCountry.length}) = ${cleanNoCountry}`,
+        );
       if (resolvedTenantId) contactQuery = contactQuery.where('tenant_id', '=', resolvedTenantId);
       contacts = await contactQuery.execute();
     }
-    const contactEmployeeIds = [...new Set(contacts.map((contact) => Number(contact.employee_id)).filter((id) => id > 0))];
+    const contactEmployeeIds = [
+      ...new Set(contacts.map((contact) => Number(contact.employee_id)).filter((id) => id > 0)),
+    ];
 
     // Search only employees identified by the supplied number or phone contact.
     let employeesQuery = this.anyDb
       .selectFrom('hr_employees as e')
-      .leftJoin('branches as b', (join: any) => join.onRef('b.id', '=', 'e.branch_id').onRef('b.tenant_id', '=', 'e.tenant_id'))
-      .leftJoin('hr_departments as d', (join: any) => join.onRef('d.id', '=', 'e.department_id').onRef('d.tenant_id', '=', 'e.tenant_id'))
-      .leftJoin('hr_positions as pos', (join: any) => join.onRef('pos.id', '=', 'e.position_id').onRef('pos.tenant_id', '=', 'e.tenant_id'))
+      .leftJoin('branches as b', (join: any) =>
+        join.onRef('b.id', '=', 'e.branch_id').onRef('b.tenant_id', '=', 'e.tenant_id'),
+      )
+      .leftJoin('hr_departments as d', (join: any) =>
+        join.onRef('d.id', '=', 'e.department_id').onRef('d.tenant_id', '=', 'e.tenant_id'),
+      )
+      .leftJoin('hr_positions as pos', (join: any) =>
+        join.onRef('pos.id', '=', 'e.position_id').onRef('pos.tenant_id', '=', 'e.tenant_id'),
+      )
       .select([
         'e.id as employee_id',
         'e.employee_no',
@@ -223,7 +241,9 @@ export class EmployeePortalService {
       .where('e.status', '=', 'active');
 
     employeesQuery = contactEmployeeIds.length
-      ? employeesQuery.where((eb: any) => eb.or([eb('e.employee_no', 'ilike', rawIdentifier), eb('e.id', 'in', contactEmployeeIds)]))
+      ? employeesQuery.where((eb: any) =>
+          eb.or([eb('e.employee_no', 'ilike', rawIdentifier), eb('e.id', 'in', contactEmployeeIds)]),
+        )
       : employeesQuery.where('e.employee_no', 'ilike', rawIdentifier);
 
     if (resolvedTenantId) {
@@ -251,14 +271,18 @@ export class EmployeePortalService {
         const pNoCountry = pDigits.startsWith('20')
           ? pDigits.slice(2)
           : pDigits.startsWith('0')
-          ? pDigits.slice(1)
-          : pDigits;
+            ? pDigits.slice(1)
+            : pDigits;
         return cleanDigits.length >= 8 && (pDigits === cleanDigits || pNoCountry === cleanNoCountry);
       });
     });
 
     if (!matchedEmployees || matchedEmployees.length === 0) {
-      throw new AppError('بيانات الدخول غير صحيحة، يرجى التأكد من رقم الهاتف المحمول ورمز الدخول السري', 'EMPLOYEE_NOT_FOUND', 401);
+      throw new AppError(
+        'بيانات الدخول غير صحيحة، يرجى التأكد من رقم الهاتف المحمول ورمز الدخول السري',
+        'EMPLOYEE_NOT_FOUND',
+        401,
+      );
     }
 
     let matched: any = null;
@@ -266,7 +290,11 @@ export class EmployeePortalService {
     if (matchedEmployees.length === 1) {
       matched = matchedEmployees[0];
       if (!matched.pin_hash) {
-        throw new AppError('لم يتم تعيين رمز الدخول السري (PIN) لهذا الموظف بعد. يرجى مراجعة إدارة الموارد البشرية لتعيينه', 'INVALID_PIN', 401);
+        throw new AppError(
+          'لم يتم تعيين رمز الدخول السري (PIN) لهذا الموظف بعد. يرجى مراجعة إدارة الموارد البشرية لتعيينه',
+          'INVALID_PIN',
+          401,
+        );
       }
       const check = await verifyPassword(rawPin, String(matched.pin_hash), String(matched.pin_salt || ''));
       if (!check.valid) {
@@ -409,11 +437,7 @@ export class EmployeePortalService {
       newPin === '1234' ||
       (await verifyPassword(newPin, String(employee.pin_hash), String(employee.pin_salt || ''))).valid
     ) {
-      throw new AppError(
-        'الرمز الجديد ضعيف: يجب أن يكون 4 أحرف على الأقل، وأن يختلف عن الرمز الحالي',
-        'WEAK_PIN',
-        400,
-      );
+      throw new AppError('الرمز الجديد ضعيف: يجب أن يكون 4 أحرف على الأقل، وأن يختلف عن الرمز الحالي', 'WEAK_PIN', 400);
     }
 
     const record = await createPasswordRecord(newPin);
@@ -436,13 +460,18 @@ export class EmployeePortalService {
    * `this.db as any`. المصدر الحقيقي هو `hr_employees.annual_leave_balance`
    * (هجرة `2030000000006-hr-leave-balances`) مع `used_annual_leaves` المحدث ذرياً عند الاعتماد والإلغاء.
    */
-  private async computeLeaveBalances(employeeId: number, tenantId: string): Promise<Array<{
-    leave_type_id: number | null;
-    leave_type_name: string;
-    total_days: number;
-    used_days: number;
-    remaining_days: number;
-  }>> {
+  private async computeLeaveBalances(
+    employeeId: number,
+    tenantId: string,
+  ): Promise<
+    Array<{
+      leave_type_id: number | null;
+      leave_type_name: string;
+      total_days: number;
+      used_days: number;
+      remaining_days: number;
+    }>
+  > {
     const employee = await this.anyDb
       .selectFrom('hr_employees')
       .select(['annual_leave_balance', 'used_annual_leaves'])
@@ -468,7 +497,9 @@ export class EmployeePortalService {
     // INV-LEAVE-BALANCE-NOT-DEDUCTING.
     const approvedRows = await this.anyDb
       .selectFrom('hr_leave_requests as req')
-      .leftJoin('hr_leave_types as t', (join: any) => join.onRef('t.id', '=', 'req.leave_type_id').onRef('t.tenant_id', '=', 'req.tenant_id'))
+      .leftJoin('hr_leave_types as t', (join: any) =>
+        join.onRef('t.id', '=', 'req.leave_type_id').onRef('t.tenant_id', '=', 'req.tenant_id'),
+      )
       .select([
         'req.days_count',
         'req.leave_type_id',
@@ -481,9 +512,7 @@ export class EmployeePortalService {
       .where('req.tenant_id', '=', tenantId)
       .where('req.status', '=', 'approved')
       .execute();
-    const deductibleRows: ApprovedLeaveDeductionRow[] = (
-      approvedRows as Array<Record<string, unknown>>
-    ).map((row) => ({
+    const deductibleRows: ApprovedLeaveDeductionRow[] = (approvedRows as Array<Record<string, unknown>>).map((row) => ({
       daysCount: Number((row as { days_count?: unknown }).days_count || 0),
       leaveTypeId: (row as { leave_type_id?: number | null }).leave_type_id ?? null,
       leaveTypeCode: (row as { leave_type_code?: string | null }).leave_type_code ?? null,
@@ -495,13 +524,15 @@ export class EmployeePortalService {
     const totalDays = Math.max(0, Number(employee?.annual_leave_balance ?? 0));
     const usedDays = Math.max(0, Number(employee?.used_annual_leaves || 0), deductibleDays);
 
-    return [{
-      leave_type_id: annualType?.id != null ? Number(annualType.id) : null,
-      leave_type_name: annualType?.name || 'إجازة سنوية',
-      total_days: totalDays,
-      used_days: usedDays,
-      remaining_days: Math.max(0, totalDays - usedDays),
-    }];
+    return [
+      {
+        leave_type_id: annualType?.id != null ? Number(annualType.id) : null,
+        leave_type_name: annualType?.name || 'إجازة سنوية',
+        total_days: totalDays,
+        used_days: usedDays,
+        remaining_days: Math.max(0, totalDays - usedDays),
+      },
+    ];
   }
 
   /**
@@ -574,7 +605,9 @@ export class EmployeePortalService {
     // 6. Latest payslip
     const latestPayslip = await this.anyDb
       .selectFrom('hr_payroll_run_items as item')
-      .innerJoin('hr_payroll_runs as run', (join: any) => join.onRef('run.id', '=', 'item.run_id').onRef('run.tenant_id', '=', 'item.tenant_id'))
+      .innerJoin('hr_payroll_runs as run', (join: any) =>
+        join.onRef('run.id', '=', 'item.run_id').onRef('run.tenant_id', '=', 'item.tenant_id'),
+      )
       .select([
         'item.id',
         'item.run_id',
@@ -626,8 +659,12 @@ export class EmployeePortalService {
       todayAttendance: {
         hasCheckedIn: Boolean(todayAttendance?.check_in_at),
         hasCheckedOut: Boolean(todayAttendance?.check_out_at),
-        checkInTime: todayAttendance?.check_in_at ? new Date(todayAttendance.check_in_at).toLocaleTimeString('ar-EG') : null,
-        checkOutTime: todayAttendance?.check_out_at ? new Date(todayAttendance.check_out_at).toLocaleTimeString('ar-EG') : null,
+        checkInTime: todayAttendance?.check_in_at
+          ? new Date(todayAttendance.check_in_at).toLocaleTimeString('ar-EG')
+          : null,
+        checkOutTime: todayAttendance?.check_out_at
+          ? new Date(todayAttendance.check_out_at).toLocaleTimeString('ar-EG')
+          : null,
         workHours: Number(todayAttendance?.work_hours || 0),
         status: todayAttendance?.status || 'لم يبصم بعد',
       },
@@ -644,15 +681,17 @@ export class EmployeePortalService {
         usedDays: Number(b.used_days || 0),
         remainingDays: Number(b.remaining_days ?? 0),
       })),
-      latestPayslip: latestPayslip ? {
-        period: latestPayslip.period_month,
-        baseSalary: Number(latestPayslip.base_salary || 0),
-        allowanceAmount: Number(latestPayslip.allowance_amount || 0),
-        deductionAmount: Number(latestPayslip.deduction_amount || 0),
-        loanDeduction: Number(latestPayslip.loan_deduction_amount || 0),
-        netPay: Number(latestPayslip.net_pay || 0),
-        status: latestPayslip.status,
-      } : null,
+      latestPayslip: latestPayslip
+        ? {
+            period: latestPayslip.period_month,
+            baseSalary: Number(latestPayslip.base_salary || 0),
+            allowanceAmount: Number(latestPayslip.allowance_amount || 0),
+            deductionAmount: Number(latestPayslip.deduction_amount || 0),
+            loanDeduction: Number(latestPayslip.loan_deduction_amount || 0),
+            netPay: Number(latestPayslip.net_pay || 0),
+            status: latestPayslip.status,
+          }
+        : null,
       totalLoansRemaining,
     };
   }
@@ -691,7 +730,9 @@ export class EmployeePortalService {
   async getPayslips(employeeId: number, tenantId: string) {
     const items = await this.anyDb
       .selectFrom('hr_payroll_run_items as item')
-      .innerJoin('hr_payroll_runs as run', (join: any) => join.onRef('run.id', '=', 'item.run_id').onRef('run.tenant_id', '=', 'item.tenant_id'))
+      .innerJoin('hr_payroll_runs as run', (join: any) =>
+        join.onRef('run.id', '=', 'item.run_id').onRef('run.tenant_id', '=', 'item.tenant_id'),
+      )
       .select([
         'item.id',
         'item.run_id',
@@ -763,7 +804,9 @@ export class EmployeePortalService {
 
     const requests = await this.anyDb
       .selectFrom('hr_leave_requests as req')
-      .leftJoin('hr_leave_types as t', (join: any) => join.onRef('t.id', '=', 'req.leave_type_id').onRef('t.tenant_id', '=', 'req.tenant_id'))
+      .leftJoin('hr_leave_types as t', (join: any) =>
+        join.onRef('t.id', '=', 'req.leave_type_id').onRef('t.tenant_id', '=', 'req.tenant_id'),
+      )
       .select([
         'req.id',
         'req.leave_type_id',
@@ -841,8 +884,10 @@ export class EmployeePortalService {
       `.execute(trx);
       const employeeService = employee.rows[0];
       if (!employeeService) throw new AppError('الموظف غير نشط', 'EMPLOYEE_INACTIVE', 403);
-      if ((employeeService.hire_date && start < employeeService.hire_date)
-        || (employeeService.end_date && end > employeeService.end_date)) {
+      if (
+        (employeeService.hire_date && start < employeeService.hire_date) ||
+        (employeeService.end_date && end > employeeService.end_date)
+      ) {
         throw new AppError('تاريخ الإجازة يجب أن يقع داخل مدة خدمة الموظف', 'LEAVE_OUTSIDE_EMPLOYMENT', 400);
       }
       const leaveType = await sql<{ id: number }>`
@@ -860,19 +905,23 @@ export class EmployeePortalService {
       if (overlap.rows.length) {
         throw new AppError('يوجد طلب إجازة آخر يتداخل مع الفترة المحددة', 'LEAVE_PERIOD_OVERLAP', 409);
       }
-      const saved = await trx.insertInto('hr_leave_requests').values({
-        employee_id: employeeId,
-        tenant_id: tenantId,
-        account_id: accountId,
-        leave_type_id: leaveTypeId,
-        start_date: start,
-        end_date: end,
-        days_count: daysCount,
-        status: 'pending',
-        reason: body.reason || '',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).returningAll().executeTakeFirstOrThrow();
+      const saved = await trx
+        .insertInto('hr_leave_requests')
+        .values({
+          employee_id: employeeId,
+          tenant_id: tenantId,
+          account_id: accountId,
+          leave_type_id: leaveTypeId,
+          start_date: start,
+          end_date: end,
+          days_count: daysCount,
+          status: 'pending',
+          reason: body.reason || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
       return saved;
     });
     return {
@@ -944,19 +993,26 @@ export class EmployeePortalService {
       const currencySetting = await sql<{ value: string }>`
         SELECT value FROM settings WHERE tenant_id = ${tenantId} AND key = 'currency' LIMIT 1
       `.execute(this.db);
-      const currency = String(currencySetting.rows[0]?.value || '').replace(/^"|"$/g, '').trim().toUpperCase();
-      if (!/^[A-Z]{3}$/.test(currency)) throw new AppError('حدد عملة منشأتك قبل طلب السلفة', 'HR_TENANT_CURRENCY_REQUIRED', 400);
+      const currency = String(currencySetting.rows[0]?.value || '')
+        .replace(/^"|"$/g, '')
+        .trim()
+        .toUpperCase();
+      if (!/^[A-Z]{3}$/.test(currency))
+        throw new AppError('حدد عملة منشأتك قبل طلب السلفة', 'HR_TENANT_CURRENCY_REQUIRED', 400);
       const bookDigits = currencyMoneyDigits(currency);
       amount = requireLoanMoney(Number(body.amount), bookDigits);
       const count = body.repaymentMonths == null ? 1 : Number(body.repaymentMonths);
       schedule = calculateLoanInstallmentSchedule(amount, count, bookDigits);
     } catch (error) {
-      throw new AppError(error instanceof Error ? error.message : 'مبلغ السلفة أو عدد الأقساط غير صحيح',
-        'HR_PORTAL_ADVANCE_INVALID', 400);
+      throw new AppError(
+        error instanceof Error ? error.message : 'مبلغ السلفة أو عدد الأقساط غير صحيح',
+        'HR_PORTAL_ADVANCE_INVALID',
+        400,
+      );
     }
     const today = todayTenantDate(await getTenantTimezone(this.db, tenantId));
     const due = addLoanInstallmentMonths(today, 1);
-    const loan = await this.db.transaction().execute(async trx => {
+    const loan = await this.db.transaction().execute(async (trx) => {
       // A portal draft must generate an installment plan just like an HR-created
       // loan. Without these rows its salary deductions can never be allocated.
       const emp = await sql<{ id: number; status: string }>`
@@ -997,9 +1053,15 @@ export class EmployeePortalService {
                   ${dueDate}::date, ${schedule.installmentValues[i]})
         `.execute(trx);
       }
-      return { id: loanId, loan_no: no, principal_amount: amount,
-        installment_count: schedule.installmentCount, installment_amount: schedule.installmentAmount,
-        repayment_mode: 'monthly_salary_installment', status: 'draft' };
+      return {
+        id: loanId,
+        loan_no: no,
+        principal_amount: amount,
+        installment_count: schedule.installmentCount,
+        installment_amount: schedule.installmentAmount,
+        repayment_mode: 'monthly_salary_installment',
+        status: 'draft',
+      };
     });
     return {
       success: true,

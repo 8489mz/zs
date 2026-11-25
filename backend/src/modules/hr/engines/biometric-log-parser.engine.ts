@@ -176,7 +176,9 @@ function mapZkVerifyMethod(code: string): BiometricVerifyMethod {
 }
 
 function mapPunchDirection(code: string): BiometricPunchDirection {
-  const trimmed = String(code || '').trim().toLowerCase();
+  const trimmed = String(code || '')
+    .trim()
+    .toLowerCase();
   if (
     trimmed === '0' ||
     trimmed === 'in' ||
@@ -291,12 +293,18 @@ export function autoDetectBiometricColumns(
     /(كود|الموظف|رقم البصم|الاسم|التاريخ|وقت|الحضور|الانصراف|الحال|القسم|employeeno|employee|ac-no|acno|enno|pin|badge|person|userid|user id|date|time|clock|punch|status|state|verify|department|name)/i;
 
   const firstRowHasDateOrTime = firstRow.some(
-    (cell) => splitDateTimeToken(cell) !== null || normalizeBiometricDate(cell) !== null || normalizeBiometricTime(cell) !== null,
+    (cell) =>
+      splitDateTimeToken(cell) !== null ||
+      normalizeBiometricDate(cell) !== null ||
+      normalizeBiometricTime(cell) !== null,
   );
   const secondRowHasDateOrTime =
     sampleRows.length > 1 &&
     sampleRows[1].some(
-      (cell) => splitDateTimeToken(cell) !== null || normalizeBiometricDate(cell) !== null || normalizeBiometricTime(cell) !== null,
+      (cell) =>
+        splitDateTimeToken(cell) !== null ||
+        normalizeBiometricDate(cell) !== null ||
+        normalizeBiometricTime(cell) !== null,
     );
 
   const hasHeaderRow =
@@ -373,8 +381,12 @@ export function autoDetectBiometricColumns(
     if (timeColCandidates.length === 1) {
       checkInTimeColIndex = timeColCandidates[0].col;
     } else if (timeColCandidates.length >= 2) {
-      const explicitIn = timeColCandidates.find((tc) => /(حضور|دخول|check.?in|clock.?in|in.?time|start)/i.test(tc.header));
-      const explicitOut = timeColCandidates.find((tc) => /(انصراف|خروج|check.?out|clock.?out|out.?time|end)/i.test(tc.header));
+      const explicitIn = timeColCandidates.find((tc) =>
+        /(حضور|دخول|check.?in|clock.?in|in.?time|start)/i.test(tc.header),
+      );
+      const explicitOut = timeColCandidates.find((tc) =>
+        /(انصراف|خروج|check.?out|clock.?out|out.?time|end)/i.test(tc.header),
+      );
       if (explicitIn && explicitOut && explicitIn.col !== explicitOut.col) {
         checkInTimeColIndex = explicitIn.col;
         checkOutTimeColIndex = explicitOut.col;
@@ -492,7 +504,22 @@ export function autoDetectBiometricColumns(
       let dirTokenHits = 0;
       for (const row of dataRows) {
         const val = (row[c] || '').trim().toLowerCase();
-        if (['in', 'out', 'c/in', 'c/out', 'check_in', 'check_out', 'checkin', 'checkout', 'حضور', 'انصراف', 'دخول', 'خروج'].includes(val)) {
+        if (
+          [
+            'in',
+            'out',
+            'c/in',
+            'c/out',
+            'check_in',
+            'check_out',
+            'checkin',
+            'checkout',
+            'حضور',
+            'انصراف',
+            'دخول',
+            'خروج',
+          ].includes(val)
+        ) {
           dirTokenHits += 4;
         } else if (['0', '1', '2', '3', '4', '5'].includes(val) && c >= 2) {
           // In ZKTeco attlog.dat: col0=PIN, col1=DateTime, col2=Verify(1), col3=Status(0/1)
@@ -633,7 +660,11 @@ export function parseAndAggregateBiometricLog(
             : null;
 
         // If both check-in and check-out columns are mapped (or checkOutTimeColIndex is set), treat as pre-paired row
-        if (mapping.checkOutTimeColIndex !== null && mapping.checkOutTimeColIndex !== undefined && (timeIn || timeOut)) {
+        if (
+          mapping.checkOutTimeColIndex !== null &&
+          mapping.checkOutTimeColIndex !== undefined &&
+          (timeIn || timeOut)
+        ) {
           if (detectedFormat === 'empty') detectedFormat = 'paired_table';
           prePairedRecords.push({
             pin,
@@ -803,12 +834,16 @@ export function buildBiometricEmployeeResolver(
   const byNumericCore = new Map<string, EmployeeBiometricCandidate | 'AMBIGUOUS'>();
 
   for (const emp of employees) {
-    const bioPin = normalizeArabicDigits(String(emp.biometricPin || '')).trim().toLowerCase();
+    const bioPin = normalizeArabicDigits(String(emp.biometricPin || ''))
+      .trim()
+      .toLowerCase();
     if (bioPin) {
       byBiometricPin.set(bioPin, emp);
     }
 
-    const empNo = normalizeArabicDigits(String(emp.employeeNo || '')).trim().toLowerCase();
+    const empNo = normalizeArabicDigits(String(emp.employeeNo || ''))
+      .trim()
+      .toLowerCase();
     if (empNo) {
       byExactEmployeeNo.set(empNo, emp);
     }
@@ -828,7 +863,9 @@ export function buildBiometricEmployeeResolver(
   }
 
   return (devicePin: string): ResolvedEmployeeMatch | null => {
-    const cleanPin = normalizeArabicDigits(String(devicePin || '')).trim().toLowerCase();
+    const cleanPin = normalizeArabicDigits(String(devicePin || ''))
+      .trim()
+      .toLowerCase();
     if (!cleanPin) return null;
 
     const exactBio = byBiometricPin.get(cleanPin);
@@ -872,9 +909,7 @@ export function parseZkUserDatBuffer(buffer: Uint8Array): DecodedZkDeviceUser[] 
     return decoder.decode(slice.subarray(0, end)).trim();
   };
 
-  const mapPrivilege = (
-    priv: number,
-  ): { role: DecodedZkDeviceUser['privilegeRole']; labelAr: string } => {
+  const mapPrivilege = (priv: number): { role: DecodedZkDeviceUser['privilegeRole']; labelAr: string } => {
     if (priv === 14) return { role: 'super_admin', labelAr: 'سوبر أدمن كامل (Super Admin)' };
     if (priv === 6 || priv === 4) return { role: 'admin', labelAr: 'مشرف (Supervisor / Admin)' };
     if (priv === 2) return { role: 'enroller', labelAr: 'مسجل بصمات (Enroller)' };
@@ -968,7 +1003,12 @@ export function makeZkCommKeyPayload(commKey: number, sessionId: number, ticks =
 /**
  * Computes ZKTeco 16-bit one's complement packet checksum.
  */
-export function buildZkUdpPacket(cmd: number, sessionId: number, replyId: number, payload: Buffer = Buffer.alloc(0)): Buffer {
+export function buildZkUdpPacket(
+  cmd: number,
+  sessionId: number,
+  replyId: number,
+  payload: Buffer = Buffer.alloc(0),
+): Buffer {
   const pkt = Buffer.alloc(8 + payload.length);
   pkt.writeUInt16LE(cmd, 0);
   pkt.writeUInt16LE(0, 2);
@@ -989,7 +1029,7 @@ export function buildZkUdpPacket(cmd: number, sessionId: number, replyId: number
       chk = (chk & 0xffff) + (chk >>> 16);
     }
   }
-  chk = (~chk) & 0xffff;
+  chk = ~chk & 0xffff;
   pkt.writeUInt16LE(chk, 2);
   return pkt;
 }

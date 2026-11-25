@@ -75,7 +75,10 @@ export class ImportCommercialService {
     // every consumer can label the estimate with what was assumed.
     const rateAssumed = dto.exchangeRate === undefined || dto.exchangeRate === null || Number(dto.exchangeRate) <= 0;
     const customsAssumed = dto.estimatedCustomsRatePercent === undefined || dto.estimatedCustomsRatePercent === null;
-    const currency = String(dto.currency || 'USD').trim().toUpperCase() || 'USD';
+    const currency =
+      String(dto.currency || 'USD')
+        .trim()
+        .toUpperCase() || 'USD';
     const commRate = rateAssumed
       ? await resolveFxRate(this.db, tenantId, currency)
       : await resolveFxRate(this.db, tenantId, currency, { suppliedRate: Number(dto.exchangeRate) });
@@ -91,7 +94,7 @@ export class ImportCommercialService {
         project_id: dto.projectId ?? null,
         supplier_id: Number(dto.supplierId),
         quotation_no: dto.quotationNo,
-        inquiry_date: dto.inquiryDate || await resolveBusinessDateKey(this.db, tenantId, new Date()),
+        inquiry_date: dto.inquiryDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
         expiry_date: dto.expiryDate || null,
         incoterm: dto.incoterm || 'FOB',
         currency: dto.currency || 'USD',
@@ -178,9 +181,7 @@ export class ImportCommercialService {
           .where('item_name', '=', quote.item_name)
           .forUpdate()
           .execute();
-        const winner = siblings.find(
-          (s: any) => s.status === 'selected' && String(s.id) !== String(quotationId),
-        );
+        const winner = siblings.find((s: any) => s.status === 'selected' && String(s.id) !== String(quotationId));
         if (winner) {
           // Stale-round rule: a quotation created at or before
           // the existing selection belongs to the locked round
@@ -234,7 +235,7 @@ export class ImportCommercialService {
         sample_cost_foreign: dto.sampleCostForeign || 0,
         freight_cost_foreign: dto.freightCostForeign || 0,
         currency: dto.currency || 'USD',
-        request_date: dto.requestDate || await resolveBusinessDateKey(this.db, tenantId, new Date()),
+        request_date: dto.requestDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
         courier_tracking_no: dto.courierTrackingNo || null,
         decision: 'pending',
         reference_sample_approved: false,
@@ -493,7 +494,13 @@ export class ImportCommercialService {
       throw new BadRequestException('نسبة الدفعة المقدمة ونسبة الرصيد يجب تحديدهما معًا صراحة أو تركهما معًا.');
     }
     if (advPct !== undefined && balPct !== undefined) {
-      if (!Number.isFinite(advPct) || !Number.isFinite(balPct) || advPct <= 0 || advPct >= 100 || Math.abs(advPct + balPct - 100) > 0.001) {
+      if (
+        !Number.isFinite(advPct) ||
+        !Number.isFinite(balPct) ||
+        advPct <= 0 ||
+        advPct >= 100 ||
+        Math.abs(advPct + balPct - 100) > 0.001
+      ) {
         throw new BadRequestException('نسبة الدفعة المقدمة والرصيد يجب أن تكونا موجبتين ومجموعهما 100.');
       }
     }
@@ -535,8 +542,8 @@ export class ImportCommercialService {
       .where('id', '=', id)
       .where('tenant_id', '=', tenantId)
       .executeTakeFirstOrThrow();
-    const paid = Number(current.paid_amount_foreign || 0) > 0 ||
-      (current.payment_status && current.payment_status !== 'unpaid');
+    const paid =
+      Number(current.paid_amount_foreign || 0) > 0 || (current.payment_status && current.payment_status !== 'unpaid');
     const poIssued = current.po_status === 'issued' || !!current.po_number;
     if (poIssued) {
       throw new BadRequestException(
@@ -553,11 +560,16 @@ export class ImportCommercialService {
       // generation re-validates the header total against the items,
       // so an items edit cannot corrupt the PO either.
       const moneyFieldsTouched =
-        dto.piNumber !== undefined || dto.piDate !== undefined ||
-        dto.currency !== undefined || dto.totalAmountForeign !== undefined ||
-        dto.incoterm !== undefined || dto.deliveryPort !== undefined ||
-        dto.paymentTerms !== undefined || dto.exchangeRateContract !== undefined ||
-        dto.advancePercentage !== undefined || dto.balancePercentage !== undefined;
+        dto.piNumber !== undefined ||
+        dto.piDate !== undefined ||
+        dto.currency !== undefined ||
+        dto.totalAmountForeign !== undefined ||
+        dto.incoterm !== undefined ||
+        dto.deliveryPort !== undefined ||
+        dto.paymentTerms !== undefined ||
+        dto.exchangeRateContract !== undefined ||
+        dto.advancePercentage !== undefined ||
+        dto.balancePercentage !== undefined;
       if (moneyFieldsTouched) {
         throw new BadRequestException(
           'لا يمكن تعديل مبالغ أو بيانات فاتورة مبدئية بعد سداد أي دفعة؛ يُسمح فقط بربط الأصناف بالمنتجات. [IMPORT_PROFORMA_FROZEN]',
@@ -615,20 +627,18 @@ export class ImportCommercialService {
       .where('tenant_id', '=', tenantId)
       .executeTakeFirstOrThrow();
     if (current.status !== 'draft') {
-      throw new BadRequestException(
-        'لا يمكن اعتماد فاتورة مبدئية ليست في حالة مسودة. [IMPORT_PROFORMA_NOT_DRAFT]',
-      );
+      throw new BadRequestException('لا يمكن اعتماد فاتورة مبدئية ليست في حالة مسودة. [IMPORT_PROFORMA_NOT_DRAFT]');
     }
-    const rawItems = typeof current.items === 'string' ? JSON.parse(current.items || '[]') : (current.items || []);
-    const hasValidItem = Array.isArray(rawItems) && rawItems.some((item: any) => {
-      const qty = Number(item?.quantity ?? item?.qty);
-      const name = String(item?.name ?? item?.productName ?? '').trim();
-      return (Number.isFinite(qty) && qty > 0) || name.length > 0;
-    });
+    const rawItems = typeof current.items === 'string' ? JSON.parse(current.items || '[]') : current.items || [];
+    const hasValidItem =
+      Array.isArray(rawItems) &&
+      rawItems.some((item: any) => {
+        const qty = Number(item?.quantity ?? item?.qty);
+        const name = String(item?.name ?? item?.productName ?? '').trim();
+        return (Number.isFinite(qty) && qty > 0) || name.length > 0;
+      });
     if (!hasValidItem) {
-      throw new BadRequestException(
-        'لا يمكن اعتماد فاتورة مبدئية بلا أصناف صالحة. [IMPORT_PROFORMA_NO_VALID_ITEMS]',
-      );
+      throw new BadRequestException('لا يمكن اعتماد فاتورة مبدئية بلا أصناف صالحة. [IMPORT_PROFORMA_NO_VALID_ITEMS]');
     }
     return await this.db
       .updateTable('import_proforma_invoices')
@@ -646,9 +656,13 @@ export class ImportCommercialService {
   async generatePoFromProforma(tenantId: string, userId: number, id: string) {
     // A Proforma is not an order: create the REAL purchasing PO and its stock lines atomically.
     return this.db.transaction().execute(async (trx) => {
-      const pi = await trx.selectFrom('import_proforma_invoices').selectAll()
-        .where('id', '=', id).where('tenant_id', '=', tenantId)
-        .forUpdate().executeTakeFirstOrThrow();
+      const pi = await trx
+        .selectFrom('import_proforma_invoices')
+        .selectAll()
+        .where('id', '=', id)
+        .where('tenant_id', '=', tenantId)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
       if (pi.po_status === 'issued' && pi.po_number) return pi;
       if (pi.status !== 'approved') throw new BadRequestException('يجب اعتماد الفاتورة المبدئية قبل إصدار أمر شراء.');
       const raw = typeof pi.items === 'string' ? JSON.parse(pi.items) : pi.items;
@@ -661,24 +675,27 @@ export class ImportCommercialService {
       // always failed validation and the transaction rolled back
       // anyway. Items are linked explicitly (updateProformaInvoice)
       // before conversion; nothing is borrowed.
-      if (!Array.isArray(raw) || !raw.length) throw new BadRequestException('الفاتورة المبدئية لا تحتوي على أصناف قابلة للشراء.');
+      if (!Array.isArray(raw) || !raw.length)
+        throw new BadRequestException('الفاتورة المبدئية لا تحتوي على أصناف قابلة للشراء.');
       // No invented rate: a foreign-currency proforma without a usable
       // contract rate must not be costed at a silent default (the old
       // fallback of 50 lived only in the draft PO's free-text notes, so
       // approving the draft posted costs nobody chose). The merchant
       // sets the contract rate on the proforma and converts again.
-      const exchangeRate = (pi.currency || 'USD').toUpperCase() === 'EGP'
-        ? 1 : Number(pi.exchange_rate_contract);
+      const exchangeRate = (pi.currency || 'USD').toUpperCase() === 'EGP' ? 1 : Number(pi.exchange_rate_contract);
       if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
         throw new BadRequestException(
           `لا يمكن إصدار أمر شراء من الفاتورة المبدئية ${pi.pi_number} بلا سعر صرف تعاقدي صالح؛ حدد سعر الصرف التعاقدي (${pi.currency || 'USD'}) على الفاتورة المبدئية قبل التحويل. [IMPORT_EXCHANGE_RATE_REQUIRED]`,
         );
       }
-      const supplier = await trx.selectFrom('suppliers')
-        .select(['id', 'name', 'account_id']).where('tenant_id', '=', tenantId)
-        .where('id', '=', pi.supplier_id).executeTakeFirstOrThrow();
+      const supplier = await trx
+        .selectFrom('suppliers')
+        .select(['id', 'name', 'account_id'])
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', pi.supplier_id)
+        .executeTakeFirstOrThrow();
       const scopeAccountId = String(supplier.account_id ?? '').trim() || tenantId;
-      const lines: Array<{productId: number; name: string; quantity: number; unitCost: number; total: number}> = [];
+      const lines: Array<{ productId: number; name: string; quantity: number; unitCost: number; total: number }> = [];
       let foreignTotal = 0;
       for (let lineIdx = 0; lineIdx < raw.length; lineIdx++) {
         const item = raw[lineIdx];
@@ -686,17 +703,32 @@ export class ImportCommercialService {
         const productId = Number(item.productId ?? item.product_id);
         const qty = Number(item.quantity ?? item.qty);
         const foreignUnitCost = Number(item.unitPriceForeign ?? item.factoryPriceUsd ?? item.unitPriceUsd);
-        if (!Number.isSafeInteger(productId) || productId <= 0 || !Number.isFinite(qty) || qty <= 0 ||
-          !Number.isFinite(foreignUnitCost) || foreignUnitCost < 0) {
+        if (
+          !Number.isSafeInteger(productId) ||
+          productId <= 0 ||
+          !Number.isFinite(qty) ||
+          qty <= 0 ||
+          !Number.isFinite(foreignUnitCost) ||
+          foreignUnitCost < 0
+        ) {
           // I1-P1: the fail-closed error names the offending line
           // (index + name) so the merchant knows exactly which PI
           // line still needs a real inventory item linked. Never
           // silently skip the line or auto-match by name.
-          throw new BadRequestException(`يجب ربط البند رقم ${lineIdx + 1} (${lineLabel}) من الـ Proforma بصنف حقيقي وتحديد الكمية وسعر الوحدة الأجنبي.`);
+          throw new BadRequestException(
+            `يجب ربط البند رقم ${lineIdx + 1} (${lineLabel}) من الـ Proforma بصنف حقيقي وتحديد الكمية وسعر الوحدة الأجنبي.`,
+          );
         }
-        const product = await trx.selectFrom('products').select(['id', 'name'])
-          .where('tenant_id', '=', tenantId).where('id', '=', productId).executeTakeFirst();
-        if (!product) throw new BadRequestException(`البند رقم ${lineIdx + 1} (${lineLabel}) يشير إلى صنف غير موجود ضمن أصناف المنشأة.`);
+        const product = await trx
+          .selectFrom('products')
+          .select(['id', 'name'])
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', productId)
+          .executeTakeFirst();
+        if (!product)
+          throw new BadRequestException(
+            `البند رقم ${lineIdx + 1} (${lineLabel}) يشير إلى صنف غير موجود ضمن أصناف المنشأة.`,
+          );
 
         const unitCost = Number((foreignUnitCost * exchangeRate).toFixed(3));
         const total = Number((qty * unitCost).toFixed(3));
@@ -714,29 +746,66 @@ export class ImportCommercialService {
         );
       }
       const subtotal = Number(lines.reduce((sum, item) => sum + item.total, 0).toFixed(3));
-      const inserted = await trx.insertInto('purchase_orders').values({
-        tenant_id: tenantId, account_id: scopeAccountId,
-        order_number: `PO-TMP-${randomUUID()}`,
-        supplier_id: supplier.id, supplier_name: supplier.name,
-        subtotal, tax_amount: 0, discount_amount: 0, total_amount: subtotal,
-        status: 'draft', notes: `أمر شراء وارد من Proforma ${pi.pi_number} - ${pi.currency} بسعر صرف ${exchangeRate}`,
-        created_by: userId,
-      }).returning('id').executeTakeFirstOrThrow();
-      const orderNumber = formatDailyDocumentNumber('PO', inserted.id, new Date(), 4, await getTenantTimezone(this.db, tenantId));
-      await trx.updateTable('purchase_orders').set({ order_number: orderNumber })
-        .where('tenant_id', '=', tenantId).where('id', '=', inserted.id).execute();
+      const inserted = await trx
+        .insertInto('purchase_orders')
+        .values({
+          tenant_id: tenantId,
+          account_id: scopeAccountId,
+          order_number: `PO-TMP-${randomUUID()}`,
+          supplier_id: supplier.id,
+          supplier_name: supplier.name,
+          subtotal,
+          tax_amount: 0,
+          discount_amount: 0,
+          total_amount: subtotal,
+          status: 'draft',
+          notes: `أمر شراء وارد من Proforma ${pi.pi_number} - ${pi.currency} بسعر صرف ${exchangeRate}`,
+          created_by: userId,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const orderNumber = formatDailyDocumentNumber(
+        'PO',
+        inserted.id,
+        new Date(),
+        4,
+        await getTenantTimezone(this.db, tenantId),
+      );
+      await trx
+        .updateTable('purchase_orders')
+        .set({ order_number: orderNumber })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', inserted.id)
+        .execute();
       for (const item of lines) {
-        await trx.insertInto('purchase_order_items').values({
-          tenant_id: tenantId, account_id: scopeAccountId,
-          purchase_order_id: inserted.id, product_id: item.productId,
-          product_name: item.name, quantity: item.quantity, received_quantity: 0,
-          unit_cost: item.unitCost, tax_rate: 0, discount: 0, total: item.total,
-        }).execute();
+        await trx
+          .insertInto('purchase_order_items')
+          .values({
+            tenant_id: tenantId,
+            account_id: scopeAccountId,
+            purchase_order_id: inserted.id,
+            product_id: item.productId,
+            product_name: item.name,
+            quantity: item.quantity,
+            received_quantity: 0,
+            unit_cost: item.unitCost,
+            tax_rate: 0,
+            discount: 0,
+            total: item.total,
+          })
+          .execute();
       }
-      return trx.updateTable('import_proforma_invoices').set({
-        po_number: orderNumber, po_date: await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()), po_status: 'issued',
-      }).where('id', '=', id).where('tenant_id', '=', tenantId)
-        .returningAll().executeTakeFirstOrThrow();
+      return trx
+        .updateTable('import_proforma_invoices')
+        .set({
+          po_number: orderNumber,
+          po_date: await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),
+          po_status: 'issued',
+        })
+        .where('id', '=', id)
+        .where('tenant_id', '=', tenantId)
+        .returningAll()
+        .executeTakeFirstOrThrow();
     });
   }
 
@@ -772,14 +841,27 @@ export class ImportCommercialService {
   async createApprovalRequest(tenantId: string, userId: number, dto: CreateApprovalRequestDto) {
     if (dto.actionType === 'partner_distribution') {
       const payload = dto.requestPayload;
-      if (!payload || payload.partnerId !== dto.referenceId || !payload.projectId || !Number.isFinite(Number(payload.amount)) || Number(payload.amount) <= 0) {
+      if (
+        !payload ||
+        payload.partnerId !== dto.referenceId ||
+        !payload.projectId ||
+        !Number.isFinite(Number(payload.amount)) ||
+        Number(payload.amount) <= 0
+      ) {
         throw new BadRequestException('اعتماد صرف الأرباح يتطلب الشريك والمشروع وسقف مبلغ موجب ومطابقة المرجع.');
       }
     }
     if (dto.actionType === 'large_transfer') {
       const payload = dto.requestPayload;
-      const payloadCurrency = String(payload?.currency || '').trim().toUpperCase();
-      if (!payload || !Number.isFinite(Number(payload.amount)) || Number(payload.amount) <= 0 || !/^[A-Z]{3}$/.test(payloadCurrency)) {
+      const payloadCurrency = String(payload?.currency || '')
+        .trim()
+        .toUpperCase();
+      if (
+        !payload ||
+        !Number.isFinite(Number(payload.amount)) ||
+        Number(payload.amount) <= 0 ||
+        !/^[A-Z]{3}$/.test(payloadCurrency)
+      ) {
         throw new BadRequestException('اعتماد الحوالة الكبيرة يتطلب سقف مبلغ موجباً وعملة صالحة من ثلاثة أحرف.');
       }
       if (payload.supplierId !== undefined && String(payload.supplierId) !== String(dto.referenceId)) {
@@ -803,14 +885,28 @@ export class ImportCommercialService {
     }
     if (dto.actionType === 'broker_expense_verification') {
       const payload = dto.requestPayload;
-      if (!payload || String(payload.brokerExpenseId || '') !== String(dto.referenceId) || !Number.isFinite(Number(payload.amount)) || Number(payload.amount) <= 0) {
+      if (
+        !payload ||
+        String(payload.brokerExpenseId || '') !== String(dto.referenceId) ||
+        !Number.isFinite(Number(payload.amount)) ||
+        Number(payload.amount) <= 0
+      ) {
         throw new BadRequestException('اعتماد التحقق من مصروف مخلص يتطلب ربط المصروف بالمرجع نفسه وسقف مبلغ موجب.');
       }
     }
     if (dto.actionType === 'sourcing_trip_expense') {
       const payload = dto.requestPayload;
-      if (!payload || String(payload.tripId || '') !== String(dto.referenceId) || !Number.isFinite(Number(payload.amount)) || Number(payload.amount) <= 0 || !Number.isFinite(Number(payload.supplierId)) || Number(payload.supplierId) <= 0) {
-        throw new BadRequestException('اعتماد ترحيل مصروف رحلة يتطلب ربط الرحلة بالمرجع نفسه وسقف مبلغ موجباً ومورداً مستحقاً.');
+      if (
+        !payload ||
+        String(payload.tripId || '') !== String(dto.referenceId) ||
+        !Number.isFinite(Number(payload.amount)) ||
+        Number(payload.amount) <= 0 ||
+        !Number.isFinite(Number(payload.supplierId)) ||
+        Number(payload.supplierId) <= 0
+      ) {
+        throw new BadRequestException(
+          'اعتماد ترحيل مصروف رحلة يتطلب ربط الرحلة بالمرجع نفسه وسقف مبلغ موجباً ومورداً مستحقاً.',
+        );
       }
     }
     return await this.db
@@ -885,7 +981,9 @@ export class ImportCommercialService {
           role: decider?.role,
         } as AuthContext);
         if (!soloOverride) {
-          throw new BadRequestException('مبدأ الرقابة الثنائية (Maker-Checker): لا يجوز للمستخدم الذي أنشأ الطلب اعتماده بنفسه.');
+          throw new BadRequestException(
+            'مبدأ الرقابة الثنائية (Maker-Checker): لا يجوز للمستخدم الذي أنشأ الطلب اعتماده بنفسه.',
+          );
         }
       }
 
@@ -961,7 +1059,12 @@ export class ImportCommercialService {
         let salesCostEgp = 0;
         for (const al of allocs) {
           const qty = Number(al.quantity || 0);
-          const sign = al.allocation_type === 'return' || al.allocation_type === 'cancellation' || al.allocation_type === 'reversal' ? -1 : 1;
+          const sign =
+            al.allocation_type === 'return' ||
+            al.allocation_type === 'cancellation' ||
+            al.allocation_type === 'reversal'
+              ? -1
+              : 1;
           salesRevenueEgp += sign * qty * Number(al.unit_sale_price_egp || 0);
           salesCostEgp += sign * qty * Number(al.unit_cost_egp || 0);
         }

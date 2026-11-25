@@ -129,7 +129,15 @@ export class AiAgentService {
 
     if (apiKey && apiKey.trim()) {
       if (provider === 'openai' || apiKey.startsWith('sk-')) {
-        aiReply = await this.askOpenAiAgent(text, toolResults, conversationHistory, reasoningSteps, apiKey, model, baseUrl);
+        aiReply = await this.askOpenAiAgent(
+          text,
+          toolResults,
+          conversationHistory,
+          reasoningSteps,
+          apiKey,
+          model,
+          baseUrl,
+        );
       } else {
         aiReply = await this.askGeminiAgent(text, toolResults, conversationHistory, reasoningSteps, apiKey, model);
       }
@@ -219,15 +227,73 @@ export class AiAgentService {
    */
   private extractProductSearchTerm(query: string): string | null {
     const stopWords = new Set([
-      'مخزون', 'مخزونها', 'مخزونه', 'مخزونهم', 'مخزوني', 'مخزن', 'مخزنها',
-      'صنف', 'أصناف', 'اصناف', 'بضاعة', 'كمية', 'نواقص',
-      'سعر', 'سعرها', 'سعره', 'رصيد', 'رصيدها', 'رصيده', 'منتج', 'بيع',
-      'مبيعات', 'بديل', 'عندي', 'عندنا', 'كام', 'كم',
-      'ايه', 'إيه', 'ما', 'هو', 'هي', 'في', 'فيه', 'فيها', 'من', 'على',
-      'هل', 'يوجد', 'باقي', 'متبقي', 'الحالي', 'حاليا', 'لو', 'سمحت',
-      'عايز', 'عاوز', 'اعرف', 'أعرف', 'شوف', 'قولي', 'قول', 'اديني',
-      'بتاع', 'بتاعة', 'ده', 'دي', 'دا', 'ال', 'و', 'ليه', 'ازاي',
-      'يوم', 'اليوم', 'النهاردة', 'امبارح', 'نهارده',
+      'مخزون',
+      'مخزونها',
+      'مخزونه',
+      'مخزونهم',
+      'مخزوني',
+      'مخزن',
+      'مخزنها',
+      'صنف',
+      'أصناف',
+      'اصناف',
+      'بضاعة',
+      'كمية',
+      'نواقص',
+      'سعر',
+      'سعرها',
+      'سعره',
+      'رصيد',
+      'رصيدها',
+      'رصيده',
+      'منتج',
+      'بيع',
+      'مبيعات',
+      'بديل',
+      'عندي',
+      'عندنا',
+      'كام',
+      'كم',
+      'ايه',
+      'إيه',
+      'ما',
+      'هو',
+      'هي',
+      'في',
+      'فيه',
+      'فيها',
+      'من',
+      'على',
+      'هل',
+      'يوجد',
+      'باقي',
+      'متبقي',
+      'الحالي',
+      'حاليا',
+      'لو',
+      'سمحت',
+      'عايز',
+      'عاوز',
+      'اعرف',
+      'أعرف',
+      'شوف',
+      'قولي',
+      'قول',
+      'اديني',
+      'بتاع',
+      'بتاعة',
+      'ده',
+      'دي',
+      'دا',
+      'ال',
+      'و',
+      'ليه',
+      'ازاي',
+      'يوم',
+      'اليوم',
+      'النهاردة',
+      'امبارح',
+      'نهارده',
     ]);
     const term = String(query || '')
       .toLowerCase()
@@ -282,7 +348,16 @@ export class AiAgentService {
     // Tool B: Inventory & Product Lookup
     // 'مخزون' is its own word: the old trigger listed 'مخزن' only, so a
     // question about 'مخزون' never ran this tool at all.
-    const isInventoryQuery = q.includes('مخزن') || q.includes('مخزون') || q.includes('منتج') || q.includes('صنف') || q.includes('بضاعة') || q.includes('كمية') || q.includes('نواقص') || q.includes('سعر') || q.includes('رصيد');
+    const isInventoryQuery =
+      q.includes('مخزن') ||
+      q.includes('مخزون') ||
+      q.includes('منتج') ||
+      q.includes('صنف') ||
+      q.includes('بضاعة') ||
+      q.includes('كمية') ||
+      q.includes('نواقص') ||
+      q.includes('سعر') ||
+      q.includes('رصيد');
     if (isInventoryQuery || q.includes('بيع') || q.includes('بديل')) {
       try {
         // Page definition (catalog): out-of-stock is stock <= 0, low is
@@ -337,12 +412,7 @@ export class AiAgentService {
             .select(['id', 'name', 'stock_qty', 'min_stock_qty', 'retail_price'])
             .where('tenant_id', '=', tenantId)
             .where('is_active', '=', true)
-            .where((eb) =>
-              eb.or([
-                eb('name', 'ilike', `%${searchTerm}%`),
-                eb('name_en', 'ilike', `%${searchTerm}%`),
-              ]),
-            )
+            .where((eb) => eb.or([eb('name', 'ilike', `%${searchTerm}%`), eb('name_en', 'ilike', `%${searchTerm}%`)]))
             .orderBy('stock_qty', 'asc')
             .limit(3)
             .execute();
@@ -384,10 +454,7 @@ export class AiAgentService {
         const rows = await this.db
           .selectFrom('sale_items as si')
           .innerJoin('sales as s', 's.id', 'si.sale_id')
-          .select([
-            'si.product_name',
-            sql<number>`COALESCE(SUM(si.qty), 0)`.as('total_qty'),
-          ])
+          .select(['si.product_name', sql<number>`COALESCE(SUM(si.qty), 0)`.as('total_qty')])
           .where('s.tenant_id', '=', tenantId)
           .where('s.created_at', '>=', thirtyDaysAgo)
           .where('s.status', '!=', 'cancelled')
@@ -410,7 +477,15 @@ export class AiAgentService {
     }
 
     // Tool C: Deadstock & Bundling Opportunities (Outside-the-box engine)
-    const isDeadstockOpportunity = q.includes('ارباح') || q.includes('أرباح') || q.includes('راكد') || q.includes('بضاعة') || q.includes('سيولة') || q.includes('فكرة') || q.includes('عرض') || q.includes('ازاي');
+    const isDeadstockOpportunity =
+      q.includes('ارباح') ||
+      q.includes('أرباح') ||
+      q.includes('راكد') ||
+      q.includes('بضاعة') ||
+      q.includes('سيولة') ||
+      q.includes('فكرة') ||
+      q.includes('عرض') ||
+      q.includes('ازاي');
     if (isDeadstockOpportunity) {
       try {
         // High stock items with retail price
@@ -453,7 +528,14 @@ export class AiAgentService {
     }
 
     // Tool D: Customer Debts & Balances
-    const isCustomerQuery = q.includes('عميل') || q.includes('عملاء') || q.includes('ديون') || q.includes('مديونية') || q.includes('فلوس') || q.includes('قسط') || q.includes('تحصيل');
+    const isCustomerQuery =
+      q.includes('عميل') ||
+      q.includes('عملاء') ||
+      q.includes('ديون') ||
+      q.includes('مديونية') ||
+      q.includes('فلوس') ||
+      q.includes('قسط') ||
+      q.includes('تحصيل');
     if (isCustomerQuery) {
       try {
         const topDebtors = await this.db
@@ -537,10 +619,7 @@ export class AiAgentService {
 
       const salesToday = await this.db
         .selectFrom('sales')
-        .select([
-          sql<number>`COUNT(*)`.as('count'),
-          sql<number>`COALESCE(SUM(total), 0)`.as('total_sales'),
-        ])
+        .select([sql<number>`COUNT(*)`.as('count'), sql<number>`COALESCE(SUM(total), 0)`.as('total_sales')])
         .where('tenant_id', '=', tenantId)
         .where('created_at', '>=', startOfToday)
         .where('status', '!=', 'cancelled')
@@ -684,7 +763,10 @@ ${JSON.stringify(reasoningSteps, null, 2)}
         const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!raw) continue;
 
-        const clean = raw.replace(/```json\s*/i, '').replace(/```\s*$/i, '').trim();
+        const clean = raw
+          .replace(/```json\s*/i, '')
+          .replace(/```\s*$/i, '')
+          .trim();
         const parsed = JSON.parse(clean);
         return {
           answer: parsed.answer || clean,
@@ -764,12 +846,25 @@ ${JSON.stringify(reasoningSteps, null, 2)}
     reasoningSteps: Array<{ step: string; observation: string }>,
   ): { answer: string; suggestedQuestions: string[] } {
     const q = query.toLowerCase();
-    const fin = (context.todayFinancials as any) || { salesAmount: 0, cashCollected: 0, cardCollected: 0, invoicesCount: 0, treasuryBalance: 0 };
+    const fin = (context.todayFinancials as any) || {
+      salesAmount: 0,
+      cashCollected: 0,
+      cardCollected: 0,
+      invoicesCount: 0,
+      treasuryBalance: 0,
+    };
     const lowStock = (context.lowStockItems as any[]) || [];
-    const stockCounts = (context.stockCounts as { ran?: boolean; outOfStock?: number; lowStock?: number } | undefined) || undefined;
-    const productLookup = (context.productLookup as { term: string; found?: boolean; items: Array<{ name: string; stock: number; min: number; price: number }> } | undefined) || undefined;
-    const topProducts = (context.topProducts as { ran?: boolean; items?: Array<{ name: string; qty: number }> } | undefined) || undefined;
-    const supplierPayables = (context.supplierPayables as { totalDebt: number; topSuppliers: Array<{ name: string; debt: number }> } | undefined) || undefined;
+    const stockCounts =
+      (context.stockCounts as { ran?: boolean; outOfStock?: number; lowStock?: number } | undefined) || undefined;
+    const productLookup =
+      (context.productLookup as
+        | { term: string; found?: boolean; items: Array<{ name: string; stock: number; min: number; price: number }> }
+        | undefined) || undefined;
+    const topProducts =
+      (context.topProducts as { ran?: boolean; items?: Array<{ name: string; qty: number }> } | undefined) || undefined;
+    const supplierPayables =
+      (context.supplierPayables as
+        { totalDebt: number; topSuppliers: Array<{ name: string; debt: number }> } | undefined) || undefined;
     const debtors = (context.debtors as any[]) || [];
     const bundling = context.bundlingOpportunities as any;
     const kb = (context.knowledgeBase as any[]) || [];
@@ -813,7 +908,10 @@ ${JSON.stringify(reasoningSteps, null, 2)}
     // Product-by-name stock: answer with that product's actual stock.
     if (productLookup && productLookup.items.length > 0) {
       const lines = productLookup.items
-        .map((p) => `- **${p.name}**: متبقي **${p.stock}** قطعة (حد الطلب ${p.min}) — سعر البيع ${p.price.toLocaleString()} ج.م.`)
+        .map(
+          (p) =>
+            `- **${p.name}**: متبقي **${p.stock}** قطعة (حد الطلب ${p.min}) — سعر البيع ${p.price.toLocaleString()} ج.م.`,
+        )
         .join('\n');
       return {
         answer: `مخزون "${productLookup.term}":\n\n${lines}`,
@@ -834,18 +932,31 @@ ${JSON.stringify(reasoningSteps, null, 2)}
     }
 
     // Outside-the-box Bundling & Profit Maximization
-    if (q.includes('ارباح') || q.includes('أرباح') || q.includes('راكد') || q.includes('عرض') || q.includes('ازاي') || q.includes('فكرة')) {
+    if (
+      q.includes('ارباح') ||
+      q.includes('أرباح') ||
+      q.includes('راكد') ||
+      q.includes('عرض') ||
+      q.includes('ازاي') ||
+      q.includes('فكرة')
+    ) {
       if (bundling) {
         return {
           answer: `إليك فكرة تشغيلية بره الصندوق لتعظيم السيولة والأرباح:\n\n1. **رصد رأس مال مجمد:** رصدت وجود مخزون راكد في صنف (**${bundling.frozenCapitalItem}**) بإجمالي **${bundling.frozenStockQty}** قطعة تقدر بحوالي **${bundling.frozenValue.toLocaleString()} ج.م** بضاعة مجمدة.\n2. **الحل الابتكاري (عرض مجمع Bundle):** نظراً لأن صنف (**${bundling.complementaryItem}**) هو الأعلى حركة وإقبالاً، أقترح إنشاء باقة بيعية تجمع القطعتين معاً بخصم 10% على الصنف الراكد.\n3. **الأثر المالي:** هذا الإجراء سيسيل السيولة المجمدة فوراً ويمنع تراكم البضاعة دون التأثير على هامش ربحك الإجمالي!`,
-          suggestedQuestions: ['من هم العملاء المناسبين لهذا العرض؟', 'ما هي الأصناف الحرجة بالمخزن؟', 'كم رصيد الخزينة المتاح حالياً؟'],
+          suggestedQuestions: [
+            'من هم العملاء المناسبين لهذا العرض؟',
+            'ما هي الأصناف الحرجة بالمخزن؟',
+            'كم رصيد الخزينة المتاح حالياً؟',
+          ],
         };
       }
     }
 
     // Customer Debts Deep Dive
     if (q.includes('عميل') || q.includes('ديون') || q.includes('مديونية')) {
-      const debtList = debtors.map((d, i) => `${i + 1}. **${d.name}**: ${d.debt.toLocaleString()} ج.م (${d.phone || 'بدون هاتف'})`).join('\n');
+      const debtList = debtors
+        .map((d, i) => `${i + 1}. **${d.name}**: ${d.debt.toLocaleString()} ج.م (${d.phone || 'بدون هاتف'})`)
+        .join('\n');
       return {
         answer: `تحليل مديونيات العملاء والتدفق النقدي:\n\n${debtList || 'لا توجد مديونيات متأخرة مسجلة حالياً.'}\n\n**توصية زاد خارج الصندوق:** بدلاً من إيقاف البيع التام، اقترح تفعيل خاصية "سداد نسبة مع كل فاتورة جديدة" (مثلاً سداد 20% من المديونية القديمة مع كل طلبية كاش جديدة)، مما يحافظ على استمرار العميل ويسرع التحصيل.`,
         suggestedQuestions: ['عرض تفاصيل آخر فاتورة لأكبر عميل', 'موقف رصيد الخزينة اليوم', 'الأصناف الأكثر مبيعاً'],
@@ -863,7 +974,11 @@ ${JSON.stringify(reasoningSteps, null, 2)}
         : 'المخزون مستقر ولا توجد نواقص حرجة اليوم.';
     return {
       answer: `الموقف التشغيلي المباشر لنشاطك اليوم:\n\n- إجمالي المبيعات: **${fin.salesAmount.toLocaleString()} ج.م** عبر **${fin.invoicesCount}** فاتورة.\n- النقدية المحصلة: **${fin.cashCollected.toLocaleString()} ج.م**.\n- البطاقات المحصلة: **${(fin.cardCollected || 0).toLocaleString()} ج.م**.\n- رصيد الخزينة الحالي: **${fin.treasuryBalance.toLocaleString()} ج.م**.${stockLine ? `\n\n${stockLine}` : ''}`,
-      suggestedQuestions: ['كيف أزيد أرباحي اليوم؟', 'من هم أكبر العملاء مديونية؟', 'اقتراح عروض ترويجية للأصناف الراكدة'],
+      suggestedQuestions: [
+        'كيف أزيد أرباحي اليوم؟',
+        'من هم أكبر العملاء مديونية؟',
+        'اقتراح عروض ترويجية للأصناف الراكدة',
+      ],
     };
   }
 
@@ -884,9 +999,10 @@ ${JSON.stringify(reasoningSteps, null, 2)}
       id: String(r.id),
       role: r.role,
       content: r.content,
-      reasoningSteps: typeof r.reasoning_steps === 'string' ? JSON.parse(r.reasoning_steps) : (r.reasoning_steps || []),
-      toolCalls: typeof r.tool_calls === 'string' ? JSON.parse(r.tool_calls) : (r.tool_calls || []),
-      suggestedQuestions: typeof r.suggested_questions === 'string' ? JSON.parse(r.suggested_questions) : (r.suggested_questions || []),
+      reasoningSteps: typeof r.reasoning_steps === 'string' ? JSON.parse(r.reasoning_steps) : r.reasoning_steps || [],
+      toolCalls: typeof r.tool_calls === 'string' ? JSON.parse(r.tool_calls) : r.tool_calls || [],
+      suggestedQuestions:
+        typeof r.suggested_questions === 'string' ? JSON.parse(r.suggested_questions) : r.suggested_questions || [],
       createdAt: r.created_at,
     }));
   }
