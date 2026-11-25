@@ -7,7 +7,7 @@ import {
 
 function testHourlyEmployeeDirectDisbursement(): void {
   const ctx: EmployeeWithdrawalContext = {
-  minorUnits: 2,
+    minorUnits: 2,
     employee: {
       id: 101,
       employeeNo: 'EMP-01',
@@ -63,7 +63,7 @@ function testHourlyEmployeeDirectDisbursement(): void {
 
 function testDebitExceedingAccruals(): void {
   const ctx: EmployeeWithdrawalContext = {
-  minorUnits: 2,
+    minorUnits: 2,
     employee: {
       id: 102,
       displayName: 'محمد علي',
@@ -113,7 +113,7 @@ function testDebitExceedingAccruals(): void {
 
 function testMonthlyContractProration(): void {
   const ctx: EmployeeWithdrawalContext = {
-  minorUnits: 2,
+    minorUnits: 2,
     employee: {
       id: 103,
       displayName: 'خالد إبراهيم',
@@ -158,7 +158,7 @@ function testMonthlyContractProration(): void {
 function testActivePayrollItem(): void {
   // 1. In-progress draft payroll item: must prorate to elapsed days (25 / 31)
   const ctxDraft: EmployeeWithdrawalContext = {
-  minorUnits: 2,
+    minorUnits: 2,
     employee: {
       id: 104,
       displayName: 'خالد عبد الله الصياد',
@@ -269,4 +269,3 @@ testMonthlyContractProration();
 testActivePayrollItem();
 testPayoutScheduleResolution();
 console.log('employee-withdrawal-balance.engine.spec: ok');
-

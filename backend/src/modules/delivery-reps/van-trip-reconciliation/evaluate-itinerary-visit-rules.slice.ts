@@ -57,9 +57,7 @@ function calculateSimpleHaversineMeters(lat1: number, lng1: number, lat2: number
  * 4. Audits GPS distance against customer storefront location (Ghost Visit detection).
  * 5. Identifies repeated negative visits (3 consecutive negatives) for supervisor intervention.
  */
-export function evaluateItineraryVisitRules(
-  params: ItineraryVisitEvaluationParams,
-): ItineraryVisitEvaluationResult {
+export function evaluateItineraryVisitRules(params: ItineraryVisitEvaluationParams): ItineraryVisitEvaluationResult {
   // 1. Negative Visit Reason Validation
   if (params.visitType === 'negative') {
     const reason = String(params.negativeReason || '').trim();

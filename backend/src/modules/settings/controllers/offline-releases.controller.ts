@@ -1,4 +1,18 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Req, Query, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  Req,
+  Query,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { SuperAdminRoleGuard } from '../../../core/auth/guards/super-admin-role.guard';
@@ -58,10 +72,7 @@ export class OfflineUpdatesPublicController {
   @UseGuards(SessionAuthGuard, PermissionsGuard)
   @RequirePermissions('canManageSettings')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 128 * 1024 * 1024 } }))
-  async applyLocalZipUpdateLegacy(
-    @UploadedFile() file: Express.Multer.File,
-    @Body('passcode') passcode?: string,
-  ) {
+  async applyLocalZipUpdateLegacy(@UploadedFile() file: Express.Multer.File, @Body('passcode') passcode?: string) {
     return this.releasesService.applyLocalZipUpdate(file, passcode);
   }
 
@@ -99,10 +110,7 @@ export class OfflineUpdatesProtectedController {
   @Post('apply-local-zip')
   @RequirePermissions('canManageSettings')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 128 * 1024 * 1024 } }))
-  async applyLocalZipUpdate(
-    @UploadedFile() file: Express.Multer.File,
-    @Body('passcode') passcode?: string,
-  ) {
+  async applyLocalZipUpdate(@UploadedFile() file: Express.Multer.File, @Body('passcode') passcode?: string) {
     return this.releasesService.applyLocalZipUpdate(file, passcode);
   }
 }
@@ -138,11 +146,7 @@ export class OfflineReleasesAdminController {
    * Body: { passcode }
    */
   @Post(':id/passcode')
-  setReleasePasscode(
-    @Req() req: RequestWithAuth,
-    @Param('id') id: string,
-    @Body() body: { passcode: string },
-  ) {
+  setReleasePasscode(@Req() req: RequestWithAuth, @Param('id') id: string, @Body() body: { passcode: string }) {
     return this.releasesService.setReleasePasscode(req.authContext!, Number(id), body?.passcode);
   }
 
@@ -154,7 +158,8 @@ export class OfflineReleasesAdminController {
   @Post()
   createRelease(
     @Req() req: RequestWithAuth,
-    @Body() body: { version: string; changelog: string; patchUrl: string; passcode?: string; requiresPasscode?: boolean },
+    @Body()
+    body: { version: string; changelog: string; patchUrl: string; passcode?: string; requiresPasscode?: boolean },
   ) {
     return this.releasesService.createRelease(req.authContext!, body);
   }

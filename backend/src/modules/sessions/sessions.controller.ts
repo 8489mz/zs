@@ -15,11 +15,19 @@ import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
-import { SessionService, isMfaChallenge, type AuthenticatedSessionResult } from '../../core/auth/services/session.service';
+import {
+  SessionService,
+  isMfaChallenge,
+  type AuthenticatedSessionResult,
+} from '../../core/auth/services/session.service';
 import { AuditService } from '../../core/audit/audit.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
-import { ConfirmPasswordResetDto, RequestPasswordResetDto, ValidatePasswordResetTokenDto } from './dto/password-reset.dto';
+import {
+  ConfirmPasswordResetDto,
+  RequestPasswordResetDto,
+  ValidatePasswordResetTokenDto,
+} from './dto/password-reset.dto';
 import { PasswordResetService } from './password-reset.service';
 import { MfaService } from './mfa.service';
 import { DisableMfaDto, MfaCodeDto, MfaLoginDto } from './dto/mfa.dto';
@@ -49,8 +57,13 @@ export class SessionsController {
 
   /** أصل الطلب كما وصل عبر البروكسي — يُستخدم كبديل حين لا يُضبط `APP_PUBLIC_URL`. */
   private requestOrigin(req: RequestWithAuth): string | undefined {
-    const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() || 'https';
-    const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+    const proto =
+      String(req.headers['x-forwarded-proto'] || '')
+        .split(',')[0]
+        .trim() || 'https';
+    const host = String(req.headers['x-forwarded-host'] || req.headers.host || '')
+      .split(',')[0]
+      .trim();
     return host ? `${proto}://${host}` : undefined;
   }
 
@@ -153,7 +166,9 @@ export class SessionsController {
     const result = await this.sessionService.authenticate(username, password, {
       ipAddress: req.ip,
       userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : '',
-      companyCode: payload.companyCode || (typeof req.headers['x-tenant-id'] === 'string' ? req.headers['x-tenant-id'] : undefined),
+      companyCode:
+        payload.companyCode ||
+        (typeof req.headers['x-tenant-id'] === 'string' ? req.headers['x-tenant-id'] : undefined),
     });
 
     if (!result) {
@@ -230,7 +245,10 @@ export class SessionsController {
 
   @Post('mfa/recovery-codes')
   @UseGuards(SessionAuthGuard)
-  async mfaRegenerateRecoveryCodes(@Body() payload: MfaCodeDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  async mfaRegenerateRecoveryCodes(
+    @Body() payload: MfaCodeDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.mfaService.regenerateRecoveryCodes(req.authContext!, payload.code);
   }
 
@@ -240,7 +258,10 @@ export class SessionsController {
    * ورمز ذو حالة يُستهلك مرة واحدة (`password-reset-token.ts`).
    */
   @Post('password-reset/request')
-  async requestPasswordReset(@Body() payload: RequestPasswordResetDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  async requestPasswordReset(
+    @Body() payload: RequestPasswordResetDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.passwordResetService.requestReset(payload, {
       ip: this.clientIp(req),
       origin: this.requestOrigin(req),
@@ -248,12 +269,18 @@ export class SessionsController {
   }
 
   @Post('password-reset/validate')
-  async validatePasswordResetToken(@Body() payload: ValidatePasswordResetTokenDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  async validatePasswordResetToken(
+    @Body() payload: ValidatePasswordResetTokenDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.passwordResetService.validateToken(payload, { ip: this.clientIp(req) });
   }
 
   @Post('password-reset/confirm')
-  async confirmPasswordReset(@Body() payload: ConfirmPasswordResetDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  async confirmPasswordReset(
+    @Body() payload: ConfirmPasswordResetDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.passwordResetService.confirmReset(payload, { ip: this.clientIp(req) });
   }
 
@@ -317,7 +344,10 @@ export class SessionsController {
 
   @Post('change-password')
   @UseGuards(SessionAuthGuard)
-  async changePassword(@Body() payload: ChangePasswordDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  async changePassword(
+    @Body() payload: ChangePasswordDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     await this.sessionService.changePassword(req.authContext!, payload.currentPassword, payload.newPassword);
     const removed = await this.sessionService.revokeOtherSessions(req.authContext!, req.authContext!.sessionId);
     await this.auditService.log('تغيير كلمة المرور', `تم تغيير كلمة المرور وإنهاء ${removed} جلسة`, req.authContext!);
@@ -329,17 +359,18 @@ export class SessionsController {
   async dismissPasswordChange(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     if (req.authContext) {
       await this.sessionService.dismissPasswordChange(req.authContext);
-      await this.auditService.log('تخطي تغيير كلمة المرور', `المستخدم ${req.authContext.username} اختار المتابعة بكلمة المرور الحالية`, req.authContext);
+      await this.auditService.log(
+        'تخطي تغيير كلمة المرور',
+        `المستخدم ${req.authContext.username} اختار المتابعة بكلمة المرور الحالية`,
+        req.authContext,
+      );
     }
     return { ok: true };
   }
 
   @Get('me')
   @UseGuards(SessionAuthGuard)
-  me(
-    @Req() req: RequestWithAuth,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<Record<string, unknown>> {
+  me(@Req() req: RequestWithAuth, @Res({ passthrough: true }) res: Response): Promise<Record<string, unknown>> {
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     this.setAuthCookies(res, req.authContext!.sessionId, expiresAt);
     return this.sessionService.buildMePayload(req.authContext!);

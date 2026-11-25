@@ -1,6 +1,13 @@
 import { Controller, Post, Body, Get, Param, ParseIntPipe, Patch, Put, Delete, UseGuards, Req } from '@nestjs/common';
 import { ManufacturingService } from '../services/manufacturing.service';
-import { CreateBomDto, CreateWorkOrderDto, CompleteWorkOrderDto, UpsertWorkCenterDto, CreateUnbuildOrderDto, CreateMtoWorkOrderDto } from '../dto/manufacturing.dto';
+import {
+  CreateBomDto,
+  CreateWorkOrderDto,
+  CompleteWorkOrderDto,
+  UpsertWorkCenterDto,
+  CreateUnbuildOrderDto,
+  CreateMtoWorkOrderDto,
+} from '../dto/manufacturing.dto';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { RequirePermissions, RequireAnyPermission } from '../../../core/auth/decorators/permissions.decorator';
 import { RequireFeature } from '../../../core/auth/decorators/feature.decorator';
@@ -27,30 +34,19 @@ export class ManufacturingController {
 
   @Patch('boms/:id')
   @RequireAnyPermission('inventory', 'products')
-  updateBom(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CreateBomDto,
-    @Req() req: RequestWithAuth
-  ) {
+  updateBom(@Param('id', ParseIntPipe) id: number, @Body() dto: CreateBomDto, @Req() req: RequestWithAuth) {
     return this.manufacturingService.updateBom(id, dto, req.authContext!);
   }
 
   @Put('boms/:id')
   @RequireAnyPermission('inventory', 'products')
-  updateBomPut(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CreateBomDto,
-    @Req() req: RequestWithAuth
-  ) {
+  updateBomPut(@Param('id', ParseIntPipe) id: number, @Body() dto: CreateBomDto, @Req() req: RequestWithAuth) {
     return this.manufacturingService.updateBom(id, dto, req.authContext!);
   }
 
   @Delete('boms/:id')
   @RequireAnyPermission('inventory', 'products')
-  deleteBom(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth
-  ) {
+  deleteBom(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.manufacturingService.deleteBom(id, req.authContext!);
   }
 
@@ -101,19 +97,13 @@ export class ManufacturingController {
 
   @Delete('work-centers/:id')
   @RequireAnyPermission('inventory', 'products')
-  deleteWorkCenter(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth,
-  ) {
+  deleteWorkCenter(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.manufacturingService.deleteWorkCenter(id, req.authContext!);
   }
 
   @Get('work-orders/:id/operations')
   @RequireAnyPermission('inventory', 'products')
-  getWorkOrderOperations(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth,
-  ) {
+  getWorkOrderOperations(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.manufacturingService.getWorkOrderOperations(id, req.authContext!);
   }
 

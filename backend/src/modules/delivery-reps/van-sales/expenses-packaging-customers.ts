@@ -7,9 +7,7 @@ import type {
 } from './van-sales-types';
 
 export class ExpensesPackagingCustomersService {
-  constructor(
-    private readonly getExpensesPackagingCustomers: () => VanExpensesPackagingCustomersService,
-  ) {}
+  constructor(private readonly getExpensesPackagingCustomers: () => VanExpensesPackagingCustomersService) {}
   async recordTripExpense(
     repId: number,
     tenantId: string,
@@ -41,12 +39,7 @@ export class ExpensesPackagingCustomersService {
     return this.getExpensesPackagingCustomers().getCustomerPackagingBalance(customerId, tenantId, repId);
   }
 
-  async createDriverCustomer(
-    repId: number,
-    tenantId: string,
-    accountId: string,
-    body: CreateDriverCustomerBody,
-  ) {
+  async createDriverCustomer(repId: number, tenantId: string, accountId: string, body: CreateDriverCustomerBody) {
     return this.getExpensesPackagingCustomers().createDriverCustomer(repId, tenantId, accountId, body);
   }
 

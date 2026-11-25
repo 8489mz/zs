@@ -16,11 +16,7 @@ import { StorefrontReservationSchedulerService } from './services/storefront-res
 
 @Module({
   imports: [AccountingModule, DatabaseModule, AuditModule, SalesModule, SettingsModule],
-  controllers: [
-    StorefrontMerchantController,
-    StorefrontPublicController,
-    MarketplaceSyncController,
-  ],
+  controllers: [StorefrontMerchantController, StorefrontPublicController, MarketplaceSyncController],
   providers: [
     StorefrontService,
     StorefrontPaymentService,
@@ -29,11 +25,6 @@ import { StorefrontReservationSchedulerService } from './services/storefront-res
     MarketplaceSyncService,
     StorefrontReservationSchedulerService,
   ],
-  exports: [
-    StorefrontService,
-    StorefrontPaymentService,
-    MarketplaceSyncService,
-    StorefrontReservationSchedulerService,
-  ],
+  exports: [StorefrontService, StorefrontPaymentService, MarketplaceSyncService, StorefrontReservationSchedulerService],
 })
 export class StorefrontModule {}

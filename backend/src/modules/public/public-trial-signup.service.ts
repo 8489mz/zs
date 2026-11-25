@@ -20,7 +20,9 @@ export class PublicTrialSignupService {
   ) {}
 
   private normalizeEmail(value: unknown): string {
-    return String(value || '').trim().toLowerCase();
+    return String(value || '')
+      .trim()
+      .toLowerCase();
   }
 
   private normalizePhone(value: unknown): string {
@@ -28,7 +30,9 @@ export class PublicTrialSignupService {
   }
 
   private maskEmail(value: string): string {
-    const email = String(value || '').trim().toLowerCase();
+    const email = String(value || '')
+      .trim()
+      .toLowerCase();
     const [localRaw, domainRaw] = email.split('@');
     const local = localRaw || '';
     const domain = domainRaw || '';
@@ -70,10 +74,9 @@ export class PublicTrialSignupService {
     const existingTenant = await this.db
       .selectFrom('tenants')
       .select(['id'])
-      .where((eb) => eb.or([
-        eb(sql<string>`LOWER(COALESCE(owner_email, ''))`, '=', email),
-        eb('owner_phone', '=', phone),
-      ]))
+      .where((eb) =>
+        eb.or([eb(sql<string>`LOWER(COALESCE(owner_email, ''))`, '=', email), eb('owner_phone', '=', phone)]),
+      )
       .executeTakeFirst();
 
     if (existingTenant) {
@@ -85,10 +88,9 @@ export class PublicTrialSignupService {
       .innerJoin('tenants as t', 't.id', 'ts.tenant_id')
       .select(['ts.id'])
       .where('ts.created_at', '>=', sql<Date>`now() - interval '30 days'`)
-      .where((eb) => eb.or([
-        eb(sql<string>`LOWER(COALESCE(t.owner_email, ''))`, '=', email),
-        eb('t.owner_phone', '=', phone),
-      ]))
+      .where((eb) =>
+        eb.or([eb(sql<string>`LOWER(COALESCE(t.owner_email, ''))`, '=', email), eb('t.owner_phone', '=', phone)]),
+      )
       .executeTakeFirst();
 
     if (existingRecentSignup) {
@@ -97,7 +99,9 @@ export class PublicTrialSignupService {
   }
 
   private shouldRequireMailDelivery(): boolean {
-    const mode = String(process.env.MAIL_DELIVERY_MODE || '').trim().toLowerCase();
+    const mode = String(process.env.MAIL_DELIVERY_MODE || '')
+      .trim()
+      .toLowerCase();
     const isProduction = String(process.env.NODE_ENV || '').trim() === 'production';
     return isProduction || mode === 'smtp';
   }
@@ -144,7 +148,10 @@ export class PublicTrialSignupService {
       this.logger.log(`provisioning ok | tenantId=${provisioned.tenant.id} | slug=${provisioned.tenant.slug}`);
 
       const isProduction = String(process.env.NODE_ENV || '').trim() === 'production';
-      const debugCredentialsEnabled = String(process.env.PUBLIC_TRIAL_DEBUG_CREDENTIALS || '').trim().toLowerCase() === 'true';
+      const debugCredentialsEnabled =
+        String(process.env.PUBLIC_TRIAL_DEBUG_CREDENTIALS || '')
+          .trim()
+          .toLowerCase() === 'true';
 
       phase = 'mail-send';
       this.logger.log(`mail send start | tenantId=${provisioned.tenant.id} | slug=${provisioned.tenant.slug}`);
@@ -173,7 +180,11 @@ export class PublicTrialSignupService {
             // in reverse dependency order, so a mail-send failure never leaves orphaned rows
             // that block deleting the tenant (branches <-> stock_locations is a two-way FK,
             // so the branch's default_stock_location_id must be cleared before either can go).
-            await trx.updateTable('branches').set({ default_stock_location_id: null }).where('tenant_id', '=', tenantId).execute();
+            await trx
+              .updateTable('branches')
+              .set({ default_stock_location_id: null })
+              .where('tenant_id', '=', tenantId)
+              .execute();
             await trx.deleteFrom('user_branches').where('tenant_id', '=', tenantId).execute();
             await trx.deleteFrom('stock_locations').where('tenant_id', '=', tenantId).execute();
             await trx.deleteFrom('branches').where('tenant_id', '=', tenantId).execute();
@@ -213,4 +224,3 @@ export class PublicTrialSignupService {
     }
   }
 }
-

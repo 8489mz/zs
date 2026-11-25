@@ -70,7 +70,8 @@ export function classifyMenuEngineeringQuadrant(
     return {
       quadrant: 'puzzle',
       quadrantLabelAr: 'لغز (Puzzle)',
-      recommendation: 'صنف عالي الربحية لكنه قليل الطلب: أعد إبرازه في المنيو ودرّب فريق الصالة على اقتراحه (Upselling).',
+      recommendation:
+        'صنف عالي الربحية لكنه قليل الطلب: أعد إبرازه في المنيو ودرّب فريق الصالة على اقتراحه (Upselling).',
     };
   } else {
     return {
@@ -98,14 +99,10 @@ export async function buildMenuEngineeringReport(
   // 1. Fetch sales items during the range with product & category info
   let salesQuery = db
     .selectFrom('sale_items as si')
-    .innerJoin('sales as s', (j) =>
-      j.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id')
-    )
-    .innerJoin('products as p', (j) =>
-      j.onRef('p.id', '=', 'si.product_id').onRef('p.tenant_id', '=', 'si.tenant_id')
-    )
+    .innerJoin('sales as s', (j) => j.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'))
+    .innerJoin('products as p', (j) => j.onRef('p.id', '=', 'si.product_id').onRef('p.tenant_id', '=', 'si.tenant_id'))
     .leftJoin('product_categories as c', (join) =>
-      join.onRef('c.id', '=', 'p.category_id').onRef('c.tenant_id', '=', 'p.tenant_id')
+      join.onRef('c.id', '=', 'p.category_id').onRef('c.tenant_id', '=', 'p.tenant_id'),
     )
     .select([
       'si.product_id',
@@ -129,15 +126,18 @@ export async function buildMenuEngineeringReport(
   const rawRows = await salesQuery.execute();
 
   // 2. Aggregate per product
-  const productAggMap = new Map<number, {
-    productId: number;
-    productName: string;
-    categoryName: string;
-    qtySold: number;
-    totalRevenue: number;
-    costPrice: number;
-    unitPrice: number;
-  }>();
+  const productAggMap = new Map<
+    number,
+    {
+      productId: number;
+      productName: string;
+      categoryName: string;
+      qtySold: number;
+      totalRevenue: number;
+      costPrice: number;
+      unitPrice: number;
+    }
+  >();
 
   for (const row of rawRows) {
     const pId = Number(row.product_id);
@@ -234,7 +234,7 @@ export async function buildMenuEngineeringReport(
       potentialProfitUplift += totalMargin * 0.15;
     } else if (quadrant === 'puzzle') {
       puzzleCount++;
-      potentialProfitUplift += totalMargin * 0.20;
+      potentialProfitUplift += totalMargin * 0.2;
     } else {
       dogCount++;
     }

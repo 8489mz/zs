@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.interceptor';
 import { RequirePermissions, RequireAnyPermission } from '../../core/auth/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
@@ -27,7 +40,11 @@ export class ServicesController {
 
   @Put('services/:id')
   @RequirePermissions('services')
-  updateService(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertServiceDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  updateService(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertServiceDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.servicesService.updateService(id, payload, req.authContext!);
   }
 

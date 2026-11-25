@@ -1,14 +1,13 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Kysely, sql, type Transaction } from 'kysely';
 import { Database } from '../../database/database.types';
 import { verifyOrderAccessToken, isSandboxPaymentAllowed } from './engines/online-order-access.engine';
 import { resolveGatewayCurrency, toGatewayMinorAmount } from './engines/gateway-amount.engine';
-import { type TenantPaymentConfig, type StorefrontWebhookResult, type LockedOnlineOrder } from './storefront-payment.types';
+import {
+  type TenantPaymentConfig,
+  type StorefrontWebhookResult,
+  type LockedOnlineOrder,
+} from './storefront-payment.types';
 
 /**
  * StorefrontPaymentHelpersService — slice S1 of the storefront-payment split.
@@ -37,23 +36,43 @@ export class StorefrontPaymentHelpersService {
   }
 
   async expectedPaymentCurrency(trx: Transaction<Database>, tenantId: string, provider: string): Promise<string> {
-    const row = await trx.selectFrom('settings').select('value')
-      .where(sql<boolean>`tenant_id = ${tenantId}`).where('key', '=', 'currency').executeTakeFirst();
+    const row = await trx
+      .selectFrom('settings')
+      .select('value')
+      .where(sql<boolean>`tenant_id = ${tenantId}`)
+      .where('key', '=', 'currency')
+      .executeTakeFirst();
     let value = String(row?.value || '');
-    try { value = String(JSON.parse(value)); } catch {}
+    try {
+      value = String(JSON.parse(value));
+    } catch {}
     return resolveGatewayCurrency(provider, value);
   }
 
   paymentReviewReason(
-    order: LockedOnlineOrder, provider: string, sessionId: string,
-    amountMinor: unknown, currency: unknown, expectedCurrency: string,
+    order: LockedOnlineOrder,
+    provider: string,
+    sessionId: string,
+    amountMinor: unknown,
+    currency: unknown,
+    expectedCurrency: string,
   ): string | null {
-    if (order.status === 'cancelled' || order.status === 'payment_failed' || order.status === 'review_required' ||
-        order.sale_id != null || (order.stock_reserved === false && order.stock_reserved_at != null)) {
+    if (
+      order.status === 'cancelled' ||
+      order.status === 'payment_failed' ||
+      order.status === 'review_required' ||
+      order.sale_id != null ||
+      (order.stock_reserved === false && order.stock_reserved_at != null)
+    ) {
       return 'late_or_released_order';
     }
-    if (order.gateway_provider !== provider || !order.gateway_order_id ||
-        !sessionId || String(order.gateway_order_id) !== sessionId) return 'payment_session_mismatch';
+    if (
+      order.gateway_provider !== provider ||
+      !order.gateway_order_id ||
+      !sessionId ||
+      String(order.gateway_order_id) !== sessionId
+    )
+      return 'payment_session_mismatch';
     const paidMinor = Number(amountMinor);
     const expectedMinor = toGatewayMinorAmount(Number(order.total_amount), expectedCurrency);
     if (!Number.isSafeInteger(paidMinor) || paidMinor !== expectedMinor) return 'amount_mismatch';
@@ -62,41 +81,64 @@ export class StorefrontPaymentHelpersService {
   }
 
   async markPaymentForReview(
-    trx: Transaction<Database>, order: LockedOnlineOrder, provider: string,
-    transactionId: string, sessionId: string, response: unknown, reason: string,
+    trx: Transaction<Database>,
+    order: LockedOnlineOrder,
+    provider: string,
+    transactionId: string,
+    sessionId: string,
+    response: unknown,
+    reason: string,
   ): Promise<StorefrontWebhookResult> {
-    await trx.updateTable('online_orders').set({
-      payment_status: 'paid', status: 'review_required',
-      gateway_provider: order.payment_status === 'paid' ? order.gateway_provider : provider,
-      gateway_transaction_id: order.payment_status === 'paid' ? order.gateway_transaction_id : transactionId,
-      gateway_response_json: JSON.stringify({ reason, receivedTransactionId: transactionId,
-        receivedSessionId: sessionId, previousTransactionId: order.gateway_transaction_id, webhook: response }),
-      paid_at: order.paid_at || new Date(), updated_at: new Date(),
-    }).where('id', '=', order.id).where(sql<boolean>`tenant_id = ${order.tenant_id}`).execute();
+    await trx
+      .updateTable('online_orders')
+      .set({
+        payment_status: 'paid',
+        status: 'review_required',
+        gateway_provider: order.payment_status === 'paid' ? order.gateway_provider : provider,
+        gateway_transaction_id: order.payment_status === 'paid' ? order.gateway_transaction_id : transactionId,
+        gateway_response_json: JSON.stringify({
+          reason,
+          receivedTransactionId: transactionId,
+          receivedSessionId: sessionId,
+          previousTransactionId: order.gateway_transaction_id,
+          webhook: response,
+        }),
+        paid_at: order.paid_at || new Date(),
+        updated_at: new Date(),
+      })
+      .where('id', '=', order.id)
+      .where(sql<boolean>`tenant_id = ${order.tenant_id}`)
+      .execute();
     this.logger.warn(`${provider} payment requires review for online order ${order.id}: ${reason}`);
     return { ok: true, status: 'review_required', orderNumber: order.order_number };
   }
 
   isCurrentPaymentSession(order: LockedOnlineOrder, provider: string, sessionId: string): boolean {
-    return order.gateway_provider === provider && Boolean(sessionId) &&
-      Boolean(order.gateway_order_id) && String(order.gateway_order_id) === sessionId;
+    return (
+      order.gateway_provider === provider &&
+      Boolean(sessionId) &&
+      Boolean(order.gateway_order_id) &&
+      String(order.gateway_order_id) === sessionId
+    );
   }
 
   isRepeatedPaidWebhook(order: LockedOnlineOrder, provider: string, transactionId: string, sessionId: string): boolean {
-    return order.payment_status === 'paid' && order.gateway_provider === provider &&
-      Boolean(transactionId) && String(order.gateway_transaction_id || '') === transactionId &&
-      this.isCurrentPaymentSession(order, provider, sessionId);
+    return (
+      order.payment_status === 'paid' &&
+      order.gateway_provider === provider &&
+      Boolean(transactionId) &&
+      String(order.gateway_transaction_id || '') === transactionId &&
+      this.isCurrentPaymentSession(order, provider, sessionId)
+    );
   }
 
   async getTenantBySlug(slug: string) {
-    const cleanSlug = String(slug || '').trim().toLowerCase();
+    const cleanSlug = String(slug || '')
+      .trim()
+      .toLowerCase();
     if (!cleanSlug || cleanSlug === 'admin') throw new NotFoundException('المتجر غير موجود');
 
-    let tenant = await this.db
-      .selectFrom('tenants')
-      .selectAll()
-      .where('slug', '=', cleanSlug)
-      .executeTakeFirst();
+    let tenant = await this.db.selectFrom('tenants').selectAll().where('slug', '=', cleanSlug).executeTakeFirst();
 
     if (!tenant && cleanSlug.includes('.')) {
       tenant = await this.db
@@ -123,19 +165,19 @@ export class StorefrontPaymentHelpersService {
       }
     }
 
-    if (!tenant && (cleanSlug === 'default' || cleanSlug === 'almhnds' || cleanSlug === 'slmhnds' || cleanSlug === 'elmhnds' || cleanSlug === 'almohandes' || cleanSlug === 'elmohandes')) {
-      tenant = await this.db
-        .selectFrom('tenants')
-        .selectAll()
-        .where('id', '=', 'default')
-        .executeTakeFirst();
+    if (
+      !tenant &&
+      (cleanSlug === 'default' ||
+        cleanSlug === 'almhnds' ||
+        cleanSlug === 'slmhnds' ||
+        cleanSlug === 'elmhnds' ||
+        cleanSlug === 'almohandes' ||
+        cleanSlug === 'elmohandes')
+    ) {
+      tenant = await this.db.selectFrom('tenants').selectAll().where('id', '=', 'default').executeTakeFirst();
 
       if (!tenant) {
-        tenant = await this.db
-          .selectFrom('tenants')
-          .selectAll()
-          .orderBy('created_at', 'asc')
-          .executeTakeFirst();
+        tenant = await this.db.selectFrom('tenants').selectAll().orderBy('created_at', 'asc').executeTakeFirst();
       }
     }
 
@@ -169,7 +211,9 @@ export class StorefrontPaymentHelpersService {
    */
   sandboxSessionOrThrow(config: TenantPaymentConfig, session: Record<string, unknown>) {
     if (!isSandboxPaymentAllowed(config)) {
-      throw new BadRequestException('تعذر بدء جلسة الدفع الإلكتروني حالياً، يرجى المحاولة لاحقاً أو اختيار الدفع عند الاستلام');
+      throw new BadRequestException(
+        'تعذر بدء جلسة الدفع الإلكتروني حالياً، يرجى المحاولة لاحقاً أو اختيار الدفع عند الاستلام',
+      );
     }
     return session;
   }

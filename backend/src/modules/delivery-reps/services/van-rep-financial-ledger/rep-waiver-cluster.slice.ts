@@ -27,13 +27,17 @@ export class RepWaiverClusterSlice {
    * returns.service.ts (getLargeCashRefundThreshold).
    */
   async getRepWaiverApprovalThreshold(trx: any, tenantId: string): Promise<number> {
-    const row = await sql<{ value?: string }>`select value from settings where key = 'repWaiverApprovalThreshold' and tenant_id = ${tenantId}`.execute(trx);
+    const row = await sql<{
+      value?: string;
+    }>`select value from settings where key = 'repWaiverApprovalThreshold' and tenant_id = ${tenantId}`.execute(trx);
     const raw = String(row.rows?.[0]?.value || '').trim();
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
         if (typeof parsed === 'number' && Number.isFinite(parsed) && parsed >= 0) return parsed;
-      } catch { /* fall through to the plain-number parse */ }
+      } catch {
+        /* fall through to the plain-number parse */
+      }
       const plain = Number(raw);
       if (Number.isFinite(plain) && plain >= 0) return plain;
     }

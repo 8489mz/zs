@@ -17,7 +17,15 @@ import {
   type AttendancePunchResolution,
 } from '../attendance-punch.engine';
 import { type RawBuilder } from 'kysely';
-import { buildAttendanceDayAuditKey, clean, combineNotes, normalizeAttendanceSource, normalizeAttendanceStatus, normalizeDateOnly, toId } from '../hr-helpers';
+import {
+  buildAttendanceDayAuditKey,
+  clean,
+  combineNotes,
+  normalizeAttendanceSource,
+  normalizeAttendanceStatus,
+  normalizeDateOnly,
+  toId,
+} from '../hr-helpers';
 
 /**
  * HrAttendanceRecordsService — slice H11 of the hr split.
@@ -75,7 +83,12 @@ export interface HrAttendanceRecordsDeps {
   tx: TransactionHelper;
   audit: AuditService;
   tenantPredicate: (auth: AuthContext, alias?: string) => RawBuilder<boolean>;
-  refreshAttendanceExceptionForEmployeeDate: (db: Kysely<Database>, employeeId: number, workDate: string, scopeTenantId: string) => Promise<void>;
+  refreshAttendanceExceptionForEmployeeDate: (
+    db: Kysely<Database>,
+    employeeId: number,
+    workDate: string,
+    scopeTenantId: string,
+  ) => Promise<void>;
 }
 
 @Injectable()
@@ -84,7 +97,12 @@ export class HrAttendanceRecordsService {
   private readonly tx: TransactionHelper;
   private readonly audit: AuditService;
   private readonly tenantPredicate: (auth: AuthContext, alias?: string) => RawBuilder<boolean>;
-  private readonly refreshAttendanceExceptionForEmployeeDate: (db: Kysely<Database>, employeeId: number, workDate: string, scopeTenantId: string) => Promise<void>;
+  private readonly refreshAttendanceExceptionForEmployeeDate: (
+    db: Kysely<Database>,
+    employeeId: number,
+    workDate: string,
+    scopeTenantId: string,
+  ) => Promise<void>;
 
   constructor(deps: HrAttendanceRecordsDeps) {
     this.db = deps.db;
@@ -97,7 +115,8 @@ export class HrAttendanceRecordsService {
   async listAttendance(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
     const tenantTimezone = await getTenantTimezone(this.db, auth.tenantId);
-    const workDate = normalizeDateOnly(query.date) || normalizeDateOnly(query.workDate) || todayTenantDate(tenantTimezone);
+    const workDate =
+      normalizeDateOnly(query.date) || normalizeDateOnly(query.workDate) || todayTenantDate(tenantTimezone);
     if (!workDate) throw new AppError('Attendance date is required', 'HR_ATTENDANCE_DATE_REQUIRED', 400);
     const search = clean(query.search).toLowerCase();
     const requestedEmployeeId = toId(query.employeeId);
@@ -105,13 +124,23 @@ export class HrAttendanceRecordsService {
     const rangeFrom = normalizeDateOnly(query.from);
     const rangeTo = normalizeDateOnly(query.to);
     if (rangeFrom || rangeTo) {
-      if (!rangeFrom || !rangeTo || rangeFrom > rangeTo) throw new AppError('اختر تاريخ بداية ونهاية صحيحين', 'HR_ATTENDANCE_RANGE_INVALID', 400);
-      const rangeDays = Math.round((Date.parse(rangeTo + 'T00:00:00Z') - Date.parse(rangeFrom + 'T00:00:00Z')) / 86400000);
+      if (!rangeFrom || !rangeTo || rangeFrom > rangeTo)
+        throw new AppError('اختر تاريخ بداية ونهاية صحيحين', 'HR_ATTENDANCE_RANGE_INVALID', 400);
+      const rangeDays = Math.round(
+        (Date.parse(rangeTo + 'T00:00:00Z') - Date.parse(rangeFrom + 'T00:00:00Z')) / 86400000,
+      );
       if (rangeDays > 92) throw new AppError('الحد الأقصى لفترة الحضور 93 يومًا', 'HR_ATTENDANCE_RANGE_TOO_LARGE', 400);
       const pageSize = Math.min(200, Math.max(1, Math.floor(Number(query.pageSize || 50)) || 50));
       const page = Math.max(1, Math.floor(Number(query.page || 1)) || 1);
       const match = `%${search}%`;
-      const count = await sql<{ total: string; minutes: string; payable_minutes: string; present: string; absent: string; late: string }>`
+      const count = await sql<{
+        total: string;
+        minutes: string;
+        payable_minutes: string;
+        present: string;
+        absent: string;
+        late: string;
+      }>`
         SELECT COUNT(*)::text AS total,
           COALESCE(SUM(CASE WHEN a.check_in_at IS NOT NULL AND a.check_out_at IS NOT NULL
               AND a.check_out_at > a.check_in_at AND a.check_out_at <= a.check_in_at + INTERVAL '24 hours'
@@ -189,30 +218,43 @@ export class HrAttendanceRecordsService {
         LIMIT ${pageSize} OFFSET ${(safePage - 1) * pageSize}
       `.execute(this.db);
       return {
-        rows: result.rows.map(row => ({
-          id: String(row.attendance_id), employeeId: String(row.employee_id),
-          employeeNo: clean(row.employee_no), employeeName: clean(row.employee_name),
-          departmentName: clean(row.department_name), jobTitleName: clean(row.job_title_name),
-          compensationType: clean(row.compensation_type), hourlyRate: Number(row.hourly_rate || 0),
-          workDate: clean(row.work_date_text), status: clean(row.status),
-          checkInAt: clean(row.check_in_at_text), checkOutAt: clean(row.check_out_at_text),
-          source: normalizeAttendanceSource(row.source), notes: clean(row.notes),
+        rows: result.rows.map((row) => ({
+          id: String(row.attendance_id),
+          employeeId: String(row.employee_id),
+          employeeNo: clean(row.employee_no),
+          employeeName: clean(row.employee_name),
+          departmentName: clean(row.department_name),
+          jobTitleName: clean(row.job_title_name),
+          compensationType: clean(row.compensation_type),
+          hourlyRate: Number(row.hourly_rate || 0),
+          workDate: clean(row.work_date_text),
+          status: clean(row.status),
+          checkInAt: clean(row.check_in_at_text),
+          checkOutAt: clean(row.check_out_at_text),
+          source: normalizeAttendanceSource(row.source),
+          notes: clean(row.notes),
           scheduledCheckInTime: clean(row.scheduled_check_in_time),
           scheduledCheckOutTime: clean(row.scheduled_check_out_time),
           graceMinutes: Number(row.grace_minutes || 0),
-          departmentId: row.department_id ? String(row.department_id) : "",
+          departmentId: row.department_id ? String(row.department_id) : '',
           expectedDailyHours: row.expected_daily_hours != null ? Number(row.expected_daily_hours) : null,
           overtimePolicy: clean(row.overtime_policy) || 'review_only',
           approvedOvertimeMinutes: Number(row.approved_overtime_minutes || 0),
           pendingOvertimeMinutes: Number(row.pending_overtime_minutes || 0),
         })),
         pagination: { page: safePage, pageSize, totalItems, totalPages },
-        summary: { totalItems, presentCount: Number(count.rows[0]?.present || 0),
-          absentCount: Number(count.rows[0]?.absent || 0), lateCount: Number(count.rows[0]?.late || 0),
+        summary: {
+          totalItems,
+          presentCount: Number(count.rows[0]?.present || 0),
+          absentCount: Number(count.rows[0]?.absent || 0),
+          lateCount: Number(count.rows[0]?.late || 0),
           workedMinutes: Number(count.rows[0]?.minutes || 0),
-          payableMinutes: Number(count.rows[0]?.payable_minutes || 0) },
-        serverTime: new Date().toISOString(), serverTimezone: tenantTimezone,
-        from: rangeFrom, to: rangeTo,
+          payableMinutes: Number(count.rows[0]?.payable_minutes || 0),
+        },
+        serverTime: new Date().toISOString(),
+        serverTimezone: tenantTimezone,
+        from: rangeFrom,
+        to: rangeTo,
       };
     }
 
@@ -285,7 +327,16 @@ export class HrAttendanceRecordsService {
         AND (${requestedDepartmentId}::BIGINT IS NULL OR e.department_id = ${requestedDepartmentId})
         AND (${search} = '' OR strpos(lower(btrim(COALESCE(e.employee_no, ''))), ${search}) > 0 OR strpos(lower(btrim(e.display_name)), ${search}) > 0 OR strpos(lower(btrim(COALESCE(d.name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(j.name, ''))), ${search}) > 0)
     `;
-    const totals = await sql<{ total: string; present: string; absent: string; late: string; leave: string; unmarked: string; minutes: string; payable_minutes: string }>`
+    const totals = await sql<{
+      total: string;
+      present: string;
+      absent: string;
+      late: string;
+      leave: string;
+      unmarked: string;
+      minutes: string;
+      payable_minutes: string;
+    }>`
       SELECT
         COUNT(*)::text AS total,
         COUNT(*) FILTER (WHERE status = 'present')::text AS present,
@@ -343,7 +394,8 @@ export class HrAttendanceRecordsService {
         employeeName: clean(row.employee_name),
         departmentName: clean(row.department_name),
         jobTitleName: clean(row.job_title_name),
-        compensationType: clean(row.compensation_type), hourlyRate: Number(row.hourly_rate || 0),
+        compensationType: clean(row.compensation_type),
+        hourlyRate: Number(row.hourly_rate || 0),
         workDate,
         status: status === 'unmarked' ? '' : status,
         checkInAt: clean(row.check_in_at_text),
@@ -353,7 +405,7 @@ export class HrAttendanceRecordsService {
         scheduledCheckInTime: clean(row.scheduled_check_in_time),
         scheduledCheckOutTime: clean(row.scheduled_check_out_time),
         graceMinutes: Number(row.grace_minutes || 0),
-        departmentId: row.department_id ? String(row.department_id) : "",
+        departmentId: row.department_id ? String(row.department_id) : '',
         expectedDailyHours: row.expected_daily_hours != null ? Number(row.expected_daily_hours) : null,
         overtimePolicy: clean(row.overtime_policy) || 'review_only',
         approvedOvertimeMinutes: Number(row.approved_overtime_minutes || 0),
@@ -385,7 +437,10 @@ export class HrAttendanceRecordsService {
    * Call while holding the tenant-wide payroll lock inside the SAME trx.
    */
   private async assertAttendanceDayNotPosted(
-    trx: Kysely<Database>, employeeId: number, workDate: string, tenantId: string,
+    trx: Kysely<Database>,
+    employeeId: number,
+    workDate: string,
+    tenantId: string,
   ): Promise<void> {
     const booked = await sql<{ id: number }>`
       SELECT r.id FROM hr_payroll_runs r
@@ -396,8 +451,11 @@ export class HrAttendanceRecordsService {
       LIMIT 1
     `.execute(trx);
     if (booked.rows.length) {
-      throw new AppError('لا يمكن تعديل حضور يوم دخل مسير مرتبات معتمد؛ سجّل تسوية محاسبية مستقلة',
-        'HR_ATTENDANCE_POSTED_PERIOD_LOCKED', 409);
+      throw new AppError(
+        'لا يمكن تعديل حضور يوم دخل مسير مرتبات معتمد؛ سجّل تسوية محاسبية مستقلة',
+        'HR_ATTENDANCE_POSTED_PERIOD_LOCKED',
+        409,
+      );
     }
   }
 
@@ -418,8 +476,8 @@ export class HrAttendanceRecordsService {
 
     await this.tx.runInTransaction(this.db, async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
-      const ids = payload.rows.map(row => toId(row.employeeId));
-      if (ids.some(id => !id)) throw new AppError('Employee is required', 'HR_ATTENDANCE_EMPLOYEE_REQUIRED', 400);
+      const ids = payload.rows.map((row) => toId(row.employeeId));
+      if (ids.some((id) => !id)) throw new AppError('Employee is required', 'HR_ATTENDANCE_EMPLOYEE_REQUIRED', 400);
       if (new Set(ids).size !== ids.length) {
         throw new AppError('لا يمكن إرسال بصمتين لنفس الموظف في يوم واحد', 'HR_ATTENDANCE_DUPLICATE_EMPLOYEE', 400);
       }
@@ -427,15 +485,20 @@ export class HrAttendanceRecordsService {
         SELECT id, status FROM hr_employees
         WHERE tenant_id = ${auth.tenantId} AND id IN (${sql.join(ids as number[])})
       `.execute(trx);
-      const eligible = new Set(allowed.rows.filter(e => e.status === 'active').map(e => Number(e.id)));
-      if (eligible.size !== ids.length || ids.some(id => !eligible.has(Number(id)))) {
-        throw new AppError('قائمة الحضور تحتوي موظفًا غير نشط أو غير تابع للمنشأة', 'HR_ATTENDANCE_EMPLOYEE_TENANT_MISMATCH', 400);
+      const eligible = new Set(allowed.rows.filter((e) => e.status === 'active').map((e) => Number(e.id)));
+      if (eligible.size !== ids.length || ids.some((id) => !eligible.has(Number(id)))) {
+        throw new AppError(
+          'قائمة الحضور تحتوي موظفًا غير نشط أو غير تابع للمنشأة',
+          'HR_ATTENDANCE_EMPLOYEE_TENANT_MISMATCH',
+          400,
+        );
       }
       for (const row of payload.rows) {
         const employeeId = toId(row.employeeId)!;
         await this.assertAttendanceDayNotPosted(trx, employeeId, workDate, auth.tenantId || '');
         const status = normalizeAttendanceStatus(row.status);
-        if (status === 'unmarked') throw new AppError('Attendance status is invalid', 'HR_ATTENDANCE_STATUS_INVALID', 400);
+        if (status === 'unmarked')
+          throw new AppError('Attendance status is invalid', 'HR_ATTENDANCE_STATUS_INVALID', 400);
         const checkInAt = row.checkInAt ? new Date(row.checkInAt) : null;
         const checkOutAt = row.checkOutAt ? new Date(row.checkOutAt) : null;
         if ((checkInAt && Number.isNaN(checkInAt.getTime())) || (checkOutAt && Number.isNaN(checkOutAt.getTime()))) {
@@ -472,16 +535,16 @@ export class HrAttendanceRecordsService {
       }
     });
 
-    await this.audit.log(
-      'Save HR attendance day',
-      `Attendance saved for ${workDate} by ${auth.username}`,
-      auth,
-      { idempotencyKey: buildAttendanceDayAuditKey(auth.tenantId || '', workDate, payload.rows) },
-    );
+    await this.audit.log('Save HR attendance day', `Attendance saved for ${workDate} by ${auth.username}`, auth, {
+      idempotencyKey: buildAttendanceDayAuditKey(auth.tenantId || '', workDate, payload.rows),
+    });
     return this.listAttendance({ date: workDate }, auth);
   }
 
-  async upsertAttendanceRecord(payload: UpsertAttendanceRecordDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertAttendanceRecord(
+    payload: UpsertAttendanceRecordDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
     const tenantTimezone = await getTenantTimezone(this.db, auth.tenantId);
     const employeeId = toId(payload.employeeId);
@@ -499,7 +562,9 @@ export class HrAttendanceRecordsService {
     const { checkInAt, checkOutAt, workDate } = punch;
     if (!workDate) throw new AppError('Attendance date is required', 'HR_ATTENDANCE_DATE_REQUIRED', 400);
 
-    const empCheck = await sql<{ status: string }>`SELECT status FROM hr_employees WHERE id = ${employeeId} AND tenant_id = ${auth.tenantId}`.execute(this.db);
+    const empCheck = await sql<{
+      status: string;
+    }>`SELECT status FROM hr_employees WHERE id = ${employeeId} AND tenant_id = ${auth.tenantId}`.execute(this.db);
     if (empCheck.rows.length === 0 || empCheck.rows[0].status !== 'active') {
       throw new AppError('Employee is not active', 'HR_EMPLOYEE_NOT_ACTIVE', 400);
     }
@@ -510,7 +575,12 @@ export class HrAttendanceRecordsService {
     const auditEntry = await this.db.transaction().execute(async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
       await this.assertAttendanceDayNotPosted(trx, employeeId, workDate, auth.tenantId || '');
-      const existingCheck = await sql<{ check_in_at: Date | null; check_out_at: Date | null; notes: string | null; prior_sessions_minutes: number | null }>`
+      const existingCheck = await sql<{
+        check_in_at: Date | null;
+        check_out_at: Date | null;
+        notes: string | null;
+        prior_sessions_minutes: number | null;
+      }>`
         SELECT check_in_at, check_out_at, notes, prior_sessions_minutes FROM hr_attendance_records
         WHERE employee_id = ${employeeId} AND work_date = ${workDate}::date AND tenant_id = ${auth.tenantId}
         FOR UPDATE
@@ -552,7 +622,8 @@ export class HrAttendanceRecordsService {
         const prevEndMs = existingRow!.check_out_at ? new Date(existingRow!.check_out_at).getTime() : NaN;
         const prevElapsed = Math.floor((prevEndMs - prevStartMs) / 60000);
         const prevMinutes = Number.isFinite(prevElapsed) && prevElapsed > 0 && prevElapsed <= 1440 ? prevElapsed : 0;
-        const accumulatedPriorMinutes = Math.max(0, Math.floor(Number(existingRow!.prior_sessions_minutes || 0))) + prevMinutes;
+        const accumulatedPriorMinutes =
+          Math.max(0, Math.floor(Number(existingRow!.prior_sessions_minutes || 0))) + prevMinutes;
 
         await sql`
           UPDATE hr_attendance_records
@@ -624,7 +695,10 @@ export class HrAttendanceRecordsService {
     return this.listAttendance({ date: workDate }, auth);
   }
 
-  async bulkImportAttendanceRecords(payload: BulkImportAttendanceDto, auth: AuthContext): Promise<{ imported: number; skipped: number; errors: string[] }> {
+  async bulkImportAttendanceRecords(
+    payload: BulkImportAttendanceDto,
+    auth: AuthContext,
+  ): Promise<{ imported: number; skipped: number; errors: string[] }> {
     requireTenantScope(auth);
     if (!payload.records || !payload.records.length) {
       throw new AppError('No records to import', 'HR_ATTENDANCE_IMPORT_EMPTY', 400);
@@ -726,7 +800,11 @@ export class HrAttendanceRecordsService {
       }
     });
 
-    await this.audit.log('Bulk import HR attendance', `Imported ${imported} attendance records by ${auth.username}`, auth);
+    await this.audit.log(
+      'Bulk import HR attendance',
+      `Imported ${imported} attendance records by ${auth.username}`,
+      auth,
+    );
     return { imported, skipped, errors };
   }
 }

@@ -11,8 +11,29 @@ export class CreateProjectDto {
 
   @IsString()
   @IsOptional()
-  @IsIn(['planning', 'draft', 'submitted', 'negotiation', 'active', 'suspended', 'completed', 'handed_over', 'lost', 'cancelled'])
-  status?: 'planning' | 'draft' | 'submitted' | 'negotiation' | 'active' | 'suspended' | 'completed' | 'handed_over' | 'lost' | 'cancelled';
+  @IsIn([
+    'planning',
+    'draft',
+    'submitted',
+    'negotiation',
+    'active',
+    'suspended',
+    'completed',
+    'handed_over',
+    'lost',
+    'cancelled',
+  ])
+  status?:
+    | 'planning'
+    | 'draft'
+    | 'submitted'
+    | 'negotiation'
+    | 'active'
+    | 'suspended'
+    | 'completed'
+    | 'handed_over'
+    | 'lost'
+    | 'cancelled';
 
   @IsNumber()
   @IsOptional()
@@ -124,8 +145,29 @@ export class UpdateProjectDto {
 
   @IsString()
   @IsOptional()
-  @IsIn(['planning', 'draft', 'submitted', 'negotiation', 'active', 'suspended', 'completed', 'handed_over', 'lost', 'cancelled'])
-  status?: 'planning' | 'draft' | 'submitted' | 'negotiation' | 'active' | 'suspended' | 'completed' | 'handed_over' | 'lost' | 'cancelled';
+  @IsIn([
+    'planning',
+    'draft',
+    'submitted',
+    'negotiation',
+    'active',
+    'suspended',
+    'completed',
+    'handed_over',
+    'lost',
+    'cancelled',
+  ])
+  status?:
+    | 'planning'
+    | 'draft'
+    | 'submitted'
+    | 'negotiation'
+    | 'active'
+    | 'suspended'
+    | 'completed'
+    | 'handed_over'
+    | 'lost'
+    | 'cancelled';
 
   @IsNumber()
   @Min(0)

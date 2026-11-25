@@ -15,7 +15,19 @@ import { PLAN_MANAGED_MODULES_SETTING_KEY } from '../../../common/constants/plat
 import { hashManagerPin, isBcryptHash, MANAGER_PIN_SETTING_KEYS } from '../../../common/utils/manager-approval';
 
 export class SettingsSave {
-  constructor(private readonly db: Kysely<Database>, private readonly audit: AuditService, private readonly authCache: AuthCacheService, private readonly bound: { getSettings: (actor: AuthContext) => Promise<Record<string, unknown>>; invalidatePlanFeaturesCache: (tenantId: string | undefined) => void; invalidateSettingsCache: (tenantId: string | undefined) => void; loadFeatureOverride: (tenantId: string, featureCode: string) => Promise<boolean | null>; scope: (actor: AuthContext) => TenantScope; tenantPredicate: (actor: AuthContext, alias?: string) => RawBuilder<boolean> }) {}
+  constructor(
+    private readonly db: Kysely<Database>,
+    private readonly audit: AuditService,
+    private readonly authCache: AuthCacheService,
+    private readonly bound: {
+      getSettings: (actor: AuthContext) => Promise<Record<string, unknown>>;
+      invalidatePlanFeaturesCache: (tenantId: string | undefined) => void;
+      invalidateSettingsCache: (tenantId: string | undefined) => void;
+      loadFeatureOverride: (tenantId: string, featureCode: string) => Promise<boolean | null>;
+      scope: (actor: AuthContext) => TenantScope;
+      tenantPredicate: (actor: AuthContext, alias?: string) => RawBuilder<boolean>;
+    },
+  ) {}
 
   private async getSettings(actor: AuthContext): Promise<Record<string, unknown>> {
     return this.bound.getSettings(actor);
@@ -37,7 +49,8 @@ export class SettingsSave {
   }
 
   async saveSettings(payload: Record<string, unknown>, actor: AuthContext): Promise<Record<string, unknown>> {
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new AppError('Settings payload must be an object', 'SETTINGS_INVALID', 400);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+      throw new AppError('Settings payload must be an object', 'SETTINGS_INVALID', 400);
     const scope = this.scope(actor);
     const currentBranchIdRaw = String(payload.currentBranchId ?? '').trim();
     const currentLocationIdRaw = String(payload.currentLocationId ?? '').trim();
@@ -92,12 +105,19 @@ export class SettingsSave {
       }
     }
 
-
     if ('uiLanguage' in normalizedPayload) {
-      normalizedPayload.uiLanguage = String(normalizedPayload.uiLanguage || '').trim().toLowerCase() === 'en' ? 'en' : 'ar';
+      normalizedPayload.uiLanguage =
+        String(normalizedPayload.uiLanguage || '')
+          .trim()
+          .toLowerCase() === 'en'
+          ? 'en'
+          : 'ar';
     }
     if ('defaultBranchIssueMode' in normalizedPayload) {
-      normalizedPayload.defaultBranchIssueMode = normalizedPayload.defaultBranchIssueMode === 'transfer_to_branch_stock' ? 'transfer_to_branch_stock' : 'final_issue';
+      normalizedPayload.defaultBranchIssueMode =
+        normalizedPayload.defaultBranchIssueMode === 'transfer_to_branch_stock'
+          ? 'transfer_to_branch_stock'
+          : 'final_issue';
     }
     if ('timezone' in normalizedPayload && normalizedPayload.timezone) {
       const tz = String(normalizedPayload.timezone).trim();
@@ -113,9 +133,9 @@ export class SettingsSave {
       .where('id', '=', scope.tenantId)
       .executeTakeFirst();
 
-    const rawRequestedActivity = String(
-      normalizedPayload.activityType || normalizedPayload.businessIndustry || '',
-    ).trim().toLowerCase();
+    const rawRequestedActivity = String(normalizedPayload.activityType || normalizedPayload.businessIndustry || '')
+      .trim()
+      .toLowerCase();
 
     let effectiveType = tenantRow?.activity_type || rawRequestedActivity || 'retail_general';
 
@@ -258,21 +278,41 @@ export class SettingsSave {
       }
     }
 
-    await this.db.transaction().execute(async trx => {
+    await this.db.transaction().execute(async (trx) => {
       if ('currency' in normalizedPayload) {
         await lockAccountingPeriod(trx, scope.tenantId);
-        const requested = String(normalizedPayload.currency || '').trim().toUpperCase();
+        const requested = String(normalizedPayload.currency || '')
+          .trim()
+          .toUpperCase();
         if (!/^[A-Z]{3}$/.test(requested)) throw new AppError('رمز العملة غير صالح', 'INVALID_CURRENCY', 400);
         const current = await tenantBaseCurrency(trx, scope.tenantId);
         if (requested !== current) {
-          const posted = await trx.selectFrom('journal_entries').select('id').where('tenant_id', '=', scope.tenantId).where('status', '=', 'posted').limit(1).executeTakeFirst();
-          const rate = await trx.selectFrom('currency_exchange_rates').select('id').where('tenant_id', '=', scope.tenantId).limit(1).executeTakeFirst();
-          if (posted || rate) throw new AppError('تغيير عملة الأساس بعد تهيئة أسعار الصرف أو الترحيل يتطلب تحويل دفاتر معتمداً', 'BASE_CURRENCY_LOCKED', 400);
+          const posted = await trx
+            .selectFrom('journal_entries')
+            .select('id')
+            .where('tenant_id', '=', scope.tenantId)
+            .where('status', '=', 'posted')
+            .limit(1)
+            .executeTakeFirst();
+          const rate = await trx
+            .selectFrom('currency_exchange_rates')
+            .select('id')
+            .where('tenant_id', '=', scope.tenantId)
+            .limit(1)
+            .executeTakeFirst();
+          if (posted || rate)
+            throw new AppError(
+              'تغيير عملة الأساس بعد تهيئة أسعار الصرف أو الترحيل يتطلب تحويل دفاتر معتمداً',
+              'BASE_CURRENCY_LOCKED',
+              400,
+            );
         }
         normalizedPayload.currency = requested;
       }
       for (const [key, value] of Object.entries(normalizedPayload)) {
-        await sql`insert into settings (key, value, tenant_id, account_id) values (${key}, ${JSON.stringify(value)}, ${scope.tenantId}, ${scope.accountId}) on conflict (tenant_id, key) do update set value = excluded.value, account_id = excluded.account_id`.execute(trx);
+        await sql`insert into settings (key, value, tenant_id, account_id) values (${key}, ${JSON.stringify(value)}, ${scope.tenantId}, ${scope.accountId}) on conflict (tenant_id, key) do update set value = excluded.value, account_id = excluded.account_id`.execute(
+          trx,
+        );
       }
     });
     this.invalidateSettingsCache(scope.tenantId);

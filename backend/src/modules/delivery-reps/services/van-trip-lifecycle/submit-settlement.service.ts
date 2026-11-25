@@ -5,11 +5,7 @@ import { AppError } from '../../../../common/errors/app-error';
 import { Database } from '../../../../database/database.types';
 import { evaluateOdometerReadings } from '../../van-trip-reconciliation.engine';
 import { resolveVanMoneyAuditActor } from '../van-common.util';
-import {
-  normalizePerDayCash,
-  sumPerDayCash,
-  type PerDayCashInput,
-} from '../../van-settlement-split.engine';
+import { normalizePerDayCash, sumPerDayCash, type PerDayCashInput } from '../../van-settlement-split.engine';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../../accounting/engines/money-minor-units.engine';
 import { computeCashDrawerVariance } from '../../../cash-drawer/helpers/cash-drawer.helper';
@@ -28,7 +24,7 @@ export class SubmitSettlementService {
     return this.db as any;
   }
 
-/**
+  /**
    * Driver submits daily trip closing report (cash handover, odometer reading, and stock unload request).
    * Status transitions to `submitted_by_rep`, pending supervisor review.
    */
@@ -66,7 +62,13 @@ export class SubmitSettlementService {
       .where('vt.id', '=', payload.tripId)
       .where('vt.tenant_id', '=', tenantId)
       .where('vt.rep_id', '=', repId)
-      .where((eb: any) => eb.or([eb('vt.status', '=', 'open'), eb('vt.settlement_status', '=', 'open'), eb('vt.settlement_status', '=', 'submitted_by_rep')]))
+      .where((eb: any) =>
+        eb.or([
+          eb('vt.status', '=', 'open'),
+          eb('vt.settlement_status', '=', 'open'),
+          eb('vt.settlement_status', '=', 'submitted_by_rep'),
+        ]),
+      )
       .executeTakeFirst();
 
     if (!trip) {
@@ -87,7 +89,9 @@ export class SubmitSettlementService {
         eventCode: AUDIT_EVENT_CODES.VAN_SUSPICION_ODOMETER_ROLLBACK,
         severity: 'high',
         titleAr: 'تلاعب في قراءة عداد الكيلومترات عند تقديم إقرار التصفية',
-        detailsAr: odometerResult.errorMessageAr || `قراءة العداد النهائية (${payload.endOdometer}) غير متسقة مع قراءة البداية (${trip.start_odometer}).`,
+        detailsAr:
+          odometerResult.errorMessageAr ||
+          `قراءة العداد النهائية (${payload.endOdometer}) غير متسقة مع قراءة البداية (${trip.start_odometer}).`,
         // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the actor is the
         // rep submitting the statement — his linked login, resolved
         // here; the radar falls back to the same resolution when it

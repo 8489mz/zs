@@ -6,8 +6,18 @@ import { AppError } from '../../../common/errors/app-error';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { ReportRangeQueryDto } from '../dto/report-query.dto';
-import { AuditLogRow, buildAuditPayload, buildTreasuryPayload, TreasurySummaryRow, TreasuryTransactionRow } from '../helpers/reports-ops.helper';
-import { applyAuditSearch, applySignedAmountFilter, applyTreasurySearch } from '../helpers/reports-query-pipeline.helper';
+import {
+  AuditLogRow,
+  buildAuditPayload,
+  buildTreasuryPayload,
+  TreasurySummaryRow,
+  TreasuryTransactionRow,
+} from '../helpers/reports-ops.helper';
+import {
+  applyAuditSearch,
+  applySignedAmountFilter,
+  applyTreasurySearch,
+} from '../helpers/reports-query-pipeline.helper';
 import { buildReportListState } from '../helpers/reports-query.helper';
 import { buildPagination, getBusinessDayBounds } from '../helpers/reports-range.helper';
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
@@ -22,15 +32,15 @@ export class ReportsAdminService {
 
   private tenantPredicate(auth: AuthContext, alias?: string) {
     const tenantId = this.tenantId(auth);
-    return alias
-      ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}`
-      : sql<boolean>`tenant_id = ${tenantId}`;
+    return alias ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}` : sql<boolean>`tenant_id = ${tenantId}`;
   }
 
   async treasuryTransactions(query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const timezone = await getTenantTimezone(this.db, scope.tenantId);
-    const { fromDate, toDate, searchPattern, filter, page, pageSize, offset } = buildReportListState(query, 25, { timezone });
+    const { fromDate, toDate, searchPattern, filter, page, pageSize, offset } = buildReportListState(query, 25, {
+      timezone,
+    });
 
     let countQuery = this.db
       .selectFrom('treasury_transactions as t')
@@ -46,7 +56,20 @@ export class ReportsAdminService {
       .leftJoin('branches as b', 'b.id', 't.branch_id')
       .leftJoin('stock_locations as l', 'l.id', 't.location_id')
       .leftJoin('users as u', 'u.id', 't.created_by')
-      .select(['t.id', 't.txn_type', 't.amount', 't.note', 't.reference_type', 't.reference_id', 't.branch_id', 't.location_id', 't.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name'])
+      .select([
+        't.id',
+        't.txn_type',
+        't.amount',
+        't.note',
+        't.reference_type',
+        't.reference_id',
+        't.branch_id',
+        't.location_id',
+        't.created_at',
+        'b.name as branch_name',
+        'l.name as location_name',
+        'u.username as created_by_name',
+      ])
       .where('t.created_at', '>=', fromDate!)
       .where('t.created_at', '<=', toDate!)
       .where(this.tenantPredicate(auth, 't'));
@@ -77,7 +100,15 @@ export class ReportsAdminService {
     rowsQuery = applyTreasurySearch(applySignedAmountFilter(rowsQuery, 't.amount', filter), searchPattern);
     summaryQuery = applyTreasurySearch(applySignedAmountFilter(summaryQuery, 't.amount', filter), searchPattern);
 
-    const lastSeenId = Math.max(0, Number((query as Record<string, unknown>).lastSeenId || (query as Record<string, unknown>).lastId || (query as Record<string, unknown>).cursor || 0));
+    const lastSeenId = Math.max(
+      0,
+      Number(
+        (query as Record<string, unknown>).lastSeenId ||
+          (query as Record<string, unknown>).lastId ||
+          (query as Record<string, unknown>).cursor ||
+          0,
+      ),
+    );
     if (lastSeenId > 0) {
       rowsQuery = rowsQuery.where('t.id', '<', lastSeenId);
     }
@@ -100,7 +131,14 @@ export class ReportsAdminService {
       .executeTakeFirst();
 
     return {
-      ...buildTreasuryPayload({ rows: rows as TreasuryTransactionRow[], page, pageSize, totalItems, summaryRow: summaryRow as TreasurySummaryRow | null, nextCursor }),
+      ...buildTreasuryPayload({
+        rows: rows as TreasuryTransactionRow[],
+        page,
+        pageSize,
+        totalItems,
+        summaryRow: summaryRow as TreasurySummaryRow | null,
+        nextCursor,
+      }),
       scope,
     };
   }
@@ -112,14 +150,38 @@ export class ReportsAdminService {
     }
     const timezone = await getTenantTimezone(this.db, scope.tenantId);
 
-    const { fromDate, toDate, searchPattern, page, pageSize, offset } = buildReportListState(query, 50, { defaultFilter: '', timezone });
+    const { fromDate, toDate, searchPattern, page, pageSize, offset } = buildReportListState(query, 50, {
+      defaultFilter: '',
+      timezone,
+    });
     const selectedUserId = Number(query.userId || 0);
     const todayBounds = getBusinessDayBounds(new Date(), timezone);
 
-    let countQuery = this.db.selectFrom('audit_logs as a').leftJoin('users as u', 'u.id', 'a.created_by').where('a.created_at', '>=', fromDate!).where('a.created_at', '<=', toDate!).where(this.tenantPredicate(auth, 'a'));
-    let rowsQuery = this.db.selectFrom('audit_logs as a').leftJoin('users as u', 'u.id', 'a.created_by').select(['a.id', 'a.action', 'a.details', 'a.created_at', 'u.username']).where('a.created_at', '>=', fromDate!).where('a.created_at', '<=', toDate!).where(this.tenantPredicate(auth, 'a'));
-    let distinctUsersQuery = this.db.selectFrom('audit_logs as a').leftJoin('users as u', 'u.id', 'a.created_by').where('a.created_at', '>=', fromDate!).where('a.created_at', '<=', toDate!).where(this.tenantPredicate(auth, 'a'));
-    let todayCountQuery = this.db.selectFrom('audit_logs as a').leftJoin('users as u', 'u.id', 'a.created_by').where('a.created_at', '>=', todayBounds.start).where('a.created_at', '<=', todayBounds.end).where(this.tenantPredicate(auth, 'a'));
+    let countQuery = this.db
+      .selectFrom('audit_logs as a')
+      .leftJoin('users as u', 'u.id', 'a.created_by')
+      .where('a.created_at', '>=', fromDate!)
+      .where('a.created_at', '<=', toDate!)
+      .where(this.tenantPredicate(auth, 'a'));
+    let rowsQuery = this.db
+      .selectFrom('audit_logs as a')
+      .leftJoin('users as u', 'u.id', 'a.created_by')
+      .select(['a.id', 'a.action', 'a.details', 'a.created_at', 'u.username'])
+      .where('a.created_at', '>=', fromDate!)
+      .where('a.created_at', '<=', toDate!)
+      .where(this.tenantPredicate(auth, 'a'));
+    let distinctUsersQuery = this.db
+      .selectFrom('audit_logs as a')
+      .leftJoin('users as u', 'u.id', 'a.created_by')
+      .where('a.created_at', '>=', fromDate!)
+      .where('a.created_at', '<=', toDate!)
+      .where(this.tenantPredicate(auth, 'a'));
+    let todayCountQuery = this.db
+      .selectFrom('audit_logs as a')
+      .leftJoin('users as u', 'u.id', 'a.created_by')
+      .where('a.created_at', '>=', todayBounds.start)
+      .where('a.created_at', '<=', todayBounds.end)
+      .where(this.tenantPredicate(auth, 'a'));
 
     countQuery = applyAuditSearch(countQuery, searchPattern);
     rowsQuery = applyAuditSearch(rowsQuery, searchPattern);
@@ -136,7 +198,9 @@ export class ReportsAdminService {
     const totalRow = await countQuery.select(sql<number>`count(*)`.as('count')).executeTakeFirst();
     const totalItems = Number((totalRow as { count?: number | string | null } | undefined)?.count || 0);
     const rows = await rowsQuery.orderBy('a.id', 'desc').limit(pageSize).offset(offset).execute();
-    const distinctUsersRow = await distinctUsersQuery.select(sql<number>`count(distinct coalesce(u.username, 'guest'))`.as('count')).executeTakeFirst();
+    const distinctUsersRow = await distinctUsersQuery
+      .select(sql<number>`count(distinct coalesce(u.username, 'guest'))`.as('count'))
+      .executeTakeFirst();
     const todayCountRow = await todayCountQuery.select(sql<number>`count(*)`.as('count')).executeTakeFirst();
 
     return {
@@ -159,15 +223,27 @@ export class ReportsAdminService {
     }
     const timezone = await getTenantTimezone(this.db, tenantId);
 
-    const { fromDate, toDate, searchPattern, page, pageSize, offset } = buildReportListState(query, 20, { defaultFilter: '', timezone });
+    const { fromDate, toDate, searchPattern, page, pageSize, offset } = buildReportListState(query, 20, {
+      defaultFilter: '',
+      timezone,
+    });
     const selectedUserId = Number(query.userId || 0);
-    const roleFilter = String(query.role || '').trim().toLowerCase();
-    const activityType = String(query.activityType || 'all').trim().toLowerCase();
+    const roleFilter = String(query.role || '')
+      .trim()
+      .toLowerCase();
+    const activityType = String(query.activityType || 'all')
+      .trim()
+      .toLowerCase();
 
-    const searchClause = searchPattern ? sql` and (lower(coalesce(u.display_name, '')) like ${searchPattern} or lower(coalesce(u.username, '')) like ${searchPattern} or lower(coalesce(u.role, '')) like ${searchPattern})` : sql``;
+    const searchClause = searchPattern
+      ? sql` and (lower(coalesce(u.display_name, '')) like ${searchPattern} or lower(coalesce(u.username, '')) like ${searchPattern} or lower(coalesce(u.role, '')) like ${searchPattern})`
+      : sql``;
     const selectedUserClause = selectedUserId > 0 ? sql` and u.id = ${selectedUserId}` : sql``;
     const roleClause = roleFilter ? sql` and lower(u.role) = ${roleFilter}` : sql``;
-    const activityClause = activityType && activityType !== 'all' ? sql` and ${sql.ref(`${activityType === 'returns' ? 'returns' : activityType}_count`)} > 0` : sql``;
+    const activityClause =
+      activityType && activityType !== 'all'
+        ? sql` and ${sql.ref(`${activityType === 'returns' ? 'returns' : activityType}_count`)} > 0`
+        : sql``;
 
     const baseMetricsCte = sql`
       with sales_agg as (select created_by as user_id, count(*)::int as sales_count, coalesce(sum(total), 0)::numeric as sales_total, max(created_at) as last_sales_at from sales where tenant_id = ${tenantId} and created_at >= ${fromDate!} and created_at <= ${toDate!} and created_by is not null and status = 'posted' group by created_by),
@@ -203,32 +279,83 @@ export class ReportsAdminService {
         where u.tenant_id = ${tenantId} ${searchClause} ${selectedUserClause} ${roleClause}
       )`;
 
-    const rowsResult = await sql<any>`${baseMetricsCte} select * from employee_metrics where 1 = 1 ${activityClause} order by last_activity_at desc, display_name asc, username asc limit ${pageSize} offset ${offset}`.execute(this.db);
-    const summaryResult = await sql<any>`${baseMetricsCte} select count(*)::int as total_users, sum(case when is_active then 1 else 0 end)::int as active_users, sum(case when (sales_count + purchases_count + returns_count + expenses_count + audit_count + shifts_count) > 0 then 1 else 0 end)::int as users_with_activity, coalesce(sum(sales_total), 0)::numeric as total_sales, coalesce(sum(purchases_total), 0)::numeric as total_purchases, coalesce(sum(returns_total), 0)::numeric as total_returns, coalesce(sum(expenses_total), 0)::numeric as total_expenses, coalesce(sum(audit_count), 0)::int as total_audit_events, coalesce(sum(shifts_count), 0)::int as total_shifts, coalesce(sum(sales_cogs), 0)::numeric as total_sales_cogs, coalesce(sum(sales_profit), 0)::numeric as total_sales_profit from employee_metrics where 1 = 1 ${activityClause}`.execute(this.db);
+    const rowsResult =
+      await sql<any>`${baseMetricsCte} select * from employee_metrics where 1 = 1 ${activityClause} order by last_activity_at desc, display_name asc, username asc limit ${pageSize} offset ${offset}`.execute(
+        this.db,
+      );
+    const summaryResult =
+      await sql<any>`${baseMetricsCte} select count(*)::int as total_users, sum(case when is_active then 1 else 0 end)::int as active_users, sum(case when (sales_count + purchases_count + returns_count + expenses_count + audit_count + shifts_count) > 0 then 1 else 0 end)::int as users_with_activity, coalesce(sum(sales_total), 0)::numeric as total_sales, coalesce(sum(purchases_total), 0)::numeric as total_purchases, coalesce(sum(returns_total), 0)::numeric as total_returns, coalesce(sum(expenses_total), 0)::numeric as total_expenses, coalesce(sum(audit_count), 0)::int as total_audit_events, coalesce(sum(shifts_count), 0)::int as total_shifts, coalesce(sum(sales_cogs), 0)::numeric as total_sales_cogs, coalesce(sum(sales_profit), 0)::numeric as total_sales_profit from employee_metrics where 1 = 1 ${activityClause}`.execute(
+        this.db,
+      );
 
     const countRow = summaryResult.rows?.[0] || {};
     const totalItems = Number(countRow.total_users || 0);
-    const rows = (rowsResult.rows || []).map((row: any) => ({ id: String(row.id || ''), name: row.display_name || row.username || 'مستخدم', username: row.username || '', role: row.role || 'cashier', isActive: row.is_active !== false, salesCount: Number(row.sales_count || 0), salesTotal: Number(row.sales_total || 0), purchasesCount: Number(row.purchases_count || 0), purchasesTotal: Number(row.purchases_total || 0), returnsCount: Number(row.returns_count || 0), returnsTotal: Number(row.returns_total || 0), expensesCount: Number(row.expenses_count || 0), expensesTotal: Number(row.expenses_total || 0), auditCount: Number(row.audit_count || 0), shiftsCount: Number(row.shifts_count || 0), openShifts: Number(row.open_shifts || 0), salesCogs: Number(row.sales_cogs || 0), salesProfit: Number(row.sales_profit || 0), lastActivityAt: row.last_activity_at || null }));
+    const rows = (rowsResult.rows || []).map((row: any) => ({
+      id: String(row.id || ''),
+      name: row.display_name || row.username || 'مستخدم',
+      username: row.username || '',
+      role: row.role || 'cashier',
+      isActive: row.is_active !== false,
+      salesCount: Number(row.sales_count || 0),
+      salesTotal: Number(row.sales_total || 0),
+      purchasesCount: Number(row.purchases_count || 0),
+      purchasesTotal: Number(row.purchases_total || 0),
+      returnsCount: Number(row.returns_count || 0),
+      returnsTotal: Number(row.returns_total || 0),
+      expensesCount: Number(row.expenses_count || 0),
+      expensesTotal: Number(row.expenses_total || 0),
+      auditCount: Number(row.audit_count || 0),
+      shiftsCount: Number(row.shifts_count || 0),
+      openShifts: Number(row.open_shifts || 0),
+      salesCogs: Number(row.sales_cogs || 0),
+      salesProfit: Number(row.sales_profit || 0),
+      lastActivityAt: row.last_activity_at || null,
+    }));
 
     return {
       rows,
-      summary: { totalUsers: Number(countRow.total_users || 0), activeUsers: Number(countRow.active_users || 0), usersWithActivity: Number(countRow.users_with_activity || 0), totalSales: Number(countRow.total_sales || 0), totalPurchases: Number(countRow.total_purchases || 0), totalReturns: Number(countRow.total_returns || 0), totalExpenses: Number(countRow.total_expenses || 0), totalAuditEvents: Number(countRow.total_audit_events || 0), totalShifts: Number(countRow.total_shifts || 0), totalSalesCogs: Number(countRow.total_sales_cogs || 0), totalSalesProfit: Number(countRow.total_sales_profit || 0) },
+      summary: {
+        totalUsers: Number(countRow.total_users || 0),
+        activeUsers: Number(countRow.active_users || 0),
+        usersWithActivity: Number(countRow.users_with_activity || 0),
+        totalSales: Number(countRow.total_sales || 0),
+        totalPurchases: Number(countRow.total_purchases || 0),
+        totalReturns: Number(countRow.total_returns || 0),
+        totalExpenses: Number(countRow.total_expenses || 0),
+        totalAuditEvents: Number(countRow.total_audit_events || 0),
+        totalShifts: Number(countRow.total_shifts || 0),
+        totalSalesCogs: Number(countRow.total_sales_cogs || 0),
+        totalSalesProfit: Number(countRow.total_sales_profit || 0),
+      },
       pagination: buildPagination(page, pageSize, totalItems),
     };
   }
 
-  async employeeDetails(userId: number, query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async employeeDetails(
+    userId: number,
+    query: ReportRangeQueryDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const { tenantId } = requireTenantScope(auth);
-    if (!auth.permissions.includes('reports') && auth.role !== 'super_admin') throw new AppError('Missing required permissions', 'FORBIDDEN', 403);
+    if (!auth.permissions.includes('reports') && auth.role !== 'super_admin')
+      throw new AppError('Missing required permissions', 'FORBIDDEN', 403);
     if (!(userId > 0)) throw new AppError('Invalid user', 'INVALID_USER_ID', 400);
 
-    const summaryPayload = await this.employeeSummary({ ...query, userId, page: 1, pageSize: 1 }, auth) as { rows?: Array<Record<string, unknown>>; summary?: Record<string, unknown> };
+    const summaryPayload = (await this.employeeSummary({ ...query, userId, page: 1, pageSize: 1 }, auth)) as {
+      rows?: Array<Record<string, unknown>>;
+      summary?: Record<string, unknown>;
+    };
     const employee = Array.isArray(summaryPayload.rows) ? summaryPayload.rows[0] : null;
     if (!employee) throw new AppError('User not found', 'USER_NOT_FOUND', 404);
 
-    const { fromDate, toDate } = buildReportListState(query, 20, { defaultFilter: '', timezone: await getTenantTimezone(this.db, tenantId) });
+    const { fromDate, toDate } = buildReportListState(query, 20, {
+      defaultFilter: '',
+      timezone: await getTenantTimezone(this.db, tenantId),
+    });
     const limit = Math.min(100, Math.max(1, Number(query.limit || 25)));
-    const activityType = String(query.activityType || 'all').trim().toLowerCase();
+    const activityType = String(query.activityType || 'all')
+      .trim()
+      .toLowerCase();
     const activityClause = activityType && activityType !== 'all' ? sql` and activity_type = ${activityType}` : sql``;
 
     const activitiesResult = await sql<any>`
@@ -244,12 +371,22 @@ export class ReportsAdminService {
         select 'shifts'::text as activity_type, concat('فتح وردية ', coalesce(cs.doc_no, concat('#', cs.id::text))) as title, nullif(cs.opening_note, '') as details, cs.opening_cash::numeric as amount, cs.created_at, coalesce(cs.doc_no, concat('#', cs.id::text)) as reference_label from cashier_shifts cs where cs.tenant_id = ${tenantId} and cs.opened_by = ${userId} and cs.created_at >= ${fromDate!} and cs.created_at <= ${toDate!}
         union all
         select 'audit'::text as activity_type, a.action as title, nullif(a.details, '') as details, null::numeric as amount, a.created_at, concat('#', a.id::text) as reference_label from audit_logs a where a.tenant_id = ${tenantId} and a.created_by = ${userId} and a.created_at >= ${fromDate!} and a.created_at <= ${toDate!}
-      ) select * from activities where 1 = 1 ${activityClause} order by created_at desc, reference_label desc limit ${limit}`.execute(this.db);
+      ) select * from activities where 1 = 1 ${activityClause} order by created_at desc, reference_label desc limit ${limit}`.execute(
+      this.db,
+    );
 
     return {
       employee,
       summary: summaryPayload.summary || {},
-      activities: (activitiesResult.rows || []).map((row: any, index: number) => ({ id: `${row.activity_type || 'activity'}-${index}`, activityType: row.activity_type || 'audit', title: row.title || '', details: row.details || '', amount: row.amount == null ? null : Number(row.amount || 0), createdAt: row.created_at || '', referenceLabel: row.reference_label || '' })),
+      activities: (activitiesResult.rows || []).map((row: any, index: number) => ({
+        id: `${row.activity_type || 'activity'}-${index}`,
+        activityType: row.activity_type || 'audit',
+        title: row.title || '',
+        details: row.details || '',
+        amount: row.amount == null ? null : Number(row.amount || 0),
+        createdAt: row.created_at || '',
+        referenceLabel: row.reference_label || '',
+      })),
     };
   }
 }

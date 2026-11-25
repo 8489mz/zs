@@ -43,13 +43,21 @@ export interface MaritimeFreightTruckingDeps {
   // (S14 getJobById precedent). The S12 slice owns it forever; the
   // facade binds its own method on the generation tree (S10 form) and
   // the merge repoints it to the S12 slice instance.
-  assertRoadProofOfDelivery: (tenantId: string, jobId: string, bookingNumber: string | null | undefined) => Promise<any>;
+  assertRoadProofOfDelivery: (
+    tenantId: string,
+    jobId: string,
+    bookingNumber: string | null | undefined,
+  ) => Promise<any>;
 }
 
 @Injectable()
 export class MaritimeFreightTruckingService {
   private readonly db: Kysely<Database>;
-  private readonly assertRoadProofOfDelivery: (tenantId: string, jobId: string, bookingNumber: string | null | undefined) => Promise<any>;
+  private readonly assertRoadProofOfDelivery: (
+    tenantId: string,
+    jobId: string,
+    bookingNumber: string | null | undefined,
+  ) => Promise<any>;
 
   constructor(deps: MaritimeFreightTruckingDeps) {
     this.db = deps.db;
@@ -62,10 +70,7 @@ export class MaritimeFreightTruckingService {
 
   async listInlandTruckingTrips(auth: AuthContext, jobId?: string | number) {
     const { tenantId } = requireTenantScope(auth);
-    let query = this.db
-      .selectFrom('maritime_inland_trucking_trips')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('maritime_inland_trucking_trips').selectAll().where('tenant_id', '=', tenantId);
 
     if (jobId) {
       query = query.where('job_id', '=', String(jobId));
@@ -104,7 +109,13 @@ export class MaritimeFreightTruckingService {
         .returningAll()
         .execute();
 
-      const finalTripNumber = formatDailyDocumentNumber('TRIP', Number(trip.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
+      const finalTripNumber = formatDailyDocumentNumber(
+        'TRIP',
+        Number(trip.id),
+        new Date(),
+        4,
+        await getTenantTimezone(trx, tenantId),
+      );
 
       const [updatedTrip] = await trx
         .updateTable('maritime_inland_trucking_trips')
@@ -156,20 +167,34 @@ export class MaritimeFreightTruckingService {
   async updateInlandTruckingTripStatus(auth: AuthContext, id: string | number, dto: UpdateInlandTruckingTripStatusDto) {
     const { tenantId } = requireTenantScope(auth);
     return await this.db.transaction().execute(async (trx) => {
-      const trip = await trx.selectFrom('maritime_inland_trucking_trips').selectAll()
-        .where('tenant_id', '=', tenantId).where('id', '=', String(id) as any)
-        .forUpdate().executeTakeFirst();
+      const trip = await trx
+        .selectFrom('maritime_inland_trucking_trips')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(id) as any)
+        .forUpdate()
+        .executeTakeFirst();
       if (!trip) throw new NotFoundException('Inland trucking trip not found');
-      const job = await trx.selectFrom('maritime_jobs').select(['transport_mode', 'gross_weight_kg', 'total_cbm', 'booking_number'])
-        .where('tenant_id', '=', tenantId).where('id', '=', trip.job_id as any).executeTakeFirst();
+      const job = await trx
+        .selectFrom('maritime_jobs')
+        .select(['transport_mode', 'gross_weight_kg', 'total_cbm', 'booking_number'])
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', trip.job_id as any)
+        .executeTakeFirst();
       if (job?.transport_mode === 'road' && dto.tripStatus === 'in_transit') {
-        const assigned = await trx.selectFrom('maritime_inland_trucking_trips').select('truck_plate')
-          .where('tenant_id', '=', tenantId).where('job_id', '=', trip.job_id)
-          .where('trip_status', 'in', ['assigned', 'loading', 'in_transit']).execute();
+        const assigned = await trx
+          .selectFrom('maritime_inland_trucking_trips')
+          .select('truck_plate')
+          .where('tenant_id', '=', tenantId)
+          .where('job_id', '=', trip.job_id)
+          .where('trip_status', 'in', ['assigned', 'loading', 'in_transit'])
+          .execute();
         try {
-          calculateTrucksRequired({ grossWeightKg: Number(job.gross_weight_kg || 0),
+          calculateTrucksRequired({
+            grossWeightKg: Number(job.gross_weight_kg || 0),
             totalCbm: Number(job.total_cbm || 0),
-            assignedTrucks: new Set(assigned.map((row) => row.truck_plate)).size });
+            assignedTrucks: new Set(assigned.map((row) => row.truck_plate)).size,
+          });
         } catch (error: any) {
           throw new BadRequestException(error.message);
         }
@@ -196,9 +221,18 @@ export class MaritimeFreightTruckingService {
 
       // Map trip status to job milestone progression
       const statusMilestoneMap: Record<string, { key: string; title: string }> = {
-        loading: { key: 'TRK_LOADED', title: `إتمام تحميل وتربيط البضاعة بالشاحنة (Cargo Loaded - ${updated.trip_number})` },
-        in_transit: { key: 'TRK_DISPATCH', title: `انطلاق الشاحنة على مسار النقل (Truck In Transit - ${updated.trip_number})` },
-        delivered: { key: 'TRK_POD', title: `وصول الشاحنة وتفريغ وتسليم البضاعة وإثبات التسليم (Delivered & POD - ${updated.trip_number})` },
+        loading: {
+          key: 'TRK_LOADED',
+          title: `إتمام تحميل وتربيط البضاعة بالشاحنة (Cargo Loaded - ${updated.trip_number})`,
+        },
+        in_transit: {
+          key: 'TRK_DISPATCH',
+          title: `انطلاق الشاحنة على مسار النقل (Truck In Transit - ${updated.trip_number})`,
+        },
+        delivered: {
+          key: 'TRK_POD',
+          title: `وصول الشاحنة وتفريغ وتسليم البضاعة وإثبات التسليم (Delivered & POD - ${updated.trip_number})`,
+        },
       };
 
       const mapping = statusMilestoneMap[dto.tripStatus];

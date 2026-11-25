@@ -43,7 +43,10 @@ export class PricingCatalogService {
   /** البلدان المنشورة فعلياً فقط — البلد المحظور لا يظهر هنا أصلاً (PRICE-2). */
   listCountries(): Array<{ code: string; name: string; currency: string; status: 'ready' | 'partial' }> {
     return Object.entries(this.catalog.countries)
-      .filter((entry): entry is [string, typeof entry[1] & { status: 'ready' | 'partial' }] => entry[1].status !== 'blocked')
+      .filter(
+        (entry): entry is [string, (typeof entry)[1] & { status: 'ready' | 'partial' }] =>
+          entry[1].status !== 'blocked',
+      )
       .map(([code, meta]) => ({ code, name: meta.name, currency: meta.currency || 'EGP', status: meta.status }));
   }
 
@@ -53,7 +56,9 @@ export class PricingCatalogService {
    * يسقطه على الافتراضي عبر `resolveProduct` (سلوك شاشة الفوترة المحفوظ).
    */
   private findProduct(industryPresetId?: string | null): CatalogProduct | undefined {
-    let wanted = String(industryPresetId || '').trim().toLowerCase();
+    let wanted = String(industryPresetId || '')
+      .trim()
+      .toLowerCase();
     if (
       wanted === 'maritime_freight' ||
       wanted === 'maritime' ||
@@ -93,9 +98,21 @@ export class PricingCatalogService {
       wanted = 'pharmacy';
     } else if (wanted === 'electronics' || wanted.includes('صيانة') || wanted.includes('إلكترون')) {
       wanted = 'electronics';
-    } else if (wanted === 'import_export' || wanted.includes('استيراد') || wanted.includes('تصدير') || wanted.includes('جمارك')) {
+    } else if (
+      wanted === 'import_export' ||
+      wanted.includes('استيراد') ||
+      wanted.includes('تصدير') ||
+      wanted.includes('جمارك')
+    ) {
       wanted = 'import_export';
-    } else if (wanted === 'warehousing' || wanted === 'warehouse' || wanted === 'wms' || wanted.includes('مخازن') || wanted.includes('مستودع') || wanted.includes('تخزين')) {
+    } else if (
+      wanted === 'warehousing' ||
+      wanted === 'warehouse' ||
+      wanted === 'wms' ||
+      wanted.includes('مخازن') ||
+      wanted.includes('مستودع') ||
+      wanted.includes('تخزين')
+    ) {
       wanted = 'warehousing';
     }
 
@@ -120,7 +137,9 @@ export class PricingCatalogService {
    * فلا يجوز السقوط عليه — يُستبدل بالافتراضي ويُبلَّغ المستدعي عبر `isBlocked`.
    */
   private resolveCountry(countryCode?: string | null): { code: string; isBlocked: boolean } {
-    const wanted = String(countryCode || '').trim().toUpperCase();
+    const wanted = String(countryCode || '')
+      .trim()
+      .toUpperCase();
     const entry = this.catalog.countries[wanted];
     if (!entry || entry.status === 'blocked') {
       return { code: PricingCatalogService.FALLBACK_COUNTRY, isBlocked: !!entry && entry.status === 'blocked' };
@@ -129,24 +148,21 @@ export class PricingCatalogService {
   }
 
   private featureGroupsFor(groupIds: string[]): CatalogFeatureGroup[] {
-    return groupIds
-      .map((id) => this.catalog.featureGroups[id])
-      .filter((g): g is CatalogFeatureGroup => !!g);
+    return groupIds.map((id) => this.catalog.featureGroups[id]).filter((g): g is CatalogFeatureGroup => !!g);
   }
 
   /**
    * الحل الصارم للمسار العام فقط: منتج مجهول أو بلد مجهول أو محظور يرجع
    * `null` (المتحكم يرد 404) بدل عرض أسعار منتج أو بلد آخر بصمت.
    */
-  resolvePublicOffer(input: {
-    industryPresetId?: string | null;
-    countryCode?: string | null;
-  }): PublicPricing | null {
+  resolvePublicOffer(input: { industryPresetId?: string | null; countryCode?: string | null }): PublicPricing | null {
     const product = this.findProduct(input.industryPresetId);
     if (!product) {
       return null;
     }
-    const wanted = String(input.countryCode || '').trim().toUpperCase();
+    const wanted = String(input.countryCode || '')
+      .trim()
+      .toUpperCase();
     const entry = this.catalog.countries[wanted];
     if (!entry || entry.status === 'blocked') {
       return null;
@@ -159,10 +175,7 @@ export class PricingCatalogService {
    * وميزات كل مستوى، والطوابق المفردة، والإضافات.
    * سلوك السقوط الافتراضي محفوظ هنا عمداً (شاشة الفوترة لا تتعطل بنشاط مجهول).
    */
-  resolveForTenant(input: {
-    industryPresetId?: string | null;
-    countryCode?: string | null;
-  }): PublicPricing {
+  resolveForTenant(input: { industryPresetId?: string | null; countryCode?: string | null }): PublicPricing {
     const product = this.resolveProduct(input.industryPresetId);
     const { code: countryCode } = this.resolveCountry(input.countryCode);
     return this.buildPublicPricing(product, countryCode);

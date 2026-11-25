@@ -123,7 +123,13 @@ export interface CreditLimitEvaluationResult {
   allowed: boolean;
   isOverridden?: boolean;
   overrideReason?: string;
-  reasonCode?: 'CUSTOMER_BLOCKED' | 'CASH_ONLY_CUSTOMER' | 'LIMIT_EXCEEDED' | 'ZERO_OR_NEGATIVE_REQUEST' | 'SUPERVISOR_OVERRIDE' | 'CUSTOMER_HAS_OVERDUE_INVOICES';
+  reasonCode?:
+    | 'CUSTOMER_BLOCKED'
+    | 'CASH_ONLY_CUSTOMER'
+    | 'LIMIT_EXCEEDED'
+    | 'ZERO_OR_NEGATIVE_REQUEST'
+    | 'SUPERVISOR_OVERRIDE'
+    | 'CUSTOMER_HAS_OVERDUE_INVOICES';
   errorMessageAr?: string;
   currentBalance: number;
   creditLimit: number;
@@ -169,7 +175,12 @@ export interface TripExpenseGovernanceParams {
 export interface TripExpenseGovernanceResult {
   allowed: boolean;
   requiresSupervisorPin: boolean;
-  reasonCode?: 'INVALID_AMOUNT' | 'EXPENSE_NOTES_REQUIRED' | 'EXPENSE_REQUIRES_SUPERVISOR_PIN' | 'SUPERVISOR_APPROVED' | 'ROUTINE_PETTY_ALLOWED';
+  reasonCode?:
+    | 'INVALID_AMOUNT'
+    | 'EXPENSE_NOTES_REQUIRED'
+    | 'EXPENSE_REQUIRES_SUPERVISOR_PIN'
+    | 'SUPERVISOR_APPROVED'
+    | 'ROUTINE_PETTY_ALLOWED';
   errorMessageAr?: string;
   projectedTripExpenses: number;
 }

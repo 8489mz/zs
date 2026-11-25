@@ -26,7 +26,8 @@ export class CreateSubcontractorBackchargeDto {
 
   @IsString()
   @IsIn(['damage_rework', 'safety_fine', 'equipment_usage', 'material_supplied', 'site_cleanup', 'other'])
-  backchargeCategory!: 'damage_rework' | 'safety_fine' | 'equipment_usage' | 'material_supplied' | 'site_cleanup' | 'other';
+  backchargeCategory!:
+    'damage_rework' | 'safety_fine' | 'equipment_usage' | 'material_supplied' | 'site_cleanup' | 'other';
 
   @IsNumber()
   @Min(0.01)

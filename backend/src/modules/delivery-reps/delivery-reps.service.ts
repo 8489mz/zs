@@ -85,7 +85,10 @@ export class DeliveryRepsService {
     return { tenant_id: tenantId, account_id: accountId };
   }
 
-  private async getDeliveryFeeMode(trx: Kysely<Database>, actor: AuthContext): Promise<'freelance_courier' | 'store_fleet'> {
+  private async getDeliveryFeeMode(
+    trx: Kysely<Database>,
+    actor: AuthContext,
+  ): Promise<'freelance_courier' | 'store_fleet'> {
     return this.sharedHelpers.getDeliveryFeeMode(trx, actor);
   }
 
@@ -105,11 +108,26 @@ export class DeliveryRepsService {
     return this.admin.remove(id, actor);
   }
 
-  async listOrders(repId: number, actor: AuthContext, filters?: { dateFrom?: string; dateTo?: string; status?: string; discountedOnly?: boolean; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {
+  async listOrders(
+    repId: number,
+    actor: AuthContext,
+    filters?: {
+      dateFrom?: string;
+      dateTo?: string;
+      status?: string;
+      discountedOnly?: boolean;
+      page?: number;
+      pageSize?: number;
+    },
+  ): Promise<Record<string, unknown>> {
     return this.readsService.listOrders(repId, actor, filters);
   }
 
-  async listSettlements(repId: number, actor: AuthContext, filters?: { dateFrom?: string; dateTo?: string; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {
+  async listSettlements(
+    repId: number,
+    actor: AuthContext,
+    filters?: { dateFrom?: string; dateTo?: string; page?: number; pageSize?: number },
+  ): Promise<Record<string, unknown>> {
     return this.readsService.listSettlements(repId, actor, filters);
   }
 
@@ -120,7 +138,14 @@ export class DeliveryRepsService {
   async settleOrder(
     saleId: number,
     actor: AuthContext,
-    payload?: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string; countedCashAmount?: number }
+    payload?: {
+      signatureDataUrl?: string;
+      proofPhotoUrl?: string;
+      gpsLat?: number;
+      gpsLng?: number;
+      notes?: string;
+      countedCashAmount?: number;
+    },
   ): Promise<Record<string, unknown>> {
     return this.settlements.settleOrder(saleId, actor, payload);
   }
@@ -128,13 +153,25 @@ export class DeliveryRepsService {
   async settlePartialOrder(
     saleId: number,
     actor: AuthContext,
-    payload?: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string; countedCashAmount?: number }
+    payload?: {
+      signatureDataUrl?: string;
+      proofPhotoUrl?: string;
+      gpsLat?: number;
+      gpsLng?: number;
+      notes?: string;
+      countedCashAmount?: number;
+    },
   ): Promise<Record<string, unknown>> {
     return this.settlements.settlePartialOrder(saleId, actor, payload);
   }
 
   private async repOrderCashDue(
-    order: { id: number; delivery_fee_mode: string | null; collection_status?: string | null; paid_amount?: number | string | null },
+    order: {
+      id: number;
+      delivery_fee_mode: string | null;
+      collection_status?: string | null;
+      paid_amount?: number | string | null;
+    },
     defaultMode: 'freelance_courier' | 'store_fleet',
     moneyDigits: MoneyDigits,
     actor: AuthContext,
@@ -150,11 +187,21 @@ export class DeliveryRepsService {
     return this.readsService.getRepLifetimeReport(repId, actor);
   }
 
-  async settleAllOrders(repId: number, expectedAmount: number, actor: AuthContext, countedCashAmount?: number): Promise<Record<string, unknown>> {
+  async settleAllOrders(
+    repId: number,
+    expectedAmount: number,
+    actor: AuthContext,
+    countedCashAmount?: number,
+  ): Promise<Record<string, unknown>> {
     return this.settlements.settleAllOrders(repId, expectedAmount, actor, countedCashAmount);
   }
 
-  async driverLogin(payload: { phone: string; pinCode: string; companyCode?: string; tenantId?: string }): Promise<{ token: string; rep: Record<string, unknown>; mustChangePin: boolean }> {
+  async driverLogin(payload: {
+    phone: string;
+    pinCode: string;
+    companyCode?: string;
+    tenantId?: string;
+  }): Promise<{ token: string; rep: Record<string, unknown>; mustChangePin: boolean }> {
     return this.driverAuthService.driverLogin(payload);
   }
 
@@ -169,15 +216,29 @@ export class DeliveryRepsService {
     return this.driverAuthService.assertDriverPinChanged(driver);
   }
 
-  async verifyDriverToken(token: string): Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string }> {
+  async verifyDriverToken(
+    token: string,
+  ): Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string }> {
     return this.driverAuthService.verifyDriverToken(token);
   }
 
-  async verifyDriverTokenForSettlement(token: string): Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string; tenantSuspended: boolean }> {
+  async verifyDriverTokenForSettlement(token: string): Promise<{
+    repId: number;
+    tenantId: string;
+    accountId: string;
+    name: string;
+    phone: string;
+    tenantSuspended: boolean;
+  }> {
     return this.driverAuthService.verifyDriverTokenForSettlement(token);
   }
 
-  async driverListOrders(repId: number, tenantId: string, accountId: string, filters?: { dateFrom?: string; dateTo?: string; status?: string; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {
+  async driverListOrders(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+    filters?: { dateFrom?: string; dateTo?: string; status?: string; page?: number; pageSize?: number },
+  ): Promise<Record<string, unknown>> {
     return this.driverOrders.driverListOrders(repId, tenantId, accountId, filters);
   }
 
@@ -185,14 +246,14 @@ export class DeliveryRepsService {
     saleId: number,
     repId: number,
     tenantId: string,
-    payload?: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string }
+    payload?: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string },
   ): Promise<Record<string, unknown>> {
     return this.driverOrders.driverSettleOrder(saleId, repId, tenantId, payload);
   }
 
   async dispatchOrders(
     actor: AuthContext,
-    payload: { repId: number; saleIds?: number[]; onlineOrderIds?: number[]; notes?: string }
+    payload: { repId: number; saleIds?: number[]; onlineOrderIds?: number[]; notes?: string },
   ) {
     return this.driverOrders.dispatchOrders(actor, payload);
   }

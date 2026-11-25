@@ -1,5 +1,10 @@
 import { type MoneyDigits, roundMoney as roundBookMoney } from '../../accounting/engines/money-minor-units.engine';
-import type { VanStockAuditItem, VanStockAuditResult, VanStockItemVariance, VanStockUncountedItem } from './van-trip-reconciliation.types';
+import type {
+  VanStockAuditItem,
+  VanStockAuditResult,
+  VanStockItemVariance,
+  VanStockUncountedItem,
+} from './van-trip-reconciliation.types';
 
 /**
  * Reconciles physical stock audit of items in the van against system stock balances.

@@ -9,7 +9,11 @@ import { sql, Kysely } from '../../database/kysely';
 import { type Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
-import { CreateCustomsDeclarationDto, CreateCustomsDeclarationItemDto, UpdateCustomsDeclarationStatusDto } from './dto/customs-declaration.dto';
+import {
+  CreateCustomsDeclarationDto,
+  CreateCustomsDeclarationItemDto,
+  UpdateCustomsDeclarationStatusDto,
+} from './dto/customs-declaration.dto';
 
 /**
  * MaritimeFreightCustomsService — slice S5 of the maritime-freight split.
@@ -307,7 +311,9 @@ export class MaritimeFreightCustomsService {
     const expenseId = await this.resolveMaritimeAccountIdOn(trx, tenantId, '6400', '5100');
     const payableId = await this.resolveMaritimeAccountIdOn(trx, tenantId, '2110');
     if (!expenseId || !payableId) {
-      throw new BadRequestException('تعذر ترحيل الرسوم الجمركية عند التخليص: حساب المصروف (6400/5100) أو الذمم الدائنة (2110) غير متاح.');
+      throw new BadRequestException(
+        'تعذر ترحيل الرسوم الجمركية عند التخليص: حساب المصروف (6400/5100) أو الذمم الدائنة (2110) غير متاح.',
+      );
     }
     const job = await trx
       .selectFrom('maritime_jobs')
@@ -347,7 +353,10 @@ export class MaritimeFreightCustomsService {
     });
     if (job) {
       const newOther = roundMoney(Number(job.other_costs_total || 0) + baseDuty, digits);
-      const newNet = roundMoney(Number(job.client_invoiced_total || 0) - (Number(job.carrier_cost_total || 0) + newOther), digits);
+      const newNet = roundMoney(
+        Number(job.client_invoiced_total || 0) - (Number(job.carrier_cost_total || 0) + newOther),
+        digits,
+      );
       await trx
         .updateTable('maritime_jobs')
         .set({ other_costs_total: newOther, net_profit: newNet, updated_at: sql`NOW()` })
@@ -379,7 +388,9 @@ export class MaritimeFreightCustomsService {
       if (!declaration) throw new NotFoundException('البيان الجمركي غير موجود');
       const allowed = allowedTransitions[String(declaration.status)] ?? [];
       if (!allowed.includes(dto.status)) {
-        throw new BadRequestException(`لا يمكن نقل البيان الجمركي من الحالة ${declaration.status} إلى الحالة ${dto.status}.`);
+        throw new BadRequestException(
+          `لا يمكن نقل البيان الجمركي من الحالة ${declaration.status} إلى الحالة ${dto.status}.`,
+        );
       }
       const updatePayload: any = { status: dto.status, updated_at: sql`NOW()` };
       if (dto.declarationNumber) updatePayload.declaration_number = dto.declarationNumber;
@@ -413,7 +424,12 @@ export class MaritimeFreightCustomsService {
    * resolveAccountId, so close postings never read this.db from
    * inside an open transaction.
    */
-  async resolveMaritimeAccountIdOn(queryable: any, tenantId: string, code: string, fallbackCode?: string): Promise<number | null> {
+  async resolveMaritimeAccountIdOn(
+    queryable: any,
+    tenantId: string,
+    code: string,
+    fallbackCode?: string,
+  ): Promise<number | null> {
     const acc = await queryable
       .selectFrom('accounting_accounts')
       .select('id')
@@ -435,7 +451,12 @@ export class MaritimeFreightCustomsService {
     return null;
   }
 
-  async hasPostedCloseJournal(queryable: any, tenantId: string, sourceType: string, sourceId: number): Promise<boolean> {
+  async hasPostedCloseJournal(
+    queryable: any,
+    tenantId: string,
+    sourceType: string,
+    sourceId: number,
+  ): Promise<boolean> {
     const existing = await queryable
       .selectFrom('journal_entries')
       .select('id')

@@ -23,7 +23,9 @@ function escapeHtml(str: string): string {
 @Injectable()
 export class TrialSignupMailService {
   private getDeliveryMode(): 'smtp' | 'console' {
-    const mode = String(process.env.MAIL_DELIVERY_MODE || '').trim().toLowerCase();
+    const mode = String(process.env.MAIL_DELIVERY_MODE || '')
+      .trim()
+      .toLowerCase();
     return mode === 'console' ? 'console' : 'smtp';
   }
 
@@ -235,7 +237,10 @@ export class TrialSignupMailService {
 
     const host = String(process.env.SMTP_HOST || '').trim();
     const port = Number(process.env.SMTP_PORT || 587);
-    const secure = String(process.env.SMTP_SECURE || 'false').trim().toLowerCase() === 'true';
+    const secure =
+      String(process.env.SMTP_SECURE || 'false')
+        .trim()
+        .toLowerCase() === 'true';
     const user = String(process.env.SMTP_USER || '').trim();
     const pass = String(process.env.SMTP_PASSWORD || '').trim();
 

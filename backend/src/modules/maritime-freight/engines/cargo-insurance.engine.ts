@@ -13,7 +13,7 @@ export const INSURANCE_CLAIM_CODES = {
   INVALID_AMOUNT: 'MARITIME_CLAIM_INVALID_AMOUNT',
 } as const;
 
-export type InsuranceClaimCode = typeof INSURANCE_CLAIM_CODES[keyof typeof INSURANCE_CLAIM_CODES];
+export type InsuranceClaimCode = (typeof INSURANCE_CLAIM_CODES)[keyof typeof INSURANCE_CLAIM_CODES];
 
 export type InsuranceClaimCheck = {
   ok: boolean;

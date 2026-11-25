@@ -76,9 +76,7 @@ export function calculateAirChargeableWeight(input: AirWeightCalculationInput): 
 
   const rawChargeableWeightKg = Math.max(grossWeightKg, volumetricWeightKg);
   // IATA standard: Round up to the next 0.5 kg
-  const chargeableWeightKg = roundToHalfKg
-    ? Math.ceil(rawChargeableWeightKg * 2) / 2
-    : rawChargeableWeightKg;
+  const chargeableWeightKg = roundToHalfKg ? Math.ceil(rawChargeableWeightKg * 2) / 2 : rawChargeableWeightKg;
 
   const dominantFactor = volumetricWeightKg > grossWeightKg ? 'volume' : 'weight';
   const volumeRatio = grossWeightKg > 0 ? Math.round((volumetricWeightKg / grossWeightKg) * 100) / 100 : 0;
@@ -133,7 +131,8 @@ export function calculateAirFreightCost(input: AirFreightCostInput): AirFreightC
   const awbFee = Math.round(Math.max(0, Number(input.awbDocumentationFee || 0)) * 100) / 100;
   const otherCharges = Math.round(Math.max(0, Number(input.otherCharges || 0)) * 100) / 100;
 
-  const totalCost = Math.round((baseWeightCharge + fuelSurcharge + securitySurcharge + awbFee + otherCharges) * 100) / 100;
+  const totalCost =
+    Math.round((baseWeightCharge + fuelSurcharge + securitySurcharge + awbFee + otherCharges) * 100) / 100;
 
   return {
     chargeableWeightKg: cw,
@@ -212,13 +211,33 @@ export function validateIataAwbNumber(awb: string): AwbValidationResult {
 
 export const IATA_CARGO_IQ_MILESTONES = [
   { key: 'BKD', title_ar: 'تأكيد حجز الشحنة الجوية', title_en: 'Air Cargo Booking Confirmed', category: 'booking' },
-  { key: 'RCS', title_ar: 'استلام الشحنة بمستودع المطار (GTI)', title_en: 'Cargo Received from Shipper', category: 'origin' },
+  {
+    key: 'RCS',
+    title_ar: 'استلام الشحنة بمستودع المطار (GTI)',
+    title_en: 'Cargo Received from Shipper',
+    category: 'origin',
+  },
   { key: 'MAN', title_ar: 'إدراج الشحنة على مانيفست الرحلة', title_en: 'Manifested on Flight', category: 'origin' },
   { key: 'DEP', title_ar: 'إقلاع رحلة الشحن الجوي (ATD)', title_en: 'Flight Departed', category: 'flight' },
   { key: 'ARR', title_ar: 'هبوط ووصول الرحلة بمطار المقصد (ATA)', title_en: 'Flight Arrived', category: 'flight' },
-  { key: 'RCF', title_ar: 'تفريغ ودخول الشحنة مستودع المطار', title_en: 'Cargo Received from Flight', category: 'destination' },
-  { key: 'CUST', title_ar: 'إنهاء الإفراج والتخليص الجمركي بالمطار', title_en: 'Customs Cleared', category: 'destination' },
+  {
+    key: 'RCF',
+    title_ar: 'تفريغ ودخول الشحنة مستودع المطار',
+    title_en: 'Cargo Received from Flight',
+    category: 'destination',
+  },
+  {
+    key: 'CUST',
+    title_ar: 'إنهاء الإفراج والتخليص الجمركي بالمطار',
+    title_en: 'Customs Cleared',
+    category: 'destination',
+  },
   { key: 'NFD', title_ar: 'إشعار العميل المستلم بالوصول', title_en: 'Consignee Notified', category: 'destination' },
   { key: 'AWD', title_ar: 'تسليم إذن التسليم والمستندات', title_en: 'Documents Delivered', category: 'delivery' },
-  { key: 'DLV', title_ar: 'تسليم الشحنة للعميل نهائياً (POD)', title_en: 'Cargo Delivered (Proof of Delivery)', category: 'delivery' },
+  {
+    key: 'DLV',
+    title_ar: 'تسليم الشحنة للعميل نهائياً (POD)',
+    title_en: 'Cargo Delivered (Proof of Delivery)',
+    category: 'delivery',
+  },
 ] as const;

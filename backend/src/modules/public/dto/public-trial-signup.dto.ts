@@ -22,4 +22,3 @@ export class PublicTrialSignupDto {
   @IsString()
   honeypot?: string;
 }
-

@@ -110,9 +110,7 @@ export function buildEmployeeFromApplicant(
 /**
  * Computes recruitment recruitment pipeline funnel counts
  */
-export function calculateRecruitmentFunnel(
-  applicants: Array<{ stage: string }>,
-): {
+export function calculateRecruitmentFunnel(applicants: Array<{ stage: string }>): {
   newCount: number;
   screeningCount: number;
   interviewCount: number;
@@ -133,19 +131,31 @@ export function calculateRecruitmentFunnel(
 
   for (const a of applicants) {
     switch (a.stage) {
-      case 'new': funnel.newCount++; break;
-      case 'screening': funnel.screeningCount++; break;
-      case 'interview': funnel.interviewCount++; break;
-      case 'offer': funnel.offerCount++; break;
-      case 'hired': funnel.hiredCount++; break;
-      case 'rejected': funnel.rejectedCount++; break;
-      default: break;
+      case 'new':
+        funnel.newCount++;
+        break;
+      case 'screening':
+        funnel.screeningCount++;
+        break;
+      case 'interview':
+        funnel.interviewCount++;
+        break;
+      case 'offer':
+        funnel.offerCount++;
+        break;
+      case 'hired':
+        funnel.hiredCount++;
+        break;
+      case 'rejected':
+        funnel.rejectedCount++;
+        break;
+      default:
+        break;
     }
   }
 
   const totalApplicants = applicants.length;
-  const conversionRatePercent =
-    totalApplicants > 0 ? Math.round((funnel.hiredCount / totalApplicants) * 1000) / 10 : 0;
+  const conversionRatePercent = totalApplicants > 0 ? Math.round((funnel.hiredCount / totalApplicants) * 1000) / 10 : 0;
 
   return {
     ...funnel,

@@ -106,7 +106,11 @@ export class ImportForeignTransfersService {
       // '—' (the screen only renders egpAmount > 0) and the row
       // looks amount-less.
       const egpAmount = Math.abs(Number(r.amount));
-      const effectiveRate = r.exchange_rate ? Number(r.exchange_rate) : (foreignAmount && foreignAmount > 0 ? Number((egpAmount / foreignAmount).toFixed(2)) : null);
+      const effectiveRate = r.exchange_rate
+        ? Number(r.exchange_rate)
+        : foreignAmount && foreignAmount > 0
+          ? Number((egpAmount / foreignAmount).toFixed(2))
+          : null;
       const dateVal = r.payment_date || r.created_at;
 
       return {
@@ -172,11 +176,12 @@ export class ImportForeignTransfersService {
     // accounts carries no cash-vs-bank distinction beyond
     // is_cash_bank, so the method is recorded with the explicit
     // account rather than inferred from it.
-    const explicitPaymentMethod = typeof dto.paymentMethod === 'string' && dto.paymentMethod.trim()
-      ? dto.paymentMethod.trim()
-      : null;
+    const explicitPaymentMethod =
+      typeof dto.paymentMethod === 'string' && dto.paymentMethod.trim() ? dto.paymentMethod.trim() : null;
     if (explicitPaymentMethod && !isPaymentMethod(explicitPaymentMethod)) {
-      throw new BadRequestException(`طريقة الدفع '${explicitPaymentMethod}' غير مدعومة. [IMPORT_PAYMENT_METHOD_UNKNOWN]`);
+      throw new BadRequestException(
+        `طريقة الدفع '${explicitPaymentMethod}' غير مدعومة. [IMPORT_PAYMENT_METHOD_UNKNOWN]`,
+      );
     }
     const effectivePaymentMethod = explicitPaymentMethod ?? 'bank_transfer';
     if (explicitPaymentMethod) {
@@ -235,9 +240,8 @@ export class ImportForeignTransfersService {
           .executeTakeFirst();
         if (bindingPi) {
           piProjectId = bindingPi.project_id;
-          piContractRate = (bindingPi.currency || 'USD').toUpperCase() === 'EGP'
-            ? 1
-            : Number(bindingPi.exchange_rate_contract);
+          piContractRate =
+            (bindingPi.currency || 'USD').toUpperCase() === 'EGP' ? 1 : Number(bindingPi.exchange_rate_contract);
         }
       }
 
@@ -246,23 +250,18 @@ export class ImportForeignTransfersService {
       // proforma/amount must never authorize a different one.
       if (approvalRequestId || isLargeTransfer) {
         if (!approvalRequestId && isLargeTransfer) {
-          throw new BadRequestException('الحوالات الكبرى (ما يعادل 100,000 بعملة الأساس فأكثر) تتطلب اعتماداً ثنائياً مسبقاً (Maker-Checker).');
+          throw new BadRequestException(
+            'الحوالات الكبرى (ما يعادل 100,000 بعملة الأساس فأكثر) تتطلب اعتماداً ثنائياً مسبقاً (Maker-Checker).',
+          );
         }
-        await this.verifyAndConsumeApprovalRequest(
-          trx,
-          tenantId,
-          'large_transfer',
-          String(sId),
-          approvalRequestId,
-          {
-            amount: cleanForeign,
-            currency: transferCurrency,
-            supplierId: String(sId),
-            proformaInvoiceId: proformaInvoiceId ? String(proformaInvoiceId) : undefined,
-            projectId: (projectId || piProjectId) ? String(projectId || piProjectId) : undefined,
-            paymentMethod: explicitPaymentMethod ? effectivePaymentMethod : undefined,
-          }
-        );
+        await this.verifyAndConsumeApprovalRequest(trx, tenantId, 'large_transfer', String(sId), approvalRequestId, {
+          amount: cleanForeign,
+          currency: transferCurrency,
+          supplierId: String(sId),
+          proformaInvoiceId: proformaInvoiceId ? String(proformaInvoiceId) : undefined,
+          projectId: projectId || piProjectId ? String(projectId || piProjectId) : undefined,
+          paymentMethod: explicitPaymentMethod ? effectivePaymentMethod : undefined,
+        });
       }
 
       const supplier = await trx
@@ -288,28 +287,27 @@ export class ImportForeignTransfersService {
         }
 
         if (Number(pi.supplier_id) !== sId) {
-          throw new BadRequestException(
-            `الفاتورة المبدئية (${pi.pi_number}) تخص مورداً آخر وليست للمورد المحدد.`
-          );
+          throw new BadRequestException(`الفاتورة المبدئية (${pi.pi_number}) تخص مورداً آخر وليست للمورد المحدد.`);
         }
 
         if (projectId && pi.project_id && projectId !== pi.project_id) {
-          throw new BadRequestException(
-            `الفاتورة المبدئية (${pi.pi_number}) مرتبطة بمشروع استيراد آخر.`
-          );
+          throw new BadRequestException(`الفاتورة المبدئية (${pi.pi_number}) مرتبطة بمشروع استيراد آخر.`);
         }
 
         const piCurrency = (pi.currency || 'USD').toUpperCase();
         const transferCurrency = (currency || 'USD').toUpperCase();
         if (piCurrency !== transferCurrency) {
           throw new BadRequestException(
-            `عملة الحوالة (${transferCurrency}) لا تطابق عملة الفاتورة المبدئية (${piCurrency}).`
+            `عملة الحوالة (${transferCurrency}) لا تطابق عملة الفاتورة المبدئية (${piCurrency}).`,
           );
         }
 
-        if (pi.payment_status === 'paid' && Number(pi.paid_amount_foreign || 0) >= Number(pi.total_amount_foreign || 0)) {
+        if (
+          pi.payment_status === 'paid' &&
+          Number(pi.paid_amount_foreign || 0) >= Number(pi.total_amount_foreign || 0)
+        ) {
           throw new BadRequestException(
-            `الفاتورة المبدئية (${pi.pi_number}) مسددة بالكامل بالفعل ولا يمكن سداد دفعات إضافية عليها.`
+            `الفاتورة المبدئية (${pi.pi_number}) مسددة بالكامل بالفعل ولا يمكن سداد دفعات إضافية عليها.`,
           );
         }
 
@@ -318,7 +316,7 @@ export class ImportForeignTransfersService {
         const remainingForeign = Math.max(0, totalForeign - alreadyPaidForeign);
         if (cleanForeign > remainingForeign + 0.0001) {
           throw new BadRequestException(
-            `مبلغ الحوالة (${cleanForeign.toFixed(2)} ${transferCurrency}) يتجاوز المتبقي غير المسدد للفاتورة المبدئية (${remainingForeign.toFixed(2)} ${transferCurrency}).`
+            `مبلغ الحوالة (${cleanForeign.toFixed(2)} ${transferCurrency}) يتجاوز المتبقي غير المسدد للفاتورة المبدئية (${remainingForeign.toFixed(2)} ${transferCurrency}).`,
           );
         }
 
@@ -343,7 +341,7 @@ export class ImportForeignTransfersService {
 
       if (existingPayment) {
         throw new ConflictException(
-          `تم تنفيذ هذا الطلب مسبقاً برقم (${existingPayment.doc_no})؛ تم منع إعادة التنفيذ بواسطة مفتاح عدم التكرار (Idempotency Key).`
+          `تم تنفيذ هذا الطلب مسبقاً برقم (${existingPayment.doc_no})؛ تم منع إعادة التنفيذ بواسطة مفتاح عدم التكرار (Idempotency Key).`,
         );
       }
 
@@ -363,11 +361,12 @@ export class ImportForeignTransfersService {
       // amounts themselves (cleanEgp / cleanForeign) made the forex
       // variance identically zero on every transfer without a caller
       // rate. With neither source, fail closed.
-      const effectiveRateContract = exchangeRateContract && exchangeRateContract > 0
-        ? exchangeRateContract
-        : (piContractRate !== null && Number.isFinite(piContractRate) && piContractRate > 0
-          ? piContractRate
-          : null);
+      const effectiveRateContract =
+        exchangeRateContract && exchangeRateContract > 0
+          ? exchangeRateContract
+          : piContractRate !== null && Number.isFinite(piContractRate) && piContractRate > 0
+            ? piContractRate
+            : null;
       if (effectiveRateContract === null) {
         throw new BadRequestException(
           'لا يمكن تنفيذ الحوالة بلا سعر صرف تعاقدي صالح؛ حدد سعر الصرف التعاقدي على الفاتورة المبدئية أو في الحوالة. [IMPORT_EXCHANGE_RATE_REQUIRED]',
@@ -389,7 +388,9 @@ export class ImportForeignTransfersService {
             amount_foreign: cleanForeign,
             note: `حوالة استيراد خارجية${notes ? ' - ' + notes : ''} [تدبير عملة: ${actualEgp} ج.م]`,
             created_by: userId,
-            payment_date: (dto as any).transferDate || await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),
+            payment_date:
+              (dto as any).transferDate ||
+              (await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date())),
             currency: currency || 'USD',
             exchange_rate: actualEgp / cleanForeign,
             forex_variance_egp: forexVarianceEgp,
@@ -415,9 +416,7 @@ export class ImportForeignTransfersService {
           .executeTakeFirstOrThrow();
       } catch (err: any) {
         if (err?.code === '23505' || String(err?.message || '').includes('idx_supplier_payments_tenant_idempotency')) {
-          throw new ConflictException(
-            'تم تنفيذ حوالة متزامنة بنفس مفتاح عدم التكرار (Idempotency Key).'
-          );
+          throw new ConflictException('تم تنفيذ حوالة متزامنة بنفس مفتاح عدم التكرار (Idempotency Key).');
         }
         throw err;
       }
@@ -438,7 +437,8 @@ export class ImportForeignTransfersService {
           account_id: bankScope.account_id,
           txn_type: 'supplier_payment',
           amount: -actualEgp,
-          note: `تدبير عملة: حوالة خارجية إلى ${supplier.name} (${cleanForeign} ${currency || 'USD'}) [طريقة الدفع: ${effectivePaymentMethod}]` +
+          note:
+            `تدبير عملة: حوالة خارجية إلى ${supplier.name} (${cleanForeign} ${currency || 'USD'}) [طريقة الدفع: ${effectivePaymentMethod}]` +
             (forexVarianceEgp !== 0 ? ` [فروق صرف: ${forexVarianceEgp.toFixed(2)} ج.م]` : ''),
           reference_type: 'supplier_payment',
           reference_id: paymentId,
@@ -460,7 +460,8 @@ export class ImportForeignTransfersService {
           entry_type: 'payment',
           amount: -contractValue,
           balance_after: newSupplierBalance,
-          note: `حوالة خارجية FT-${paymentId} (${cleanForeign} ${currency || 'USD'})` +
+          note:
+            `حوالة خارجية FT-${paymentId} (${cleanForeign} ${currency || 'USD'})` +
             (forexVarianceEgp !== 0 ? ` [فروق صرف: ${forexVarianceEgp.toFixed(2)} ج.م]` : ''),
           reference_type: 'supplier_payment',
           reference_id: paymentId,
@@ -480,7 +481,8 @@ export class ImportForeignTransfersService {
         .where('tenant_id', '=', tenantId)
         .execute();
 
-      const postingService = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
+      const postingService =
+        this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
       const lines: any[] = [
         // Line 1: Debit Supplier Accounts Payable in EGP (relieve debt at contract rate)
         {

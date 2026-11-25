@@ -16,53 +16,38 @@ export type { CopilotResponse } from './ai-copilot/ai-copilot-types';
 export class AiCopilotService {
   private readonly logger = new Logger(AiCopilotService.name);
 
-  constructor(
-    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
-  ) {}
+  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   private s1Instance?: AiCopilotAsk;
   private get s1(): AiCopilotAsk {
-    return (this.s1Instance ??= new AiCopilotAsk(
-      this.db,
-      this.logger,
-      {
-        getEffectiveAiConfig: (tenantId) => this.s2.getEffectiveAiConfig(tenantId),
-        askOpenAi: (question, snapshot, apiKey, model, baseUrl) =>
-          this.s5.askOpenAi(question, snapshot, apiKey, model, baseUrl)
-      }
-    ));
+    return (this.s1Instance ??= new AiCopilotAsk(this.db, this.logger, {
+      getEffectiveAiConfig: (tenantId) => this.s2.getEffectiveAiConfig(tenantId),
+      askOpenAi: (question, snapshot, apiKey, model, baseUrl) =>
+        this.s5.askOpenAi(question, snapshot, apiKey, model, baseUrl),
+    }));
   }
 
   private s2Instance?: AiCopilotConfig;
   private get s2(): AiCopilotConfig {
-    return (this.s2Instance ??= new AiCopilotConfig(
-      this.db,
-      this.logger
-    ));
+    return (this.s2Instance ??= new AiCopilotConfig(this.db, this.logger));
   }
 
   private s3Instance?: AiCopilotTestKeys;
   private get s3(): AiCopilotTestKeys {
-    return (this.s3Instance ??= new AiCopilotTestKeys(
-      {
-        getEffectiveAiConfig: (tenantId) => this.s2.getEffectiveAiConfig(tenantId),
-        getEffectiveGeminiApiKey: (tenantId) => this.s2.getEffectiveGeminiApiKey(tenantId),
-        testOpenAiKey: (apiKey, model, baseUrl) => this.s5.testOpenAiKey(apiKey, model, baseUrl)
-      }
-    ));
+    return (this.s3Instance ??= new AiCopilotTestKeys({
+      getEffectiveAiConfig: (tenantId) => this.s2.getEffectiveAiConfig(tenantId),
+      getEffectiveGeminiApiKey: (tenantId) => this.s2.getEffectiveGeminiApiKey(tenantId),
+      testOpenAiKey: (apiKey, model, baseUrl) => this.s5.testOpenAiKey(apiKey, model, baseUrl),
+    }));
   }
 
   private s4Instance?: AiCopilotSalesBot;
   private get s4(): AiCopilotSalesBot {
-    return (this.s4Instance ??= new AiCopilotSalesBot(
-      this.db,
-      this.logger,
-      {
-        getEffectiveAiConfig: (tenantId) => this.s2.getEffectiveAiConfig(tenantId),
-        askOpenAiSalesBot: (customerMessage, products, businessInfo, apiKey, model, baseUrl) =>
-          this.s5.askOpenAiSalesBot(customerMessage, products, businessInfo, apiKey, model, baseUrl)
-      }
-    ));
+    return (this.s4Instance ??= new AiCopilotSalesBot(this.db, this.logger, {
+      getEffectiveAiConfig: (tenantId) => this.s2.getEffectiveAiConfig(tenantId),
+      askOpenAiSalesBot: (customerMessage, products, businessInfo, apiKey, model, baseUrl) =>
+        this.s5.askOpenAiSalesBot(customerMessage, products, businessInfo, apiKey, model, baseUrl),
+    }));
   }
 
   private s5Instance?: AiCopilotOpenAi;
@@ -127,7 +112,13 @@ export class AiCopilotService {
       baseUrl?: string;
     },
     actor?: AuthContext,
-  ): Promise<{ success: boolean; message: string; model?: string; provider?: string; availableModels?: Array<{ id: string; displayName: string }> }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    model?: string;
+    provider?: string;
+    availableModels?: Array<{ id: string; displayName: string }>;
+  }> {
     return this.s3.testAiKey(params, actor);
   }
 

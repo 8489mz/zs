@@ -23,15 +23,7 @@ export const DAY_KEY_TO_ARABIC: Record<string, string> = {
   friday: 'الجمعة',
 };
 
-export const CANONICAL_ARABIC_DAYS = [
-  'السبت',
-  'الأحد',
-  'الإثنين',
-  'الثلاثاء',
-  'الأربعاء',
-  'الخميس',
-  'الجمعة',
-] as const;
+export const CANONICAL_ARABIC_DAYS = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'] as const;
 
 /**
  * Normalizes any Arabic or English day string into canonical English key.
@@ -85,10 +77,7 @@ export function extractCustomerVisitDays(meta: any): {
  * Determines whether a customer is scheduled to be visited on target day key.
  * If customer has no specific restricted visit days, they are considered available in daily open route.
  */
-export function isCustomerScheduledForDay(
-  visitDays: string[],
-  targetDayKey: string,
-): boolean {
+export function isCustomerScheduledForDay(visitDays: string[], targetDayKey: string): boolean {
   if (!visitDays || visitDays.length === 0) {
     return true;
   }

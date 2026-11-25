@@ -7,9 +7,7 @@
 
 export type LoyaltyAdjustActionType = 'earn' | 'redeem' | 'manual_adjust';
 
-export function resolveLoyaltyAdjustActionType(
-  actionType: string | undefined,
-): LoyaltyAdjustActionType {
+export function resolveLoyaltyAdjustActionType(actionType: string | undefined): LoyaltyAdjustActionType {
   if (actionType === 'earn' || actionType === 'redeem' || actionType === 'manual_adjust') {
     return actionType;
   }

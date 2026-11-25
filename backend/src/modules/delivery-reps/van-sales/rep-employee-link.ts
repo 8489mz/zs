@@ -2,17 +2,11 @@ import type { AuthContext } from '../../../core/auth/interfaces/auth-context.int
 import type { VanRepEmployeeLinkService } from '../services/van-rep-employee-link.service';
 
 export class RepEmployeeLinkService {
-  constructor(
-    private readonly getRepEmployeeLink: () => VanRepEmployeeLinkService,
-  ) {}
+  constructor(private readonly getRepEmployeeLink: () => VanRepEmployeeLinkService) {}
   /**
    * Link delivery representative to an HR employee.
    */
-  async linkRepToEmployee(
-    tenantId: string,
-    repId: number,
-    employeeId: number | null,
-  ) {
+  async linkRepToEmployee(tenantId: string, repId: number, employeeId: number | null) {
     return this.getRepEmployeeLink().linkRepToEmployee(tenantId, repId, employeeId);
   }
 
@@ -26,12 +20,7 @@ export class RepEmployeeLinkService {
   /**
    * Automatically create an HR employee record for a delivery representative and link them.
    */
-  async autoCreateEmployeeForRep(
-    tenantId: string,
-    accountId: string,
-    repId: number,
-    authContext: AuthContext,
-  ) {
+  async autoCreateEmployeeForRep(tenantId: string, accountId: string, repId: number, authContext: AuthContext) {
     return this.getRepEmployeeLink().autoCreateEmployeeForRep(tenantId, accountId, repId, authContext);
   }
 }

@@ -1,11 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Kysely, sql } from '../../../../database/kysely';
 import { Database } from '../../../../database/database.types';
-import {
-  normalizeCustomerCode,
-  getCustomerRepBalancesMap,
-  getMonthlyOfficialHolidayDates,
-} from '../van-common.util';
+import { normalizeCustomerCode, getCustomerRepBalancesMap, getMonthlyOfficialHolidayDates } from '../van-common.util';
 import {
   calculateRepTargetMetrics,
   evaluateBatchExpiryStatus,
@@ -17,11 +13,7 @@ import {
 import { getTenantTimezone, todayTenantDate } from '../../../../common/utils/tenant-timezone.util';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../../accounting/engines/money-minor-units.engine';
-import {
-  type VanTripLifecycleDeps,
-  type VanStockItem,
-  type VanTripSummary,
-} from './van-trip-types';
+import { type VanTripLifecycleDeps, type VanStockItem, type VanTripSummary } from './van-trip-types';
 
 @Injectable()
 export class GetActiveTripService {
@@ -37,10 +29,14 @@ export class GetActiveTripService {
     return this.db as any;
   }
 
-/**
+  /**
    * Retrieves active open trip and current car inventory for a delivery representative.
    */
-  async getActiveTrip(repId: number, tenantId: string, accountId: string): Promise<{
+  async getActiveTrip(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+  ): Promise<{
     hasActiveTrip: boolean;
     trip?: VanTripSummary;
     assignedVehicle?: {
@@ -107,12 +103,7 @@ export class GetActiveTripService {
         'status',
       ])
       .where('tenant_id', '=', tenantId)
-      .where((eb: any) =>
-        eb.or([
-          eb('assigned_rep_id', '=', repId),
-          eb('van_location_id', '=', vanLoc.id),
-        ])
-      )
+      .where((eb: any) => eb.or([eb('assigned_rep_id', '=', repId), eb('van_location_id', '=', vanLoc.id)]))
       .orderBy('id', 'desc')
       .executeTakeFirst();
 
@@ -124,7 +115,9 @@ export class GetActiveTripService {
           vehicleType: assignedVehicleRow.vehicleType || 'van',
           currentOdometer: Number(assignedVehicleRow.currentOdometer || 0),
           fuelType: assignedVehicleRow.fuelType || 'petrol_92',
-          licenseExpiresAt: assignedVehicleRow.licenseExpiresAt ? String(assignedVehicleRow.licenseExpiresAt) : undefined,
+          licenseExpiresAt: assignedVehicleRow.licenseExpiresAt
+            ? String(assignedVehicleRow.licenseExpiresAt)
+            : undefined,
           status: String(assignedVehicleRow.status || 'assigned'),
         }
       : null;
@@ -230,22 +223,34 @@ export class GetActiveTripService {
     // rule): the same clock the sale writers use, so the inventory
     // fetch agrees with the writer instead of sampling host-local.
     const todayIso = todayTenantDate(await getTenantTimezone(this.anyDb, tenantId));
-    const activeOffers = prodIds.length > 0
-      ? await this.anyDb
-          .selectFrom('product_offers')
-          .select(['id', 'product_id', 'offer_type', 'value', 'start_date', 'end_date', 'min_qty', 'bogo_buy_qty', 'bogo_get_qty', 'bogo_discount_percent'])
-          .where('product_id', 'in', prodIds)
-          .where('tenant_id', '=', tenantId)
-          .where('is_active', '=', true)
-          .where((eb: any) =>
-            eb.and([
-              eb.or([eb('start_date', 'is', null), eb('start_date', '<=', todayIso)]),
-              eb.or([eb('end_date', 'is', null), eb('end_date', '>=', todayIso)]),
+    const activeOffers =
+      prodIds.length > 0
+        ? await this.anyDb
+            .selectFrom('product_offers')
+            .select([
+              'id',
+              'product_id',
+              'offer_type',
+              'value',
+              'start_date',
+              'end_date',
+              'min_qty',
+              'bogo_buy_qty',
+              'bogo_get_qty',
+              'bogo_discount_percent',
             ])
-          )
-          .orderBy('id', 'desc')
-          .execute()
-      : [];
+            .where('product_id', 'in', prodIds)
+            .where('tenant_id', '=', tenantId)
+            .where('is_active', '=', true)
+            .where((eb: any) =>
+              eb.and([
+                eb.or([eb('start_date', 'is', null), eb('start_date', '<=', todayIso)]),
+                eb.or([eb('end_date', 'is', null), eb('end_date', '>=', todayIso)]),
+              ]),
+            )
+            .orderBy('id', 'desc')
+            .execute()
+        : [];
 
     const offersByProdId = new Map<number, any>();
     for (const off of activeOffers) {
@@ -256,25 +261,26 @@ export class GetActiveTripService {
     }
 
     // Query product units and FEFO batches for van inventory items
-    const [rawUnits, batchRows] = prodIds.length > 0
-      ? await Promise.all([
-          this.anyDb
-            .selectFrom('product_units')
-            .select(['id', 'product_id', 'name', 'multiplier', 'is_base_unit'])
-            .where('product_id', 'in', prodIds)
-            .orderBy('multiplier', 'asc')
-            .execute(),
-          this.anyDb
-            .selectFrom('pharmacy_batches')
-            .select(['product_id', 'batch_number', 'expiry_date', 'quantity'])
-            .where('tenant_id', '=', tenantId)
-            .where('product_id', 'in', prodIds)
-            .where(sql<boolean>`cast(coalesce(quantity, 0) as numeric) > 0`)
-            .orderBy('expiry_date', 'asc')
-            .execute()
-            .catch(() => []),
-        ])
-      : [[], []];
+    const [rawUnits, batchRows] =
+      prodIds.length > 0
+        ? await Promise.all([
+            this.anyDb
+              .selectFrom('product_units')
+              .select(['id', 'product_id', 'name', 'multiplier', 'is_base_unit'])
+              .where('product_id', 'in', prodIds)
+              .orderBy('multiplier', 'asc')
+              .execute(),
+            this.anyDb
+              .selectFrom('pharmacy_batches')
+              .select(['product_id', 'batch_number', 'expiry_date', 'quantity'])
+              .where('tenant_id', '=', tenantId)
+              .where('product_id', 'in', prodIds)
+              .where(sql<boolean>`cast(coalesce(quantity, 0) as numeric) > 0`)
+              .orderBy('expiry_date', 'asc')
+              .execute()
+              .catch(() => []),
+          ])
+        : [[], []];
 
     const fefoBatchByProdId = new Map<number, { batchNumber: string | null; expiryDate: string }>();
     for (const b of batchRows || []) {
@@ -339,16 +345,21 @@ export class GetActiveTripService {
           const discPct = Number(offer.bogo_discount_percent ?? 100);
           const cycle = buyQ + getQ;
           const fullDisc = getQ * baseRetail * (discPct / 100);
-          effectiveRetail = roundMoney(Math.max(0, (cycle * baseRetail) - fullDisc) / cycle, moneyDigits);
+          effectiveRetail = roundMoney(Math.max(0, cycle * baseRetail - fullDisc) / cycle, moneyDigits);
           discountPerUnit = Math.max(0, roundMoney(baseRetail - effectiveRetail, moneyDigits));
-          offerBadge = discPct === 100 ? `اشتري ${buyQ} واحصل على ${getQ} مجاناً` : `اشتري ${buyQ} و${getQ} بخصم ${discPct}%`;
+          offerBadge =
+            discPct === 100 ? `اشتري ${buyQ} واحصل على ${getQ} مجاناً` : `اشتري ${buyQ} و${getQ} بخصم ${discPct}%`;
         }
       }
 
       let metaObj: any = null;
       if (r.productMetadata) {
         if (typeof r.productMetadata === 'string') {
-          try { metaObj = JSON.parse(r.productMetadata); } catch { metaObj = null; }
+          try {
+            metaObj = JSON.parse(r.productMetadata);
+          } catch {
+            metaObj = null;
+          }
         } else if (typeof r.productMetadata === 'object') {
           metaObj = r.productMetadata;
         }
@@ -441,7 +452,11 @@ export class GetActiveTripService {
       const cid = Number(c.id);
       let meta: any = {};
       if (typeof c.metadata === 'string') {
-        try { meta = JSON.parse(c.metadata); } catch { meta = {}; }
+        try {
+          meta = JSON.parse(c.metadata);
+        } catch {
+          meta = {};
+        }
       } else if (c.metadata && typeof c.metadata === 'object') {
         meta = c.metadata;
       }
@@ -468,7 +483,9 @@ export class GetActiveTripService {
         // customer type, so the type rides the trip customers payload.
         customer_type: (c as any).customer_type || 'cash',
         assignedRepIds,
-        locationUrl: meta.location_url || (meta.gps_lat && meta.gps_lng ? `https://maps.google.com/?q=${meta.gps_lat},${meta.gps_lng}` : ''),
+        locationUrl:
+          meta.location_url ||
+          (meta.gps_lat && meta.gps_lng ? `https://maps.google.com/?q=${meta.gps_lat},${meta.gps_lng}` : ''),
       };
     });
 
@@ -580,12 +597,14 @@ export class GetActiveTripService {
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();
     const targetAmount = Number(targetRow?.target_amount || 0);
-    const collectionTarget = targetRow?.collection_target !== null && targetRow?.collection_target !== undefined
-      ? Number(targetRow.collection_target)
-      : null;
-    const visitsTarget = targetRow?.visits_target !== null && targetRow?.visits_target !== undefined
-      ? Number(targetRow.visits_target)
-      : null;
+    const collectionTarget =
+      targetRow?.collection_target !== null && targetRow?.collection_target !== undefined
+        ? Number(targetRow.collection_target)
+        : null;
+    const visitsTarget =
+      targetRow?.visits_target !== null && targetRow?.visits_target !== undefined
+        ? Number(targetRow.visits_target)
+        : null;
 
     const salesMtdRow = await this.anyDb
       .selectFrom('sales')
@@ -678,7 +697,7 @@ export class GetActiveTripService {
       id: Number(tripRow.id),
       repId: Number(tripRow.repId),
       repName: tripRow.repName,
-      vehicleId: tripRow.vehicleId ? Number(tripRow.vehicleId) : (assignedVehicle ? assignedVehicle.id : undefined),
+      vehicleId: tripRow.vehicleId ? Number(tripRow.vehicleId) : assignedVehicle ? assignedVehicle.id : undefined,
       vehiclePlate: tripRow.vehiclePlate || assignedVehicle?.plateNumber,
       vehicleModel: tripRow.vehicleModel || assignedVehicle?.modelName,
       startOdometer: Number(tripRow.startOdometer || assignedVehicle?.currentOdometer || 0),

@@ -1,15 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Delete,
-  Body,
-  Param,
-  Query,
-  Req,
-  ParseIntPipe,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, Req, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
 import { RequireFeature } from '../../../core/auth/decorators/feature.decorator';
@@ -25,19 +14,13 @@ export class EndOfServiceController {
 
   @Post('calculate-preview')
   @RequireAnyPermission('hrSalaryView', 'hrSalaryManage', 'hrPayrollApprove')
-  async calculatePreview(
-    @Body() body: SettlementCalculateInput,
-    @Req() req: RequestWithAuth
-  ) {
+  async calculatePreview(@Body() body: SettlementCalculateInput, @Req() req: RequestWithAuth) {
     return this.eosService.calculateSettlementPreview(body, req.authContext!);
   }
 
   @Post()
   @RequirePermissions('hrSalaryManage')
-  async createSettlement(
-    @Body() body: CreateSettlementDto,
-    @Req() req: RequestWithAuth
-  ) {
+  async createSettlement(@Body() body: CreateSettlementDto, @Req() req: RequestWithAuth) {
     return this.eosService.createSettlement(body, req.authContext!);
   }
 
@@ -46,7 +29,7 @@ export class EndOfServiceController {
   async listSettlements(
     @Query('status') status: string | undefined,
     @Query('employeeId') employeeId: string | undefined,
-    @Req() req: RequestWithAuth
+    @Req() req: RequestWithAuth,
   ) {
     return this.eosService.listSettlements(req.authContext!, {
       status,
@@ -56,10 +39,7 @@ export class EndOfServiceController {
 
   @Get(':id')
   @RequireAnyPermission('hrSalaryView', 'hrSalaryManage', 'hrPayrollApprove')
-  async getSettlement(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth
-  ) {
+  async getSettlement(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.eosService.getSettlement(id, req.authContext!);
   }
 
@@ -68,17 +48,14 @@ export class EndOfServiceController {
   async postAccounting(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { treasuryAccountId?: number; notes?: string },
-    @Req() req: RequestWithAuth
+    @Req() req: RequestWithAuth,
   ) {
     return this.eosService.postAccountingEntry(id, body, req.authContext!);
   }
 
   @Delete(':id')
   @RequirePermissions('hrSalaryManage')
-  async deleteSettlement(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth
-  ) {
+  async deleteSettlement(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.eosService.deleteSettlement(id, req.authContext!);
   }
 }

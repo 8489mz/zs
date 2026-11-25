@@ -20,7 +20,11 @@ export interface StorefrontPaymentSessionDeps {
   // Bound helpers from the helpers slice (passed bound so the moved
   // bodies stay byte-identical).
   getTenantBySlug: (slug: string) => Promise<Selectable<TenantTable>>;
-  findOrderByToken: (tenantId: string, orderNumber: string, token: string | undefined) => Promise<Selectable<OnlineOrderTable>>;
+  findOrderByToken: (
+    tenantId: string,
+    orderNumber: string,
+    token: string | undefined,
+  ) => Promise<Selectable<OnlineOrderTable>>;
   sandboxSessionOrThrow: (config: TenantPaymentConfig, session: Record<string, unknown>) => Record<string, unknown>;
 }
 
@@ -28,8 +32,15 @@ export interface StorefrontPaymentSessionDeps {
 export class StorefrontPaymentSessionService {
   private readonly db: Kysely<Database>;
   private readonly getTenantBySlug: (slug: string) => Promise<Selectable<TenantTable>>;
-  private readonly findOrderByToken: (tenantId: string, orderNumber: string, token: string | undefined) => Promise<Selectable<OnlineOrderTable>>;
-  private readonly sandboxSessionOrThrow: (config: TenantPaymentConfig, session: Record<string, unknown>) => Record<string, unknown>;
+  private readonly findOrderByToken: (
+    tenantId: string,
+    orderNumber: string,
+    token: string | undefined,
+  ) => Promise<Selectable<OnlineOrderTable>>;
+  private readonly sandboxSessionOrThrow: (
+    config: TenantPaymentConfig,
+    session: Record<string, unknown>,
+  ) => Record<string, unknown>;
   private readonly logger = new Logger(StorefrontPaymentSessionService.name);
 
   constructor(deps: StorefrontPaymentSessionDeps) {
@@ -80,10 +91,12 @@ export class StorefrontPaymentSessionService {
     const enabled = map.get('storefront_online_payment_enabled') === 'true';
     const rawCurrency = (map.get('currency') || '').toUpperCase();
     const rawCountry = (map.get('country') || '').toUpperCase();
-    const isGcc = ['KW', 'SA', 'AE', 'QA', 'BH', 'OM'].includes(rawCountry) ||
+    const isGcc =
+      ['KW', 'SA', 'AE', 'QA', 'BH', 'OM'].includes(rawCountry) ||
       ['KWD', 'SAR', 'AED', 'QAR', 'BHD', 'OMR'].includes(rawCurrency);
     const defaultProvider = isGcc ? 'tap' : 'paymob';
-    const provider = (map.get('storefront_online_payment_provider') || defaultProvider) as 'paymob' | 'xpay' | 'tap' | 'stripe' | 'mock';
+    const provider = (map.get('storefront_online_payment_provider') || defaultProvider) as
+      'paymob' | 'xpay' | 'tap' | 'stripe' | 'mock';
     const apiKey = map.get('storefront_paymob_api_key') || '';
     const integrationId = map.get('storefront_paymob_integration_id') || '';
     const iframeId = map.get('storefront_paymob_iframe_id') || '';
@@ -253,7 +266,7 @@ export class StorefrontPaymentSessionService {
         try {
           const xpayBase = config.xpayTestMode ? 'https://staging.xpay.app' : 'https://community.xpay.app';
           const phone = order.customer_phone || '01000000000';
-          const formattedPhone = phone.startsWith('+') ? phone : (phone.startsWith('0') ? `+2${phone}` : `+20${phone}`);
+          const formattedPhone = phone.startsWith('+') ? phone : phone.startsWith('0') ? `+2${phone}` : `+20${phone}`;
 
           const xpayRes = await fetch(`${xpayBase}/api/v1/payments/pay/variable-amount`, {
             method: 'POST',

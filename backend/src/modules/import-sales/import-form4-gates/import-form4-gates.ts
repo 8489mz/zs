@@ -71,8 +71,13 @@ export class ImportForm4GatesSlice {
    * anywhere (shipment or transfer) triggers the gate; only
    * all-cash_carried is exempt.
    */
-  async assertForm4ClearanceGate(executor: Transaction<Database> | Kysely<Database>, tenantId: string, shipment: Selectable<ImportShipmentTable>): Promise<void> {
-    const items = await executor.selectFrom('import_shipment_items')
+  async assertForm4ClearanceGate(
+    executor: Transaction<Database> | Kysely<Database>,
+    tenantId: string,
+    shipment: Selectable<ImportShipmentTable>,
+  ): Promise<void> {
+    const items = await executor
+      .selectFrom('import_shipment_items')
       .select(['quantity', 'factory_unit_price_usd'])
       .where('tenant_id', '=', tenantId)
       .where('shipment_id', '=', shipment.id)
@@ -83,7 +88,8 @@ export class ImportForm4GatesSlice {
     );
     let funding: Array<{ payment_method: string | null | undefined; form4_number: string | null | undefined }> = [];
     if (shipment.project_id) {
-      funding = await executor.selectFrom('supplier_payments')
+      funding = await executor
+        .selectFrom('supplier_payments')
         .innerJoin('import_proforma_invoices', 'import_proforma_invoices.id', 'supplier_payments.proforma_invoice_id')
         .select([
           'supplier_payments.payment_method as payment_method',

@@ -14,7 +14,16 @@ import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant
 import { calculateLoanInstallmentSchedule, requireLoanMoney } from '../payroll-loan-allocation.engine';
 import { MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
-import { clean, toId, normalizeDateOnly, tenantBookDigits, normalizePayrollMonth, monthRange, addMonths, nextMonthDate } from '../hr-helpers';
+import {
+  clean,
+  toId,
+  normalizeDateOnly,
+  tenantBookDigits,
+  normalizePayrollMonth,
+  monthRange,
+  addMonths,
+  nextMonthDate,
+} from '../hr-helpers';
 
 /**
  * HrLoansService — slice H4 of the hr split.
@@ -67,34 +76,54 @@ export class HrLoansService {
     this.scope = deps.scope;
   }
 
-  private normalizeRepaymentPlan(payload: UpsertEmployeeLoanDto, amount: number, minorUnits: MoneyDigits): {
-    repaymentMode: string; installmentCount: number; installmentAmount: number;
-    installmentValues: number[]; monthlyInstallmentAmount: number | null;
-    firstDueDate: string | null; salaryDueDate: string | null;
+  private normalizeRepaymentPlan(
+    payload: UpsertEmployeeLoanDto,
+    amount: number,
+    minorUnits: MoneyDigits,
+  ): {
+    repaymentMode: string;
+    installmentCount: number;
+    installmentAmount: number;
+    installmentValues: number[];
+    monthlyInstallmentAmount: number | null;
+    firstDueDate: string | null;
+    salaryDueDate: string | null;
   } {
-    const repaymentMode = ['deduct_next_salary', 'monthly_salary_installment', 'manual_cash'].includes(clean(payload.repaymentMode))
-      ? clean(payload.repaymentMode) : 'manual_cash';
+    const repaymentMode = ['deduct_next_salary', 'monthly_salary_installment', 'manual_cash'].includes(
+      clean(payload.repaymentMode),
+    )
+      ? clean(payload.repaymentMode)
+      : 'manual_cash';
     const issueDate = normalizeDateOnly(payload.issueDate);
     if (!issueDate) throw new AppError('تاريخ إصدار السلفة غير صحيح', 'HR_LOAN_ISSUE_DATE_REQUIRED', 400);
     const salaryDueDate = payload.salaryDueDate ? normalizeDateOnly(payload.salaryDueDate) : null;
     const selectedDueDate = payload.firstDueDate ? normalizeDateOnly(payload.firstDueDate) : null;
     if ((payload.salaryDueDate && !salaryDueDate) || (payload.firstDueDate && !selectedDueDate))
       throw new AppError('تاريخ استحقاق القسط غير صحيح', 'HR_LOAN_DUE_DATE_INVALID', 400);
-    const firstDueDate = selectedDueDate || salaryDueDate
-      || (repaymentMode === 'manual_cash' ? issueDate : nextMonthDate(issueDate));
+    const firstDueDate =
+      selectedDueDate || salaryDueDate || (repaymentMode === 'manual_cash' ? issueDate : nextMonthDate(issueDate));
     let plan: ReturnType<typeof calculateLoanInstallmentSchedule>;
     try {
-      plan = repaymentMode === 'deduct_next_salary'
-        ? calculateLoanInstallmentSchedule(amount, 1, minorUnits)
-        : repaymentMode === 'monthly_salary_installment' && Number(payload.monthlyInstallmentAmount || 0) > 0
-          ? calculateLoanInstallmentSchedule(amount, 1, minorUnits, Number(payload.monthlyInstallmentAmount))
-          : calculateLoanInstallmentSchedule(amount, Number(payload.installmentCount || 1), minorUnits);
+      plan =
+        repaymentMode === 'deduct_next_salary'
+          ? calculateLoanInstallmentSchedule(amount, 1, minorUnits)
+          : repaymentMode === 'monthly_salary_installment' && Number(payload.monthlyInstallmentAmount || 0) > 0
+            ? calculateLoanInstallmentSchedule(amount, 1, minorUnits, Number(payload.monthlyInstallmentAmount))
+            : calculateLoanInstallmentSchedule(amount, Number(payload.installmentCount || 1), minorUnits);
     } catch (error) {
-      throw new AppError(error instanceof Error ? error.message : 'خطة تقسيط غير صحيحة', 'HR_LOAN_INSTALLMENT_PLAN_INVALID', 400);
+      throw new AppError(
+        error instanceof Error ? error.message : 'خطة تقسيط غير صحيحة',
+        'HR_LOAN_INSTALLMENT_PLAN_INVALID',
+        400,
+      );
     }
-    return { repaymentMode, ...plan,
+    return {
+      repaymentMode,
+      ...plan,
       monthlyInstallmentAmount: repaymentMode === 'monthly_salary_installment' ? plan.installmentAmount : null,
-      firstDueDate, salaryDueDate };
+      firstDueDate,
+      salaryDueDate,
+    };
   }
 
   async listLoans(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
@@ -251,7 +280,9 @@ export class HrLoansService {
           entryType: clean(row.entry_type),
           amount: Math.abs(Number(row.amount || 0)),
           balanceAfter: Number(row.balance_after || 0),
-          repaymentMethod: clean(row.repayment_method) || (clean(row.entry_type) === 'loan_repayment' ? 'manual_cash' : 'disbursement'),
+          repaymentMethod:
+            clean(row.repayment_method) ||
+            (clean(row.entry_type) === 'loan_repayment' ? 'manual_cash' : 'disbursement'),
           note: clean(row.note),
           createdAt: clean(row.created_at_text),
           receivedById: row.received_by_id ? String(row.received_by_id) : '',
@@ -322,27 +353,43 @@ export class HrLoansService {
     const repaymentMode = clean(payload.repaymentMode) || 'manual_cash';
     if (!employeeId) throw new AppError('Employee is required', 'HR_LOAN_EMPLOYEE_REQUIRED', 400);
     if (payload.autoDisburse && auth.role !== 'admin' && auth.role !== 'super_admin') {
-      throw new AppError('الصرف التلقائي للسلفة للإدارة فقط؛ استخدم الاعتماد والصرف المنفصل', 'HR_LOAN_AUTO_DISBURSE_FORBIDDEN', 403);
+      throw new AppError(
+        'الصرف التلقائي للسلفة للإدارة فقط؛ استخدم الاعتماد والصرف المنفصل',
+        'HR_LOAN_AUTO_DISBURSE_FORBIDDEN',
+        403,
+      );
     }
     if (!(amount > 0)) throw new AppError('Loan amount must be greater than zero', 'HR_LOAN_AMOUNT_INVALID', 400);
     if (!issueDate) throw new AppError('Loan issue date is required', 'HR_LOAN_ISSUE_DATE_REQUIRED', 400);
     if (!['deduct_next_salary', 'monthly_salary_installment', 'manual_cash'].includes(repaymentMode)) {
       throw new AppError('Loan repayment mode is invalid', 'HR_LOAN_REPAYMENT_MODE_INVALID', 400);
     }
-    if (repaymentMode === 'monthly_salary_installment' && !(Number(payload.monthlyInstallmentAmount || 0) > 0) && !(Number(payload.installmentCount || 0) > 0)) {
-      throw new AppError('Monthly installment amount or installment count is required', 'HR_LOAN_INSTALLMENT_REQUIRED', 400);
+    if (
+      repaymentMode === 'monthly_salary_installment' &&
+      !(Number(payload.monthlyInstallmentAmount || 0) > 0) &&
+      !(Number(payload.installmentCount || 0) > 0)
+    ) {
+      throw new AppError(
+        'Monthly installment amount or installment count is required',
+        'HR_LOAN_INSTALLMENT_REQUIRED',
+        400,
+      );
     }
 
     await this.tx.runInTransaction(this.db, async (trx) => {
       // Never mutate loan balances/installments concurrently with payroll review
       // or accrual posting; all HR loan writers acquire the tenant payroll lock.
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
-      const employee = await trx.selectFrom('hr_employees').select(['id', 'status', 'display_name', 'first_name'])
-        .where('id', '=', employeeId).where('tenant_id', '=', requireTenantScope(auth).tenantId)
+      const employee = await trx
+        .selectFrom('hr_employees')
+        .select(['id', 'status', 'display_name', 'first_name'])
+        .where('id', '=', employeeId)
+        .where('tenant_id', '=', requireTenantScope(auth).tenantId)
         .forUpdate()
         .executeTakeFirst();
       if (!employee) throw new AppError('Employee not found', 'HR_EMPLOYEE_NOT_FOUND', 404);
-      if (employee.status !== 'active') throw new AppError('Cannot grant loan to inactive employee', 'HR_EMPLOYEE_INACTIVE', 400);
+      if (employee.status !== 'active')
+        throw new AppError('Cannot grant loan to inactive employee', 'HR_EMPLOYEE_INACTIVE', 400);
 
       // Cumulative loan exposure check (Invariant G1-C / HR-7)
       const existingLoans = await sql<{ total_remaining: string }>`
@@ -354,13 +401,14 @@ export class HrLoansService {
       const currentActiveDebt = Number(existingLoans.rows[0]?.total_remaining || 0);
 
       // Ceiling bounded by employee base salary (max 3x monthly salary or 50,000)
-      const contract = await trx.selectFrom('hr_employment_contracts')
+      const contract = await trx
+        .selectFrom('hr_employment_contracts')
         .select('base_salary')
         .where('employee_id', '=', employeeId)
         .where('tenant_id', '=', requireTenantScope(auth).tenantId)
         .where('status', '=', 'active')
         .where('start_date', '<=', issueDate)
-        .where(eb => eb.or([eb('end_date', 'is', null), eb('end_date', '>=', issueDate)]))
+        .where((eb) => eb.or([eb('end_date', 'is', null), eb('end_date', '>=', issueDate)]))
         .orderBy('start_date', 'desc')
         .executeTakeFirst();
       const monthlyWage = Number(contract?.base_salary || 0);
@@ -370,12 +418,16 @@ export class HrLoansService {
         throw new AppError(
           `قيمة السلفة تتجاوز الحد الأقصى المسموح به للموظف (${maxLoanCeiling} - القائم حالياً: ${currentActiveDebt})`,
           'HR_LOAN_CEILING_EXCEEDED',
-          400
+          400,
         );
       }
 
       const loanBookDigits = await tenantBookDigits(trx, auth.tenantId || '');
-      const plan = this.normalizeRepaymentPlan({ ...payload, employeeId, principalAmount: amount, issueDate, repaymentMode }, amount, loanBookDigits);
+      const plan = this.normalizeRepaymentPlan(
+        { ...payload, employeeId, principalAmount: amount, issueDate, repaymentMode },
+        amount,
+        loanBookDigits,
+      );
       const requestedLoanNo = clean(payload.loanNo);
       const tempLoanNo = requestedLoanNo || `LOAN-TMP-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const insert = await sql<{ id: number }>`
@@ -384,13 +436,19 @@ export class HrLoansService {
         RETURNING id
       `.execute(trx);
       const loanId = Number(insert.rows[0]?.id || 0);
-      const finalLoanNo = requestedLoanNo || formatDailyDocumentNumber('LOAN', loanId, new Date(), 4, await getTenantTimezone(trx, auth.tenantId));
-      await sql`UPDATE hr_employee_loans SET loan_no = ${finalLoanNo} WHERE id = ${loanId} AND tenant_id = ${auth.tenantId}`.execute(trx);
+      const finalLoanNo =
+        requestedLoanNo ||
+        formatDailyDocumentNumber('LOAN', loanId, new Date(), 4, await getTenantTimezone(trx, auth.tenantId));
+      await sql`UPDATE hr_employee_loans SET loan_no = ${finalLoanNo} WHERE id = ${loanId} AND tenant_id = ${auth.tenantId}`.execute(
+        trx,
+      );
 
       for (let i = 1; i <= plan.installmentCount; i += 1) {
         const dueDate = plan.firstDueDate ? addMonths(plan.firstDueDate, i - 1) : null;
         const installmentValue = plan.installmentValues[i - 1];
-        await sql`INSERT INTO hr_employee_loan_installments (tenant_id, account_id, loan_id, installment_no, due_date, amount) VALUES (${auth.tenantId}, ${auth.accountId}, ${loanId}, ${i}, ${dueDate}, ${installmentValue})`.execute(trx);
+        await sql`INSERT INTO hr_employee_loan_installments (tenant_id, account_id, loan_id, installment_no, due_date, amount) VALUES (${auth.tenantId}, ${auth.accountId}, ${loanId}, ${i}, ${dueDate}, ${installmentValue})`.execute(
+          trx,
+        );
       }
 
       if (payload.autoDisburse) {
@@ -412,7 +470,17 @@ export class HrLoansService {
         `.execute(trx);
 
         const empName = clean(employee.display_name || employee.first_name);
-        await this.treasury.recordLoanDisbursement(trx, { id: loanId, amount, employeeName: empName, branchId: toId(payload.branchId), locationId: toId(payload.locationId) }, auth);
+        await this.treasury.recordLoanDisbursement(
+          trx,
+          {
+            id: loanId,
+            amount,
+            employeeName: empName,
+            branchId: toId(payload.branchId),
+            locationId: toId(payload.locationId),
+          },
+          auth,
+        );
         await this.accountingPosting.postEmployeeLoanDisbursement(trx, loanId, auth);
       }
     });
@@ -421,14 +489,18 @@ export class HrLoansService {
   }
 
   async updateLoan(id: number, payload: UpsertEmployeeLoanDto, auth: AuthContext): Promise<Record<string, unknown>> {
-    const existing = await sql<{ status: string }>`SELECT status FROM hr_employee_loans WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(this.db);
+    const existing = await sql<{
+      status: string;
+    }>`SELECT status FROM hr_employee_loans WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(this.db);
     if (!existing.rows.length) throw new AppError('Loan not found', 'HR_LOAN_NOT_FOUND', 404);
-    if (existing.rows[0].status !== 'draft') throw new AppError('Only draft loans can be edited', 'HR_LOAN_EDIT_LOCKED', 400);
+    if (existing.rows[0].status !== 'draft')
+      throw new AppError('Only draft loans can be edited', 'HR_LOAN_EDIT_LOCKED', 400);
 
     const amount = Number(payload.principalAmount || 0);
     const issueDate = normalizeDateOnly(payload.issueDate);
     if (!issueDate) throw new AppError('Loan issue date is required', 'HR_LOAN_ISSUE_DATE_REQUIRED', 400);
-    if (!Number.isFinite(amount) || amount <= 0) throw new AppError('مبلغ السلفة غير صحيح', 'HR_LOAN_AMOUNT_INVALID', 400);
+    if (!Number.isFinite(amount) || amount <= 0)
+      throw new AppError('مبلغ السلفة غير صحيح', 'HR_LOAN_AMOUNT_INVALID', 400);
     const loanBookDigits = await tenantBookDigits(this.db, auth.tenantId || '');
     const plan = this.normalizeRepaymentPlan({ ...payload, issueDate }, amount, loanBookDigits);
 
@@ -449,8 +521,14 @@ export class HrLoansService {
       if (!employeeId || employeeId !== Number(loan.employee_id)) {
         throw new AppError('لا يمكن نقل سلفة موظف لموظف آخر؛ أنشئ طلب سلفة جديدًا', 'HR_LOAN_EMPLOYEE_IMMUTABLE', 409);
       }
-      if (!(await trx.selectFrom('hr_employees').select('id')
-        .where('id', '=', employeeId).where('tenant_id', '=', requireTenantScope(auth).tenantId).executeTakeFirst())) {
+      if (
+        !(await trx
+          .selectFrom('hr_employees')
+          .select('id')
+          .where('id', '=', employeeId)
+          .where('tenant_id', '=', requireTenantScope(auth).tenantId)
+          .executeTakeFirst())
+      ) {
         throw new AppError('Employee not found', 'HR_EMPLOYEE_NOT_FOUND', 404);
       }
       await sql`
@@ -463,7 +541,9 @@ export class HrLoansService {
         WHERE id = ${id} AND tenant_id = ${auth.tenantId}
       `.execute(trx);
 
-      await sql`DELETE FROM hr_employee_loan_installments WHERE loan_id = ${id} AND tenant_id = ${auth.tenantId}`.execute(trx);
+      await sql`DELETE FROM hr_employee_loan_installments WHERE loan_id = ${id} AND tenant_id = ${auth.tenantId}`.execute(
+        trx,
+      );
       for (let i = 1; i <= plan.installmentCount; i += 1) {
         const installmentValue = plan.installmentValues[i - 1];
         const dueDate = plan.firstDueDate ? addMonths(plan.firstDueDate, i - 1) : null;
@@ -480,23 +560,32 @@ export class HrLoansService {
 
   async approveLoan(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
     const { tenantId } = requireTenantScope(auth);
-    await this.tx.runInTransaction(this.db, async trx => {
+    await this.tx.runInTransaction(this.db, async (trx) => {
       // Never mutate loan balances/installments concurrently with payroll review
       // or accrual posting; all HR loan writers acquire the tenant payroll lock.
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
-      const result = await sql<{ id: number; employee_id: number; principal_amount: string; created_by: string; status: string }>`
+      const result = await sql<{
+        id: number;
+        employee_id: number;
+        principal_amount: string;
+        created_by: string;
+        status: string;
+      }>`
         SELECT id, employee_id, principal_amount, created_by, status
         FROM hr_employee_loans WHERE id = ${id} AND tenant_id = ${tenantId}
         FOR UPDATE
       `.execute(trx);
       const loan = result.rows[0];
       if (!loan) throw new AppError('Loan not found', 'HR_LOAN_NOT_FOUND', 404);
-      if (loan.status !== 'draft') throw new AppError('Only draft loans can be approved', 'HR_LOAN_STATUS_INVALID', 409);
+      if (loan.status !== 'draft')
+        throw new AppError('Only draft loans can be approved', 'HR_LOAN_STATUS_INVALID', 409);
       // Permission and maker-checker decisions always operate on this locked row.
-      if (String(loan.created_by) === String(auth.userId)
-        && auth.role !== 'super_admin' && auth.role !== 'admin') {
-        throw new AppError('لا يجوز لمنشئ طلب السلفة اعتماده بنفسه (مبدأ فصل المهام الرقابي)',
-          'HR_LOAN_MAKER_CHECKER_VIOLATION', 403);
+      if (String(loan.created_by) === String(auth.userId) && auth.role !== 'super_admin' && auth.role !== 'admin') {
+        throw new AppError(
+          'لا يجوز لمنشئ طلب السلفة اعتماده بنفسه (مبدأ فصل المهام الرقابي)',
+          'HR_LOAN_MAKER_CHECKER_VIOLATION',
+          403,
+        );
       }
       // CREATE only tested debt exposure at draft creation; multiple drafts
       // can otherwise be approved later and exceed the same employee ceiling.
@@ -531,11 +620,16 @@ export class HrLoansService {
       const maximum = wage > 0 ? wage * 3 : 50000;
       const outstanding = Number(exposure.rows[0]?.amount || 0);
       const incoming = Number(loan.principal_amount);
-      if (!Number.isFinite(outstanding) || !Number.isFinite(incoming) || incoming <= 0
-        || outstanding + incoming > maximum) {
+      if (
+        !Number.isFinite(outstanding) ||
+        !Number.isFinite(incoming) ||
+        incoming <= 0 ||
+        outstanding + incoming > maximum
+      ) {
         throw new AppError(
           `إجمالي السلف بعد اعتماد الطلب (${outstanding + incoming}) يتجاوز السقف الحالي للموظف (${maximum})`,
-          'HR_LOAN_CEILING_EXCEEDED_AT_APPROVAL', 409,
+          'HR_LOAN_CEILING_EXCEEDED_AT_APPROVAL',
+          409,
         );
       }
       const updated = await sql<{ id: number }>`
@@ -563,15 +657,28 @@ export class HrLoansService {
       `.execute(trx);
       const loan = result.rows[0];
       if (!loan) throw new AppError('Loan not found', 'HR_LOAN_NOT_FOUND', 404);
-      if (clean(loan.status) !== 'approved') throw new AppError('Loan must be approved before disbursement', 'HR_LOAN_APPROVAL_REQUIRED', 400);
-      await sql`UPDATE hr_employee_loans SET status = 'paid', disbursed_by = ${auth.userId}, disbursed_at = NOW(), updated_by = ${auth.userId}, updated_at = NOW() WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(trx);
+      if (clean(loan.status) !== 'approved')
+        throw new AppError('Loan must be approved before disbursement', 'HR_LOAN_APPROVAL_REQUIRED', 400);
+      await sql`UPDATE hr_employee_loans SET status = 'paid', disbursed_by = ${auth.userId}, disbursed_at = NOW(), updated_by = ${auth.userId}, updated_at = NOW() WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(
+        trx,
+      );
       const ledger = await sql<{ id: number }>`
         INSERT INTO hr_employee_ledger (employee_id, entry_type, amount, balance_after, note, reference_type, reference_id, branch_id, location_id, created_by, tenant_id, account_id)
         VALUES (${loan.employee_id}, 'loan_disbursement', ${Number(loan.principal_amount || 0)}, ${Number(loan.remaining_amount || 0)}, 'صرف السلفة للموظف', 'hr_employee_loan', ${id}, ${toId(loan.branch_id)}, ${toId(loan.location_id)}, ${auth.userId}, ${this.scope(auth).tenantId}, ${this.scope(auth).accountId})
         RETURNING id
       `.execute(trx);
       void ledger;
-      await this.treasury.recordLoanDisbursement(trx, { id, amount: Number(loan.principal_amount || 0), employeeName: clean(loan.employee_name), branchId: toId(loan.branch_id), locationId: toId(loan.location_id) }, auth);
+      await this.treasury.recordLoanDisbursement(
+        trx,
+        {
+          id,
+          amount: Number(loan.principal_amount || 0),
+          employeeName: clean(loan.employee_name),
+          branchId: toId(loan.branch_id),
+          locationId: toId(loan.location_id),
+        },
+        auth,
+      );
       await this.accountingPosting.postEmployeeLoanDisbursement(trx, id, auth);
     });
     await this.audit.log('Pay HR employee loan', `Employee loan #${id} disbursed by ${auth.username}`, auth);
@@ -588,27 +695,39 @@ export class HrLoansService {
       `.execute(trx);
       const loan = result.rows[0];
       if (!loan) throw new AppError('Loan not found', 'HR_LOAN_NOT_FOUND', 404);
-      if (!['paid', 'partially_repaid'].includes(clean(loan.status))) throw new AppError('Loan must be disbursed before repayment', 'HR_LOAN_REPAYMENT_STATUS_INVALID', 400);
+      if (!['paid', 'partially_repaid'].includes(clean(loan.status)))
+        throw new AppError('Loan must be disbursed before repayment', 'HR_LOAN_REPAYMENT_STATUS_INVALID', 400);
       const repayBookDigits = await tenantBookDigits(trx, auth.tenantId || '');
       let requestedAmount: number;
       try {
         requestedAmount = requireLoanMoney(Number(payload.amount), await tenantBookDigits(trx, auth.tenantId || ''));
       } catch {
-        throw new AppError('مبلغ سداد السلفة يجب أن يكون موجبًا وبدقة دفاتر المنشأة', 'HR_LOAN_REPAYMENT_PRECISION_INVALID', 400);
+        throw new AppError(
+          'مبلغ سداد السلفة يجب أن يكون موجبًا وبدقة دفاتر المنشأة',
+          'HR_LOAN_REPAYMENT_PRECISION_INVALID',
+          400,
+        );
       }
       const remainingBalance = Number(loan.remaining_amount || 0);
       if (requestedAmount > remainingBalance) {
         throw new AppError('Repayment amount exceeds remaining loan balance', 'HR_LOAN_REPAYMENT_EXCEEDS_BALANCE', 400);
       }
       const amount = requestedAmount;
-      const repaymentMethod = clean(payload.repaymentMethod) === 'salary_deduction' ? 'salary_deduction' : 'manual_cash';
+      const repaymentMethod =
+        clean(payload.repaymentMethod) === 'salary_deduction' ? 'salary_deduction' : 'manual_cash';
       if (repaymentMethod === 'salary_deduction') {
-        throw new AppError('Salary deduction is handled automatically during payroll processing', 'HR_LOAN_SALARY_DEDUCTION_REQUIRES_PAYROLL', 400);
+        throw new AppError(
+          'Salary deduction is handled automatically during payroll processing',
+          'HR_LOAN_SALARY_DEDUCTION_REQUIRES_PAYROLL',
+          400,
+        );
       }
       if (!(amount > 0)) throw new AppError('Loan has no remaining balance', 'HR_LOAN_NO_BALANCE', 400);
       const paid = Number(loan.paid_amount || 0) + amount;
       const remaining = Math.max(0, Number(loan.remaining_amount || 0) - amount);
-      await sql`UPDATE hr_employee_loans SET paid_amount = ${paid}, remaining_amount = ${remaining}, status = ${remaining > 0 ? 'partially_repaid' : 'repaid'}, updated_by = ${auth.userId}, updated_at = NOW() WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(trx);
+      await sql`UPDATE hr_employee_loans SET paid_amount = ${paid}, remaining_amount = ${remaining}, status = ${remaining > 0 ? 'partially_repaid' : 'repaid'}, updated_by = ${auth.userId}, updated_at = NOW() WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(
+        trx,
+      );
       let remainingRepayment = amount;
       const installments = await sql<Record<string, unknown>>`
         SELECT id, amount, paid_amount
@@ -625,7 +744,7 @@ export class HrLoansService {
         if (!(installmentId > 0) || !(due > 0)) continue;
         const applied = Math.min(due, remainingRepayment);
         const newPaid = roundMoney(alreadyPaid + applied, repayBookDigits);
-        const status = newPaid + 1 / (2 * (10 ** repayBookDigits)) >= installmentAmount ? 'paid' : 'partial';
+        const status = newPaid + 1 / (2 * 10 ** repayBookDigits) >= installmentAmount ? 'paid' : 'partial';
         await sql`
           UPDATE hr_employee_loan_installments
           SET paid_amount = ${newPaid}, status = ${status}, paid_at = CASE WHEN ${status} = 'paid' THEN NOW() ELSE paid_at END, updated_at = NOW()
@@ -640,10 +759,11 @@ export class HrLoansService {
       // minor unit, the same form as the installment-status line above):
       // at 3dp a 0.001 remainder is ONE minor unit and must fail closed,
       // never strand silently while the loan is marked repaid.
-      if (remainingRepayment > 1 / (2 * (10 ** repayBookDigits))) {
+      if (remainingRepayment > 1 / (2 * 10 ** repayBookDigits)) {
         throw new AppError(
           'تعذر توزيع مبلغ السداد كاملًا على أقساط السلفة؛ راجع الرصيد وجدول التقسيط',
-          'HR_LOAN_REPAYMENT_INSTALLMENT_MISMATCH', 409,
+          'HR_LOAN_REPAYMENT_INSTALLMENT_MISMATCH',
+          409,
         );
       }
       const ledger = await sql<{ id: number }>`
@@ -653,7 +773,18 @@ export class HrLoansService {
       `.execute(trx);
       const ledgerId = Number(ledger.rows[0]?.id || 0);
       if (repaymentMethod === 'manual_cash') {
-        await this.treasury.recordLoanRepayment(trx, { ledgerId, loanId: id, amount, employeeName: clean(loan.employee_name), branchId: toId(loan.branch_id), locationId: toId(loan.location_id) }, auth);
+        await this.treasury.recordLoanRepayment(
+          trx,
+          {
+            ledgerId,
+            loanId: id,
+            amount,
+            employeeName: clean(loan.employee_name),
+            branchId: toId(loan.branch_id),
+            locationId: toId(loan.location_id),
+          },
+          auth,
+        );
         await this.accountingPosting.postEmployeeLoanManualRepayment(trx, ledgerId, auth);
       }
     });

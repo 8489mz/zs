@@ -1,4 +1,11 @@
-import { BadRequestException, Inject, Injectable, NotFoundException, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { Kysely } from 'kysely';
@@ -16,7 +23,14 @@ export const DIAGNOSTICS_MAX_INFLATED_ENTRY_BYTES = 20 * 1024 * 1024;
 
 /** A real bundle is a zip archive: local file header `PK`. */
 export function isZipBuffer(buffer: Buffer | undefined): boolean {
-  return !!buffer && buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
+  return (
+    !!buffer &&
+    buffer.length >= 4 &&
+    buffer[0] === 0x50 &&
+    buffer[1] === 0x4b &&
+    buffer[2] === 0x03 &&
+    buffer[3] === 0x04
+  );
 }
 
 export interface UploadDiagnosticDto {
@@ -96,7 +110,7 @@ export class SaasDiagnosticsService {
               if (errorSamples.length < 5) {
                 try {
                   const parsed = JSON.parse(line);
-                  const msg = parsed.context ? JSON.stringify(parsed.context) : (parsed.msg || 'error');
+                  const msg = parsed.context ? JSON.stringify(parsed.context) : parsed.msg || 'error';
                   errorSamples.push(`${parsed.time || ''} : ${msg}`);
                 } catch {
                   errorSamples.push(line.slice(0, 150));
@@ -165,7 +179,11 @@ export class SaasDiagnosticsService {
     }
     await this.db
       .deleteFrom('saas_client_diagnostics')
-      .where('id', 'in', stale.map((row) => row.id))
+      .where(
+        'id',
+        'in',
+        stale.map((row) => row.id),
+      )
       .execute();
   }
 
@@ -179,25 +197,14 @@ export class SaasDiagnosticsService {
     if (query.search && query.search.trim()) {
       const s = `%${query.search.trim()}%`;
       baseQuery = baseQuery.where((eb: any) =>
-        eb.or([
-          eb('client_name', 'ilike', s),
-          eb('client_identifier', 'ilike', s),
-          eb('log_period', 'ilike', s),
-        ]),
+        eb.or([eb('client_name', 'ilike', s), eb('client_identifier', 'ilike', s), eb('log_period', 'ilike', s)]),
       );
     }
 
-    const totalRes = await baseQuery
-      .select((eb: any) => eb.fn.count('id').as('total'))
-      .executeTakeFirst();
+    const totalRes = await baseQuery.select((eb: any) => eb.fn.count('id').as('total')).executeTakeFirst();
     const total = Number((totalRes as any)?.total || 0);
 
-    const rows = await baseQuery
-      .selectAll()
-      .orderBy('uploaded_at', 'desc')
-      .limit(limit)
-      .offset(offset)
-      .execute();
+    const rows = await baseQuery.selectAll().orderBy('uploaded_at', 'desc').limit(limit).offset(offset).execute();
 
     return {
       data: rows.map((r: any) => ({
@@ -221,11 +228,7 @@ export class SaasDiagnosticsService {
   }
 
   async getDiagnosticFile(id: number) {
-    const row = await this.db
-      .selectFrom('saas_client_diagnostics')
-      .selectAll()
-      .where('id', '=', id)
-      .executeTakeFirst();
+    const row = await this.db.selectFrom('saas_client_diagnostics').selectAll().where('id', '=', id).executeTakeFirst();
 
     if (!row) {
       throw new NotFoundException('السجل التشخيصي غير موجود');
@@ -244,11 +247,7 @@ export class SaasDiagnosticsService {
   }
 
   async deleteDiagnostic(id: number) {
-    const row = await this.db
-      .selectFrom('saas_client_diagnostics')
-      .selectAll()
-      .where('id', '=', id)
-      .executeTakeFirst();
+    const row = await this.db.selectFrom('saas_client_diagnostics').selectAll().where('id', '=', id).executeTakeFirst();
 
     if (!row) {
       throw new NotFoundException('السجل غير موجود');
@@ -262,10 +261,7 @@ export class SaasDiagnosticsService {
       // ignore
     }
 
-    await this.db
-      .deleteFrom('saas_client_diagnostics')
-      .where('id', '=', id)
-      .execute();
+    await this.db.deleteFrom('saas_client_diagnostics').where('id', '=', id).execute();
 
     return { success: true, message: 'تم حذف السجل بنجاح' };
   }
@@ -279,10 +275,8 @@ export class SaasDiagnosticsService {
     samples: string[];
   }) {
     // 1. Direct Telegram Bot notification
-    const telegramToken =
-      process.env.TELEGRAM_BOT_TOKEN?.trim() || '8654604814:AAE4kT0_AlTsmVe_2mu17_-g_lpWy3nqtac';
-    const telegramChatId =
-      process.env.TELEGRAM_CHAT_ID?.trim() || '6553830927';
+    const telegramToken = process.env.TELEGRAM_BOT_TOKEN?.trim() || '8654604814:AAE4kT0_AlTsmVe_2mu17_-g_lpWy3nqtac';
+    const telegramChatId = process.env.TELEGRAM_CHAT_ID?.trim() || '6553830927';
 
     if (telegramToken && telegramChatId) {
       try {

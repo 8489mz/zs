@@ -52,8 +52,25 @@ export class MaritimeFreightMasterDataService {
    * is seeded for the specified tenant. If records are missing, it safely seeds them
    * without overwriting existing client modifications.
    */
-  async ensureDefaultMasterData(tenantId: string): Promise<{ portsAdded: number; linesAdded: number; agentsAdded: number; airlinesAdded: number; airportsAdded: number; truckingAdded: number; dryPortsAdded: number }> {
-    if (!tenantId) return { portsAdded: 0, linesAdded: 0, agentsAdded: 0, airlinesAdded: 0, airportsAdded: 0, truckingAdded: 0, dryPortsAdded: 0 };
+  async ensureDefaultMasterData(tenantId: string): Promise<{
+    portsAdded: number;
+    linesAdded: number;
+    agentsAdded: number;
+    airlinesAdded: number;
+    airportsAdded: number;
+    truckingAdded: number;
+    dryPortsAdded: number;
+  }> {
+    if (!tenantId)
+      return {
+        portsAdded: 0,
+        linesAdded: 0,
+        agentsAdded: 0,
+        airlinesAdded: 0,
+        airportsAdded: 0,
+        truckingAdded: 0,
+        dryPortsAdded: 0,
+      };
 
     let portsAdded = 0;
     let linesAdded = 0;
@@ -181,10 +198,7 @@ export class MaritimeFreightMasterDataService {
         .selectFrom('shipping_ports')
         .select('code')
         .where('tenant_id', '=', tenantId)
-        .where((eb) => eb.or([
-          eb('port_type', '=', 'air'),
-          eb('iata_code', 'is not', null)
-        ]))
+        .where((eb) => eb.or([eb('port_type', '=', 'air'), eb('iata_code', 'is not', null)]))
         .execute();
 
       const existingAirportCodes = new Set(existingAirports.map((p) => p.code));
@@ -260,8 +274,18 @@ export class MaritimeFreightMasterDataService {
         dryPortsAdded++;
       }
 
-      if (portsAdded > 0 || linesAdded > 0 || agentsAdded > 0 || airlinesAdded > 0 || airportsAdded > 0 || truckingAdded > 0 || dryPortsAdded > 0) {
-        this.logger.log(`Seeded maritime defaults for tenant ${tenantId}: ports=${portsAdded}, lines=${linesAdded}, agents=${agentsAdded}, airlines=${airlinesAdded}, airports=${airportsAdded}, trucking=${truckingAdded}, dryPorts=${dryPortsAdded}`);
+      if (
+        portsAdded > 0 ||
+        linesAdded > 0 ||
+        agentsAdded > 0 ||
+        airlinesAdded > 0 ||
+        airportsAdded > 0 ||
+        truckingAdded > 0 ||
+        dryPortsAdded > 0
+      ) {
+        this.logger.log(
+          `Seeded maritime defaults for tenant ${tenantId}: ports=${portsAdded}, lines=${linesAdded}, agents=${agentsAdded}, airlines=${airlinesAdded}, airports=${airportsAdded}, trucking=${truckingAdded}, dryPorts=${dryPortsAdded}`,
+        );
       }
     } catch (err) {
       this.logger.error(`Error ensuring maritime defaults for tenant ${tenantId}:`, err);
@@ -362,7 +386,10 @@ export class MaritimeFreightMasterDataService {
       .execute();
   }
 
-  async createPort(auth: AuthContext, data: { code: string; nameAr: string; nameEn: string; countryCode: string; countryName: string }) {
+  async createPort(
+    auth: AuthContext,
+    data: { code: string; nameAr: string; nameEn: string; countryCode: string; countryName: string },
+  ) {
     const { tenantId } = requireTenantScope(auth);
     const existing = await this.db
       .selectFrom('shipping_ports')
@@ -395,7 +422,10 @@ export class MaritimeFreightMasterDataService {
   // --------------------------------------------------------------------------
   // 2. Shipping Lines Master Data
   // --------------------------------------------------------------------------
-  async getShippingLines(auth: AuthContext, filters?: { carrierType?: string; tradeLane?: string; countryCode?: string; search?: string }) {
+  async getShippingLines(
+    auth: AuthContext,
+    filters?: { carrierType?: string; tradeLane?: string; countryCode?: string; search?: string },
+  ) {
     const { tenantId } = requireTenantScope(auth);
     await this.ensureDefaultMasterData(tenantId);
 
@@ -420,15 +450,17 @@ export class MaritimeFreightMasterDataService {
 
       if (filters?.search) {
         const term = `%${filters.search}%`;
-        q = q.where((eb) => eb.or([
-          eb('code', 'ilike', term),
-          eb('name_ar', 'ilike', term),
-          eb('name_en', 'ilike', term),
-          eb('contact_person', 'ilike', term),
-          eb('country_name', 'ilike', term),
-          eb('city_name', 'ilike', term),
-          eb('rfq_email', 'ilike', term)
-        ]));
+        q = q.where((eb) =>
+          eb.or([
+            eb('code', 'ilike', term),
+            eb('name_ar', 'ilike', term),
+            eb('name_en', 'ilike', term),
+            eb('contact_person', 'ilike', term),
+            eb('country_name', 'ilike', term),
+            eb('city_name', 'ilike', term),
+            eb('rfq_email', 'ilike', term),
+          ]),
+        );
       }
 
       return q.orderBy('carrier_type', 'asc').orderBy('name_ar', 'asc');
@@ -443,26 +475,29 @@ export class MaritimeFreightMasterDataService {
     return await buildQuery('default').execute();
   }
 
-  async createShippingLine(auth: AuthContext, data: {
-    code: string;
-    nameAr: string;
-    nameEn?: string;
-    carrierType?: 'shipping_line' | 'overseas_agent';
-    tradeLanes?: string;
-    countryName?: string;
-    countryCode?: string;
-    cityName?: string;
-    contactPerson?: string;
-    email?: string;
-    rfqEmail?: string;
-    bookingEmail?: string;
-    phone?: string;
-    whatsapp?: string;
-    wechat?: string;
-    servicesOffered?: string;
-    supportedPorts?: string;
-    notes?: string;
-  }) {
+  async createShippingLine(
+    auth: AuthContext,
+    data: {
+      code: string;
+      nameAr: string;
+      nameEn?: string;
+      carrierType?: 'shipping_line' | 'overseas_agent';
+      tradeLanes?: string;
+      countryName?: string;
+      countryCode?: string;
+      cityName?: string;
+      contactPerson?: string;
+      email?: string;
+      rfqEmail?: string;
+      bookingEmail?: string;
+      phone?: string;
+      whatsapp?: string;
+      wechat?: string;
+      servicesOffered?: string;
+      supportedPorts?: string;
+      notes?: string;
+    },
+  ) {
     const { tenantId } = requireTenantScope(auth);
     const existing = await this.db
       .selectFrom('shipping_lines')
@@ -523,13 +558,16 @@ export class MaritimeFreightMasterDataService {
     let updatedCount = 0;
 
     for (const item of items) {
-      const code = String(item.code || '').trim().toUpperCase();
+      const code = String(item.code || '')
+        .trim()
+        .toUpperCase();
       const nameAr = String(item.nameAr || item.name_ar || '').trim();
       if (!code || !nameAr) continue;
 
-      const carrierType = item.carrierType === 'overseas_agent' || item.carrier_type === 'overseas_agent'
-        ? 'overseas_agent'
-        : 'shipping_line';
+      const carrierType =
+        item.carrierType === 'overseas_agent' || item.carrier_type === 'overseas_agent'
+          ? 'overseas_agent'
+          : 'shipping_line';
 
       const existing = await this.db
         .selectFrom('shipping_lines')
@@ -546,7 +584,10 @@ export class MaritimeFreightMasterDataService {
             name_en: item.nameEn || item.name_en || nameAr,
             carrier_type: carrierType,
             country_name: item.countryName || item.country_name || null,
-            country_code: item.countryCode || item.country_code ? String(item.countryCode || item.country_code).toUpperCase() : null,
+            country_code:
+              item.countryCode || item.country_code
+                ? String(item.countryCode || item.country_code).toUpperCase()
+                : null,
             city_name: item.cityName || item.city_name || null,
             contact_person: item.contactPerson || item.contact_person || null,
             email: item.email || null,
@@ -576,7 +617,10 @@ export class MaritimeFreightMasterDataService {
             name_en: item.nameEn || item.name_en || nameAr,
             carrier_type: carrierType,
             country_name: item.countryName || item.country_name || null,
-            country_code: item.countryCode || item.country_code ? String(item.countryCode || item.country_code).toUpperCase() : null,
+            country_code:
+              item.countryCode || item.country_code
+                ? String(item.countryCode || item.country_code).toUpperCase()
+                : null,
             city_name: item.cityName || item.city_name || null,
             contact_person: item.contactPerson || item.contact_person || null,
             email: item.email || null,

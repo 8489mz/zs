@@ -2,22 +2,30 @@ import { ForbiddenException } from '@nestjs/common';
 import { sql } from '../../../../database/kysely';
 import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary';
 import { formatBranchStockLocationName } from '../../../../common/utils/branch-stock.util';
-import { normalizeImportKey, cleanString, normalizeArabicDigits, type TenantScope, type DbExecutor } from './settings-import-shared';
+import {
+  normalizeImportKey,
+  cleanString,
+  normalizeArabicDigits,
+  type TenantScope,
+  type DbExecutor,
+} from './settings-import-shared';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 
 export class SettingsImportGuards {
   assertAdmin(auth?: AuthContext | null): asserts auth is AuthContext {
     if (!auth) throw new ForbiddenException('Authentication required');
-    const canManage = auth.role === 'super_admin' || auth.permissions.includes('settings') || auth.permissions.includes('canManageSettings');
+    const canManage =
+      auth.role === 'super_admin' ||
+      auth.permissions.includes('settings') ||
+      auth.permissions.includes('canManageSettings');
     if (!canManage) throw new ForbiddenException('Missing required permissions');
     requireTenantScope(auth);
   }
 
   assertEmployeeImporter(auth?: AuthContext | null): asserts auth is AuthContext {
     if (!auth) throw new ForbiddenException('Authentication required');
-    const canImportEmployees = auth.role === 'super_admin'
-      || auth.permissions.includes('hrEmployees')
-      || auth.permissions.includes('hr');
+    const canImportEmployees =
+      auth.role === 'super_admin' || auth.permissions.includes('hrEmployees') || auth.permissions.includes('hr');
     if (!canImportEmployees) throw new ForbiddenException('Missing required permissions');
     requireTenantScope(auth);
   }
@@ -75,11 +83,17 @@ export class SettingsImportGuards {
     if (!matched) return null;
     const hour = Number(matched[1]);
     const minute = Number(matched[2]);
-    if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59)
+      return null;
     return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
   }
 
-  async ensureHrMasterName(db: DbExecutor, table: 'hr_departments' | 'hr_job_titles' | 'hr_positions', name: string, actor: AuthContext): Promise<number | null> {
+  async ensureHrMasterName(
+    db: DbExecutor,
+    table: 'hr_departments' | 'hr_job_titles' | 'hr_positions',
+    name: string,
+    actor: AuthContext,
+  ): Promise<number | null> {
     const normalized = cleanString(name);
     if (!normalized) return null;
     const scope = this.scope(actor);
@@ -120,7 +134,13 @@ export class SettingsImportGuards {
     return String(next).padStart(3, '0');
   }
 
-  async upsertEmployeeContact(db: DbExecutor, employeeId: number, contactType: 'phone' | 'email', value: string, actor: AuthContext): Promise<void> {
+  async upsertEmployeeContact(
+    db: DbExecutor,
+    employeeId: number,
+    contactType: 'phone' | 'email',
+    value: string,
+    actor: AuthContext,
+  ): Promise<void> {
     const normalizedValue = cleanString(value);
     if (!normalizedValue) return;
     const scope = this.scope(actor);
@@ -153,7 +173,12 @@ export class SettingsImportGuards {
     `.execute(db);
   }
 
-  async findEmployeeByContact(db: DbExecutor, contactType: 'phone' | 'email', value: string, actor: AuthContext): Promise<number[]> {
+  async findEmployeeByContact(
+    db: DbExecutor,
+    contactType: 'phone' | 'email',
+    value: string,
+    actor: AuthContext,
+  ): Promise<number[]> {
     const normalized = cleanString(value);
     if (!normalized) return [];
     const scope = this.scope(actor);
@@ -172,9 +197,18 @@ export class SettingsImportGuards {
     const normalized = cleanString(name);
     if (!normalized) return null;
     const scope = this.scope(actor);
-    const existing = await db.selectFrom('product_categories').select(['id']).where(sql<boolean>`tenant_id = ${scope.tenantId}`).where(sql`LOWER(name)`, '=', normalized.toLowerCase()).executeTakeFirst();
+    const existing = await db
+      .selectFrom('product_categories')
+      .select(['id'])
+      .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+      .where(sql`LOWER(name)`, '=', normalized.toLowerCase())
+      .executeTakeFirst();
     if (existing) return Number(existing.id);
-    const inserted = await db.insertInto('product_categories').values({ name: normalized, is_active: true, ...this.tenantFields(actor) }).returning('id').executeTakeFirstOrThrow();
+    const inserted = await db
+      .insertInto('product_categories')
+      .values({ name: normalized, is_active: true, ...this.tenantFields(actor) })
+      .returning('id')
+      .executeTakeFirstOrThrow();
     return Number(inserted.id);
   }
 
@@ -182,9 +216,26 @@ export class SettingsImportGuards {
     const normalized = cleanString(name);
     if (!normalized) return null;
     const scope = this.scope(actor);
-    const existing = await db.selectFrom('suppliers').select(['id']).where(sql<boolean>`tenant_id = ${scope.tenantId}`).where(sql`LOWER(name)`, '=', normalized.toLowerCase()).executeTakeFirst();
+    const existing = await db
+      .selectFrom('suppliers')
+      .select(['id'])
+      .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+      .where(sql`LOWER(name)`, '=', normalized.toLowerCase())
+      .executeTakeFirst();
     if (existing) return Number(existing.id);
-    const inserted = await db.insertInto('suppliers').values({ name: normalized, phone: '', address: '', balance: 0, notes: '', is_active: true, ...this.tenantFields(actor) }).returning('id').executeTakeFirstOrThrow();
+    const inserted = await db
+      .insertInto('suppliers')
+      .values({
+        name: normalized,
+        phone: '',
+        address: '',
+        balance: 0,
+        notes: '',
+        is_active: true,
+        ...this.tenantFields(actor),
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
     return Number(inserted.id);
   }
 
@@ -219,20 +270,24 @@ export class SettingsImportGuards {
     const branchId = branch ? Number(branch.id) : null;
 
     // Resolve tenant primary / default branch stock location (e.g. 'رصيد الفرع الرئيسي')
-    const defaultLocation = (branch?.default_stock_location_id
-      ? activeLocations.find((l) => Number(l.id) === Number(branch.default_stock_location_id))
-      : null)
-      || activeLocations.find((l) => l.location_type === 'branch_stock')
-      || activeLocations.find((l) => (l.name || '').includes('رصيد'))
-      || activeLocations[0]
-      || null;
+    const defaultLocation =
+      (branch?.default_stock_location_id
+        ? activeLocations.find((l) => Number(l.id) === Number(branch.default_stock_location_id))
+        : null) ||
+      activeLocations.find((l) => l.location_type === 'branch_stock') ||
+      activeLocations.find((l) => (l.name || '').includes('رصيد')) ||
+      activeLocations[0] ||
+      null;
 
     let result: { locationId: number; branchId: number | null } | null = null;
 
     // CASE 1: Empty warehouse name -> fallback to tenant default location
     if (!normalized) {
       if (defaultLocation) {
-        result = { locationId: Number(defaultLocation.id), branchId: defaultLocation.branch_id ? Number(defaultLocation.branch_id) : branchId };
+        result = {
+          locationId: Number(defaultLocation.id),
+          branchId: defaultLocation.branch_id ? Number(defaultLocation.branch_id) : branchId,
+        };
       } else {
         const locName = branch ? formatBranchStockLocationName(branch.name) : 'رصيد الفرع الرئيسي';
         const inserted = await db
@@ -246,16 +301,25 @@ export class SettingsImportGuards {
           })
           .returning(['id', 'branch_id'])
           .executeTakeFirstOrThrow();
-        result = { locationId: Number(inserted.id), branchId: inserted.branch_id ? Number(inserted.branch_id) : branchId };
+        result = {
+          locationId: Number(inserted.id),
+          branchId: inserted.branch_id ? Number(inserted.branch_id) : branchId,
+        };
       }
     } else {
       // CASE 2: Exact match (case insensitive)
       const exactMatch = activeLocations.find((l) => (l.name || '').trim().toLowerCase() === normalized.toLowerCase());
       if (exactMatch) {
-        result = { locationId: Number(exactMatch.id), branchId: exactMatch.branch_id ? Number(exactMatch.branch_id) : branchId };
+        result = {
+          locationId: Number(exactMatch.id),
+          branchId: exactMatch.branch_id ? Number(exactMatch.branch_id) : branchId,
+        };
       } else if (activeLocations.length === 1 && defaultLocation) {
         // CASE 3: Only ONE active location exists in tenant -> map to it without fracturing stock
-        result = { locationId: Number(defaultLocation.id), branchId: defaultLocation.branch_id ? Number(defaultLocation.branch_id) : branchId };
+        result = {
+          locationId: Number(defaultLocation.id),
+          branchId: defaultLocation.branch_id ? Number(defaultLocation.branch_id) : branchId,
+        };
       } else {
         // CASE 4: Common aliases for the default/primary location
         const cleanNorm = normalized.toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').trim();
@@ -283,7 +347,10 @@ export class SettingsImportGuards {
         });
 
         if (isGenericDefaultAlias && defaultLocation) {
-          result = { locationId: Number(defaultLocation.id), branchId: defaultLocation.branch_id ? Number(defaultLocation.branch_id) : branchId };
+          result = {
+            locationId: Number(defaultLocation.id),
+            branchId: defaultLocation.branch_id ? Number(defaultLocation.branch_id) : branchId,
+          };
         } else {
           // CASE 5: Custom location name -> create as internal_warehouse
           const inserted = await db
@@ -297,7 +364,10 @@ export class SettingsImportGuards {
             })
             .returning(['id', 'branch_id'])
             .executeTakeFirstOrThrow();
-          result = { locationId: Number(inserted.id), branchId: inserted.branch_id ? Number(inserted.branch_id) : branchId };
+          result = {
+            locationId: Number(inserted.id),
+            branchId: inserted.branch_id ? Number(inserted.branch_id) : branchId,
+          };
         }
       }
     }

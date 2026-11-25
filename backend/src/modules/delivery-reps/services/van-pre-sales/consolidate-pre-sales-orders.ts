@@ -59,14 +59,7 @@ export class ConsolidatePreSalesOrdersSlice {
 
       const orders = await trxAny
         .selectFrom('sales_orders')
-        .select([
-          'id',
-          'order_number',
-          'status',
-          'warehouse_location_id',
-          'customer_name',
-          'notes',
-        ])
+        .select(['id', 'order_number', 'status', 'warehouse_location_id', 'customer_name', 'notes'])
         .where('id', 'in', uniqueOrderIds)
         .where('tenant_id', '=', tenantId)
         .where('order_source', '=', 'van_presales')
@@ -140,10 +133,7 @@ export class ConsolidatePreSalesOrdersSlice {
         }
 
         const multiplier = Math.max(0.0001, Number(item.unit_multiplier || 1));
-        const baseQty =
-          reservedQty > 0
-            ? reservedQty
-            : Number((Number(item.quantity || 0) * multiplier).toFixed(4));
+        const baseQty = reservedQty > 0 ? reservedQty : Number((Number(item.quantity || 0) * multiplier).toFixed(4));
 
         if (baseQty > 0) {
           const existing = consolidatedMap.get(pid);
@@ -186,11 +176,7 @@ export class ConsolidatePreSalesOrdersSlice {
       const resolvedWarehouseId =
         Number(payload.sourceWarehouseId || 0) ||
         firstOrderWarehouseId ||
-        (await this.resolveDefaultWarehouseLocationId(
-          tenantId,
-          undefined,
-          Array.from(consolidatedMap.keys()),
-        )) ||
+        (await this.resolveDefaultWarehouseLocationId(tenantId, undefined, Array.from(consolidatedMap.keys()))) ||
         1;
 
       const consolidatedItems = sortItemsByProductId(

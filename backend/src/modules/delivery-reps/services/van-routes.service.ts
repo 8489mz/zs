@@ -21,29 +21,19 @@ export class VanRoutesService {
 
   private visitsSliceInstance?: VanRoutesVisitsSlice;
   private get visitsSlice(): VanRoutesVisitsSlice {
-    return (this.visitsSliceInstance ??= new VanRoutesVisitsSlice(
-      this.db,
-      this.fraudRadar,
-    ));
+    return (this.visitsSliceInstance ??= new VanRoutesVisitsSlice(this.db, this.fraudRadar));
   }
 
   private supervisorSliceInstance?: VanRoutesSupervisorSlice;
   private get supervisorSlice(): VanRoutesSupervisorSlice {
-    return (this.supervisorSliceInstance ??= new VanRoutesSupervisorSlice(
-      this.db,
-      this.vanFleetService,
-    ));
+    return (this.supervisorSliceInstance ??= new VanRoutesSupervisorSlice(this.db, this.vanFleetService));
   }
 
   private optimizeSliceInstance?: VanRoutesOptimizeSlice;
   private get optimizeSlice(): VanRoutesOptimizeSlice {
-    return (this.optimizeSliceInstance ??= new VanRoutesOptimizeSlice(
-      this.db,
-      {
-        listRepServedCustomerIds: (tenantId, repId) =>
-          this.visitsSlice.listRepServedCustomerIds(tenantId, repId),
-      },
-    ));
+    return (this.optimizeSliceInstance ??= new VanRoutesOptimizeSlice(this.db, {
+      listRepServedCustomerIds: (tenantId, repId) => this.visitsSlice.listRepServedCustomerIds(tenantId, repId),
+    }));
   }
 
   async getDriverTodayItinerary(tenantId: string, repId: number, tripId?: number) {

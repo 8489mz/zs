@@ -102,7 +102,8 @@ export class StorefrontSettingsService {
       else if (rawCurrency === 'OMR') countryCode = 'OM';
       else countryCode = 'EG';
     }
-    const isGcc = ['KW', 'SA', 'AE', 'QA', 'BH', 'OM'].includes(countryCode) ||
+    const isGcc =
+      ['KW', 'SA', 'AE', 'QA', 'BH', 'OM'].includes(countryCode) ||
       ['KWD', 'SAR', 'AED', 'QAR', 'BHD', 'OMR'].includes(rawCurrency);
     const defaultProvider = isGcc ? 'tap' : 'paymob';
 
@@ -202,7 +203,11 @@ export class StorefrontSettingsService {
 
     if (payload.customDomain !== undefined) {
       const cleanDomain = payload.customDomain?.trim()
-        ? payload.customDomain.trim().toLowerCase().replace(/^https?:\/\//, '').split('/')[0]
+        ? payload.customDomain
+            .trim()
+            .toLowerCase()
+            .replace(/^https?:\/\//, '')
+            .split('/')[0]
         : null;
       await this.db
         .updateTable('tenants')
@@ -233,7 +238,10 @@ export class StorefrontSettingsService {
             .where('key', '=', 'storefront_slug')
             .executeTakeFirst(),
         ]);
-        const currentStoreSlug = String(currentSetting?.value ?? '').replace(/^"|"$/g, '').trim().toLowerCase();
+        const currentStoreSlug = String(currentSetting?.value ?? '')
+          .replace(/^"|"$/g, '')
+          .trim()
+          .toLowerCase();
         keepsReservedSlug = cleanSlug === String(current?.slug || '').toLowerCase() || cleanSlug === currentStoreSlug;
         if (!keepsReservedSlug) {
           throw new BadRequestException('هذا الاسم محجوز للنظام ولا يمكن استخدامه كرابط للمتجر');
@@ -278,7 +286,8 @@ export class StorefrontSettingsService {
     if (payload.address !== undefined) entries.push({ key: 'storefront_address', value: payload.address });
     if (payload.bio !== undefined) entries.push({ key: 'storefront_bio', value: payload.bio });
     if (payload.logoUrl !== undefined) entries.push({ key: 'storefront_logo_url', value: payload.logoUrl });
-    if (payload.announcement !== undefined) entries.push({ key: 'storefront_announcement', value: payload.announcement });
+    if (payload.announcement !== undefined)
+      entries.push({ key: 'storefront_announcement', value: payload.announcement });
     if (payload.bannerUrl !== undefined) entries.push({ key: 'storefront_banner_url', value: payload.bannerUrl });
     if (payload.bannerUrls !== undefined) {
       entries.push({ key: 'storefront_banner_urls', value: payload.bannerUrls });
@@ -289,56 +298,95 @@ export class StorefrontSettingsService {
       }
     }
     if (payload.bannerFit !== undefined) entries.push({ key: 'storefront_banner_fit', value: payload.bannerFit });
-    if (payload.bannerPosition !== undefined) entries.push({ key: 'storefront_banner_position', value: payload.bannerPosition });
-    if (payload.bannerPositions !== undefined) entries.push({ key: 'storefront_banner_positions', value: payload.bannerPositions });
-    if (payload.bannerIntervalSeconds !== undefined) entries.push({ key: 'storefront_banner_interval', value: payload.bannerIntervalSeconds });
-    if (payload.smartDealsEnabled !== undefined) entries.push({ key: 'storefront_smart_deals', value: payload.smartDealsEnabled });
+    if (payload.bannerPosition !== undefined)
+      entries.push({ key: 'storefront_banner_position', value: payload.bannerPosition });
+    if (payload.bannerPositions !== undefined)
+      entries.push({ key: 'storefront_banner_positions', value: payload.bannerPositions });
+    if (payload.bannerIntervalSeconds !== undefined)
+      entries.push({ key: 'storefront_banner_interval', value: payload.bannerIntervalSeconds });
+    if (payload.smartDealsEnabled !== undefined)
+      entries.push({ key: 'storefront_smart_deals', value: payload.smartDealsEnabled });
     if (payload.deliveryFee !== undefined) entries.push({ key: 'storefront_delivery_fee', value: payload.deliveryFee });
     if (payload.minOrder !== undefined) entries.push({ key: 'storefront_min_order', value: payload.minOrder });
-    if (payload.freeShippingEnabled !== undefined) entries.push({ key: 'storefront_free_shipping_enabled', value: payload.freeShippingEnabled });
-    if (payload.freeShippingMinOrder !== undefined) entries.push({ key: 'storefront_free_shipping_min_order', value: payload.freeShippingMinOrder });
+    if (payload.freeShippingEnabled !== undefined)
+      entries.push({ key: 'storefront_free_shipping_enabled', value: payload.freeShippingEnabled });
+    if (payload.freeShippingMinOrder !== undefined)
+      entries.push({ key: 'storefront_free_shipping_min_order', value: payload.freeShippingMinOrder });
     if (payload.whatsappPhone !== undefined) entries.push({ key: 'storefront_whatsapp', value: payload.whatsappPhone });
-    if (payload.onlinePaymentEnabled !== undefined) entries.push({ key: 'storefront_online_payment_enabled', value: payload.onlinePaymentEnabled });
-    if (payload.onlinePaymentProvider !== undefined) entries.push({ key: 'storefront_online_payment_provider', value: payload.onlinePaymentProvider });
-    if (payload.paymobApiKey !== undefined && !isMaskedGatewaySecret(payload.paymobApiKey)) entries.push({ key: 'storefront_paymob_api_key', value: payload.paymobApiKey });
-    if (payload.paymobIntegrationId !== undefined) entries.push({ key: 'storefront_paymob_integration_id', value: payload.paymobIntegrationId });
-    if (payload.paymobIframeId !== undefined) entries.push({ key: 'storefront_paymob_iframe_id', value: payload.paymobIframeId });
-    if (payload.paymobHmacSecret !== undefined && !isMaskedGatewaySecret(payload.paymobHmacSecret)) entries.push({ key: 'storefront_paymob_hmac_secret', value: payload.paymobHmacSecret });
-    if (payload.paymobTestMode !== undefined) entries.push({ key: 'storefront_paymob_test_mode', value: payload.paymobTestMode });
-    if (payload.xpayApiKey !== undefined && !isMaskedGatewaySecret(payload.xpayApiKey)) entries.push({ key: 'storefront_xpay_api_key', value: payload.xpayApiKey });
-    if (payload.xpayCommunityId !== undefined) entries.push({ key: 'storefront_xpay_community_id', value: payload.xpayCommunityId });
-    if (payload.xpayTestMode !== undefined) entries.push({ key: 'storefront_xpay_test_mode', value: payload.xpayTestMode });
-    if (payload.tapSecretKey !== undefined && !isMaskedGatewaySecret(payload.tapSecretKey)) entries.push({ key: 'storefront_tap_secret_key', value: payload.tapSecretKey });
-    if (payload.tapPublishableKey !== undefined) entries.push({ key: 'storefront_tap_publishable_key', value: payload.tapPublishableKey });
-    if (payload.tapTestMode !== undefined) entries.push({ key: 'storefront_tap_test_mode', value: payload.tapTestMode });
-    if (payload.stripeSecretKey !== undefined && !isMaskedGatewaySecret(payload.stripeSecretKey)) entries.push({ key: 'storefront_stripe_secret_key', value: payload.stripeSecretKey });
-    if (payload.stripePublishableKey !== undefined) entries.push({ key: 'storefront_stripe_publishable_key', value: payload.stripePublishableKey });
-    if (payload.stripeWebhookSecret !== undefined && !isMaskedGatewaySecret(payload.stripeWebhookSecret)) entries.push({ key: 'storefront_stripe_webhook_secret', value: payload.stripeWebhookSecret });
-    if (payload.stripeTestMode !== undefined) entries.push({ key: 'storefront_stripe_test_mode', value: payload.stripeTestMode });
+    if (payload.onlinePaymentEnabled !== undefined)
+      entries.push({ key: 'storefront_online_payment_enabled', value: payload.onlinePaymentEnabled });
+    if (payload.onlinePaymentProvider !== undefined)
+      entries.push({ key: 'storefront_online_payment_provider', value: payload.onlinePaymentProvider });
+    if (payload.paymobApiKey !== undefined && !isMaskedGatewaySecret(payload.paymobApiKey))
+      entries.push({ key: 'storefront_paymob_api_key', value: payload.paymobApiKey });
+    if (payload.paymobIntegrationId !== undefined)
+      entries.push({ key: 'storefront_paymob_integration_id', value: payload.paymobIntegrationId });
+    if (payload.paymobIframeId !== undefined)
+      entries.push({ key: 'storefront_paymob_iframe_id', value: payload.paymobIframeId });
+    if (payload.paymobHmacSecret !== undefined && !isMaskedGatewaySecret(payload.paymobHmacSecret))
+      entries.push({ key: 'storefront_paymob_hmac_secret', value: payload.paymobHmacSecret });
+    if (payload.paymobTestMode !== undefined)
+      entries.push({ key: 'storefront_paymob_test_mode', value: payload.paymobTestMode });
+    if (payload.xpayApiKey !== undefined && !isMaskedGatewaySecret(payload.xpayApiKey))
+      entries.push({ key: 'storefront_xpay_api_key', value: payload.xpayApiKey });
+    if (payload.xpayCommunityId !== undefined)
+      entries.push({ key: 'storefront_xpay_community_id', value: payload.xpayCommunityId });
+    if (payload.xpayTestMode !== undefined)
+      entries.push({ key: 'storefront_xpay_test_mode', value: payload.xpayTestMode });
+    if (payload.tapSecretKey !== undefined && !isMaskedGatewaySecret(payload.tapSecretKey))
+      entries.push({ key: 'storefront_tap_secret_key', value: payload.tapSecretKey });
+    if (payload.tapPublishableKey !== undefined)
+      entries.push({ key: 'storefront_tap_publishable_key', value: payload.tapPublishableKey });
+    if (payload.tapTestMode !== undefined)
+      entries.push({ key: 'storefront_tap_test_mode', value: payload.tapTestMode });
+    if (payload.stripeSecretKey !== undefined && !isMaskedGatewaySecret(payload.stripeSecretKey))
+      entries.push({ key: 'storefront_stripe_secret_key', value: payload.stripeSecretKey });
+    if (payload.stripePublishableKey !== undefined)
+      entries.push({ key: 'storefront_stripe_publishable_key', value: payload.stripePublishableKey });
+    if (payload.stripeWebhookSecret !== undefined && !isMaskedGatewaySecret(payload.stripeWebhookSecret))
+      entries.push({ key: 'storefront_stripe_webhook_secret', value: payload.stripeWebhookSecret });
+    if (payload.stripeTestMode !== undefined)
+      entries.push({ key: 'storefront_stripe_test_mode', value: payload.stripeTestMode });
     if (payload.brandColor !== undefined) entries.push({ key: 'storefront_brand_color', value: payload.brandColor });
-    if (payload.brandSecondaryColor !== undefined) entries.push({ key: 'storefront_brand_secondary_color', value: payload.brandSecondaryColor });
-    if (payload.brandSurfaceColor !== undefined) entries.push({ key: 'storefront_brand_surface_color', value: payload.brandSurfaceColor });
+    if (payload.brandSecondaryColor !== undefined)
+      entries.push({ key: 'storefront_brand_secondary_color', value: payload.brandSecondaryColor });
+    if (payload.brandSurfaceColor !== undefined)
+      entries.push({ key: 'storefront_brand_surface_color', value: payload.brandSurfaceColor });
     if (payload.themePreset !== undefined) entries.push({ key: 'storefront_theme_preset', value: payload.themePreset });
-    if (payload.metaPixelId !== undefined) entries.push({ key: 'storefront_meta_pixel_id', value: payload.metaPixelId });
+    if (payload.metaPixelId !== undefined)
+      entries.push({ key: 'storefront_meta_pixel_id', value: payload.metaPixelId });
     if (payload.ga4Id !== undefined) entries.push({ key: 'storefront_ga4_id', value: payload.ga4Id });
-    if (payload.tiktokPixelId !== undefined) entries.push({ key: 'storefront_tiktok_pixel_id', value: payload.tiktokPixelId });
-    if (payload.snapchatPixelId !== undefined) entries.push({ key: 'storefront_snapchat_pixel_id', value: payload.snapchatPixelId });
-    if (payload.pickupEnabled !== undefined) entries.push({ key: 'storefront_pickup_enabled', value: payload.pickupEnabled });
-    if (payload.heroHeadline !== undefined) entries.push({ key: 'storefront_hero_headline', value: payload.heroHeadline });
-    if (payload.heroSubtitle !== undefined) entries.push({ key: 'storefront_hero_subtitle', value: payload.heroSubtitle });
-    if (payload.supportEmail !== undefined) entries.push({ key: 'storefront_support_email', value: payload.supportEmail });
-    if (payload.contactPhone !== undefined) entries.push({ key: 'storefront_contact_phone', value: payload.contactPhone });
+    if (payload.tiktokPixelId !== undefined)
+      entries.push({ key: 'storefront_tiktok_pixel_id', value: payload.tiktokPixelId });
+    if (payload.snapchatPixelId !== undefined)
+      entries.push({ key: 'storefront_snapchat_pixel_id', value: payload.snapchatPixelId });
+    if (payload.pickupEnabled !== undefined)
+      entries.push({ key: 'storefront_pickup_enabled', value: payload.pickupEnabled });
+    if (payload.heroHeadline !== undefined)
+      entries.push({ key: 'storefront_hero_headline', value: payload.heroHeadline });
+    if (payload.heroSubtitle !== undefined)
+      entries.push({ key: 'storefront_hero_subtitle', value: payload.heroSubtitle });
+    if (payload.supportEmail !== undefined)
+      entries.push({ key: 'storefront_support_email', value: payload.supportEmail });
+    if (payload.contactPhone !== undefined)
+      entries.push({ key: 'storefront_contact_phone', value: payload.contactPhone });
     if (payload.facebookUrl !== undefined) entries.push({ key: 'storefront_facebook_url', value: payload.facebookUrl });
-    if (payload.instagramUrl !== undefined) entries.push({ key: 'storefront_instagram_url', value: payload.instagramUrl });
+    if (payload.instagramUrl !== undefined)
+      entries.push({ key: 'storefront_instagram_url', value: payload.instagramUrl });
     if (payload.twitterUrl !== undefined) entries.push({ key: 'storefront_twitter_url', value: payload.twitterUrl });
     if (payload.tiktokUrl !== undefined) entries.push({ key: 'storefront_tiktok_url', value: payload.tiktokUrl });
     if (payload.youtubeUrl !== undefined) entries.push({ key: 'storefront_youtube_url', value: payload.youtubeUrl });
     if (payload.telegramUrl !== undefined) entries.push({ key: 'storefront_telegram_url', value: payload.telegramUrl });
-    if (payload.allowOutOfStockOrders !== undefined) entries.push({ key: 'storefront_allow_out_of_stock', value: payload.allowOutOfStockOrders });
-    if (payload.showOutOfStockProducts !== undefined) entries.push({ key: 'storefront_show_out_of_stock', value: payload.showOutOfStockProducts });
-    if (payload.stockMode !== undefined) entries.push({ key: 'storefront_stock_mode', value: normalizeStorefrontStockMode(payload.stockMode) });
-    if (payload.midBannersEnabled !== undefined) entries.push({ key: 'storefront_mid_banners_enabled', value: payload.midBannersEnabled });
-    if (payload.heroBannerFullBleed !== undefined) entries.push({ key: 'storefront_hero_full_bleed', value: payload.heroBannerFullBleed });
+    if (payload.allowOutOfStockOrders !== undefined)
+      entries.push({ key: 'storefront_allow_out_of_stock', value: payload.allowOutOfStockOrders });
+    if (payload.showOutOfStockProducts !== undefined)
+      entries.push({ key: 'storefront_show_out_of_stock', value: payload.showOutOfStockProducts });
+    if (payload.stockMode !== undefined)
+      entries.push({ key: 'storefront_stock_mode', value: normalizeStorefrontStockMode(payload.stockMode) });
+    if (payload.midBannersEnabled !== undefined)
+      entries.push({ key: 'storefront_mid_banners_enabled', value: payload.midBannersEnabled });
+    if (payload.heroBannerFullBleed !== undefined)
+      entries.push({ key: 'storefront_hero_full_bleed', value: payload.heroBannerFullBleed });
     if (payload.midBanners !== undefined) {
       const normalizedBanners: any[] = [];
       if (Array.isArray(payload.midBanners)) {

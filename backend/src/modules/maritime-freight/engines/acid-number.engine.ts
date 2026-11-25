@@ -17,12 +17,13 @@
  * validated digit-for-digit downstream.
  */
 
-export function requiresAcidNumber(
-  direction: string | null | undefined,
-  podCode: string | null | undefined,
-): boolean {
-  const normalizedDirection = String(direction || '').trim().toLowerCase();
-  const normalizedPod = String(podCode || '').trim().toUpperCase();
+export function requiresAcidNumber(direction: string | null | undefined, podCode: string | null | undefined): boolean {
+  const normalizedDirection = String(direction || '')
+    .trim()
+    .toLowerCase();
+  const normalizedPod = String(podCode || '')
+    .trim()
+    .toUpperCase();
   return normalizedDirection === 'import' && normalizedPod.startsWith('EG');
 }
 

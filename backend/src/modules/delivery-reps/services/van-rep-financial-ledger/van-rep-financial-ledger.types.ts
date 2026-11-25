@@ -7,5 +7,17 @@ export type VanRepFinancialLedgerDeps = {
   db: Kysely<Database>;
   audit: AuditService;
   accountingPosting: AccountingPostingService;
-  verifySupervisorPin: (tenantId: string, pinInput?: string | null, repId?: number | null, queryable?: any, accountId?: string | null) => Promise<{ approved: boolean; supervisorId?: number; supervisorName?: string; supervisorRole?: string; approvalMode?: 'pin' | 'account' }>;
+  verifySupervisorPin: (
+    tenantId: string,
+    pinInput?: string | null,
+    repId?: number | null,
+    queryable?: any,
+    accountId?: string | null,
+  ) => Promise<{
+    approved: boolean;
+    supervisorId?: number;
+    supervisorName?: string;
+    supervisorRole?: string;
+    approvalMode?: 'pin' | 'account';
+  }>;
 };

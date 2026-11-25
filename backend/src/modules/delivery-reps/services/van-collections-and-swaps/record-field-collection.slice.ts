@@ -2,8 +2,21 @@ import { sql } from '../../../../database/kysely';
 import { AUDIT_EVENT_CODES } from '../../../../core/audit/audit.service';
 import { AppError } from '../../../../common/errors/app-error';
 import { evaluateFieldCardPayment } from '../../van-trip-reconciliation.engine';
-import { getCustomerRepBalancesMap, fieldCollectionPaymentScope, resolveFieldCollectionChannel, resolveVanMoneyAuditActor } from '../van-common.util';
-import { extractCoordinatesFromCustomerLocation, evaluateGeofenceCompliance, isValidCoordinatePair, extractAssignedRepIds, loadRepPermissions, resolveIsolatedRepCustomerBalance, validateIsolatedRepCollection } from '../../rep-target.engine';
+import {
+  getCustomerRepBalancesMap,
+  fieldCollectionPaymentScope,
+  resolveFieldCollectionChannel,
+  resolveVanMoneyAuditActor,
+} from '../van-common.util';
+import {
+  extractCoordinatesFromCustomerLocation,
+  evaluateGeofenceCompliance,
+  isValidCoordinatePair,
+  extractAssignedRepIds,
+  loadRepPermissions,
+  resolveIsolatedRepCustomerBalance,
+  validateIsolatedRepCollection,
+} from '../../rep-target.engine';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../../accounting/engines/money-minor-units.engine';
 import { offlineSaleTimestamps } from '../../../cash-drawer/helpers/cash-drawer.helper';
@@ -86,9 +99,19 @@ export class RecordFieldCollectionSlice {
       .where('vt.rep_id', '=', repId)
       .executeTakeFirst();
 
-    if (!trip || trip.status !== 'open') throw new AppError('رحلة التوزيع المحددة مغلقة أو تمت تصفيتها، ولا يمكن تسجيل تحصيل جديد عليها', 'INVALID_TRIP', 400);
+    if (!trip || trip.status !== 'open')
+      throw new AppError(
+        'رحلة التوزيع المحددة مغلقة أو تمت تصفيتها، ولا يمكن تسجيل تحصيل جديد عليها',
+        'INVALID_TRIP',
+        400,
+      );
 
-    const cust = await this.anyDb.selectFrom('customers').select(['id', 'name']).where('id', '=', payload.customerId).where('tenant_id', '=', tenantId).executeTakeFirst();
+    const cust = await this.anyDb
+      .selectFrom('customers')
+      .select(['id', 'name'])
+      .where('id', '=', payload.customerId)
+      .where('tenant_id', '=', tenantId)
+      .executeTakeFirst();
     if (!cust) throw new AppError('العميل غير موجود', 'CUSTOMER_NOT_FOUND', 404);
 
     let branchId = trip.vanBranchId ? Number(trip.vanBranchId) : null;
@@ -126,16 +149,20 @@ export class RecordFieldCollectionSlice {
         .forUpdate()
         .executeTakeFirst();
       if (!lockedTrip || lockedTrip.status !== 'open') {
-        throw new AppError('رحلة التوزيع المحددة مغلقة أو تمت تصفيتها، ولا يمكن تسجيل تحصيل جديد عليها', 'INVALID_TRIP', 400);
+        throw new AppError(
+          'رحلة التوزيع المحددة مغلقة أو تمت تصفيتها، ولا يمكن تسجيل تحصيل جديد عليها',
+          'INVALID_TRIP',
+          400,
+        );
       }
       vanLocId = lockedTrip.van_location_id ? Number(lockedTrip.van_location_id) : null;
       const lockedVanLocRow = vanLocId
         ? await trxAny
-          .selectFrom('stock_locations')
-          .select(['branch_id'])
-          .where('id', '=', vanLocId)
-          .where('tenant_id', '=', tenantId)
-          .executeTakeFirst()
+            .selectFrom('stock_locations')
+            .select(['branch_id'])
+            .where('id', '=', vanLocId)
+            .where('tenant_id', '=', tenantId)
+            .executeTakeFirst()
         : null;
       const lockedBranchId = lockedVanLocRow?.branch_id ? Number(lockedVanLocRow.branch_id) : null;
       branchId = lockedBranchId;
@@ -227,7 +254,11 @@ export class RecordFieldCollectionSlice {
       if (payload.gpsLat != null && payload.gpsLng != null) {
         let custMeta: any = {};
         if (typeof lockedCust.metadata === 'string') {
-          try { custMeta = JSON.parse(lockedCust.metadata); } catch { custMeta = {}; }
+          try {
+            custMeta = JSON.parse(lockedCust.metadata);
+          } catch {
+            custMeta = {};
+          }
         } else if (lockedCust.metadata && typeof lockedCust.metadata === 'object') {
           custMeta = lockedCust.metadata;
         }
@@ -352,7 +383,10 @@ export class RecordFieldCollectionSlice {
         );
       }
 
-      const isInstapayCollection = payload.paymentMethod === 'instapay' || payload.paymentMethod === 'vodafone_cash' || payload.paymentMethod === 'bank_transfer';
+      const isInstapayCollection =
+        payload.paymentMethod === 'instapay' ||
+        payload.paymentMethod === 'vodafone_cash' ||
+        payload.paymentMethod === 'bank_transfer';
       const defaultColNote = isInstapayCollection
         ? `سند تحصيل إلكتروني (${payload.paymentMethod === 'vodafone_cash' ? 'فودافون كاش' : 'إنستاباي/تحويل'}) بواسطة المندوب`
         : `سند تحصيل نقدي ميداني بواسطة المندوب`;
@@ -440,7 +474,14 @@ export class RecordFieldCollectionSlice {
       await this.deps.accountingPosting.postVanFieldCollection(
         trx,
         Number(insertedPayment.id),
-        { amount, customerId: payload.customerId, branchId, locationId: vanLocId, paymentMethod: payload.paymentMethod || 'cash', transferReference: payload.transferReference },
+        {
+          amount,
+          customerId: payload.customerId,
+          branchId,
+          locationId: vanLocId,
+          paymentMethod: payload.paymentMethod || 'cash',
+          transferReference: payload.transferReference,
+        },
         systemAuth,
       );
 

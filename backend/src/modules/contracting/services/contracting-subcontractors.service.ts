@@ -80,11 +80,8 @@ export class ContractingSubcontractorsService {
           .where((eb) =>
             eb.or([
               eb('subcontract_id', '=', sc.id as any),
-              eb.and([
-                eb('ipc_type', '=', 'subcontractor'),
-                eb('subcontractor_id', '=', sc.subcontractor_id as any),
-              ]),
-            ])
+              eb.and([eb('ipc_type', '=', 'subcontractor'), eb('subcontractor_id', '=', sc.subcontractor_id as any)]),
+            ]),
           )
           .where('status', 'in', ['approved', 'paid'])
           .executeTakeFirst();
@@ -128,7 +125,7 @@ export class ContractingSubcontractorsService {
           createdAt: String(sc.created_at),
           updatedAt: String(sc.updated_at),
         };
-      })
+      }),
     );
   }
 
@@ -145,7 +142,8 @@ export class ContractingSubcontractorsService {
 
     const totalAmount = Number(dto.totalAmount || 0);
     const advancePct = Number(dto.advancePct || 0);
-    const advanceAmount = dto.advanceAmount !== undefined ? Number(dto.advanceAmount) : (totalAmount * advancePct) / 100;
+    const advanceAmount =
+      dto.advanceAmount !== undefined ? Number(dto.advanceAmount) : (totalAmount * advancePct) / 100;
 
     const values: any = {
       tenant_id: tenantId,
@@ -158,7 +156,8 @@ export class ContractingSubcontractorsService {
       retention_percent: dto.retentionPercent !== undefined ? Number(dto.retentionPercent) : 5.0,
       advance_pct: advancePct,
       advance_amount: advanceAmount,
-      advance_recovery_start_pct: dto.advanceRecoveryStartPct !== undefined ? Number(dto.advanceRecoveryStartPct) : 10.0,
+      advance_recovery_start_pct:
+        dto.advanceRecoveryStartPct !== undefined ? Number(dto.advanceRecoveryStartPct) : 10.0,
       advance_recovery_end_pct: dto.advanceRecoveryEndPct !== undefined ? Number(dto.advanceRecoveryEndPct) : 80.0,
       retention_limit_pct: dto.retentionLimitPct !== undefined ? Number(dto.retentionLimitPct) : 5.0,
       penalty_per_day: Number(dto.penaltyPerDay || 0),
@@ -180,11 +179,7 @@ export class ContractingSubcontractorsService {
     };
 
     if (suppliedNumber) {
-      const [sub] = await this.db
-        .insertInto('contracting_subcontracts')
-        .values(values)
-        .returningAll()
-        .execute();
+      const [sub] = await this.db.insertInto('contracting_subcontracts').values(values).returningAll().execute();
       return sub;
     }
 
@@ -226,10 +221,7 @@ export class ContractingSubcontractorsService {
 
   async getSubcontractors(auth: AuthContext, query?: { search?: string; tradeSpecialty?: string; status?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any)
-      .selectFrom('contracting_subcontractors')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let q = (this.db as any).selectFrom('contracting_subcontractors').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.status) {
       q = q.where('status', '=', query.status);
@@ -246,7 +238,7 @@ export class ContractingSubcontractorsService {
           eb('mobile', 'ilike', term),
           eb('trade_specialty', 'ilike', term),
           eb('tax_number', 'ilike', term),
-        ])
+        ]),
       );
     }
 
@@ -317,7 +309,7 @@ export class ContractingSubcontractorsService {
           totalPaid,
           netBalance,
         };
-      })
+      }),
     );
   }
 
@@ -455,7 +447,11 @@ export class ContractingSubcontractorsService {
     return { success: true, message: 'تم حذف المقاول بنجاح' };
   }
 
-  async getSubcontractorLedger(auth: AuthContext, subcontractorId: number, query?: { projectId?: string; fromDate?: string; toDate?: string }) {
+  async getSubcontractorLedger(
+    auth: AuthContext,
+    subcontractorId: number,
+    query?: { projectId?: string; fromDate?: string; toDate?: string },
+  ) {
     const { tenantId } = requireTenantScope(auth);
     const businessTz = await getTenantTimezone(this.db, tenantId);
     const sub = await this.getSubcontractorById(auth, subcontractorId);
@@ -521,7 +517,11 @@ export class ContractingSubcontractorsService {
     for (const inv of invoices) {
       const net = Number(inv.net_payable || 0);
       rawTx.push({
-        date: inv.period_end || (inv.created_at instanceof Date ? todayTenantDate(businessTz, inv.created_at) : todayTenantDate(businessTz, new Date(String(inv.created_at)))),
+        date:
+          inv.period_end ||
+          (inv.created_at instanceof Date
+            ? todayTenantDate(businessTz, inv.created_at)
+            : todayTenantDate(businessTz, new Date(String(inv.created_at)))),
         type: 'invoice',
         refNumber: inv.ipc_number,
         description: `مستخلص أعمال وتشوينات رقم ${inv.ipc_number}`,
@@ -546,12 +546,16 @@ export class ContractingSubcontractorsService {
         p.payment_category === 'advance'
           ? 'دفعة مقدمة'
           : p.payment_category === 'retention'
-          ? 'إفراج محجوز ضمان'
-          : p.payment_category === 'operational_advance'
-          ? 'سلفة تشغيلية'
-          : 'دفعة جارية تحت الحساب';
+            ? 'إفراج محجوز ضمان'
+            : p.payment_category === 'operational_advance'
+              ? 'سلفة تشغيلية'
+              : 'دفعة جارية تحت الحساب';
       rawTx.push({
-        date: p.payment_date || (p.created_at instanceof Date ? todayTenantDate(businessTz, p.created_at) : todayTenantDate(businessTz, new Date(String(p.created_at)))),
+        date:
+          p.payment_date ||
+          (p.created_at instanceof Date
+            ? todayTenantDate(businessTz, p.created_at)
+            : todayTenantDate(businessTz, new Date(String(p.created_at)))),
         type: 'payment',
         refNumber: p.payment_number,
         description: `سند صرف ${catLabel} (${methodLabel})${p.reference_number ? ` - م: ${p.reference_number}` : ''}${p.notes ? ` - ${p.notes}` : ''}`,
@@ -569,7 +573,11 @@ export class ContractingSubcontractorsService {
     for (const bc of backcharges) {
       const amt = Number(bc.amount || 0);
       rawTx.push({
-        date: bc.occurrence_date || (bc.created_at instanceof Date ? todayTenantDate(businessTz, bc.created_at) : todayTenantDate(businessTz, new Date(String(bc.created_at)))),
+        date:
+          bc.occurrence_date ||
+          (bc.created_at instanceof Date
+            ? todayTenantDate(businessTz, bc.created_at)
+            : todayTenantDate(businessTz, new Date(String(bc.created_at)))),
         type: 'backcharge',
         refNumber: bc.voucher_number,
         description: `خصم تشوينات/مصروفات موقع (${bc.description || 'خصم مباشر'})`,
@@ -613,7 +621,10 @@ export class ContractingSubcontractorsService {
     const totalInvoiced = invoices.reduce((sum: number, inv: any) => sum + Number(inv.net_payable || 0), 0);
     const totalPaid = payments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
     const totalBackcharges = backcharges.reduce((sum: number, bc: any) => sum + Number(bc.amount || 0), 0);
-    const totalRetentionHeld = invoices.reduce((sum: number, inv: any) => sum + Number(inv.retention_held_amount || 0), 0);
+    const totalRetentionHeld = invoices.reduce(
+      (sum: number, inv: any) => sum + Number(inv.retention_held_amount || 0),
+      0,
+    );
     const netBalanceDue = totalInvoiced - totalPaid - totalBackcharges;
 
     return {

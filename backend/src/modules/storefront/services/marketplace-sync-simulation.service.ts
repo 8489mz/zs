@@ -21,11 +21,12 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AuditService } from '../../../core/audit/audit.service';
 import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
 import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
-import { STOREFRONT_NOT_ENTITLED_MESSAGE, isStorefrontEntitledForOrders } from '../engines/storefront-entitlement.engine';
+import {
+  STOREFRONT_NOT_ENTITLED_MESSAGE,
+  isStorefrontEntitledForOrders,
+} from '../engines/storefront-entitlement.engine';
 import { PlanFeatureService } from '../../../core/auth/services/plan-feature.service';
-import type {
-  MarketplaceSkuMapping,
-} from './marketplace-sync.types';
+import type { MarketplaceSkuMapping } from './marketplace-sync.types';
 
 export interface MarketplaceSyncSimulationDeps {
   db: Kysely<Database>;
@@ -36,7 +37,10 @@ export interface MarketplaceSyncSimulationDeps {
   setSettingJson: <T>(key: string, tenantId: string, value: T) => Promise<void>;
   // Bound cross-slice dep (S3 syncInventory, S10 form: the facade binds its
   // own method so this slice is standalone-compilable; merge orders S3 first).
-  syncInventory: (auth: AuthContext, marketplace?: 'amazon' | 'noon') => Promise<{ syncedCount: number; updatedMappings: MarketplaceSkuMapping[] }>;
+  syncInventory: (
+    auth: AuthContext,
+    marketplace?: 'amazon' | 'noon',
+  ) => Promise<{ syncedCount: number; updatedMappings: MarketplaceSkuMapping[] }>;
   audit: AuditService;
   // Optional like the facade ctor: a missing resolver fails closed in the
   // entitlement gate instead of crashing DI.
@@ -68,7 +72,13 @@ export class MarketplaceSyncSimulationService {
   async simulateIncomingOrder(
     marketplace: 'amazon' | 'noon',
     auth: AuthContext,
-  ): Promise<{ success: boolean; orderId: number; orderNumber: string; totalAmount: number; reservedProductName: string }> {
+  ): Promise<{
+    success: boolean;
+    orderId: number;
+    orderNumber: string;
+    totalAmount: number;
+    reservedProductName: string;
+  }> {
     const scope = requireTenantScope(auth);
 
     // D-SF-06 (INV-SF-SIMULATE-ORDER-GATE): a simulated order is a paid
@@ -258,7 +268,8 @@ export class MarketplaceSyncSimulationService {
 
     const mapping = mappings[index];
     const myEffectivePrice = mapping.customPrice ?? mapping.retailPrice ?? 0;
-    const competitorPrice = payload.competitorPrice !== undefined ? Number(payload.competitorPrice) : mapping.competitorPrice;
+    const competitorPrice =
+      payload.competitorPrice !== undefined ? Number(payload.competitorPrice) : mapping.competitorPrice;
     const buyBoxPrice = payload.buyBoxPrice !== undefined ? Number(payload.buyBoxPrice) : mapping.buyBoxPrice;
 
     let buyBoxStatus: 'winning' | 'at_risk' | 'losing' | undefined = undefined;

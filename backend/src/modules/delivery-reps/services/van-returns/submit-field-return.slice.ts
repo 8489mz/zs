@@ -2,7 +2,11 @@ import { Kysely, sql } from '../../../../database/kysely';
 import { Database } from '../../../../database/database.types';
 import { AppError } from '../../../../common/errors/app-error';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
+import {
+  currencyMoneyDigits,
+  roundMoney,
+  type MoneyDigits,
+} from '../../../accounting/engines/money-minor-units.engine';
 import { generateDailySequenceNumber, resolveRepLinkedUserId } from '../van-common.util';
 import { offlineSaleTimestamps } from '../../../cash-drawer/helpers/cash-drawer.helper';
 import { validateVanOfflineCreatedAt } from '../../van-offline-timestamps.helper';
@@ -57,31 +61,31 @@ export class SubmitFieldReturnSlice {
   }
 
   private async resolveSaleRefundLegs(
-  q: any,
-  tenantId: string,
-  sale: {
-    id: number;
-    payment_type?: string | null;
-    total?: unknown;
-    paid_amount?: unknown;
-    store_credit_used?: unknown;
-    customer_id?: number | null;
-  },
-  moneyDigits: MoneyDigits,
-  opts: {
-    excludeReturnId?: number | null;
-    priorReturns?: Array<{ id?: unknown; refund_method?: string | null; total_amount?: unknown }> | null;
-  } = {},
-): Promise<{ paymentMethod: string; cashRemaining: number; creditRemaining: number }> {
+    q: any,
+    tenantId: string,
+    sale: {
+      id: number;
+      payment_type?: string | null;
+      total?: unknown;
+      paid_amount?: unknown;
+      store_credit_used?: unknown;
+      customer_id?: number | null;
+    },
+    moneyDigits: MoneyDigits,
+    opts: {
+      excludeReturnId?: number | null;
+      priorReturns?: Array<{ id?: unknown; refund_method?: string | null; total_amount?: unknown }> | null;
+    } = {},
+  ): Promise<{ paymentMethod: string; cashRemaining: number; creditRemaining: number }> {
     return this.bound.resolveSaleRefundLegs(q, tenantId, sale, moneyDigits, opts);
   }
 
   private assertRefundMethodCoveredByLegs(
-  legs: { paymentMethod: string; cashRemaining: number; creditRemaining: number },
-  refundMethod: 'credit' | 'cash',
-  totalAmount: number,
-  moneyDigits: MoneyDigits,
-): void {
+    legs: { paymentMethod: string; cashRemaining: number; creditRemaining: number },
+    refundMethod: 'credit' | 'cash',
+    totalAmount: number,
+    moneyDigits: MoneyDigits,
+  ): void {
     return this.bound.assertRefundMethodCoveredByLegs(legs, refundMethod, totalAmount, moneyDigits);
   }
 
@@ -128,7 +132,11 @@ export class SubmitFieldReturnSlice {
     // sale, and an unlinked refund has no payment legs to match.
     // Refused before any other validation; nothing is written.
     if (payload.saleId == null || Number(payload.saleId) <= 0) {
-      throw new AppError('المرتجع الميداني يتطلب ربطه بالفاتورة الأصلية — اختر الفاتورة من قائمة فواتير العميل', 'RETURN_REQUIRES_SALE_ID', 400);
+      throw new AppError(
+        'المرتجع الميداني يتطلب ربطه بالفاتورة الأصلية — اختر الفاتورة من قائمة فواتير العميل',
+        'RETURN_REQUIRES_SALE_ID',
+        400,
+      );
     }
     if (!payload.items || !payload.items.length) {
       throw new AppError('يجب تحديد صنف واحد على الأقل للمرتجع', 'EMPTY_RETURN_ITEMS', 400);
@@ -241,7 +249,9 @@ export class SubmitFieldReturnSlice {
       .where('tenant_id', '=', tenantId)
       .execute();
 
-    const alreadyReturnedBySaleItem = await this.computeAlreadyReturnedQtyBySaleItem(tenantId, [Number(payload.saleId)]);
+    const alreadyReturnedBySaleItem = await this.computeAlreadyReturnedQtyBySaleItem(tenantId, [
+      Number(payload.saleId),
+    ]);
 
     for (const item of payload.items) {
       const line = item.saleItemId
@@ -284,7 +294,11 @@ export class SubmitFieldReturnSlice {
           referenceType: 'sale',
           referenceId: Number(payload.saleId),
         });
-        throw new AppError(`سعر المرتجع (${item.unitPrice}) يتجاوز السعر الصافي بعد الخصم بالفاتورة الأصلية (${netUnit})`, 'RETURN_PRICE_EXCEEDS_NET', 400);
+        throw new AppError(
+          `سعر المرتجع (${item.unitPrice}) يتجاوز السعر الصافي بعد الخصم بالفاتورة الأصلية (${netUnit})`,
+          'RETURN_PRICE_EXCEEDS_NET',
+          400,
+        );
       }
 
       const alreadyReturned = alreadyReturnedBySaleItem.get(Number(line.id)) || 0;

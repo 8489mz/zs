@@ -19,17 +19,69 @@
  * domain, or paths the app already owns.
  */
 export const RESERVED_STORE_SLUGS: ReadonlySet<string> = new Set([
-  'app', 'www', 'api', 'admin', 'mail', 'email', 'smtp', 'ftp', 'cdn', 'static', 'assets', 'media',
-  'status', 'docs', 'help', 'support', 'blog', 'dev', 'staging', 'test', 'demo', 'erp', 'portal',
-  'dashboard', 'billing', 'pay', 'payment', 'payments', 'webhook', 'webhooks', 'auth', 'sso', 'oauth',
-  'login', 'logout', 'register', 'signup', 'trial', 'store', 'st', 'shop', 'profile', 'settings', 'pos',
-  'system', 'driver', 'track', 'public', 'default', 'root', 'ns1', 'ns2', 'uptime-probe',
+  'app',
+  'www',
+  'api',
+  'admin',
+  'mail',
+  'email',
+  'smtp',
+  'ftp',
+  'cdn',
+  'static',
+  'assets',
+  'media',
+  'status',
+  'docs',
+  'help',
+  'support',
+  'blog',
+  'dev',
+  'staging',
+  'test',
+  'demo',
+  'erp',
+  'portal',
+  'dashboard',
+  'billing',
+  'pay',
+  'payment',
+  'payments',
+  'webhook',
+  'webhooks',
+  'auth',
+  'sso',
+  'oauth',
+  'login',
+  'logout',
+  'register',
+  'signup',
+  'trial',
+  'store',
+  'st',
+  'shop',
+  'profile',
+  'settings',
+  'pos',
+  'system',
+  'driver',
+  'track',
+  'public',
+  'default',
+  'root',
+  'ns1',
+  'ns2',
+  'uptime-probe',
 ]);
 
 const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 export function isReservedStoreSlug(slug: unknown): boolean {
-  return RESERVED_STORE_SLUGS.has(String(slug ?? '').trim().toLowerCase());
+  return RESERVED_STORE_SLUGS.has(
+    String(slug ?? '')
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 /** The configured root domain, lower-cased, or '' when subdomain stores are off. */
@@ -51,7 +103,9 @@ export function storefrontRootDomain(env: NodeJS.ProcessEnv = process.env): stri
 
 /** True when this slug can be served as `<slug>.<root>`. */
 export function canUseStoreSubdomain(slug: unknown): boolean {
-  const clean = String(slug ?? '').trim().toLowerCase();
+  const clean = String(slug ?? '')
+    .trim()
+    .toLowerCase();
   return DNS_LABEL.test(clean) && !RESERVED_STORE_SLUGS.has(clean);
 }
 
@@ -73,7 +127,9 @@ export function platformNoReplyEmail(env: NodeJS.ProcessEnv = process.env): stri
 }
 
 function cleanOrigin(origin: string | undefined): string | null {
-  const base = String(origin || '').trim().replace(/\/$/, '');
+  const base = String(origin || '')
+    .trim()
+    .replace(/\/$/, '');
   return /^https?:\/\/[^\s/]+$/i.test(base) ? base : null;
 }
 
@@ -86,7 +142,9 @@ export function buildStorePublicBase(
   slug: string,
   options: { legacyPrefix?: 'st' | 'store'; env?: NodeJS.ProcessEnv } = {},
 ): string | null {
-  const clean = String(slug || '').trim().toLowerCase();
+  const clean = String(slug || '')
+    .trim()
+    .toLowerCase();
   const root = storefrontRootDomain(options.env);
   if (root && canUseStoreSubdomain(clean)) return `https://${clean}.${root}`;
   const base = cleanOrigin(origin);

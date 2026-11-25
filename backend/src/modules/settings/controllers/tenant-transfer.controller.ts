@@ -1,4 +1,18 @@
-import { Body, Controller, Get, MaxFileSizeValidator, ParseFilePipe, Post, Req, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors, BadRequestException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  MaxFileSizeValidator,
+  ParseFilePipe,
+  Post,
+  Req,
+  Res,
+  StreamableFile,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+  BadRequestException,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { AdminRoleGuard } from '../../../core/auth/guards/admin-role.guard';
@@ -29,7 +43,12 @@ export class TenantTransferController {
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   async import(
-    @UploadedFile(new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: 500 * 1024 * 1024 })], fileIsRequired: true }))
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [new MaxFileSizeValidator({ maxSize: 500 * 1024 * 1024 })],
+        fileIsRequired: true,
+      }),
+    )
     file: Express.Multer.File,
     @Body() body: Record<string, unknown>,
     @Req() req: RequestWithAuth,

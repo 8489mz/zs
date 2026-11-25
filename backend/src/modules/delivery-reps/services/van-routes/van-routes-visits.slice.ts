@@ -5,8 +5,19 @@ import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
 import { normalizeCustomerCode, getCustomerRepBalancesMap } from '../van-common.util';
 import { getTenantTimezone, todayTenantDate } from '../../../../common/utils/tenant-timezone.util';
-import { extractCoordinatesFromCustomerLocation, evaluateGeofenceCompliance, extractAssignedRepIds, hasGpsCoordinates, loadRepPermissions, resolveIsolatedRepCustomerBalance } from '../../rep-target.engine';
-import { getCurrentBusinessDay, extractCustomerVisitDays, isCustomerScheduledForDay } from '../../van-routes-schedule.util';
+import {
+  extractCoordinatesFromCustomerLocation,
+  evaluateGeofenceCompliance,
+  extractAssignedRepIds,
+  hasGpsCoordinates,
+  loadRepPermissions,
+  resolveIsolatedRepCustomerBalance,
+} from '../../rep-target.engine';
+import {
+  getCurrentBusinessDay,
+  extractCustomerVisitDays,
+  isCustomerScheduledForDay,
+} from '../../van-routes-schedule.util';
 import { VanFraudRadarService } from '../van-fraud-radar.service';
 
 export class VanRoutesVisitsSlice {
@@ -157,7 +168,11 @@ export class VanRoutesVisitsSlice {
     // 2. Filter customers based on rep assignment (supporting multi-rep shared customers & ledger ownership)
     const parseCustMeta = (raw: any): any => {
       if (typeof raw === 'string') {
-        try { return JSON.parse(raw); } catch { return {}; }
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return {};
+        }
       }
       return raw && typeof raw === 'object' ? raw : {};
     };
@@ -224,84 +239,86 @@ export class VanRoutesVisitsSlice {
       negativeMap.set(Number(r.customerId), Number(r.negativeCount || 0));
     }
 
-    return repCustomers.map((c: any) => {
-      const cId = Number(c.id);
-      const meta = parseCustMeta(c.metadata);
-      const assignedRepIds = extractAssignedRepIds(meta);
-      const isolated = resolveIsolatedRepCustomerBalance({
-        repId: numRepId,
-        breakdown: repBalancesMap.get(cId),
-        assignedRepIds,
-        fallbackTotalBalance: Number(c.balance || 0),
-        moneyDigits,
-      });
-      const todayVisit = visitMap.get(cId);
-      const totalNegatives = negativeMap.get(cId) || 0;
+    return repCustomers
+      .map((c: any) => {
+        const cId = Number(c.id);
+        const meta = parseCustMeta(c.metadata);
+        const assignedRepIds = extractAssignedRepIds(meta);
+        const isolated = resolveIsolatedRepCustomerBalance({
+          repId: numRepId,
+          breakdown: repBalancesMap.get(cId),
+          assignedRepIds,
+          fallbackTotalBalance: Number(c.balance || 0),
+          moneyDigits,
+        });
+        const todayVisit = visitMap.get(cId);
+        const totalNegatives = negativeMap.get(cId) || 0;
 
-      let status: 'pending' | 'positive' | 'negative' = 'pending';
-      if (todayVisit) {
-        status = todayVisit.visitType;
-      }
-
-      const { visitDays, visitDay } = extractCustomerVisitDays(meta);
-
-      // Support rep-specific daily schedules (e.g. Rep A visits on Sunday, Rep B visits on Thursday)
-      let effectiveVisitDays = visitDays;
-      let effectiveVisitDay = visitDay;
-      if (Array.isArray(meta.rep_schedules) && meta.rep_schedules.length > 0) {
-        const specificSchedule = meta.rep_schedules.find(
-          (s: any) => Number(s?.repId ?? s?.rep_id) === numRepId,
-        );
-        if (specificSchedule && Array.isArray(specificSchedule.days) && specificSchedule.days.length > 0) {
-          const extractedSpecific = extractCustomerVisitDays({ visit_days: specificSchedule.days });
-          effectiveVisitDays = extractedSpecific.visitDays;
-          effectiveVisitDay = extractedSpecific.visitDay;
+        let status: 'pending' | 'positive' | 'negative' = 'pending';
+        if (todayVisit) {
+          status = todayVisit.visitType;
         }
-      }
 
-      const isScheduledToday = isCustomerScheduledForDay(effectiveVisitDays, todayDayKey);
-      const assignedRepId = assignedRepIds.includes(numRepId)
-        ? numRepId
-        : (meta.assigned_rep_id ? Number(meta.assigned_rep_id) : null);
+        const { visitDays, visitDay } = extractCustomerVisitDays(meta);
 
-      const coords = extractCoordinatesFromCustomerLocation({
-        locationUrl: meta.location_url,
-        metadata: meta,
+        // Support rep-specific daily schedules (e.g. Rep A visits on Sunday, Rep B visits on Thursday)
+        let effectiveVisitDays = visitDays;
+        let effectiveVisitDay = visitDay;
+        if (Array.isArray(meta.rep_schedules) && meta.rep_schedules.length > 0) {
+          const specificSchedule = meta.rep_schedules.find((s: any) => Number(s?.repId ?? s?.rep_id) === numRepId);
+          if (specificSchedule && Array.isArray(specificSchedule.days) && specificSchedule.days.length > 0) {
+            const extractedSpecific = extractCustomerVisitDays({ visit_days: specificSchedule.days });
+            effectiveVisitDays = extractedSpecific.visitDays;
+            effectiveVisitDay = extractedSpecific.visitDay;
+          }
+        }
+
+        const isScheduledToday = isCustomerScheduledForDay(effectiveVisitDays, todayDayKey);
+        const assignedRepId = assignedRepIds.includes(numRepId)
+          ? numRepId
+          : meta.assigned_rep_id
+            ? Number(meta.assigned_rep_id)
+            : null;
+
+        const coords = extractCoordinatesFromCustomerLocation({
+          locationUrl: meta.location_url,
+          metadata: meta,
+        });
+
+        return {
+          customerId: cId,
+          customerName: c.name,
+          customerPhone: c.phone || '',
+          customerAddress: c.address || '',
+          customerCode: normalizeCustomerCode(meta.customer_code || meta.code, cId),
+          route: meta.route || 'الخط العام',
+          district: meta.district || meta.area || meta.neighborhood || '',
+          routeSequence: Number(meta.route_sequence || 0),
+          visitDay: effectiveVisitDay || meta.visit_day || '',
+          visitDays: effectiveVisitDays,
+          repSchedules: meta.rep_schedules || [],
+          isScheduledToday,
+          currentDayName,
+          assignedRepId,
+          assignedRepIds,
+          assignedRepName: meta.assigned_rep_name || '',
+          locationUrl: meta.location_url || (coords ? `https://maps.google.com/?q=${coords.lat},${coords.lng}` : ''),
+          gpsLat: coords?.lat ?? null,
+          gpsLng: coords?.lng ?? null,
+          balance: isolated.repBalance,
+          totalCompanyBalance: isolated.totalCustomerBalance,
+          creditLimit: Number(c.creditLimit || 0),
+          visitStatus: status,
+          todayVisit: todayVisit || null,
+          repeatedNegativesCount: totalNegatives,
+          hasRepeatedNegativeAlert: totalNegatives >= 3,
+        };
+      })
+      .sort((a: any, b: any) => {
+        const seqA = a.routeSequence > 0 ? a.routeSequence : 999999;
+        const seqB = b.routeSequence > 0 ? b.routeSequence : 999999;
+        return seqA - seqB;
       });
-
-      return {
-        customerId: cId,
-        customerName: c.name,
-        customerPhone: c.phone || '',
-        customerAddress: c.address || '',
-        customerCode: normalizeCustomerCode(meta.customer_code || meta.code, cId),
-        route: meta.route || 'الخط العام',
-        district: meta.district || meta.area || meta.neighborhood || '',
-        routeSequence: Number(meta.route_sequence || 0),
-        visitDay: effectiveVisitDay || meta.visit_day || '',
-        visitDays: effectiveVisitDays,
-        repSchedules: meta.rep_schedules || [],
-        isScheduledToday,
-        currentDayName,
-        assignedRepId,
-        assignedRepIds,
-        assignedRepName: meta.assigned_rep_name || '',
-        locationUrl: meta.location_url || (coords ? `https://maps.google.com/?q=${coords.lat},${coords.lng}` : ''),
-        gpsLat: coords?.lat ?? null,
-        gpsLng: coords?.lng ?? null,
-        balance: isolated.repBalance,
-        totalCompanyBalance: isolated.totalCustomerBalance,
-        creditLimit: Number(c.creditLimit || 0),
-        visitStatus: status,
-        todayVisit: todayVisit || null,
-        repeatedNegativesCount: totalNegatives,
-        hasRepeatedNegativeAlert: totalNegatives >= 3,
-      };
-    }).sort((a: any, b: any) => {
-      const seqA = a.routeSequence > 0 ? a.routeSequence : 999999;
-      const seqB = b.routeSequence > 0 ? b.routeSequence : 999999;
-      return seqA - seqB;
-    });
   }
 
   async recordFieldVisit(
@@ -443,7 +460,11 @@ export class VanRoutesVisitsSlice {
           detailsAr: `سجل المندوب زيارة (${payload.visitType === 'negative' ? 'سلبية' : 'إيجابية'}) للعميل "${custRow.name}" من على بعد ${Math.round(geo.distanceMeters || 0)} متر (الحد المسموح 300 متر).`,
           referenceType: 'van_field_visits',
           referenceId: Number(inserted.id),
-          extraMetadata: { distanceMeters: geo.distanceMeters, visitType: payload.visitType, negativeReason: payload.negativeReason },
+          extraMetadata: {
+            distanceMeters: geo.distanceMeters,
+            visitType: payload.visitType,
+            negativeReason: payload.negativeReason,
+          },
         });
       }
     }

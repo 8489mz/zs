@@ -34,7 +34,9 @@ export type SupplierBalanceRow = {
 };
 
 function normalizeSearch(value: unknown): string {
-  return String(value || '').trim().toLowerCase();
+  return String(value || '')
+    .trim()
+    .toLowerCase();
 }
 
 export function buildCustomerBalanceRows(
@@ -70,7 +72,11 @@ export function filterCustomerBalanceRows(
 
   if (search) {
     filtered = filtered.filter((row) =>
-      [row.name, row.phone].some((value) => String(value || '').toLowerCase().includes(search)),
+      [row.name, row.phone].some((value) =>
+        String(value || '')
+          .toLowerCase()
+          .includes(search),
+      ),
     );
   }
 
@@ -87,7 +93,10 @@ export function filterCustomerBalanceRows(
 export function summarizeCustomerBalanceRows(rows: CustomerBalanceRow[], digits: MoneyDigits = 2) {
   return {
     totalItems: rows.length,
-    totalBalance: toMoney(rows.reduce((sum, row) => sum + row.balance, 0), digits),
+    totalBalance: toMoney(
+      rows.reduce((sum, row) => sum + row.balance, 0),
+      digits,
+    ),
     overLimit: rows.filter((row) => row.creditLimit > 0 && row.balance > row.creditLimit).length,
   };
 }
@@ -100,7 +109,9 @@ export function buildSupplierBalanceRows(
     id: String(row.id),
     name: row.name || '',
     phone: row.phone || '',
-    balance: ledgerTotals.has(String(row.id)) ? Number(ledgerTotals.get(String(row.id)) || 0) : Number(row.balance || 0),
+    balance: ledgerTotals.has(String(row.id))
+      ? Number(ledgerTotals.get(String(row.id)) || 0)
+      : Number(row.balance || 0),
   }));
 }
 
@@ -114,7 +125,11 @@ export function filterSupplierBalanceRows(
   let filtered = rows.filter((row) => row.balance > 0);
   if (search) {
     filtered = filtered.filter((row) =>
-      [row.name, row.phone].some((value) => String(value || '').toLowerCase().includes(search)),
+      [row.name, row.phone].some((value) =>
+        String(value || '')
+          .toLowerCase()
+          .includes(search),
+      ),
     );
   }
   if (filter === 'high-balance') {
@@ -126,7 +141,10 @@ export function filterSupplierBalanceRows(
 export function summarizeSupplierBalanceRows(rows: SupplierBalanceRow[], digits: MoneyDigits = 2) {
   return {
     totalItems: rows.length,
-    totalBalance: toMoney(rows.reduce((sum, row) => sum + row.balance, 0), digits),
+    totalBalance: toMoney(
+      rows.reduce((sum, row) => sum + row.balance, 0),
+      digits,
+    ),
   };
 }
 

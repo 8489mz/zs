@@ -45,7 +45,10 @@ async function eosBookDigits(db: Kysely<Database>, tenantId: string): Promise<Mo
   const setting = await sql<{ value: string }>`
     SELECT value FROM settings WHERE tenant_id = ${tenantId} AND key = 'currency' LIMIT 1
   `.execute(db);
-  const currency = String(setting.rows[0]?.value ?? '').replace(/^"|"$/g, '').trim().toUpperCase();
+  const currency = String(setting.rows[0]?.value ?? '')
+    .replace(/^"|"$/g, '')
+    .trim()
+    .toUpperCase();
   if (!/^[A-Z]{3}$/.test(currency)) {
     throw new BadRequestException('حدد عملة منشأتك قبل احتساب المخالصة');
   }
@@ -79,21 +82,13 @@ export class EndOfServiceService {
       .select(['id', 'allowance_amount'])
       .where('employee_id', '=', employeeId)
       .where('tenant_id', '=', tenantId)
-      .where((eb) =>
-        eb.or([
-          eb('effective_from', 'is', null),
-          eb('effective_from', '<=', terminationDate),
-        ]),
-      )
-      .where((eb) =>
-        eb.or([
-          eb('effective_to', 'is', null),
-          eb('effective_to', '>=', terminationDate),
-        ]),
-      )
+      .where((eb) => eb.or([eb('effective_from', 'is', null), eb('effective_from', '<=', terminationDate)]))
+      .where((eb) => eb.or([eb('effective_to', 'is', null), eb('effective_to', '>=', terminationDate)]))
       .execute();
     if (packages.length > 1) {
-      throw new BadRequestException('يوجد أكثر من حزمة بدلات سارية في تاريخ إنهاء الخدمة؛ أغلق الحزم المتداخلة قبل احتساب المخالصة');
+      throw new BadRequestException(
+        'يوجد أكثر من حزمة بدلات سارية في تاريخ إنهاء الخدمة؛ أغلق الحزم المتداخلة قبل احتساب المخالصة',
+      );
     }
     const amount = packages.length ? Number(packages[0].allowance_amount || 0) : 0;
     if (!Number.isFinite(amount) || amount < 0) {
@@ -122,9 +117,10 @@ export class EndOfServiceService {
 
     if (!employee.hire_date) throw new BadRequestException('يجب تسجيل تاريخ تعيين الموظف قبل احتساب المخالصة');
     const endDate = String(input.terminationDate || '');
-    const validEndDate = /^\d{4}-\d{2}-\d{2}$/.test(endDate)
-      && Number.isFinite(Date.parse(endDate + 'T00:00:00Z'))
-      && new Date(endDate + 'T00:00:00Z').toISOString().slice(0, 10) === endDate;
+    const validEndDate =
+      /^\d{4}-\d{2}-\d{2}$/.test(endDate) &&
+      Number.isFinite(Date.parse(endDate + 'T00:00:00Z')) &&
+      new Date(endDate + 'T00:00:00Z').toISOString().slice(0, 10) === endDate;
     if (!validEndDate) throw new BadRequestException('تاريخ إنهاء الخدمة يجب أن يكون تاريخاً صحيحاً YYYY-MM-DD');
     const hireDate = new Date(employee.hire_date);
     if (!Number.isFinite(hireDate.getTime())) throw new BadRequestException('تاريخ تعيين الموظف غير صحيح');
@@ -152,10 +148,7 @@ export class EndOfServiceService {
       .where('start_date', '<=', input.terminationDate as any)
       // A historic contract that expired before termination is NOT a valid
       // salary basis for an EOS gratuity or unused leave payout.
-      .where((eb: any) => eb.or([
-        eb('end_date', 'is', null),
-        eb('end_date', '>=', input.terminationDate as any),
-      ]))
+      .where((eb: any) => eb.or([eb('end_date', 'is', null), eb('end_date', '>=', input.terminationDate as any)]))
       .orderBy('start_date', 'desc')
       .orderBy('id', 'desc')
       .executeTakeFirst();
@@ -179,11 +172,7 @@ export class EndOfServiceService {
       // recorded in the same bucket, gratuity is overstated — the
       // preview discloses allowanceAmount so the user can see it).
       // Deductions never count toward the wage.
-      allowanceAmount = await this.effectiveAllowanceAmount(
-        input.employeeId,
-        tenantId,
-        input.terminationDate,
-      );
+      allowanceAmount = await this.effectiveAllowanceAmount(input.employeeId, tenantId, input.terminationDate);
       totalSalary = basicSalary + allowanceAmount;
     } else {
       throw new BadRequestException('لا يوجد عقد راتب صالح يغطي تاريخ إنهاء الخدمة؛ راجع العقد قبل تسعير المخالصة');
@@ -201,7 +190,9 @@ export class EndOfServiceService {
     if (!input.lawType) throw new BadRequestException('يجب تحديد قانون العمل؛ لا يجوز افتراض قانون دولة');
     const lawType = input.lawType;
     if (lawType === 'egyptian') {
-      throw new BadRequestException('مكافأة نهاية الخدمة المصرية ليست نسبة موحدة من سنوات الخدمة. لا تستخدم الحسبة الآلية؛ راجع القانون والعقد ثم استخدم سياسة مخصصة معتمدة.');
+      throw new BadRequestException(
+        'مكافأة نهاية الخدمة المصرية ليست نسبة موحدة من سنوات الخدمة. لا تستخدم الحسبة الآلية؛ راجع القانون والعقد ثم استخدم سياسة مخصصة معتمدة.',
+      );
     }
     const reason = input.terminationReason || 'resignation';
     const gratuity = calculateGratuity({
@@ -241,8 +232,11 @@ export class EndOfServiceService {
     // Never guess unpaid wages from the termination calendar day: the employee
     // may already have been paid through the normal payroll. HR must reconcile
     // salary runs and explicitly confirm the remaining payable amount.
-    if (input.pendingSalaryAmount == null || !Number.isFinite(Number(input.pendingSalaryAmount))
-      || Number(input.pendingSalaryAmount) < 0) {
+    if (
+      input.pendingSalaryAmount == null ||
+      !Number.isFinite(Number(input.pendingSalaryAmount)) ||
+      Number(input.pendingSalaryAmount) < 0
+    ) {
       throw new BadRequestException('حدد قيمة المرتب المتبقي بعد مراجعة ما تم صرفه في كشوف المرتبات');
     }
     let pendingSalaryAmount: number;
@@ -373,10 +367,13 @@ export class EndOfServiceService {
     const calc = await this.calculateSettlementPreview(dto, auth);
 
     return await this.db.transaction().execute(async (trx) => {
-      const employee = await trx.selectFrom('hr_employees')
+      const employee = await trx
+        .selectFrom('hr_employees')
         .select(['id', 'status'])
-        .where('id', '=', dto.employeeId).where('tenant_id', '=', tenantId)
-        .forUpdate().executeTakeFirst();
+        .where('id', '=', dto.employeeId)
+        .where('tenant_id', '=', tenantId)
+        .forUpdate()
+        .executeTakeFirst();
       if (!employee || employee.status === 'terminated') throw new BadRequestException('الموظف انتهت خدمته بالفعل');
       const duplicate = await sql<{ id: number }>`
         SELECT id FROM hr_end_of_service_settlements
@@ -426,7 +423,13 @@ export class EndOfServiceService {
         .execute();
 
       // Canonical collision-proof document numbering based on unique returned ID
-      const settlementNo = formatDailyDocumentNumber('EOS', Number(inserted.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
+      const settlementNo = formatDailyDocumentNumber(
+        'EOS',
+        Number(inserted.id),
+        new Date(),
+        4,
+        await getTenantTimezone(trx, tenantId),
+      );
       await (trx as any)
         .updateTable('hr_end_of_service_settlements')
         .set({ settlement_no: settlementNo })
@@ -453,9 +456,15 @@ export class EndOfServiceService {
 
     let q = (this.db as any)
       .selectFrom('hr_end_of_service_settlements as s')
-      .leftJoin('hr_employees as e', (join: any) => join.onRef('e.id', '=', 's.employee_id').onRef('e.tenant_id', '=', 's.tenant_id'))
-      .leftJoin('hr_departments as d', (join: any) => join.onRef('d.id', '=', 'e.department_id').onRef('d.tenant_id', '=', 's.tenant_id'))
-      .leftJoin('journal_entries as j', (join: any) => join.onRef('j.id', '=', 's.journal_entry_id').onRef('j.tenant_id', '=', 's.tenant_id'))
+      .leftJoin('hr_employees as e', (join: any) =>
+        join.onRef('e.id', '=', 's.employee_id').onRef('e.tenant_id', '=', 's.tenant_id'),
+      )
+      .leftJoin('hr_departments as d', (join: any) =>
+        join.onRef('d.id', '=', 'e.department_id').onRef('d.tenant_id', '=', 's.tenant_id'),
+      )
+      .leftJoin('journal_entries as j', (join: any) =>
+        join.onRef('j.id', '=', 's.journal_entry_id').onRef('j.tenant_id', '=', 's.tenant_id'),
+      )
       .select([
         's.id',
         's.settlement_no as settlementNo',
@@ -511,9 +520,15 @@ export class EndOfServiceService {
 
     const row = await (this.db as any)
       .selectFrom('hr_end_of_service_settlements as s')
-      .leftJoin('hr_employees as e', (join: any) => join.onRef('e.id', '=', 's.employee_id').onRef('e.tenant_id', '=', 's.tenant_id'))
-      .leftJoin('hr_departments as d', (join: any) => join.onRef('d.id', '=', 'e.department_id').onRef('d.tenant_id', '=', 's.tenant_id'))
-      .leftJoin('journal_entries as j', (join: any) => join.onRef('j.id', '=', 's.journal_entry_id').onRef('j.tenant_id', '=', 's.tenant_id'))
+      .leftJoin('hr_employees as e', (join: any) =>
+        join.onRef('e.id', '=', 's.employee_id').onRef('e.tenant_id', '=', 's.tenant_id'),
+      )
+      .leftJoin('hr_departments as d', (join: any) =>
+        join.onRef('d.id', '=', 'e.department_id').onRef('d.tenant_id', '=', 's.tenant_id'),
+      )
+      .leftJoin('journal_entries as j', (join: any) =>
+        join.onRef('j.id', '=', 's.journal_entry_id').onRef('j.tenant_id', '=', 's.tenant_id'),
+      )
       .selectAll('s')
       .select([
         'e.employee_no as employeeNo',
@@ -545,9 +560,10 @@ export class EndOfServiceService {
         unpaidLoansDeduction: Number(row.unpaid_loans_deduction || 0),
         assetsDeduction: Number(row.assets_deduction || 0),
         otherDeductions: Number(row.other_deductions || 0),
-        clearanceChecklist: typeof row.clearance_checklist === 'string'
-          ? JSON.parse(row.clearance_checklist)
-          : (row.clearance_checklist || []),
+        clearanceChecklist:
+          typeof row.clearance_checklist === 'string'
+            ? JSON.parse(row.clearance_checklist)
+            : row.clearance_checklist || [],
       },
     };
   }
@@ -583,7 +599,11 @@ export class EndOfServiceService {
       // EOS gratuity and annual-leave encashment were calculated from specific
       // employment and leave records. Never post a stale draft after those
       // underlying values change without recalculating the full settlement.
-      const changedFinancialBasis = await sql<{ contract_changed: boolean; leave_changed: boolean; future_contract: boolean }>`
+      const changedFinancialBasis = await sql<{
+        contract_changed: boolean;
+        leave_changed: boolean;
+        future_contract: boolean;
+      }>`
         SELECT
           EXISTS (
             SELECT 1 FROM hr_employment_contracts c
@@ -604,10 +624,14 @@ export class EndOfServiceService {
           ) AS future_contract
       `.execute(trx);
       if (changedFinancialBasis.rows[0]?.contract_changed || changedFinancialBasis.rows[0]?.leave_changed) {
-        throw new BadRequestException('تغيرت عقود أو إجازات الموظف بعد إعداد المخالصة؛ احذف المسودة وأعد الحساب والمراجعة قبل الترحيل');
+        throw new BadRequestException(
+          'تغيرت عقود أو إجازات الموظف بعد إعداد المخالصة؛ احذف المسودة وأعد الحساب والمراجعة قبل الترحيل',
+        );
       }
       if (changedFinancialBasis.rows[0]?.future_contract) {
-        throw new BadRequestException('يوجد عقد نشط يبدأ بعد تاريخ إنهاء الخدمة؛ عالج العقود المستقبلية قبل ترحيل المخالصة');
+        throw new BadRequestException(
+          'يوجد عقد نشط يبدأ بعد تاريخ إنهاء الخدمة؛ عالج العقود المستقبلية قبل ترحيل المخالصة',
+        );
       }
 
       // Payroll accrual can have occurred after the EOS draft was computed.
@@ -641,15 +665,23 @@ export class EndOfServiceService {
         .where('status', 'not in', ['returned', 'cancelled'])
         .execute();
 
-      if (unreturnedAssets.length > 0 && !settlement.custody_cleared && !(Number(settlement.assets_deduction || 0) > 0)) {
-        throw new BadRequestException('لا يمكن ترحيل مخالصة موظف لديه عهد غير مستردة دون إخلاء طرف للعهدة أو استقطاع قيمتها');
+      if (
+        unreturnedAssets.length > 0 &&
+        !settlement.custody_cleared &&
+        !(Number(settlement.assets_deduction || 0) > 0)
+      ) {
+        throw new BadRequestException(
+          'لا يمكن ترحيل مخالصة موظف لديه عهد غير مستردة دون إخلاء طرف للعهدة أو استقطاع قيمتها',
+        );
       }
 
       // EOS drafts are snapshots: loan repayments may have occurred since creation.
       // Lock the current loan balances *before* posting the general-ledger credit.
       // Otherwise the journal could credit a loan that can no longer be recovered.
       const loansDeduction = Number(settlement.unpaid_loans_deduction || 0);
-      const activeLoans = loansDeduction > 0 ? await sql<Record<string, unknown>>`
+      const activeLoans =
+        loansDeduction > 0
+          ? await sql<Record<string, unknown>>`
         SELECT * FROM hr_employee_loans
         WHERE employee_id = ${settlement.employee_id}
           AND tenant_id = ${tenantId}
@@ -657,10 +689,12 @@ export class EndOfServiceService {
           AND remaining_amount > 0
         ORDER BY id ASC
         FOR UPDATE
-      `.execute(trx) : { rows: [] as Record<string, unknown>[] };
-      const availableLoanBalance = roundMoney(activeLoans.rows.reduce(
-        (sum, loan) => sum + Number(loan.remaining_amount || 0), 0,
-      ), bookDigits);
+      `.execute(trx)
+          : { rows: [] as Record<string, unknown>[] };
+      const availableLoanBalance = roundMoney(
+        activeLoans.rows.reduce((sum, loan) => sum + Number(loan.remaining_amount || 0), 0),
+        bookDigits,
+      );
       if (loansDeduction < 0 || loansDeduction > availableLoanBalance + halfMinor) {
         throw new BadRequestException('رصيد السلف تغير منذ إنشاء المخالصة؛ احذف المسودة وأعد احتسابها قبل الترحيل');
       }
@@ -734,9 +768,7 @@ export class EndOfServiceService {
           // in the same transaction. Historic missing installments must not
           // silently disappear from the employee repayment subledger.
           if (remainingInstallmentDeduction > halfMinor) {
-            throw new BadRequestException(
-              'أقساط السلفة لا تغطي كامل الخصم من المخالصة؛ أصلح جدول الأقساط قبل الترحيل',
-            );
+            throw new BadRequestException('أقساط السلفة لا تغطي كامل الخصم من المخالصة؛ أصلح جدول الأقساط قبل الترحيل');
           }
 
           // Record in hr_employee_ledger

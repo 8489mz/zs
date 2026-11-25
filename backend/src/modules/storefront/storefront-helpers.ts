@@ -19,7 +19,9 @@ export function assertValidCustomerPhone(rawPhone: string | undefined, countryCo
   const digitsOnly = cleanCustomerPhone.replace(/\D/g, '');
   if (countryCode === 'EG' && (cleanCustomerPhone.startsWith('01') || cleanCustomerPhone.length === 11)) {
     if (!/^01[0125]\d{8}$/.test(digitsOnly)) {
-      throw new BadRequestException('يرجى إدخال رقم هاتف محمول مصري صحيح مكون من 11 رقماً ويبدأ بـ (010، 011، 012، 015)');
+      throw new BadRequestException(
+        'يرجى إدخال رقم هاتف محمول مصري صحيح مكون من 11 رقماً ويبدأ بـ (010، 011، 012، 015)',
+      );
     }
   } else if (digitsOnly.length < 7 || digitsOnly.length > 16) {
     throw new BadRequestException('يرجى إدخال رقم هاتف صحيح');
@@ -62,7 +64,9 @@ export function offerTimezone(settings: Map<string, string>): string {
  */
 export function storefrontMoneyDigits(settings: Map<string, string>, tenant?: unknown): MoneyDigits {
   const tenantCurrency = (tenant as { currency?: unknown } | null | undefined)?.currency;
-  const code = String(settings.get('currency') || tenantCurrency || 'EGP').trim().toUpperCase();
+  const code = String(settings.get('currency') || tenantCurrency || 'EGP')
+    .trim()
+    .toUpperCase();
   try {
     return currencyMoneyDigits(code);
   } catch {
@@ -102,16 +106,14 @@ export function isOutOfStockOrderingAllowed(
     normLegacyBiz === 'restaurant';
 
   const explicitSetting = settings.get('storefront_allow_out_of_stock');
-  if (explicitSetting === 'false' || explicitSetting === false as any) return false;
-  if (explicitSetting === 'true' || explicitSetting === true as any) return true;
+  if (explicitSetting === 'false' || explicitSetting === (false as any)) return false;
+  if (explicitSetting === 'true' || explicitSetting === (true as any)) return true;
   if (settings.get('storefront_unlimited_stock') === 'true') return true;
 
   if (isRestaurant) return true;
 
   const cleanSlug = (tenantSlug || '').toLowerCase().trim();
-  const isDemoOrDev =
-    cleanSlug === 'default' ||
-    cleanSlug === 'dev-tenant';
+  const isDemoOrDev = cleanSlug === 'default' || cleanSlug === 'dev-tenant';
 
   return isDemoOrDev;
 }
@@ -121,7 +123,12 @@ export function isOutOfStockOrderingAllowed(
  * It is still an advisory check (the stock is actually moved when the cashier posts the sale through
  * SalesService, which enforces it for real), but it stops the store from promising what it cannot ship.
  */
-export function assertOnlineStockAvailable(name: string, stockQty: number, requestedQty: number, allowOutOfStock: boolean): void {
+export function assertOnlineStockAvailable(
+  name: string,
+  stockQty: number,
+  requestedQty: number,
+  allowOutOfStock: boolean,
+): void {
   if (allowOutOfStock) return;
   if (stockQty <= 0) {
     throw new BadRequestException(`عفواً، نفد مخزون الصنف "${name}"، يرجى حذفه من السلة لإتمام الطلب.`);

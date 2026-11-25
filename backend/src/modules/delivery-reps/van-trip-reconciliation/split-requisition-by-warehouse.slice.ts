@@ -30,9 +30,10 @@ export function splitRequisitionByWarehouse(
   for (const item of items || []) {
     const qty = Number(item.qty || 0);
     if (qty <= 0) continue;
-    const whId = item.sourceWarehouseId && Number(item.sourceWarehouseId) > 0
-      ? Number(item.sourceWarehouseId)
-      : defaultWarehouseId;
+    const whId =
+      item.sourceWarehouseId && Number(item.sourceWarehouseId) > 0
+        ? Number(item.sourceWarehouseId)
+        : defaultWarehouseId;
 
     const group = groups.get(whId) || { name: item.sourceWarehouseName, items: [] };
     group.items.push({ ...item, sourceWarehouseId: whId });

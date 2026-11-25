@@ -147,7 +147,12 @@ export class MaritimeFreightPipelineService {
     const config = await this.getTenantPipelineConfig(tenantId);
 
     if (config.automationMode === 'manual') {
-      return { processedRfqs: 0, awardedCount: 0, quotesGenerated: 0, details: ['الوضع التشغيلي مضبوط على يدوي بالكامل'] };
+      return {
+        processedRfqs: 0,
+        awardedCount: 0,
+        quotesGenerated: 0,
+        details: ['الوضع التشغيلي مضبوط على يدوي بالكامل'],
+      };
     }
 
     const openRfqs = await this.db
@@ -170,8 +175,11 @@ export class MaritimeFreightPipelineService {
       .executeTakeFirst();
     let systemCurrency = 'EGP';
     if (currencySetting) {
-      try { systemCurrency = String(JSON.parse(currencySetting.value)); }
-      catch { systemCurrency = String(currencySetting.value); }
+      try {
+        systemCurrency = String(JSON.parse(currencySetting.value));
+      } catch {
+        systemCurrency = String(currencySetting.value);
+      }
     }
     systemCurrency = systemCurrency.trim().toUpperCase();
 
@@ -202,7 +210,10 @@ export class MaritimeFreightPipelineService {
       const targetRate = rfq.target_rate_max ? Number(rfq.target_rate_max) : null;
 
       const earlyBid = config.earlyAwardingEnabled
-        ? bids.find((b) => Number(b.free_days) >= minFreeDays && (targetRate ? Number(b.total_freight_cost) <= targetRate : false))
+        ? bids.find(
+            (b) =>
+              Number(b.free_days) >= minFreeDays && (targetRate ? Number(b.total_freight_cost) <= targetRate : false),
+          )
         : null;
 
       if (!isDeadlineReached && !earlyBid) {
@@ -220,7 +231,9 @@ export class MaritimeFreightPipelineService {
             .where('id', '=', rfq.id)
             .execute();
         }
-        details.push(`طلب ${rfq.rfq_number}: العروض مكتملة، بانتظار الاعتماد والمراجعة البشرية للهامش (محطة توقف مفعلة)`);
+        details.push(
+          `طلب ${rfq.rfq_number}: العروض مكتملة، بانتظار الاعتماد والمراجعة البشرية للهامش (محطة توقف مفعلة)`,
+        );
         continue;
       }
 
@@ -242,7 +255,9 @@ export class MaritimeFreightPipelineService {
       try {
         exchangeRate = await this.resolveAutoQuoteExchangeRate(tenantId, bidCurrency);
       } catch {
-        details.push(`طلب ${rfq.rfq_number}: لا يوجد سعر صرف مسجل لعملة العرض (${bidCurrency})؛ لم يصدر عرض آلي، سجّل السعر ثم أعد التشغيل`);
+        details.push(
+          `طلب ${rfq.rfq_number}: لا يوجد سعر صرف مسجل لعملة العرض (${bidCurrency})؛ لم يصدر عرض آلي، سجّل السعر ثم أعد التشغيل`,
+        );
         continue;
       }
 
@@ -269,9 +284,12 @@ export class MaritimeFreightPipelineService {
         if (profit < marginFloor) {
           profit = marginFloor;
         }
-        const marginType = config.defaultMarginType === 'percentage' && baseCost > 0 && profit === baseCost * (config.defaultMarginValue / 100)
-          ? 'percentage'
-          : 'fixed';
+        const marginType =
+          config.defaultMarginType === 'percentage' &&
+          baseCost > 0 &&
+          profit === baseCost * (config.defaultMarginValue / 100)
+            ? 'percentage'
+            : 'fixed';
 
         // 3. Issue quotation
         const quote = await this.createQuotation(auth, {
@@ -304,7 +322,8 @@ export class MaritimeFreightPipelineService {
             try {
               const cleanPhone = rfq.customer_phone.replace(/[^0-9]/g, '');
               const totalClient = baseCost + profit;
-              const msg = `مرحباً ${rfq.customer_name || 'عميلنا العزيز'}، يسعدنا تقديم عرض سعر الشحن البحري:\n` +
+              const msg =
+                `مرحباً ${rfq.customer_name || 'عميلنا العزيز'}، يسعدنا تقديم عرض سعر الشحن البحري:\n` +
                 `• مسار: من ${rfq.pol_name} إلى ${rfq.pod_name}\n` +
                 `• الحاويات: ${rfq.container_count}x ${rfq.container_type}\n` +
                 `• الخط الملاحي: ${bestBid.shipping_line_name}\n` +
@@ -318,7 +337,9 @@ export class MaritimeFreightPipelineService {
           }
         }
 
-        details.push(`طلب ${rfq.rfq_number}: تمت الترسية آلياً على خط ${bestBid.shipping_line_name} بسعر ${baseCost}$ مع هامش ربح ${profit}$ وإصدار عرض ${quote.quotation_number}`);
+        details.push(
+          `طلب ${rfq.rfq_number}: تمت الترسية آلياً على خط ${bestBid.shipping_line_name} بسعر ${baseCost}$ مع هامش ربح ${profit}$ وإصدار عرض ${quote.quotation_number}`,
+        );
       } catch (err: any) {
         this.logger.error(`Error in automated RFQ pipeline for RFQ [${rfq.rfq_number}]: ${err?.message}`);
       }

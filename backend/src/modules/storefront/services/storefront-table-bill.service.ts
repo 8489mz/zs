@@ -49,7 +49,9 @@ export class StorefrontTableBillService {
    * Next-Gen F&B: Get active table check / bill for Pay-at-Table via QR code
    */
   async getActiveTableBill(slug: string, tableNumber: string) {
-    const cleanSlug = String(slug || '').trim().toLowerCase();
+    const cleanSlug = String(slug || '')
+      .trim()
+      .toLowerCase();
     const cleanTable = String(tableNumber || '').trim();
     const tenant = await this.getTenantBySlug(cleanSlug);
 
@@ -172,12 +174,15 @@ export class StorefrontTableBillService {
     // absent rate falls back (0 tax, 12 service percent); a present but
     // invalid rate fails closed inside the engine.
     const settings = await this.getTenantSettingsMap(tenant.id);
-    const serviceChargeEnabled = settings.get('restaurant_service_charge_enabled') === 'true' || settings.get('restaurantServiceChargeEnabled') === 'true';
+    const serviceChargeEnabled =
+      settings.get('restaurant_service_charge_enabled') === 'true' ||
+      settings.get('restaurantServiceChargeEnabled') === 'true';
     const totals = computeTableBillTotals({
       subtotal,
       discount,
       serviceChargeEnabled,
-      serviceChargePercent: settings.get('restaurant_service_charge_rate') ?? settings.get('restaurantServiceChargePercent'),
+      serviceChargePercent:
+        settings.get('restaurant_service_charge_rate') ?? settings.get('restaurantServiceChargePercent'),
       taxRate: settings.get('tax_rate') ?? settings.get('taxRate'),
       digits: storefrontMoneyDigits(settings, tenant),
     });
@@ -225,8 +230,6 @@ export class StorefrontTableBillService {
     void slug;
     void tableNumber;
     void dto;
-    throw new ServiceUnavailableException(
-      'الدفع الإلكتروني لفاتورة الطاولة غير متاح حالياً — ادفع عند الكاشير.',
-    );
+    throw new ServiceUnavailableException('الدفع الإلكتروني لفاتورة الطاولة غير متاح حالياً — ادفع عند الكاشير.');
   }
 }

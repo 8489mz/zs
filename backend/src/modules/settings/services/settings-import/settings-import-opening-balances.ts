@@ -23,42 +23,68 @@ export class SettingsImportOpeningBalances {
     return this.bound.tenantFields(actor);
   }
 
-  async addCustomerOpeningBalance(db: DbExecutor, customerId: number, amount: number, actor: AuthContext): Promise<void> {
+  async addCustomerOpeningBalance(
+    db: DbExecutor,
+    customerId: number,
+    amount: number,
+    actor: AuthContext,
+  ): Promise<void> {
     if (Math.abs(amount) <= 0.0001) return;
     const scope = this.scope(actor);
-    await db.insertInto('customer_ledger').values({
-      customer_id: customerId,
-      entry_type: 'opening_balance',
-      amount,
-      balance_after: amount,
-      note: 'رصيد أولي من الاستيراد',
-      reference_type: 'customer',
-      reference_id: customerId,
-      created_by: actor.userId,
-      branch_id: null,
-      location_id: null,
-      ...this.tenantFields(actor),
-    }).execute();
-    await db.updateTable('customers').set({ balance: amount, updated_at: sql`NOW()` }).where('id', '=', customerId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+    await db
+      .insertInto('customer_ledger')
+      .values({
+        customer_id: customerId,
+        entry_type: 'opening_balance',
+        amount,
+        balance_after: amount,
+        note: 'رصيد أولي من الاستيراد',
+        reference_type: 'customer',
+        reference_id: customerId,
+        created_by: actor.userId,
+        branch_id: null,
+        location_id: null,
+        ...this.tenantFields(actor),
+      })
+      .execute();
+    await db
+      .updateTable('customers')
+      .set({ balance: amount, updated_at: sql`NOW()` })
+      .where('id', '=', customerId)
+      .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+      .execute();
   }
 
-  async addSupplierOpeningBalance(db: DbExecutor, supplierId: number, amount: number, actor: AuthContext): Promise<void> {
+  async addSupplierOpeningBalance(
+    db: DbExecutor,
+    supplierId: number,
+    amount: number,
+    actor: AuthContext,
+  ): Promise<void> {
     if (Math.abs(amount) <= 0.0001) return;
     const scope = this.scope(actor);
-    await db.insertInto('supplier_ledger').values({
-      supplier_id: supplierId,
-      entry_type: 'opening_balance',
-      amount,
-      balance_after: amount,
-      note: 'رصيد أولي من الاستيراد',
-      reference_type: 'supplier',
-      reference_id: supplierId,
-      created_by: actor.userId,
-      branch_id: null,
-      location_id: null,
-      ...this.tenantFields(actor),
-    }).execute();
-    await db.updateTable('suppliers').set({ balance: amount, updated_at: sql`NOW()` }).where('id', '=', supplierId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+    await db
+      .insertInto('supplier_ledger')
+      .values({
+        supplier_id: supplierId,
+        entry_type: 'opening_balance',
+        amount,
+        balance_after: amount,
+        note: 'رصيد أولي من الاستيراد',
+        reference_type: 'supplier',
+        reference_id: supplierId,
+        created_by: actor.userId,
+        branch_id: null,
+        location_id: null,
+        ...this.tenantFields(actor),
+      })
+      .execute();
+    await db
+      .updateTable('suppliers')
+      .set({ balance: amount, updated_at: sql`NOW()` })
+      .where('id', '=', supplierId)
+      .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+      .execute();
   }
 
   /**
@@ -96,9 +122,13 @@ export class SettingsImportOpeningBalances {
     const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
     const amount = stockMovementTotal(opts.signedQty, opts.unitCost, digits);
     if (amount === 0) return;
-    const accounts = await trx.selectFrom('accounting_accounts').select(['id', 'code'])
-      .where('tenant_id', '=', scope.tenantId).where('code', 'in', ['1140', '3100'])
-      .where('is_active', '=', true).execute();
+    const accounts = await trx
+      .selectFrom('accounting_accounts')
+      .select(['id', 'code'])
+      .where('tenant_id', '=', scope.tenantId)
+      .where('code', 'in', ['1140', '3100'])
+      .where('is_active', '=', true)
+      .execute();
     const byCode = new Map(accounts.map((account) => [account.code, Number(account.id)]));
     if (!byCode.get('1140') || !byCode.get('3100')) {
       throw new AppError('Inventory or opening capital account is unavailable', 'OPENING_STOCK_ACCOUNT_MISSING', 422);
@@ -106,13 +136,38 @@ export class SettingsImportOpeningBalances {
     const value = Math.abs(amount);
     const increase = opts.signedQty > 0;
     await this.accountingPosting.postDomainJournal(trx, {
-      sourceType: opts.sourceType, sourceId: opts.sourceId,
-      tenantId: scope.tenantId, accountId: scope.accountId, entryDate: new Date(),
-      description: increase ? `رصيد افتتاحي مستورد للصنف ${opts.productId}` : `تخفيض رصيد افتتاحي مستورد للصنف ${opts.productId}`,
-      branchId: opts.branchId, locationId: opts.locationId, createdBy: opts.actor.userId,
+      sourceType: opts.sourceType,
+      sourceId: opts.sourceId,
+      tenantId: scope.tenantId,
+      accountId: scope.accountId,
+      entryDate: new Date(),
+      description: increase
+        ? `رصيد افتتاحي مستورد للصنف ${opts.productId}`
+        : `تخفيض رصيد افتتاحي مستورد للصنف ${opts.productId}`,
+      branchId: opts.branchId,
+      locationId: opts.locationId,
+      createdBy: opts.actor.userId,
       lines: [
-        { accountId: increase ? byCode.get('1140')! : byCode.get('3100')!, debit: value, credit: 0, description: increase ? 'إثبات مخزون افتتاحي مستورد' : 'تخفيض مقابل المخزون الافتتاحي المستورد', partnerType: 'none', partnerId: null, branchId: opts.branchId, locationId: opts.locationId },
-        { accountId: increase ? byCode.get('3100')! : byCode.get('1140')!, debit: 0, credit: value, description: increase ? 'مقابل المخزون الافتتاحي ضمن رأس المال' : 'تخفيض مخزون افتتاحي مستورد', partnerType: 'none', partnerId: null, branchId: opts.branchId, locationId: opts.locationId },
+        {
+          accountId: increase ? byCode.get('1140')! : byCode.get('3100')!,
+          debit: value,
+          credit: 0,
+          description: increase ? 'إثبات مخزون افتتاحي مستورد' : 'تخفيض مقابل المخزون الافتتاحي المستورد',
+          partnerType: 'none',
+          partnerId: null,
+          branchId: opts.branchId,
+          locationId: opts.locationId,
+        },
+        {
+          accountId: increase ? byCode.get('3100')! : byCode.get('1140')!,
+          debit: 0,
+          credit: value,
+          description: increase ? 'مقابل المخزون الافتتاحي ضمن رأس المال' : 'تخفيض مخزون افتتاحي مستورد',
+          partnerType: 'none',
+          partnerId: null,
+          branchId: opts.branchId,
+          locationId: opts.locationId,
+        },
       ],
     });
   }

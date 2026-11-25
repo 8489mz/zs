@@ -24,7 +24,7 @@ export class ImportAccountResolversSlice {
       | 'vat_receivable'
       | 'clearing'
       | 'equity',
-    preferredAccountId?: number | null
+    preferredAccountId?: number | null,
   ): Promise<number> {
     const roleExpectedTypes: Record<string, { type: string; label: string }> = {
       bank: { type: 'asset', label: 'الأصول/النقدية والبنك' },
@@ -102,7 +102,17 @@ export class ImportAccountResolversSlice {
     const accountById = async (id: number) => {
       return await trx
         .selectFrom('accounting_accounts')
-        .select(['id', 'account_id', 'code', 'account_type', 'is_active', 'is_cash_bank', 'is_inventory', 'is_payable', 'is_receivable'])
+        .select([
+          'id',
+          'account_id',
+          'code',
+          'account_type',
+          'is_active',
+          'is_cash_bank',
+          'is_inventory',
+          'is_payable',
+          'is_receivable',
+        ])
         .where('tenant_id', '=', tenantId)
         .where('id', '=', id)
         .executeTakeFirst();
@@ -119,7 +129,7 @@ export class ImportAccountResolversSlice {
       }
       if (!accountIsEligible(preferred)) {
         throw new BadRequestException(
-          `الحساب المحاسبي المحدد (${id}) غير صالح لدور (${role}) أو معطل. راجع نوع الحساب وعلامة وظيفته المحاسبية.`
+          `الحساب المحاسبي المحدد (${id}) غير صالح لدور (${role}) أو معطل. راجع نوع الحساب وعلامة وظيفته المحاسبية.`,
         );
       }
       return Number(preferred.id);
@@ -184,7 +194,17 @@ export class ImportAccountResolversSlice {
     for (const code of codes) {
       const byCode = await trx
         .selectFrom('accounting_accounts')
-        .select(['id', 'account_id', 'code', 'account_type', 'is_active', 'is_cash_bank', 'is_inventory', 'is_payable', 'is_receivable'])
+        .select([
+          'id',
+          'account_id',
+          'code',
+          'account_type',
+          'is_active',
+          'is_cash_bank',
+          'is_inventory',
+          'is_payable',
+          'is_receivable',
+        ])
         .where('tenant_id', '=', tenantId)
         .where('code', '=', code)
         .executeTakeFirst();
@@ -196,7 +216,7 @@ export class ImportAccountResolversSlice {
     // Strict Architectural Policy: Zero arbitrary fallbacks by account_type to prevent account contamination.
     // If no explicit matching account exists in settings or candidate codes, fail loudly.
     throw new UnprocessableEntityException(
-      `تعذر تحديد حساب محاسبي نشط ومصنف لدور (${role}) في دليل الحسابات. يرجى تهيئة وتفعيل الحساب المناسب في شجرة الحسابات أو إعدادات المحاسبة أولاً.`
+      `تعذر تحديد حساب محاسبي نشط ومصنف لدور (${role}) في دليل الحسابات. يرجى تهيئة وتفعيل الحساب المناسب في شجرة الحسابات أو إعدادات المحاسبة أولاً.`,
     );
   }
 
@@ -217,11 +237,19 @@ export class ImportAccountResolversSlice {
     tenantId: string,
     role: 'cogs' | 'forex_loss' | 'forex_gain' | 'inventory',
   ): Promise<number[]> {
-    const roleSpec: Record<string, { type: string; codes: string[]; settingsKey?: string; requireInventoryFlag?: boolean }> = {
+    const roleSpec: Record<
+      string,
+      { type: string; codes: string[]; settingsKey?: string; requireInventoryFlag?: boolean }
+    > = {
       cogs: { type: 'expense', codes: ['5110', '5101', '5100'], settingsKey: 'cogs_account_id' },
       forex_loss: { type: 'expense', codes: ['5201', '5190'] },
       forex_gain: { type: 'revenue', codes: ['4201', '4190'] },
-      inventory: { type: 'asset', codes: ['1140', '1141', '1200'], settingsKey: 'inventory_account_id', requireInventoryFlag: true },
+      inventory: {
+        type: 'asset',
+        codes: ['1140', '1141', '1200'],
+        settingsKey: 'inventory_account_id',
+        requireInventoryFlag: true,
+      },
     };
     const spec = roleSpec[role];
     let settingsId: number | null = null;
@@ -242,10 +270,7 @@ export class ImportAccountResolversSlice {
       .where('account_type', '=', spec.type)
       .$if(spec.requireInventoryFlag === true, (eb: any) => eb.where('is_inventory', '=', true))
       .where((eb: any) =>
-        eb.or([
-          ...(settingsId !== null ? [eb('id', '=', settingsId)] : []),
-          eb('code', 'in', spec.codes),
-        ]),
+        eb.or([...(settingsId !== null ? [eb('id', '=', settingsId)] : []), eb('code', 'in', spec.codes)]),
       )
       .execute();
     return rows.map((r) => Number(r.id)).filter((n) => Number.isSafeInteger(n) && n > 0);

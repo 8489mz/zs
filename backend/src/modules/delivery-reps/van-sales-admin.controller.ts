@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { VanSalesService } from './van-sales.service';
 import { VanPreSalesService } from './services/van-pre-sales.service';
 import { VanPromotionsService } from './services/van-promotions.service';
@@ -32,19 +45,10 @@ export class VanSalesAdminController {
     private readonly vanRoutesService: VanRoutesService,
     private readonly vanFieldExecutionService: VanFieldExecutionService,
   ) {
-    this.adminPreSalesTrips = new VanSalesAdminPreSalesTripsSlice(
-      this.vanSalesService,
-      this.vanPreSalesService,
-    );
-    this.adminFleet = new VanSalesAdminFleetSlice(
-      this.vanSalesService,
-    );
-    this.adminTargets = new VanSalesAdminTargetsSlice(
-      this.vanSalesService,
-    );
-    this.adminOps = new VanSalesAdminOpsSlice(
-      this.vanSalesService,
-    );
+    this.adminPreSalesTrips = new VanSalesAdminPreSalesTripsSlice(this.vanSalesService, this.vanPreSalesService);
+    this.adminFleet = new VanSalesAdminFleetSlice(this.vanSalesService);
+    this.adminTargets = new VanSalesAdminTargetsSlice(this.vanSalesService);
+    this.adminOps = new VanSalesAdminOpsSlice(this.vanSalesService);
     this.adminPromotionsLedger = new VanSalesAdminPromotionsLedgerSlice(
       this.vanSalesService,
       this.vanPromotionsService,
@@ -69,19 +73,13 @@ export class VanSalesAdminController {
 
   @Get('pre-sales-orders/:id')
   @RequirePermissions('deliveryRepsAdmin')
-  async getPreSalesOrderDetails(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async getPreSalesOrderDetails(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     return this.adminPreSalesTrips.getPreSalesOrderDetails(req, id);
   }
 
   @Post('pre-sales-orders/:id/approve')
   @RequirePermissions('deliveryRepsAdmin')
-  async approvePreSalesOrder(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async approvePreSalesOrder(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     return this.adminPreSalesTrips.approvePreSalesOrder(req, id);
   }
 
@@ -248,10 +246,7 @@ export class VanSalesAdminController {
 
   @Post('returns/:id/approve')
   @RequirePermissions('deliveryRepsAdmin')
-  async approveReturn(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async approveReturn(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     return this.adminFleet.approveReturn(req, id);
   }
 
@@ -267,10 +262,7 @@ export class VanSalesAdminController {
 
   @Get('available-products')
   @RequirePermissions('deliveryRepsAdmin')
-  async getAdminAvailableProducts(
-    @Req() req: RequestWithAuth,
-    @Query('warehouseId') warehouseId?: string,
-  ) {
+  async getAdminAvailableProducts(@Req() req: RequestWithAuth, @Query('warehouseId') warehouseId?: string) {
     return this.adminFleet.getAdminAvailableProducts(req, warehouseId);
   }
 
@@ -318,10 +310,7 @@ export class VanSalesAdminController {
 
   @Post('requisitions/:id/dispatch')
   @RequirePermissions('deliveryRepsAdmin')
-  async dispatchRequisition(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async dispatchRequisition(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     return this.adminFleet.dispatchRequisition(req, id);
   }
 
@@ -337,20 +326,14 @@ export class VanSalesAdminController {
 
   @Delete('requisitions/:id')
   @RequirePermissions('deliveryRepsAdmin')
-  async deleteRequisition(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async deleteRequisition(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     return this.adminFleet.deleteRequisition(req, id);
   }
 
   // Targets Management Endpoints
   @Get('targets')
   @RequirePermissions('deliveryRepsAdmin')
-  async listRepTargets(
-    @Req() req: RequestWithAuth,
-    @Query('month') month?: string,
-  ) {
+  async listRepTargets(@Req() req: RequestWithAuth, @Query('month') month?: string) {
     return this.adminTargets.listRepTargets(req, month);
   }
 
@@ -517,10 +500,7 @@ export class VanSalesAdminController {
   // Fleet Oil Changes Endpoints
   @Get('oil-changes')
   @RequirePermissions('deliveryRepsAdmin')
-  async listOilChanges(
-    @Req() req: RequestWithAuth,
-    @Query('vehicleId') vehicleId?: string,
-  ) {
+  async listOilChanges(@Req() req: RequestWithAuth, @Query('vehicleId') vehicleId?: string) {
     return this.adminOps.listOilChanges(req, vehicleId);
   }
 
@@ -553,10 +533,7 @@ export class VanSalesAdminController {
 
   @Get('vehicles/:id/drivers')
   @RequirePermissions('deliveryRepsAdmin')
-  async listVehicleDrivers(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async listVehicleDrivers(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     return this.adminOps.listVehicleDrivers(req, id);
   }
 
@@ -579,10 +556,7 @@ export class VanSalesAdminController {
 
   @Delete('vehicles/:id/drivers/:driverId')
   @RequirePermissions('deliveryRepsAdmin')
-  async removeVehicleDriver(
-    @Req() req: RequestWithAuth,
-    @Param('driverId', ParseIntPipe) driverId: number,
-  ) {
+  async removeVehicleDriver(@Req() req: RequestWithAuth, @Param('driverId', ParseIntPipe) driverId: number) {
     return this.adminOps.removeVehicleDriver(req, driverId);
   }
 
@@ -598,28 +572,19 @@ export class VanSalesAdminController {
 
   @Get('trips/:id/expenses')
   @RequirePermissions('deliveryRepsAdmin')
-  async getAdminTripExpenses(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async getAdminTripExpenses(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     return this.adminOps.getAdminTripExpenses(req, id);
   }
 
   @Get('trips/:id/packaging')
   @RequirePermissions('deliveryRepsAdmin')
-  async getAdminTripPackaging(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async getAdminTripPackaging(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     return this.adminOps.getAdminTripPackaging(req, id);
   }
 
   @Get('customers/:customerId/packaging')
   @RequirePermissions('deliveryRepsAdmin')
-  async getAdminCustomerPackaging(
-    @Req() req: RequestWithAuth,
-    @Param('customerId', ParseIntPipe) customerId: number,
-  ) {
+  async getAdminCustomerPackaging(@Req() req: RequestWithAuth, @Param('customerId', ParseIntPipe) customerId: number) {
     return this.adminOps.getAdminCustomerPackaging(req, customerId);
   }
 
@@ -661,29 +626,19 @@ export class VanSalesAdminController {
 
   @Post('promotions')
   @RequirePermissions('deliveryRepsAdmin')
-  async createPromotion(
-    @Req() req: RequestWithAuth,
-    @Body() body: any,
-  ) {
+  async createPromotion(@Req() req: RequestWithAuth, @Body() body: any) {
     return this.adminPromotionsLedger.createPromotion(req, body);
   }
 
   @Put('promotions/:id')
   @RequirePermissions('deliveryRepsAdmin')
-  async updatePromotion(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: any,
-  ) {
+  async updatePromotion(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.adminPromotionsLedger.updatePromotion(req, id, body);
   }
 
   @Delete('promotions/:id')
   @RequirePermissions('deliveryRepsAdmin')
-  async deletePromotion(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async deletePromotion(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     return this.adminPromotionsLedger.deletePromotion(req, id);
   }
 
@@ -701,7 +656,8 @@ export class VanSalesAdminController {
   @RequirePermissions('deliveryRepsAdmin')
   async optimizeSupervisorRoute(
     @Req() req: RequestWithAuth,
-    @Body() body: {
+    @Body()
+    body: {
       customerIds?: number[];
       route?: string;
       repId?: number;
@@ -739,10 +695,7 @@ export class VanSalesAdminController {
 
   @Get('trips/:tripId/breadcrumbs')
   @RequirePermissions('deliveryRepsAdmin')
-  async getLiveTripBreadcrumbs(
-    @Req() req: RequestWithAuth,
-    @Param('tripId', ParseIntPipe) tripId: number,
-  ) {
+  async getLiveTripBreadcrumbs(@Req() req: RequestWithAuth, @Param('tripId', ParseIntPipe) tripId: number) {
     return this.adminPromotionsLedger.getLiveTripBreadcrumbs(req, tripId);
   }
 
@@ -788,27 +741,19 @@ export class VanSalesAdminController {
 
   @Post('financial-ledger/link-employee')
   @RequirePermissions('deliveryRepsAdmin')
-  async linkRepToEmployee(
-    @Req() req: RequestWithAuth,
-    @Body() body: { repId: number; employeeId: number | null },
-  ) {
+  async linkRepToEmployee(@Req() req: RequestWithAuth, @Body() body: { repId: number; employeeId: number | null }) {
     return this.adminPromotionsLedger.linkRepToEmployee(req, body);
   }
 
   @Get('financial-ledger/candidate-employees')
   @RequirePermissions('deliveryRepsAdmin')
-  async listCandidateEmployees(
-    @Req() req: RequestWithAuth,
-  ) {
+  async listCandidateEmployees(@Req() req: RequestWithAuth) {
     return this.adminPromotionsLedger.listCandidateEmployees(req);
   }
 
   @Post('financial-ledger/auto-create-employee')
   @RequirePermissions('deliveryRepsAdmin')
-  async autoCreateEmployee(
-    @Req() req: RequestWithAuth,
-    @Body() body: { repId: number },
-  ) {
+  async autoCreateEmployee(@Req() req: RequestWithAuth, @Body() body: { repId: number }) {
     return this.adminPromotionsLedger.autoCreateEmployee(req, body);
   }
 }

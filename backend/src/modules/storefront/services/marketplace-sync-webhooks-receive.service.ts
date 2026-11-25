@@ -25,10 +25,7 @@ import {
   matchMarketplaceTenant,
   type MarketplaceTenantCandidate,
 } from '../engines/marketplace-webhook-event.engine';
-import type {
-  MarketplaceWebhookReceiptOpts,
-  SupportedMarketplace,
-} from './marketplace-sync.types';
+import type { MarketplaceWebhookReceiptOpts, SupportedMarketplace } from './marketplace-sync.types';
 
 export interface MarketplaceSyncWebhooksReceiveDeps {
   db: Kysely<Database>;
@@ -94,7 +91,7 @@ export class MarketplaceSyncWebhooksReceiveService {
     const identity = extractMarketplaceEventIdentity(payload ?? {});
     const candidates = await this.loadMarketplaceTenantCandidates(marketplace);
     const payloadTenantId = matchMarketplaceTenant(candidates, identity.sellerIds);
-    const tenantId = payloadTenantId ?? (identity.sellerIds.length === 0 ? sessionTenantId ?? null : null);
+    const tenantId = payloadTenantId ?? (identity.sellerIds.length === 0 ? (sessionTenantId ?? null) : null);
     const dedupKey = marketplaceWebhookDedupKey(marketplace, identity);
 
     const inserted = await this.db
@@ -109,7 +106,12 @@ export class MarketplaceSyncWebhooksReceiveService {
         payload: payload ?? {},
         payload_hash: identity.payloadHash,
         signature: opts?.signature ?? null,
-        raw_body: opts?.rawBody === undefined ? null : Buffer.isBuffer(opts.rawBody) ? opts.rawBody.toString('utf8') : opts.rawBody,
+        raw_body:
+          opts?.rawBody === undefined
+            ? null
+            : Buffer.isBuffer(opts.rawBody)
+              ? opts.rawBody.toString('utf8')
+              : opts.rawBody,
         status: tenantId ? 'pending' : 'unresolved',
       })
       .onConflict((oc) => oc.column('dedup_key').doNothing())
@@ -181,16 +183,18 @@ export class MarketplaceSyncWebhooksReceiveService {
   async listMarketplaceWebhookEvents(
     auth: AuthContext,
     filters: { marketplace?: SupportedMarketplace; status?: string; limit?: number },
-  ): Promise<Array<{
-    id: number;
-    marketplace: string;
-    eventType: string;
-    eventKey: string;
-    status: string;
-    receivedAt: Date;
-    processedAt: Date | null;
-    payload: unknown;
-  }>> {
+  ): Promise<
+    Array<{
+      id: number;
+      marketplace: string;
+      eventType: string;
+      eventKey: string;
+      status: string;
+      receivedAt: Date;
+      processedAt: Date | null;
+      payload: unknown;
+    }>
+  > {
     const scope = requireTenantScope(auth);
     const limit = Math.min(Math.max(filters.limit ?? 50, 1), 50);
     let query = this.db

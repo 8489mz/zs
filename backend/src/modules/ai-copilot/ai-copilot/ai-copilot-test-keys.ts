@@ -49,9 +49,17 @@ export class AiCopilotTestKeys {
       baseUrl?: string;
     },
     actor?: AuthContext,
-  ): Promise<{ success: boolean; message: string; model?: string; provider?: string; availableModels?: Array<{ id: string; displayName: string }> }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    model?: string;
+    provider?: string;
+    availableModels?: Array<{ id: string; displayName: string }>;
+  }> {
     const { tenantId } = actor ? requireTenantScope(actor) : { tenantId: '' };
-    const config = tenantId ? await this.getEffectiveAiConfig(tenantId) : { provider: 'gemini' as AiProvider, apiKey: null, model: '' };
+    const config = tenantId
+      ? await this.getEffectiveAiConfig(tenantId)
+      : { provider: 'gemini' as AiProvider, apiKey: null, model: '' };
 
     const keyToTest = (params.apiKey || config.apiKey || '').trim();
     const provider = params.provider || (keyToTest.startsWith('sk-') ? 'openai' : config.provider || 'gemini');
@@ -179,10 +187,10 @@ export class AiCopilotTestKeys {
       const friendlyErr = requestedModelError?.includes('503')
         ? 'النموذج يواجه ضغطاً مؤقتاً في سيرفرات Google حالياً (503 High Demand) - Spikes in demand are temporary.'
         : requestedModelError?.includes('404') || requestedModelError?.includes('no longer available')
-        ? 'النموذج غير متاح أو تم إيقافه لمفتاحك من قِبل Google (404 Deprecated).'
-        : requestedModelError?.includes('429')
-        ? 'تم تجاوز الحصة المتاحة لهذا النموذج من قِبل Google (429 Quota Exceeded).'
-        : requestedModelError || 'فشل الاتصال بالنموذج المحدد من قِبل Google';
+          ? 'النموذج غير متاح أو تم إيقافه لمفتاحك من قِبل Google (404 Deprecated).'
+          : requestedModelError?.includes('429')
+            ? 'تم تجاوز الحصة المتاحة لهذا النموذج من قِبل Google (429 Quota Exceeded).'
+            : requestedModelError || 'فشل الاتصال بالنموذج المحدد من قِبل Google';
 
       return {
         success: false,
@@ -239,7 +247,8 @@ export class AiCopilotTestKeys {
           if (errMsg.includes('API_KEY_SERVICE_BLOCKED')) {
             return {
               success: false,
-              message: 'المفتاح محظور (API_KEY_SERVICE_BLOCKED): يرجى في صفحة Google AI Studio الضغط على "Create API key in new project" لإنشاء مفتاح في مشروع جديد غير مقيد.',
+              message:
+                'المفتاح محظور (API_KEY_SERVICE_BLOCKED): يرجى في صفحة Google AI Studio الضغط على "Create API key in new project" لإنشاء مفتاح في مشروع جديد غير مقيد.',
             };
           }
 

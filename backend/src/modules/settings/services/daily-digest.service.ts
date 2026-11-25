@@ -57,8 +57,12 @@ export class DailyDigestService {
       includeSales: map.get('daily_digest_include_sales') !== false,
       includeTransfers: map.get('daily_digest_include_transfers') !== false,
       includeShortages: map.get('daily_digest_include_shortages') !== false,
-      mainWarehouseId: map.get('daily_digest_main_warehouse_id') ? Number(map.get('daily_digest_main_warehouse_id')) : undefined,
-      shopLocationId: map.get('daily_digest_shop_location_id') ? Number(map.get('daily_digest_shop_location_id')) : undefined,
+      mainWarehouseId: map.get('daily_digest_main_warehouse_id')
+        ? Number(map.get('daily_digest_main_warehouse_id'))
+        : undefined,
+      shopLocationId: map.get('daily_digest_shop_location_id')
+        ? Number(map.get('daily_digest_shop_location_id'))
+        : undefined,
     };
   }
 
@@ -69,11 +73,16 @@ export class DailyDigestService {
     if (payload.enabled !== undefined) updates.push({ key: 'daily_digest_enabled', val: payload.enabled });
     if (payload.phone !== undefined) updates.push({ key: 'daily_digest_phone', val: payload.phone });
     if (payload.timeOfDay !== undefined) updates.push({ key: 'daily_digest_time', val: payload.timeOfDay });
-    if (payload.includeSales !== undefined) updates.push({ key: 'daily_digest_include_sales', val: payload.includeSales });
-    if (payload.includeTransfers !== undefined) updates.push({ key: 'daily_digest_include_transfers', val: payload.includeTransfers });
-    if (payload.includeShortages !== undefined) updates.push({ key: 'daily_digest_include_shortages', val: payload.includeShortages });
-    if (payload.mainWarehouseId !== undefined) updates.push({ key: 'daily_digest_main_warehouse_id', val: payload.mainWarehouseId });
-    if (payload.shopLocationId !== undefined) updates.push({ key: 'daily_digest_shop_location_id', val: payload.shopLocationId });
+    if (payload.includeSales !== undefined)
+      updates.push({ key: 'daily_digest_include_sales', val: payload.includeSales });
+    if (payload.includeTransfers !== undefined)
+      updates.push({ key: 'daily_digest_include_transfers', val: payload.includeTransfers });
+    if (payload.includeShortages !== undefined)
+      updates.push({ key: 'daily_digest_include_shortages', val: payload.includeShortages });
+    if (payload.mainWarehouseId !== undefined)
+      updates.push({ key: 'daily_digest_main_warehouse_id', val: payload.mainWarehouseId });
+    if (payload.shopLocationId !== undefined)
+      updates.push({ key: 'daily_digest_shop_location_id', val: payload.shopLocationId });
 
     for (const item of updates) {
       await sql`
@@ -87,7 +96,10 @@ export class DailyDigestService {
     return { ok: true };
   }
 
-  async generateAndSendDigest(tenantId: string, overridePhone?: string): Promise<{ success: boolean; message?: string; text?: string }> {
+  async generateAndSendDigest(
+    tenantId: string,
+    overridePhone?: string,
+  ): Promise<{ success: boolean; message?: string; text?: string }> {
     const tenant = await this.db
       .selectFrom('tenants')
       .select(['business_name', 'owner_phone'])
@@ -135,9 +147,14 @@ export class DailyDigestService {
       month: 'long',
       day: 'numeric',
     });
-    const nowTimeStr = new Date().toLocaleTimeString('ar-EG', { timeZone: tenantTz, hour: '2-digit', minute: '2-digit' });
+    const nowTimeStr = new Date().toLocaleTimeString('ar-EG', {
+      timeZone: tenantTz,
+      hour: '2-digit',
+      minute: '2-digit',
+    });
 
-    let digestText = `🌙 *الملخص التنفيذي واللوجستي اليومي*\n` +
+    let digestText =
+      `🌙 *الملخص التنفيذي واللوجستي اليومي*\n` +
       `🏢 *${businessName}*\n` +
       `📅 ${todayDateStr} | ⏰ ${nowTimeStr}\n` +
       `━━━━━━━━━━━━━━━━━━━━\n\n`;
@@ -149,9 +166,15 @@ export class DailyDigestService {
         .select([
           sql<number>`COUNT(id)`.as('invoices_count'),
           sql<number>`COALESCE(SUM(total), 0)`.as('total_sales'),
-          sql<number>`COALESCE(SUM(CASE WHEN payment_channel = 'cash' THEN paid_amount ELSE 0 END), 0)`.as('cash_total'),
-          sql<number>`COALESCE(SUM(CASE WHEN payment_channel = 'card' THEN paid_amount ELSE 0 END), 0)`.as('card_total'),
-          sql<number>`COALESCE(SUM(CASE WHEN payment_channel IN ('wallet', 'instapay') THEN paid_amount ELSE 0 END), 0)`.as('instapay_total'),
+          sql<number>`COALESCE(SUM(CASE WHEN payment_channel = 'cash' THEN paid_amount ELSE 0 END), 0)`.as(
+            'cash_total',
+          ),
+          sql<number>`COALESCE(SUM(CASE WHEN payment_channel = 'card' THEN paid_amount ELSE 0 END), 0)`.as(
+            'card_total',
+          ),
+          sql<number>`COALESCE(SUM(CASE WHEN payment_channel IN ('wallet', 'instapay') THEN paid_amount ELSE 0 END), 0)`.as(
+            'instapay_total',
+          ),
         ])
         .where('tenant_id', '=', tenantId)
         .where('status', '!=', 'cancelled')
@@ -168,10 +191,7 @@ export class DailyDigestService {
       const topItems = await this.db
         .selectFrom('sale_items as si')
         .innerJoin('sales as s', 's.id', 'si.sale_id')
-        .select([
-          'si.product_name',
-          sql<number>`SUM(si.qty)`.as('qty_sold'),
-        ])
+        .select(['si.product_name', sql<number>`SUM(si.qty)`.as('qty_sold')])
         .where('s.tenant_id', '=', tenantId)
         .where('s.status', '!=', 'cancelled')
         .where(sql<boolean>`DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey}`)
@@ -180,15 +200,16 @@ export class DailyDigestService {
         .limit(3)
         .execute();
 
-      digestText += `📊 *المبيعات والإيرادات اليومية:*\n` +
+      digestText +=
+        `📊 *المبيعات والإيرادات اليومية:*\n` +
         `• إجمالي المبيعات: *${totalSales} ج.م* (${invoicesCount} فاتورة)\n` +
         `• نقدية بالصندوق (كاش): ${cashTotal} ج.م\n` +
         `• شبكة وماكينات دفع: ${cardTotal} ج.م\n` +
         `• إنستاباي ومحافظ: ${instapayTotal} ج.م\n`;
 
       if (topItems.length > 0) {
-        digestText += `🔥 الأكثر مبيعاً: ` +
-          topItems.map((it) => `${it.product_name} (${it.qty_sold} ق)`).join('، ') + `\n`;
+        digestText +=
+          `🔥 الأكثر مبيعاً: ` + topItems.map((it) => `${it.product_name} (${it.qty_sold} ق)`).join('، ') + `\n`;
       }
 
       digestText += `\n`;
@@ -301,8 +322,7 @@ export class DailyDigestService {
       }
     }
 
-    digestText += `━━━━━━━━━━━━━━━━━━━━\n` +
-      `_تم الإنشاء والإرسال آلياً عبر منظومة Z-Systems المؤسسية_`;
+    digestText += `━━━━━━━━━━━━━━━━━━━━\n` + `_تم الإنشاء والإرسال آلياً عبر منظومة Z-Systems المؤسسية_`;
 
     const sendRes = await this.whatsappGateway.sendRawMessage(tenantId, recipientPhone, digestText);
     return {

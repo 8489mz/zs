@@ -26,11 +26,15 @@ export class ContractingDocumentsSlice {
   // 15. Equipment Fuel & Operating Meter Logs
   // ==========================================================================
 
-    async getEquipmentFuelLogs(auth: AuthContext, projectId: string): Promise<ContractingEquipmentFuelLog[]> {
+  async getEquipmentFuelLogs(auth: AuthContext, projectId: string): Promise<ContractingEquipmentFuelLog[]> {
     return this.documentsService.getEquipmentFuelLogs(auth, projectId);
   }
 
-    async createEquipmentFuelLog(auth: AuthContext, projectId: string, dto: CreateEquipmentFuelLogDto): Promise<ContractingEquipmentFuelLog> {
+  async createEquipmentFuelLog(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateEquipmentFuelLogDto,
+  ): Promise<ContractingEquipmentFuelLog> {
     return this.documentsService.createEquipmentFuelLog(auth, projectId, dto);
   }
 
@@ -54,7 +58,11 @@ export class ContractingDocumentsSlice {
     return this.documentsService.addDocumentRevision(auth, documentId, dto);
   }
 
-  async updateDocumentRevisionStatus(auth: AuthContext, revisionId: string, dto: UpdateContractingDocumentRevisionStatusDto) {
+  async updateDocumentRevisionStatus(
+    auth: AuthContext,
+    revisionId: string,
+    dto: UpdateContractingDocumentRevisionStatusDto,
+  ) {
     return this.documentsService.updateDocumentRevisionStatus(auth, revisionId, dto);
   }
 

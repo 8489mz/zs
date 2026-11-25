@@ -10,7 +10,11 @@ import { isPlatformTenantId, requireTenantScope } from '../../../core/auth/utils
 import { AppError } from '../../../common/errors/app-error';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { resolveTenantPackage } from '../../../core/tenant-transfer/backup-bundle';
-import { exportTenantPackage, importTenantPackage, TenantPackageError } from '../../../core/tenant-transfer/tenant-package';
+import {
+  exportTenantPackage,
+  importTenantPackage,
+  TenantPackageError,
+} from '../../../core/tenant-transfer/tenant-package';
 import { SettingsService } from '../settings.service';
 import { isDesktopRuntimeMode } from '../../../config/app-mode';
 import { isProtectedTenantDataTarget } from '../../../core/tenant-transfer/protected-tenant-target';
@@ -62,7 +66,9 @@ export class TenantTransferService {
       // only the cloud hands out offline id blocks; a desktop carries the block it received
       allocateOfflineBlock: !desktop,
     });
-    await this.audit.log('تصدير حزمة بيانات المنشأة', `تم تصدير حزمة بيانات المنشأة بواسطة ${auth.username}`, auth).catch(() => undefined);
+    await this.audit
+      .log('تصدير حزمة بيانات المنشأة', `تم تصدير حزمة بيانات المنشأة بواسطة ${auth.username}`, auth)
+      .catch(() => undefined);
     const day = await resolveBusinessDateKey(this.db, scope.tenantId, new Date());
     const slug = (manifest.origin?.slug || manifest.tenant.slug || 'tenant').replace(/[^A-Za-z0-9_-]+/g, '-');
     return { buffer, fileName: `ZERP-tenant-${slug}-${day}.zsbak` };
@@ -76,12 +82,17 @@ export class TenantTransferService {
     this.assertCanTransfer(auth);
     const scope = requireTenantScope(auth);
     if (isProtectedTenantDataTarget(scope.tenantId)) {
-
-      throw new ForbiddenException('ممنوع منعاً باتاً استيراد حزم بيانات فوق منشأة المنصة المركزية السحابية (zs). المنصة مخصصة لإدارة المشتركين فقط.');
+      throw new ForbiddenException(
+        'ممنوع منعاً باتاً استيراد حزم بيانات فوق منشأة المنصة المركزية السحابية (zs). المنصة مخصصة لإدارة المشتركين فقط.',
+      );
     }
 
     if (String(options.confirmation || '').trim() !== TENANT_IMPORT_CONFIRMATION) {
-      throw new AppError(`اكتب ${TENANT_IMPORT_CONFIRMATION} لتأكيد استبدال كل بيانات المنشأة`, 'TENANT_IMPORT_CONFIRMATION_REQUIRED', 400);
+      throw new AppError(
+        `اكتب ${TENANT_IMPORT_CONFIRMATION} لتأكيد استبدال كل بيانات المنشأة`,
+        'TENANT_IMPORT_CONFIRMATION_REQUIRED',
+        400,
+      );
     }
 
     let packageBuffer: Buffer;
@@ -90,12 +101,21 @@ export class TenantTransferService {
     } catch (error: any) {
       if (Array.isArray(error?.bundleTenants)) {
         throw new AppError('الملف يحتوي أكثر من منشأة: اختر المنشأة المطلوبة', 'TENANT_PICK_REQUIRED', 409, {
-          tenants: error.bundleTenants.map((t: any) => ({ tenantId: t.tenantId, slug: t.slug, businessName: t.businessName, rows: t.rows })),
+          tenants: error.bundleTenants.map((t: any) => ({
+            tenantId: t.tenantId,
+            slug: t.slug,
+            businessName: t.businessName,
+            rows: t.rows,
+          })),
         });
       }
       const message = String(error?.message || '');
       if (/passphrase/i.test(message)) {
-        throw new AppError(/Wrong/i.test(message) ? 'كلمة سر النسخة غير صحيحة' : 'النسخة مشفرة: أدخل كلمة سر النسخ الاحتياطي', 'BACKUP_PASSPHRASE', 400);
+        throw new AppError(
+          /Wrong/i.test(message) ? 'كلمة سر النسخة غير صحيحة' : 'النسخة مشفرة: أدخل كلمة سر النسخ الاحتياطي',
+          'BACKUP_PASSPHRASE',
+          400,
+        );
       }
       throw new AppError('الملف ليس نسخة احتياطية أو حزمة بيانات صالحة', 'PACKAGE_INVALID', 400);
     }
@@ -110,15 +130,19 @@ export class TenantTransferService {
       this.settings.invalidateSettingsCache(scope.tenantId);
       this.settings.invalidateBranchesCache(scope.tenantId);
       this.settings.invalidatePlanFeaturesCache(scope.tenantId);
-      await this.audit.log(
-        'استيراد حزمة بيانات المنشأة',
-        `تم استبدال بيانات المنشأة بحزمة ${report.sourceTenant.businessName || report.sourceTenant.slug} (${report.rows} سجل) بواسطة ${auth.username}`,
-        auth,
-      ).catch(() => undefined);
+      await this.audit
+        .log(
+          'استيراد حزمة بيانات المنشأة',
+          `تم استبدال بيانات المنشأة بحزمة ${report.sourceTenant.businessName || report.sourceTenant.slug} (${report.rows} سجل) بواسطة ${auth.username}`,
+          auth,
+        )
+        .catch(() => undefined);
       return { ok: true, ...report, loggedOut: true };
     } catch (error: any) {
       if (error instanceof TenantPackageError) {
-        throw new AppError(PACKAGE_ERROR_MESSAGES[error.code] ?? error.message, `TENANT_${error.code}`, 400, { detail: error.message });
+        throw new AppError(PACKAGE_ERROR_MESSAGES[error.code] ?? error.message, `TENANT_${error.code}`, 400, {
+          detail: error.message,
+        });
       }
       throw error;
     }

@@ -72,7 +72,7 @@ export class AddonsController {
   linkProductModifiers(
     @Param('productId', ParseIntPipe) productId: number,
     @Body('groupIds') groupIds: number[],
-    @Req() req: RequestWithAuth
+    @Req() req: RequestWithAuth,
   ) {
     return this.addonsService.linkProductModifiers(productId, groupIds, req.authContext!);
   }

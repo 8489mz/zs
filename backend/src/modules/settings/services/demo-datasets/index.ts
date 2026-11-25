@@ -16,12 +16,16 @@ export const DEMO_DATASETS: Record<string, DemoActivityDataset> = {
 };
 
 export function getDemoDataset(activityKey?: string): DemoActivityDataset {
-  const key = String(activityKey || 'supermarket').trim().toLowerCase();
+  const key = String(activityKey || 'supermarket')
+    .trim()
+    .toLowerCase();
   return DEMO_DATASETS[key] || supermarketDataset;
 }
 
 export function mapIndustryToDemoActivity(industry?: string): string {
-  const norm = String(industry || '').trim().toLowerCase();
+  const norm = String(industry || '')
+    .trim()
+    .toLowerCase();
   switch (norm) {
     case 'restaurant':
     case 'cafe':

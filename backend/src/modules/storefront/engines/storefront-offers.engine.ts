@@ -72,7 +72,10 @@ export function normalizeDateOnly(value: unknown): string {
 export function todayLocalIsoDate(timezone = 'Africa/Cairo', now = new Date()): string {
   const format = (zone: string): string => {
     const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: zone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
     }).formatToParts(now);
     const value = (type: string) => parts.find((part) => part.type === type)?.value || '';
     return `${value('year')}-${value('month')}-${value('day')}`;
@@ -107,10 +110,15 @@ export function isOfferActiveNow(
 
   // Day of week check (e.g. "0,1,2,3,4,5,6" or "sun,mon,...")
   if (offer.days_of_week && typeof offer.days_of_week === 'string' && offer.days_of_week.trim()) {
-    const localDay = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' }).format(now).toLowerCase();
+    const localDay = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' })
+      .format(now)
+      .toLowerCase();
     const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
     const dayNum = String(dayNames.indexOf(localDay)); // 0 is Sunday
-    const daysAllowed = offer.days_of_week.toLowerCase().split(',').map((d) => d.trim());
+    const daysAllowed = offer.days_of_week
+      .toLowerCase()
+      .split(',')
+      .map((d) => d.trim());
     const currentName = localDay;
     if (!daysAllowed.includes(dayNum) && !daysAllowed.includes(currentName)) {
       return false;
@@ -119,12 +127,18 @@ export function isOfferActiveNow(
 
   // Happy hour time range check (format "HH:MM")
   if (offer.happy_hour_start && offer.happy_hour_end) {
-    const currentTimeStr = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
+    const currentTimeStr = new Intl.DateTimeFormat('en-GB', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(now);
     const start = offer.happy_hour_start.slice(0, 5);
     const end = offer.happy_hour_end.slice(0, 5);
-    const inWindow = start <= end
-      ? currentTimeStr >= start && currentTimeStr <= end
-      : currentTimeStr >= start || currentTimeStr <= end;
+    const inWindow =
+      start <= end
+        ? currentTimeStr >= start && currentTimeStr <= end
+        : currentTimeStr >= start || currentTimeStr <= end;
     if (!inWindow) {
       return false;
     }
@@ -164,7 +178,7 @@ export function calculateOfferAdjustedPrice(
     if (normalizedQty < minQty) return roundBookMoney(basePrice, digits);
     const bundles = Math.floor(normalizedQty / minQty);
     const remainder = normalizedQty % minQty;
-    const total = (bundles * offerValue) + (remainder * basePrice);
+    const total = bundles * offerValue + remainder * basePrice;
     return roundBookMoney(total / normalizedQty, digits);
   }
 
@@ -175,7 +189,7 @@ export function calculateOfferAdjustedPrice(
     const normalizedQty = Math.max(1, Math.trunc(Number(qty || 1)));
     const freeUnits = Math.floor(normalizedQty / (buyQ + getQ)) * getQ;
     if (!freeUnits) return roundBookMoney(basePrice, digits);
-    const total = (normalizedQty * basePrice) - (freeUnits * basePrice * discPct / 100);
+    const total = normalizedQty * basePrice - (freeUnits * basePrice * discPct) / 100;
     return roundBookMoney(Math.max(0, total) / normalizedQty, digits);
   }
 
@@ -203,7 +217,9 @@ export function resolveBestStorefrontOffer(
     };
   }
 
-  const activeOffers = offers.filter((off) => isOfferActiveNow(off, todayIso ?? todayLocalIsoDate(timezone, now), now, timezone));
+  const activeOffers = offers.filter((off) =>
+    isOfferActiveNow(off, todayIso ?? todayLocalIsoDate(timezone, now), now, timezone),
+  );
   if (activeOffers.length === 0) {
     return {
       hasDiscount: false,
@@ -250,9 +266,7 @@ export function resolveBestStorefrontOffer(
           const buyQ = Number(offer.bogo_buy_qty || 1);
           const getQ = Number(offer.bogo_get_qty || 1);
           const discPct = Number(offer.bogo_discount_percent ?? 100);
-          badge = discPct === 100
-            ? `اشتري ${buyQ} واكسب ${getQ}`
-            : `اشتري ${buyQ} و${getQ} بخصم ${discPct}%`;
+          badge = discPct === 100 ? `اشتري ${buyQ} واكسب ${getQ}` : `اشتري ${buyQ} و${getQ} بخصم ${discPct}%`;
         } else if (offer.offer_type === 'fixed') {
           badge = `وفر ${roundBookMoney(Number(offer.value), digits)} ج`;
         } else if (offer.offer_type === 'price') {

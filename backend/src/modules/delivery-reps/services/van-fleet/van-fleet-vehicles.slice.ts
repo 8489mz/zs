@@ -53,18 +53,10 @@ export class VanFleetVehiclesSlice {
         throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
       }
       if (Number((trip as any).rep_id) !== Number(repId)) {
-        throw new AppError(
-          'هذه الرحلة تخص مندوباً آخر، لا يمكنك تسجيل وقود عليها',
-          'REP_TRIP_NOT_OWNED',
-          403,
-        );
+        throw new AppError('هذه الرحلة تخص مندوباً آخر، لا يمكنك تسجيل وقود عليها', 'REP_TRIP_NOT_OWNED', 403);
       }
       if ((trip as any).vehicle_id != null && Number((trip as any).vehicle_id) !== Number(vehicleId)) {
-        throw new AppError(
-          'هذه المركبة ليست مركبة الرحلة المذكورة',
-          'REP_VEHICLE_NOT_ASSIGNED',
-          403,
-        );
+        throw new AppError('هذه المركبة ليست مركبة الرحلة المذكورة', 'REP_VEHICLE_NOT_ASSIGNED', 403);
       }
       return;
     }
@@ -91,11 +83,7 @@ export class VanFleetVehiclesSlice {
       .executeTakeFirst();
     if (ownTrip) return;
 
-    throw new AppError(
-      'هذه المركبة ليست مسندة إليك، لا يمكنك تسجيل وقود/زيت عليها',
-      'REP_VEHICLE_NOT_ASSIGNED',
-      403,
-    );
+    throw new AppError('هذه المركبة ليست مسندة إليك، لا يمكنك تسجيل وقود/زيت عليها', 'REP_VEHICLE_NOT_ASSIGNED', 403);
   }
 
   /**
@@ -304,7 +292,12 @@ export class VanFleetVehiclesSlice {
         await this.reassignVehicleRep(
           trx,
           tenantId,
-          { id: Number(inserted.id), van_location_id: Number(loc.id), assigned_rep_id: null, plate_number: plateNumber },
+          {
+            id: Number(inserted.id),
+            van_location_id: Number(loc.id),
+            assigned_rep_id: null,
+            plate_number: plateNumber,
+          },
           Number(payload.assignedRepId),
         );
       }
@@ -335,11 +328,7 @@ export class VanFleetVehiclesSlice {
     },
   ) {
     if (payload.status && !FLEET_VEHICLE_STATUSES.includes(payload.status as any)) {
-      throw new AppError(
-        `حالة مركبة غير صالحة: "${payload.status}"`,
-        'INVALID_VEHICLE_STATUS',
-        400,
-      );
+      throw new AppError(`حالة مركبة غير صالحة: "${payload.status}"`, 'INVALID_VEHICLE_STATUS', 400);
     }
 
     await this.db.transaction().execute(async (trx) => {
@@ -368,9 +357,15 @@ export class VanFleetVehiclesSlice {
         );
       }
 
-      const afterReassign = payload.assignedRepId !== undefined
-        ? await trxAny.selectFrom('fleet_vehicles').select(['assigned_rep_id', 'status']).where('id', '=', id).where('tenant_id', '=', tenantId).executeTakeFirstOrThrow()
-        : { assigned_rep_id: existing.assigned_rep_id, status: existing.status };
+      const afterReassign =
+        payload.assignedRepId !== undefined
+          ? await trxAny
+              .selectFrom('fleet_vehicles')
+              .select(['assigned_rep_id', 'status'])
+              .where('id', '=', id)
+              .where('tenant_id', '=', tenantId)
+              .executeTakeFirstOrThrow()
+          : { assigned_rep_id: existing.assigned_rep_id, status: existing.status };
 
       await trxAny
         .updateTable('fleet_vehicles')
@@ -379,10 +374,13 @@ export class VanFleetVehiclesSlice {
           model_name: payload.modelName !== undefined ? payload.modelName?.trim() : existing.model_name,
           vehicle_type: payload.vehicleType || existing.vehicle_type,
           vin_chassis: payload.vinChassis !== undefined ? payload.vinChassis?.trim() : existing.vin_chassis,
-          branch_id: payload.branchId !== undefined ? (payload.branchId ? Number(payload.branchId) : null) : existing.branch_id,
-          current_odometer: payload.currentOdometer !== undefined ? Number(payload.currentOdometer) : existing.current_odometer,
+          branch_id:
+            payload.branchId !== undefined ? (payload.branchId ? Number(payload.branchId) : null) : existing.branch_id,
+          current_odometer:
+            payload.currentOdometer !== undefined ? Number(payload.currentOdometer) : existing.current_odometer,
           fuel_type: payload.fuelType || existing.fuel_type,
-          license_expires_at: payload.licenseExpiresAt !== undefined ? payload.licenseExpiresAt : existing.license_expires_at,
+          license_expires_at:
+            payload.licenseExpiresAt !== undefined ? payload.licenseExpiresAt : existing.license_expires_at,
           status: payload.status || afterReassign.status,
           assigned_rep_id: afterReassign.assigned_rep_id,
           notes: payload.notes !== undefined ? payload.notes?.trim() : existing.notes,

@@ -1,21 +1,15 @@
-import {
-  BadRequestException,
-  UnauthorizedException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
-import {
-  type Kysely,
-  sql,
-  type Transaction,
-  type Selectable,
-} from 'kysely';
+import { BadRequestException, UnauthorizedException, Injectable, Logger } from '@nestjs/common';
+import { type Kysely, sql, type Transaction, type Selectable } from 'kysely';
 import { type Database, type TenantTable, type OnlineOrderTable } from '../../database/database.types';
 import { type WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 import { isSandboxPaymentAllowed } from './engines/online-order-access.engine';
 import { toGatewayMinorAmount } from './engines/gateway-amount.engine';
 import * as crypto from 'crypto';
-import { type TenantPaymentConfig, type StorefrontWebhookResult, type LockedOnlineOrder } from './storefront-payment.types';
+import {
+  type TenantPaymentConfig,
+  type StorefrontWebhookResult,
+  type LockedOnlineOrder,
+} from './storefront-payment.types';
 
 /**
  * StorefrontPaymentWebhooks2Service — slice S4 of the storefront payment split.
@@ -33,14 +27,43 @@ export interface StorefrontPaymentWebhooks2Deps {
   // Bound cross-slice deps from the facade's own methods (passed bound
   // so the moved bodies stay byte-identical).
   getTenantBySlug: (slug: string) => Promise<Selectable<TenantTable>>;
-  findOrderByToken: (tenantId: string, orderNumber: string, token: string | undefined) => Promise<Selectable<OnlineOrderTable>>;
+  findOrderByToken: (
+    tenantId: string,
+    orderNumber: string,
+    token: string | undefined,
+  ) => Promise<Selectable<OnlineOrderTable>>;
   expectedPaymentCurrency: (trx: Transaction<Database>, tenantId: string, provider: string) => Promise<string>;
-  paymentReviewReason: (order: LockedOnlineOrder, provider: string, sessionId: string, amountMinor: unknown, currency: unknown, expectedCurrency: string) => string | null;
-  markPaymentForReview: (trx: Transaction<Database>, order: LockedOnlineOrder, provider: string, transactionId: string, sessionId: string, response: unknown, reason: string) => Promise<StorefrontWebhookResult>;
+  paymentReviewReason: (
+    order: LockedOnlineOrder,
+    provider: string,
+    sessionId: string,
+    amountMinor: unknown,
+    currency: unknown,
+    expectedCurrency: string,
+  ) => string | null;
+  markPaymentForReview: (
+    trx: Transaction<Database>,
+    order: LockedOnlineOrder,
+    provider: string,
+    transactionId: string,
+    sessionId: string,
+    response: unknown,
+    reason: string,
+  ) => Promise<StorefrontWebhookResult>;
   isCurrentPaymentSession: (order: LockedOnlineOrder, provider: string, sessionId: string) => boolean;
-  isRepeatedPaidWebhook: (order: LockedOnlineOrder, provider: string, transactionId: string, sessionId: string) => boolean;
+  isRepeatedPaidWebhook: (
+    order: LockedOnlineOrder,
+    provider: string,
+    transactionId: string,
+    sessionId: string,
+  ) => boolean;
   getTenantPaymentConfig: (tenantId: string) => Promise<TenantPaymentConfig>;
-  resolveWebhookOrder: (params: { provider: string; tenantId: string; orderNumber: string; gatewayOrderId: string }) => Promise<Selectable<OnlineOrderTable> | null>;
+  resolveWebhookOrder: (params: {
+    provider: string;
+    tenantId: string;
+    orderNumber: string;
+    gatewayOrderId: string;
+  }) => Promise<Selectable<OnlineOrderTable> | null>;
   compensateFailedOrderPayment: (trx: Transaction<Database>, order: any, gatewayResponse: any) => Promise<void>;
 }
 
@@ -49,15 +72,52 @@ export class StorefrontPaymentWebhooks2Service {
   private readonly db: Kysely<Database>;
   private readonly whatsappService?: WhatsAppGatewayService;
   private readonly getTenantBySlug: (slug: string) => Promise<Selectable<TenantTable>>;
-  private readonly findOrderByToken: (tenantId: string, orderNumber: string, token: string | undefined) => Promise<Selectable<OnlineOrderTable>>;
-  private readonly expectedPaymentCurrency: (trx: Transaction<Database>, tenantId: string, provider: string) => Promise<string>;
-  private readonly paymentReviewReason: (order: LockedOnlineOrder, provider: string, sessionId: string, amountMinor: unknown, currency: unknown, expectedCurrency: string) => string | null;
-  private readonly markPaymentForReview: (trx: Transaction<Database>, order: LockedOnlineOrder, provider: string, transactionId: string, sessionId: string, response: unknown, reason: string) => Promise<StorefrontWebhookResult>;
+  private readonly findOrderByToken: (
+    tenantId: string,
+    orderNumber: string,
+    token: string | undefined,
+  ) => Promise<Selectable<OnlineOrderTable>>;
+  private readonly expectedPaymentCurrency: (
+    trx: Transaction<Database>,
+    tenantId: string,
+    provider: string,
+  ) => Promise<string>;
+  private readonly paymentReviewReason: (
+    order: LockedOnlineOrder,
+    provider: string,
+    sessionId: string,
+    amountMinor: unknown,
+    currency: unknown,
+    expectedCurrency: string,
+  ) => string | null;
+  private readonly markPaymentForReview: (
+    trx: Transaction<Database>,
+    order: LockedOnlineOrder,
+    provider: string,
+    transactionId: string,
+    sessionId: string,
+    response: unknown,
+    reason: string,
+  ) => Promise<StorefrontWebhookResult>;
   private readonly isCurrentPaymentSession: (order: LockedOnlineOrder, provider: string, sessionId: string) => boolean;
-  private readonly isRepeatedPaidWebhook: (order: LockedOnlineOrder, provider: string, transactionId: string, sessionId: string) => boolean;
+  private readonly isRepeatedPaidWebhook: (
+    order: LockedOnlineOrder,
+    provider: string,
+    transactionId: string,
+    sessionId: string,
+  ) => boolean;
   private readonly getTenantPaymentConfig: (tenantId: string) => Promise<TenantPaymentConfig>;
-  private readonly resolveWebhookOrder: (params: { provider: string; tenantId: string; orderNumber: string; gatewayOrderId: string }) => Promise<Selectable<OnlineOrderTable> | null>;
-  private readonly compensateFailedOrderPayment: (trx: Transaction<Database>, order: any, gatewayResponse: any) => Promise<void>;
+  private readonly resolveWebhookOrder: (params: {
+    provider: string;
+    tenantId: string;
+    orderNumber: string;
+    gatewayOrderId: string;
+  }) => Promise<Selectable<OnlineOrderTable> | null>;
+  private readonly compensateFailedOrderPayment: (
+    trx: Transaction<Database>,
+    order: any,
+    gatewayResponse: any,
+  ) => Promise<void>;
   private readonly logger = new Logger(StorefrontPaymentWebhooks2Service.name);
 
   constructor(deps: StorefrontPaymentWebhooks2Deps) {
@@ -194,15 +254,23 @@ export class StorefrontPaymentWebhooks2Service {
     // 1. If hashstring is present, verify HMAC-SHA256
     if (hashHeader) {
       const strToHash = `${body?.id || ''}${Number(body?.amount || 0).toFixed(2)}${body?.currency || ''}${body?.gateway?.reference || ''}${body?.payment_reference || ''}${body?.status || ''}${body?.created || ''}`;
-      const computedFromFields = crypto.createHmac('sha256', config.tapSecretKey.trim()).update(strToHash).digest('hex');
-      const computedFromRaw = rawBody && rawBody.length > 0 ? crypto.createHmac('sha256', config.tapSecretKey.trim()).update(rawBody).digest('hex') : '';
+      const computedFromFields = crypto
+        .createHmac('sha256', config.tapSecretKey.trim())
+        .update(strToHash)
+        .digest('hex');
+      const computedFromRaw =
+        rawBody && rawBody.length > 0
+          ? crypto.createHmac('sha256', config.tapSecretKey.trim()).update(rawBody).digest('hex')
+          : '';
 
       const hashBuf = Buffer.from(hashHeader.toLowerCase());
       const fBuf = Buffer.from(computedFromFields.toLowerCase());
       const rBuf = Buffer.from(computedFromRaw.toLowerCase());
 
-      if ((hashBuf.length === fBuf.length && crypto.timingSafeEqual(hashBuf, fBuf)) ||
-          (rBuf.length > 0 && hashBuf.length === rBuf.length && crypto.timingSafeEqual(hashBuf, rBuf))) {
+      if (
+        (hashBuf.length === fBuf.length && crypto.timingSafeEqual(hashBuf, fBuf)) ||
+        (rBuf.length > 0 && hashBuf.length === rBuf.length && crypto.timingSafeEqual(hashBuf, rBuf))
+      ) {
         isVerified = true;
       }
     }
@@ -222,11 +290,13 @@ export class StorefrontPaymentWebhooks2Service {
           const fetchedAmount = Number(tapCheckData?.amount || 0);
           const fetchedCurrency = String(tapCheckData?.currency || '').toUpperCase();
           const fetchedOrderNum = String(tapCheckData?.metadata?.orderNumber || tapCheckData?.reference?.order || '');
-          if ((fetchedStatus === 'CAPTURED' || fetchedStatus === 'PAID') &&
-              ['CAPTURED', 'PAID', 'SUCCESS'].includes(status) &&
-              Math.round(fetchedAmount * 100) === Math.round(Number(body?.amount) * 100) &&
-              fetchedCurrency === String(body?.currency || '').toUpperCase() &&
-              fetchedOrderNum === order.order_number) {
+          if (
+            (fetchedStatus === 'CAPTURED' || fetchedStatus === 'PAID') &&
+            ['CAPTURED', 'PAID', 'SUCCESS'].includes(status) &&
+            Math.round(fetchedAmount * 100) === Math.round(Number(body?.amount) * 100) &&
+            fetchedCurrency === String(body?.currency || '').toUpperCase() &&
+            fetchedOrderNum === order.order_number
+          ) {
             isVerified = true;
           }
         }
@@ -261,12 +331,18 @@ export class StorefrontPaymentWebhooks2Service {
         if (isSuccessful && !this.isRepeatedPaidWebhook(lockedOrder, 'tap', chargeId, chargeId)) {
           return this.markPaymentForReview(trx, lockedOrder, 'tap', chargeId, chargeId, body, 'additional_payment');
         }
-        return { ok: true, status: lockedOrder.status === 'review_required' ? 'review_required' : 'paid', orderNumber: lockedOrder.order_number, alreadyPaid: true };
+        return {
+          ok: true,
+          status: lockedOrder.status === 'review_required' ? 'review_required' : 'paid',
+          orderNumber: lockedOrder.order_number,
+          alreadyPaid: true,
+        };
       }
 
       if (isSuccessful) {
         const currency = await this.expectedPaymentCurrency(trx, lockedOrder.tenant_id, 'tap');
-        const amountMinor = body?.amount === undefined ? undefined : toGatewayMinorAmount(Number(body.amount), currency);
+        const amountMinor =
+          body?.amount === undefined ? undefined : toGatewayMinorAmount(Number(body.amount), currency);
         const reason = this.paymentReviewReason(lockedOrder, 'tap', chargeId, amountMinor, body?.currency, currency);
         if (reason) return this.markPaymentForReview(trx, lockedOrder, 'tap', chargeId, chargeId, body, reason);
 
@@ -293,7 +369,9 @@ export class StorefrontPaymentWebhooks2Service {
           return { ok: true, received: true };
         }
         await this.compensateFailedOrderPayment(trx, lockedOrder, body);
-        this.logger.warn(`Order ${lockedOrder.order_number} marked as FAILED via Tap Webhook; stock reservation released.`);
+        this.logger.warn(
+          `Order ${lockedOrder.order_number} marked as FAILED via Tap Webhook; stock reservation released.`,
+        );
         return { ok: true, status: 'failed', orderNumber: lockedOrder.order_number };
       }
 
@@ -307,7 +385,11 @@ export class StorefrontPaymentWebhooks2Service {
     return result;
   }
 
-  async processStripeWebhook(headers: Record<string, any>, body: any, rawBody?: Buffer): Promise<StorefrontWebhookResult> {
+  async processStripeWebhook(
+    headers: Record<string, any>,
+    body: any,
+    rawBody?: Buffer,
+  ): Promise<StorefrontWebhookResult> {
     this.logger.log(`Stripe Webhook received: ${body?.type}`);
     const eventType = String(body?.type || '');
     const obj = body?.data?.object || body;
@@ -342,7 +424,9 @@ export class StorefrontPaymentWebhooks2Service {
     const sigHeader = (headers['stripe-signature'] || headers['Stripe-Signature'] || '') as string;
 
     if (!stripeSecret || !sigHeader || !rawBody) {
-      this.logger.warn(`Stripe webhook rejected: missing secret, signature, or rawBody for order ${order.order_number}`);
+      this.logger.warn(
+        `Stripe webhook rejected: missing secret, signature, or rawBody for order ${order.order_number}`,
+      );
       throw new UnauthorizedException('توقيع Stripe غير صحيح أو مفقود.');
     }
 
@@ -401,15 +485,35 @@ export class StorefrontPaymentWebhooks2Service {
       if (lockedOrder.payment_status === 'paid') {
         const paidTransactionId = String(obj?.payment_intent || obj?.id || '');
         if (isSuccessful && !this.isRepeatedPaidWebhook(lockedOrder, 'stripe', paidTransactionId, sessionId)) {
-          return this.markPaymentForReview(trx, lockedOrder, 'stripe', paidTransactionId, sessionId, body, 'additional_payment');
+          return this.markPaymentForReview(
+            trx,
+            lockedOrder,
+            'stripe',
+            paidTransactionId,
+            sessionId,
+            body,
+            'additional_payment',
+          );
         }
-        return { ok: true, status: lockedOrder.status === 'review_required' ? 'review_required' : 'paid', orderNumber: lockedOrder.order_number, alreadyPaid: true };
+        return {
+          ok: true,
+          status: lockedOrder.status === 'review_required' ? 'review_required' : 'paid',
+          orderNumber: lockedOrder.order_number,
+          alreadyPaid: true,
+        };
       }
 
       if (isSuccessful) {
         const currency = await this.expectedPaymentCurrency(trx, lockedOrder.tenant_id, 'stripe');
         const txnId = String(obj?.payment_intent || obj?.id || '');
-        const reason = this.paymentReviewReason(lockedOrder, 'stripe', sessionId, obj?.amount_total, obj?.currency, currency);
+        const reason = this.paymentReviewReason(
+          lockedOrder,
+          'stripe',
+          sessionId,
+          obj?.amount_total,
+          obj?.currency,
+          currency,
+        );
         if (reason) return this.markPaymentForReview(trx, lockedOrder, 'stripe', txnId, sessionId, body, reason);
 
         await trx
@@ -435,7 +539,9 @@ export class StorefrontPaymentWebhooks2Service {
           return { ok: true, received: true };
         }
         await this.compensateFailedOrderPayment(trx, lockedOrder, body);
-        this.logger.warn(`Order ${lockedOrder.order_number} marked as FAILED via Stripe Webhook; stock reservation released.`);
+        this.logger.warn(
+          `Order ${lockedOrder.order_number} marked as FAILED via Stripe Webhook; stock reservation released.`,
+        );
         return { ok: true, status: 'failed', orderNumber: lockedOrder.order_number };
       }
 

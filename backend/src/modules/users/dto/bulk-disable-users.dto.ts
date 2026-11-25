@@ -9,4 +9,3 @@ export class BulkDisableUsersDto {
   @Min(1, { each: true })
   userIds!: number[];
 }
-

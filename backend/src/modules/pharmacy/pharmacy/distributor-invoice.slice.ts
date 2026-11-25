@@ -8,7 +8,12 @@ import { buildDistributorPurchaseItem } from '../engines/distributor-purchase.en
 import { PurchasesService } from '../../purchases/purchases.service';
 import { AppError } from '../../../common/errors/app-error';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, toMinorUnits, fromMinorUnits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import {
+  currencyMoneyDigits,
+  toMinorUnits,
+  fromMinorUnits,
+  roundMoney,
+} from '../../accounting/engines/money-minor-units.engine';
 
 export class DistributorInvoiceSlice {
   constructor(
@@ -22,14 +27,21 @@ export class DistributorInvoiceSlice {
   async importDistributorInvoice(
     auth: AuthContext,
     dto: {
-      distributor: string; supplierId?: number; locationId?: number;
-      invoiceNumber?: string; invoiceDate?: string;
+      distributor: string;
+      supplierId?: number;
+      locationId?: number;
+      invoiceNumber?: string;
+      invoiceDate?: string;
       paymentType?: 'credit' | 'cash';
       lines: Array<{
-        productName: string; barcode?: string;
-        quantity: number; bonusQuantity?: number;
-        publicPrice: number; costPrice: number;
-        expiryDate: string; batchNumber?: string;
+        productName: string;
+        barcode?: string;
+        quantity: number;
+        bonusQuantity?: number;
+        publicPrice: number;
+        costPrice: number;
+        expiryDate: string;
+        batchNumber?: string;
       }>;
     },
   ) {
@@ -38,13 +50,18 @@ export class DistributorInvoiceSlice {
     const distributor = String(dto.distributor || '').trim();
     const invoiceNo = String(dto.invoiceNumber || '').trim();
     if (!distributor || !invoiceNo || invoiceNo.length > 100) {
-      throw new AppError('A named supplier and unique distributor invoice number are required',
-        'PHARMACY_SUPPLIER_INVOICE_REQUIRED', 422);
+      throw new AppError(
+        'A named supplier and unique distributor invoice number are required',
+        'PHARMACY_SUPPLIER_INVOICE_REQUIRED',
+        422,
+      );
     }
     // This endpoint is an adapter to the existing purchase/GRN engine; it MUST
     // NOT create independent inventory, cash, or batch rows.
-    let supplierQuery = this.db.selectFrom('suppliers')
-      .select(['id', 'name']).where('tenant_id', '=', scope.tenantId)
+    let supplierQuery = this.db
+      .selectFrom('suppliers')
+      .select(['id', 'name'])
+      .where('tenant_id', '=', scope.tenantId)
       .where('is_active', '=', true);
     if (dto.supplierId) {
       supplierQuery = supplierQuery.where('id', '=', Number(dto.supplierId));
@@ -53,18 +70,22 @@ export class DistributorInvoiceSlice {
     }
     const suppliers = await supplierQuery.limit(2).execute();
     if (suppliers.length !== 1) {
-      throw new AppError('Distributor must match exactly one active tenant supplier',
-        'PHARMACY_SUPPLIER_NOT_LINKED', 422);
+      throw new AppError(
+        'Distributor must match exactly one active tenant supplier',
+        'PHARMACY_SUPPLIER_NOT_LINKED',
+        422,
+      );
     }
     const supplierId = Number(suppliers[0].id);
-    let locationQuery = this.db.selectFrom('stock_locations')
-      .select(['id', 'branch_id']).where('tenant_id', '=', scope.tenantId)
+    let locationQuery = this.db
+      .selectFrom('stock_locations')
+      .select(['id', 'branch_id'])
+      .where('tenant_id', '=', scope.tenantId)
       .where('is_active', '=', true);
     if (dto.locationId) locationQuery = locationQuery.where('id', '=', Number(dto.locationId));
     const locations = await locationQuery.limit(2).execute();
     if (locations.length !== 1 || !locations[0].branch_id) {
-      throw new AppError('Select a single active tenant receiving location',
-        'PHARMACY_RECEIPT_LOCATION_REQUIRED', 422);
+      throw new AppError('Select a single active tenant receiving location', 'PHARMACY_RECEIPT_LOCATION_REQUIRED', 422);
     }
     const locationId = Number(locations[0].id);
     const branchId = Number(locations[0].branch_id);
@@ -75,13 +96,15 @@ export class DistributorInvoiceSlice {
     let totalCostMinor = 0;
     let totalPublicSum = 0;
     for (const line of dto.lines) {
-      let query = this.db.selectFrom('pharmacy_drugs').select(['id', 'product_id'])
+      let query = this.db
+        .selectFrom('pharmacy_drugs')
+        .select(['id', 'product_id'])
         .where('tenant_id', '=', scope.tenantId);
       if (line.barcode?.trim()) {
         const barcode = line.barcode.trim();
-        query = query.where((eb) => eb.or([
-          eb('barcode', '=', barcode), eb('trade_name', '=', line.productName.trim()),
-        ]));
+        query = query.where((eb) =>
+          eb.or([eb('barcode', '=', barcode), eb('trade_name', '=', line.productName.trim())]),
+        );
       } else {
         query = query.where('trade_name', '=', line.productName.trim());
       }
@@ -92,29 +115,38 @@ export class DistributorInvoiceSlice {
         productId = Number(matches[0].product_id);
         isDrug = true;
       } else {
-        let prodQuery = this.db.selectFrom('products').select('id')
-          .where('tenant_id', '=', scope.tenantId).where('is_active', '=', true);
+        let prodQuery = this.db
+          .selectFrom('products')
+          .select('id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('is_active', '=', true);
         if (line.barcode?.trim()) {
           const barcode = line.barcode.trim();
-          prodQuery = prodQuery.where((eb) => eb.or([
-            eb('barcode', '=', barcode), eb('name', '=', line.productName.trim()),
-          ]));
+          prodQuery = prodQuery.where((eb) =>
+            eb.or([eb('barcode', '=', barcode), eb('name', '=', line.productName.trim())]),
+          );
         } else {
           prodQuery = prodQuery.where('name', '=', line.productName.trim());
         }
         const prodMatches = await prodQuery.limit(2).execute();
         if (prodMatches.length !== 1) {
-          throw new AppError('Link the imported drug to exactly one inventory product before purchasing',
-            'PHARMACY_PRODUCT_NOT_LINKED', 422);
+          throw new AppError(
+            'Link the imported drug to exactly one inventory product before purchasing',
+            'PHARMACY_PRODUCT_NOT_LINKED',
+            422,
+          );
         }
         productId = Number(prodMatches[0].id);
       }
-      const product = await this.db.selectFrom('products').select('id')
-        .where('tenant_id', '=', scope.tenantId).where('id', '=', productId)
-        .where('is_active', '=', true).executeTakeFirst();
+      const product = await this.db
+        .selectFrom('products')
+        .select('id')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('id', '=', productId)
+        .where('is_active', '=', true)
+        .executeTakeFirst();
       if (!product) {
-        throw new AppError('Linked inventory product is missing or inactive',
-          'PHARMACY_PRODUCT_NOT_LINKED', 422);
+        throw new AppError('Linked inventory product is missing or inactive', 'PHARMACY_PRODUCT_NOT_LINKED', 422);
       }
       let item: ReturnType<typeof buildDistributorPurchaseItem>;
       try {
@@ -134,8 +166,11 @@ export class DistributorInvoiceSlice {
         throw new AppError((error as Error).message, 'PHARMACY_INVOICE_LINE_INVALID', 422);
       }
       if (!Number.isSafeInteger(totalCostMinor)) {
-        throw new AppError('Distributor invoice monetary total exceeds safe range',
-          'PHARMACY_INVOICE_TOTAL_INVALID', 422);
+        throw new AppError(
+          'Distributor invoice monetary total exceeds safe range',
+          'PHARMACY_INVOICE_TOTAL_INVALID',
+          422,
+        );
       }
       totalQuantity += item.qty;
       totalPublicSum += item.qty * Number(line.publicPrice);
@@ -144,21 +179,38 @@ export class DistributorInvoiceSlice {
     // The canonical purchasing path now persists the same 2/3-digit tenant
     // invoice amount in supplier AP, inventory and journal entries.
 
-    const recorded = await this.purchases.createPurchase({
-      supplierId, supplierInvoiceNo: invoiceNo,
-      paymentType: dto.paymentType === 'cash' ? 'cash' : 'credit',
-      branchId, locationId, items, taxRate: 0, pricesIncludeTax: false,
-      note: `Imported pharmacy distributor invoice ${distributor} / ${invoiceNo}`,
-    }, auth, `pharmacy:${supplierId}:${invoiceNo}`);
+    const recorded = await this.purchases.createPurchase(
+      {
+        supplierId,
+        supplierInvoiceNo: invoiceNo,
+        paymentType: dto.paymentType === 'cash' ? 'cash' : 'credit',
+        branchId,
+        locationId,
+        items,
+        taxRate: 0,
+        pricesIncludeTax: false,
+        note: `Imported pharmacy distributor invoice ${distributor} / ${invoiceNo}`,
+      },
+      auth,
+      `pharmacy:${supplierId}:${invoiceNo}`,
+    );
     const purchaseId = Number(recorded.purchaseId);
     if (!Number.isSafeInteger(purchaseId) || purchaseId <= 0) {
-      throw new AppError('Purchase creation did not return a valid source document',
-        'PHARMACY_PURCHASE_RECOVERY_REQUIRED', 422);
+      throw new AppError(
+        'Purchase creation did not return a valid source document',
+        'PHARMACY_PURCHASE_RECOVERY_REQUIRED',
+        422,
+      );
     }
     return {
-      success: true, distributor, invoiceNumber: invoiceNo, purchaseId,
-      importedLinesCount: items.length, totalQuantity,
-      totalCostSum: fromMinorUnits(totalCostMinor, moneyDigits), totalPublicSum,
+      success: true,
+      distributor,
+      invoiceNumber: invoiceNo,
+      purchaseId,
+      importedLinesCount: items.length,
+      totalQuantity,
+      totalCostSum: fromMinorUnits(totalCostMinor, moneyDigits),
+      totalPublicSum,
       message: 'Distributor invoice was posted through canonical purchasing, supplier, inventory and GL',
     };
   }

@@ -72,7 +72,11 @@ export interface MaritimeFreightCarrierInvoicesDeps {
   // bodies are byte-identical). They stay in the facade forever; the
   // facade binds its own methods, so there is no merge repoint for them
   // (S14 precedent).
-  resolveFreightExchangeRate: (tenantId: string, currency: string | undefined, suppliedRate?: number) => Promise<number>;
+  resolveFreightExchangeRate: (
+    tenantId: string,
+    currency: string | undefined,
+    suppliedRate?: number,
+  ) => Promise<number>;
   resolveAccountId: (tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
   assertMaritimeJournalPeriodOpen: (trx: any, tenantId: string, entryDate: Date) => Promise<void>;
 }
@@ -83,7 +87,11 @@ export class MaritimeFreightCarrierInvoicesService {
   private readonly accountingPosting: AccountingPostingService;
   private readonly getJobById: (auth: AuthContext, id: string) => Promise<any>;
   private readonly mapRateCardRow: (r: any) => any;
-  private readonly resolveFreightExchangeRate: (tenantId: string, currency: string | undefined, suppliedRate?: number) => Promise<number>;
+  private readonly resolveFreightExchangeRate: (
+    tenantId: string,
+    currency: string | undefined,
+    suppliedRate?: number,
+  ) => Promise<number>;
   private readonly resolveAccountId: (tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
   private readonly assertMaritimeJournalPeriodOpen: (trx: any, tenantId: string, entryDate: Date) => Promise<void>;
 
@@ -117,7 +125,15 @@ export class MaritimeFreightCarrierInvoicesService {
     trx: any,
     tenantId: string,
     params: {
-      job: { id: number | string; cost_center_id?: number | string | null; job_number?: string; shipping_line_name?: string | null; carrier_cost_total?: number | string | null; client_invoiced_total?: number | string | null; other_costs_total?: number | string | null };
+      job: {
+        id: number | string;
+        cost_center_id?: number | string | null;
+        job_number?: string;
+        shipping_line_name?: string | null;
+        carrier_cost_total?: number | string | null;
+        client_invoiced_total?: number | string | null;
+        other_costs_total?: number | string | null;
+      };
       invoiceNumber: string;
       carrierName?: string | null;
       shippingLineId?: string | number | null;
@@ -133,7 +149,16 @@ export class MaritimeFreightCarrierInvoicesService {
     let job = params.job;
 
     await this.assertMaritimeJournalPeriodOpen(trx, tenantId, params.entryDate);
-    job = { ...job, ...await trx.selectFrom('maritime_jobs').selectAll().where('tenant_id', '=', tenantId).where('id', '=', job.id).forUpdate().executeTakeFirstOrThrow() };
+    job = {
+      ...job,
+      ...(await trx
+        .selectFrom('maritime_jobs')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', job.id)
+        .forUpdate()
+        .executeTakeFirstOrThrow()),
+    };
 
     const expenseAccId = await this.resolveAccountId(tenantId, '6400', '5100');
     const creditAccId = await this.resolveAccountId(tenantId, '2110');
@@ -156,13 +181,40 @@ export class MaritimeFreightCarrierInvoicesService {
     const tempNo = `JRN-TMP-CARRIER-${job.id}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     if (!params.shippingLineId) throw new BadRequestException('يجب ربط فاتورة الناقل بخط ملاحي محدد.');
-    const supplierId = await ensureDomainSupplier(trx, tenantId, 'shipping_line', params.shippingLineId, params.carrierName || job.shipping_line_name || 'خط ملاحي');
+    const supplierId = await ensureDomainSupplier(
+      trx,
+      tenantId,
+      'shipping_line',
+      params.shippingLineId,
+      params.carrierName || job.shipping_line_name || 'خط ملاحي',
+    );
     const entryId = await this.accountingPosting.postDomainJournal(trx, {
-      tenantId, accountId: tenantId, entryDate: params.entryDate, description: desc,
-      sourceType: 'maritime_carrier_invoice', sourceId: Number(job.id), createdBy: Number(params.userId) || null,
+      tenantId,
+      accountId: tenantId,
+      entryDate: params.entryDate,
+      description: desc,
+      sourceType: 'maritime_carrier_invoice',
+      sourceId: Number(job.id),
+      createdBy: Number(params.userId) || null,
       lines: [
-        { accountId: expenseAccId, costCenterId, description: desc, debit: baseTotalAmount, credit: 0, partnerType: 'none', partnerId: null },
-        { accountId: creditAccId, costCenterId, description: desc, debit: 0, credit: baseTotalAmount, partnerType: 'supplier', partnerId: supplierId },
+        {
+          accountId: expenseAccId,
+          costCenterId,
+          description: desc,
+          debit: baseTotalAmount,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+        },
+        {
+          accountId: creditAccId,
+          costCenterId,
+          description: desc,
+          debit: 0,
+          credit: baseTotalAmount,
+          partnerType: 'supplier',
+          partnerId: supplierId,
+        },
       ],
     });
 
@@ -333,7 +385,9 @@ export class MaritimeFreightCarrierInvoicesService {
     const normalizedInvoiceNumber = dto.invoiceNumber.trim().toUpperCase();
     const effectiveShippingLineId = dto.shippingLineId
       ? Number(dto.shippingLineId)
-      : (job.shipping_line_id ? Number(job.shipping_line_id) : null);
+      : job.shipping_line_id
+        ? Number(job.shipping_line_id)
+        : null;
 
     // Everything below is one atomic unit: the journal (header + lines), the job cost roll-up,
     // and the invoice record itself. Previously these were five independent statements on
@@ -346,10 +400,11 @@ export class MaritimeFreightCarrierInvoicesService {
         .select('id')
         .where('tenant_id', '=', tenantId)
         .where(sql<string>`UPPER(TRIM(invoice_number))`, '=', normalizedInvoiceNumber);
-      const duplicateInvoice = await (effectiveShippingLineId == null
-        ? duplicateQuery.where('shipping_line_id', 'is', null)
-        : duplicateQuery.where('shipping_line_id', '=', effectiveShippingLineId))
-        .executeTakeFirst();
+      const duplicateInvoice = await (
+        effectiveShippingLineId == null
+          ? duplicateQuery.where('shipping_line_id', 'is', null)
+          : duplicateQuery.where('shipping_line_id', '=', effectiveShippingLineId)
+      ).executeTakeFirst();
       if (duplicateInvoice) {
         throw new BadRequestException('رقم فاتورة الخط الملاحي مستخدم من قبل ولا يمكن تسجيله مرتين لنفس الخط الملاحي');
       }
@@ -376,10 +431,16 @@ export class MaritimeFreightCarrierInvoicesService {
         .values({
           tenant_id: tenantId,
           job_id: Number(job.id),
-          shipping_line_id: dto.shippingLineId ? Number(dto.shippingLineId) : (job.shipping_line_id ? Number(job.shipping_line_id) : null),
+          shipping_line_id: dto.shippingLineId
+            ? Number(dto.shippingLineId)
+            : job.shipping_line_id
+              ? Number(job.shipping_line_id)
+              : null,
           carrier_name: dto.carrierName || job.shipping_line_name || 'Carrier',
           invoice_number: dto.invoiceNumber.trim(),
-          invoice_date: dto.invoiceDate ? (dto.invoiceDate as any) : (await resolveBusinessDateKey(trx, tenantId, new Date()) as any),
+          invoice_date: dto.invoiceDate
+            ? (dto.invoiceDate as any)
+            : ((await resolveBusinessDateKey(trx, tenantId, new Date())) as any),
           currency,
           total_invoiced_amount: totalAmount,
           ocean_freight: Number(dto.oceanFreight || 0),
@@ -410,10 +471,10 @@ export class MaritimeFreightCarrierInvoicesService {
       auditStatus === 'matched'
         ? 'مطابقة للتعرفة المتعاقد عليها'
         : auditStatus === 'overcharge'
-        ? `زيادة غير معتمدة بمقدار +${audit.varianceAmount} (+${audit.variancePct}%) تتطلب مراجعة واعتماد مسؤول مالي آخر أو فتح نزاع`
-        : auditStatus === 'undercharge'
-        ? `أقل من التعرفة بمقدار -${Math.abs(audit.varianceAmount)}`
-        : 'سجلت بدون تعرفة مسبقة';
+          ? `زيادة غير معتمدة بمقدار +${audit.varianceAmount} (+${audit.variancePct}%) تتطلب مراجعة واعتماد مسؤول مالي آخر أو فتح نزاع`
+          : auditStatus === 'undercharge'
+            ? `أقل من التعرفة بمقدار -${Math.abs(audit.varianceAmount)}`
+            : 'سجلت بدون تعرفة مسبقة';
 
     return {
       success: true,
@@ -502,9 +563,7 @@ export class MaritimeFreightCarrierInvoicesService {
         if (createdBy !== null && Number(auth.userId) === createdBy) {
           soloOverride = await isSoloAdminOverride(trx, tenantId, auth);
           if (soloOverride && !(dto.reason || '').trim()) {
-            throw new BadRequestException(
-              'يجب تقديم مبرر مالي لاعتماد التجاوز يوضح سبب قبول الزيادة عن التعرفة.',
-            );
+            throw new BadRequestException('يجب تقديم مبرر مالي لاعتماد التجاوز يوضح سبب قبول الزيادة عن التعرفة.');
           }
         }
         if (!soloOverride) {
@@ -519,7 +578,9 @@ export class MaritimeFreightCarrierInvoicesService {
       // the fiscal period lock — neither of which the previous inline copy of this logic did.
       let entryId = invoice.journal_entry_id ? Number(invoice.journal_entry_id) : null;
       if (!entryId) {
-        const invCurrency = String(invoice.currency || 'USD').trim().toUpperCase();
+        const invCurrency = String(invoice.currency || 'USD')
+          .trim()
+          .toUpperCase();
         const fxRate = await this.resolveFreightExchangeRate(tenantId, invCurrency);
 
         entryId = await this.postCarrierInvoiceJournal(trx, tenantId, {

@@ -2,7 +2,14 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely } from '../../database/kysely';
 import type { CashDrawerMovementType } from './helpers/cash-drawer.helper';
 import { type ShiftCustomerCollectionsByChannel } from './helpers/shift-customer-collections.helper';
-import type { ShiftRow, ShiftServiceBreakdown, ShiftSalesBreakdown, ShiftSaleReturnTotals, CloseOperationDetailInput, BlindCloseMetadata } from './cash-drawer.types';
+import type {
+  ShiftRow,
+  ShiftServiceBreakdown,
+  ShiftSalesBreakdown,
+  ShiftSaleReturnTotals,
+  CloseOperationDetailInput,
+  BlindCloseMetadata,
+} from './cash-drawer.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { KYSELY_DB } from '../../database/database.constants';
@@ -101,10 +108,21 @@ export class CashDrawerService {
    * reconciliation delta out of storage rounding alone. Declared
    * values stored at 2dp before the package parse back identically.
    */
-  private toBookMoney(value: unknown, digits: MoneyDigits): number { return roundMoney(Number(value || 0), digits); }
-  private scope(auth: AuthContext) { return requireTenantScope(auth); }
-  private normalizeOperationCount(value: unknown): number { const parsed = Number(value || 0); return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0; }
-  private normalizeOperationDetails(details: unknown, maxCount: number, digits: MoneyDigits): Array<{ amount: number; reference?: string }> {
+  private toBookMoney(value: unknown, digits: MoneyDigits): number {
+    return roundMoney(Number(value || 0), digits);
+  }
+  private scope(auth: AuthContext) {
+    return requireTenantScope(auth);
+  }
+  private normalizeOperationCount(value: unknown): number {
+    const parsed = Number(value || 0);
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+  }
+  private normalizeOperationDetails(
+    details: unknown,
+    maxCount: number,
+    digits: MoneyDigits,
+  ): Array<{ amount: number; reference?: string }> {
     if (!Array.isArray(details) || details.length === 0) return [];
     const effectiveLimit = Math.max(maxCount, details.length);
     if (effectiveLimit <= 0) return [];
@@ -114,14 +132,18 @@ export class CashDrawerService {
       return { amount: amount >= 0 ? amount : 0, ...(reference ? { reference } : {}) };
     });
   }
-  private serializeBlindCloseNote(meta: BlindCloseMetadata): string { return `${BLIND_CLOSE_NOTE_PREFIX}${JSON.stringify(meta)}`; }
+  private serializeBlindCloseNote(meta: BlindCloseMetadata): string {
+    return `${BLIND_CLOSE_NOTE_PREFIX}${JSON.stringify(meta)}`;
+  }
   private parseBlindCloseNote(rawNote: unknown): BlindCloseMetadata | null {
     const text = String(rawNote || '');
     if (!text.startsWith(BLIND_CLOSE_NOTE_PREFIX)) return null;
     try {
       const parsed = JSON.parse(text.slice(BLIND_CLOSE_NOTE_PREFIX.length).trim()) as BlindCloseMetadata;
       return parsed && typeof parsed === 'object' && parsed.blindClose === true ? parsed : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   private async assertManagerPin(pin: string, auth: AuthContext): Promise<void> {
@@ -144,11 +166,20 @@ export class CashDrawerService {
     return this.auth.isPasswordRequiredOnShiftOpen(auth);
   }
 
-  private async assertCashDrawerApproval(movementType: CashDrawerMovementType, approvalSecret: string, auth: AuthContext): Promise<void> {
+  private async assertCashDrawerApproval(
+    movementType: CashDrawerMovementType,
+    approvalSecret: string,
+    auth: AuthContext,
+  ): Promise<void> {
     return this.auth.assertCashDrawerApproval(movementType, approvalSecret, auth);
   }
 
-  private async computeShiftCashDrawerMovements(shiftId: number, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<{
+  private async computeShiftCashDrawerMovements(
+    shiftId: number,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ): Promise<{
     cashInTotal: number;
     deliveryCashInTotal: number;
     manualCashInTotal: number;
@@ -158,55 +189,120 @@ export class CashDrawerService {
     return this.compute.computeShiftCashDrawerMovements(shiftId, auth, queryable, digits);
   }
 
-  private async computeShiftSupplierPaymentsTotal(shift: ShiftRow, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<number> {
+  private async computeShiftSupplierPaymentsTotal(
+    shift: ShiftRow,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ): Promise<number> {
     return this.compute.computeShiftSupplierPaymentsTotal(shift, auth, queryable, digits);
   }
 
-  private async computeShiftExpensesTotal(shift: ShiftRow, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<number> {
+  private async computeShiftExpensesTotal(
+    shift: ShiftRow,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ): Promise<number> {
     return this.compute.computeShiftExpensesTotal(shift, auth, queryable, digits);
   }
 
-  private async computeShiftServiceBreakdown(shift: ShiftRow, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<ShiftServiceBreakdown> {
+  private async computeShiftServiceBreakdown(
+    shift: ShiftRow,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ): Promise<ShiftServiceBreakdown> {
     return this.compute.computeShiftServiceBreakdown(shift, auth, queryable, digits);
   }
 
-  private async computeShiftSalesBreakdown(shift: ShiftRow, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<ShiftSalesBreakdown> {
+  private async computeShiftSalesBreakdown(
+    shift: ShiftRow,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ): Promise<ShiftSalesBreakdown> {
     return this.compute.computeShiftSalesBreakdown(shift, auth, queryable, digits);
   }
 
-  private async computeShiftSaleReturnTotals(shift: ShiftRow, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<ShiftSaleReturnTotals> {
+  private async computeShiftSaleReturnTotals(
+    shift: ShiftRow,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ): Promise<ShiftSaleReturnTotals> {
     return this.compute.computeShiftSaleReturnTotals(shift, auth, queryable, digits);
   }
 
-  private async computeShiftCustomerCollectionsByChannel(shift: ShiftRow, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<ShiftCustomerCollectionsByChannel> {
+  private async computeShiftCustomerCollectionsByChannel(
+    shift: ShiftRow,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ): Promise<ShiftCustomerCollectionsByChannel> {
     return this.compute.computeShiftCustomerCollectionsByChannel(shift, auth, queryable, digits);
   }
 
   private async computeShiftCancelledSaleCashReceipts(
-    shift: ShiftRow, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits,
+    shift: ShiftRow,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
   ): Promise<number> {
     return this.compute.computeShiftCancelledSaleCashReceipts(shift, auth, queryable, digits);
   }
 
-  private async computeShiftAttributedSaleCash(shift: ShiftRow, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<{
+  private async computeShiftAttributedSaleCash(
+    shift: ShiftRow,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ): Promise<{
     total: number;
-    items: Array<{ id: string; kind: 'cash_in' | 'cash_out'; kindLabel: string; amount: number; note: string; createdAt: string }>;
+    items: Array<{
+      id: string;
+      kind: 'cash_in' | 'cash_out';
+      kindLabel: string;
+      amount: number;
+      note: string;
+      createdAt: string;
+    }>;
   }> {
     return this.compute.computeShiftAttributedSaleCash(shift, auth, queryable, digits);
   }
 
-  private async computeShiftExpectedCashFromShift(shift: ShiftRow, auth: AuthContext, salesBreakdown?: ShiftSalesBreakdown, serviceBreakdown?: ShiftServiceBreakdown, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<number> {
-    return this.compute.computeShiftExpectedCashFromShift(shift, auth, salesBreakdown, serviceBreakdown, queryable, digits);
+  private async computeShiftExpectedCashFromShift(
+    shift: ShiftRow,
+    auth: AuthContext,
+    salesBreakdown?: ShiftSalesBreakdown,
+    serviceBreakdown?: ShiftServiceBreakdown,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ): Promise<number> {
+    return this.compute.computeShiftExpectedCashFromShift(
+      shift,
+      auth,
+      salesBreakdown,
+      serviceBreakdown,
+      queryable,
+      digits,
+    );
   }
 
-  private async fetchShiftMovementItems(shiftId: number, shift: ShiftRow, auth: AuthContext): Promise<Array<{
-    id: string;
-    kind: 'cash_in' | 'cash_out' | 'delivery' | 'expense' | 'supplier_payment' | 'return';
-    kindLabel: string;
-    amount: number;
-    note: string;
-    createdAt: string;
-  }>> {
+  private async fetchShiftMovementItems(
+    shiftId: number,
+    shift: ShiftRow,
+    auth: AuthContext,
+  ): Promise<
+    Array<{
+      id: string;
+      kind: 'cash_in' | 'cash_out' | 'delivery' | 'expense' | 'supplier_payment' | 'return';
+      kindLabel: string;
+      amount: number;
+      note: string;
+      createdAt: string;
+    }>
+  > {
     return this.reads.fetchShiftMovementItems(shiftId, shift, auth);
   }
 
@@ -236,7 +332,11 @@ export class CashDrawerService {
     return this.reads.listCashierShifts(query, auth);
   }
 
-  private async getCashierShortageTolerance(queryable: Kysely<Database>, tenantId: string, digits: MoneyDigits): Promise<number> {
+  private async getCashierShortageTolerance(
+    queryable: Kysely<Database>,
+    tenantId: string,
+    digits: MoneyDigits,
+  ): Promise<number> {
     return this.reads.getCashierShortageTolerance(queryable, tenantId, digits);
   }
 
@@ -248,19 +348,65 @@ export class CashDrawerService {
     return this.reads.findOpenTablesBlockingClose(queryable, tenantId, shift);
   }
 
-  async openCashierShift(payload: { openingCash?: number; note?: string; branchId?: number | string | null; locationId?: number | string | null; password?: string; managerPin?: string; terminalCode?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
+  async openCashierShift(
+    payload: {
+      openingCash?: number;
+      note?: string;
+      branchId?: number | string | null;
+      locationId?: number | string | null;
+      password?: string;
+      managerPin?: string;
+      terminalCode?: string;
+    },
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.write.openCashierShift(payload, auth);
   }
 
-  async recordCashMovement(shiftId: number, payload: { type?: string; amount?: number; note?: string; managerPin?: string; requestKey?: string; counterpartAccountId?: number }, auth: AuthContext): Promise<Record<string, unknown>> {
+  async recordCashMovement(
+    shiftId: number,
+    payload: {
+      type?: string;
+      amount?: number;
+      note?: string;
+      managerPin?: string;
+      requestKey?: string;
+      counterpartAccountId?: number;
+    },
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.write.recordCashMovement(shiftId, payload, auth);
   }
 
-  async closeCashierShift(shiftId: number, payload: { countedCash?: number; cardDeclaredTotal?: number; cardOperationCount?: number; walletDeclaredTotal?: number; walletOperationCount?: number; instapayDeclaredTotal?: number; instapayOperationCount?: number; cardDetails?: Array<{ amount?: number; reference?: string }>; walletDetails?: Array<{ amount?: number; reference?: string }>; instapayDetails?: Array<{ amount?: number; reference?: string }>; note?: string; managerPin?: string; approverSecret?: string; openTablesOverrideSecret?: string; openTablesOverrideReason?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
+  async closeCashierShift(
+    shiftId: number,
+    payload: {
+      countedCash?: number;
+      cardDeclaredTotal?: number;
+      cardOperationCount?: number;
+      walletDeclaredTotal?: number;
+      walletOperationCount?: number;
+      instapayDeclaredTotal?: number;
+      instapayOperationCount?: number;
+      cardDetails?: Array<{ amount?: number; reference?: string }>;
+      walletDetails?: Array<{ amount?: number; reference?: string }>;
+      instapayDetails?: Array<{ amount?: number; reference?: string }>;
+      note?: string;
+      managerPin?: string;
+      approverSecret?: string;
+      openTablesOverrideSecret?: string;
+      openTablesOverrideReason?: string;
+    },
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.write.closeCashierShift(shiftId, payload, auth);
   }
 
-  async reviewCashierShiftClose(shiftId: number, payload: { decision?: string; note?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
+  async reviewCashierShiftClose(
+    shiftId: number,
+    payload: { decision?: string; note?: string },
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.write.reviewCashierShiftClose(shiftId, payload, auth);
   }
 }

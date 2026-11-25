@@ -38,9 +38,7 @@ export class ReportsSummaryService {
 
   private tenantPredicate(auth: AuthContext, alias?: string) {
     const { tenantId } = this.scope(auth);
-    return alias
-      ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}`
-      : sql<boolean>`tenant_id = ${tenantId}`;
+    return alias ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}` : sql<boolean>`tenant_id = ${tenantId}`;
   }
 
   private withScope(payload: Record<string, unknown>, auth: AuthContext): Record<string, unknown> {
@@ -67,9 +65,13 @@ export class ReportsSummaryService {
     const cutoff31 = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000);
     const cutoff61 = new Date(now.getTime() - 61 * 24 * 60 * 60 * 1000);
     const cutoff91 = new Date(now.getTime() - 91 * 24 * 60 * 60 * 1000);
-    const customerAging = customerRows.length ? await sql<{
-      partner_id: number; current_amount: number; days_31_to_60: number; days_61_to_90: number;
-    }>`
+    const customerAging = customerRows.length
+      ? await sql<{
+          partner_id: number;
+          current_amount: number;
+          days_31_to_60: number;
+          days_61_to_90: number;
+        }>`
       with ordered as (
         select s.customer_id as partner_id,
                greatest(0, s.total - coalesce(s.paid_amount, 0)) as total,
@@ -92,7 +94,8 @@ export class ReportsSummaryService {
              coalesce(sum(amount) filter (where created_at <= ${cutoff31} and created_at > ${cutoff61}), 0) as days_31_to_60,
              coalesce(sum(amount) filter (where created_at <= ${cutoff61} and created_at > ${cutoff91}), 0) as days_61_to_90
       from allocated group by partner_id
-    `.execute(this.db) : { rows: [] };
+    `.execute(this.db)
+      : { rows: [] };
     const agingByCustomer = new Map(customerAging.rows.map((row) => [Number(row.partner_id), row]));
 
     const receivables = customerRows.map((cust) => {
@@ -123,9 +126,13 @@ export class ReportsSummaryService {
       .orderBy('balance', 'desc')
       .execute();
 
-    const supplierAging = supplierRows.length ? await sql<{
-      partner_id: number; current_amount: number; days_31_to_60: number; days_61_to_90: number;
-    }>`
+    const supplierAging = supplierRows.length
+      ? await sql<{
+          partner_id: number;
+          current_amount: number;
+          days_31_to_60: number;
+          days_61_to_90: number;
+        }>`
       with ordered as (
         select p.supplier_id as partner_id,
                greatest(0, p.total - coalesce(p.paid_amount, 0)) as total,
@@ -148,7 +155,8 @@ export class ReportsSummaryService {
              coalesce(sum(amount) filter (where created_at <= ${cutoff31} and created_at > ${cutoff61}), 0) as days_31_to_60,
              coalesce(sum(amount) filter (where created_at <= ${cutoff61} and created_at > ${cutoff91}), 0) as days_61_to_90
       from allocated group by partner_id
-    `.execute(this.db) : { rows: [] };
+    `.execute(this.db)
+      : { rows: [] };
     const agingBySupplier = new Map(supplierAging.rows.map((row) => [Number(row.partner_id), row]));
 
     const payables = supplierRows.map((sup) => {
@@ -257,7 +265,7 @@ export class ReportsSummaryService {
         urgency = 'overstocked';
       }
 
-      const targetBuffer = (dailyBurnRate * 30) + minStock;
+      const targetBuffer = dailyBurnRate * 30 + minStock;
       const suggestedReorderQty = Math.max(0, Math.ceil(targetBuffer - stock));
 
       return {
@@ -331,11 +339,13 @@ export class ReportsSummaryService {
     )`);
 
     if (search) {
-      baseQuery = baseQuery.where((eb: any) => eb.or([
-        eb(sql`lower(p.name)`, 'like', searchPattern!),
-        eb(sql`lower(coalesce(c.name, ''))`, 'like', searchPattern!),
-        eb(sql`lower(coalesce(s.name, ''))`, 'like', searchPattern!),
-      ]));
+      baseQuery = baseQuery.where((eb: any) =>
+        eb.or([
+          eb(sql`lower(p.name)`, 'like', searchPattern!),
+          eb(sql`lower(coalesce(c.name, ''))`, 'like', searchPattern!),
+          eb(sql`lower(coalesce(s.name, ''))`, 'like', searchPattern!),
+        ]),
+      );
     }
 
     const countRow = await baseQuery.select(sql<number>`count(*)`.as('count')).executeTakeFirst();
@@ -359,7 +369,7 @@ export class ReportsSummaryService {
           WHERE si.product_id = p.id
             AND sa.status = 'posted'
             AND sa.tenant_id = ${scope.tenantId}
-        )`.as('last_sale_date')
+        )`.as('last_sale_date'),
       ])
       .orderBy(query.locationId ? 'pls.qty' : 'p.stock_qty', 'desc')
       .orderBy('p.id', 'asc')
@@ -396,22 +406,29 @@ export class ReportsSummaryService {
     const summaryAgg = await baseQuery
       .select([
         sql<number>`coalesce(sum(${query.locationId ? sql`pls.qty` : sql`p.stock_qty`}), 0)`.as('total_qty'),
-        sql<number>`coalesce(sum((${query.locationId ? sql`pls.qty` : sql`p.stock_qty`}) * coalesce(p.cost_price, 0)), 0)`.as('total_tied_capital'),
-        sql<number>`coalesce(sum((${query.locationId ? sql`pls.qty` : sql`p.stock_qty`}) * coalesce(p.retail_price, 0)), 0)`.as('total_retail_value'),
+        sql<number>`coalesce(sum((${query.locationId ? sql`pls.qty` : sql`p.stock_qty`}) * coalesce(p.cost_price, 0)), 0)`.as(
+          'total_tied_capital',
+        ),
+        sql<number>`coalesce(sum((${query.locationId ? sql`pls.qty` : sql`p.stock_qty`}) * coalesce(p.retail_price, 0)), 0)`.as(
+          'total_retail_value',
+        ),
       ])
       .executeTakeFirst();
 
-    return this.withScope({
-      items,
-      pagination,
-      summary: {
-        totalDeadItems: totalItems,
-        totalDeadStockQty: Number(Number((summaryAgg as any)?.total_qty || 0).toFixed(2)),
-        totalTiedCapital: roundMoney(Number((summaryAgg as any)?.total_tied_capital || 0), digits),
-        totalRetailValue: roundMoney(Number((summaryAgg as any)?.total_retail_value || 0), digits),
-        daysThreshold: days,
-      }
-    }, auth);
+    return this.withScope(
+      {
+        items,
+        pagination,
+        summary: {
+          totalDeadItems: totalItems,
+          totalDeadStockQty: Number(Number((summaryAgg as any)?.total_qty || 0).toFixed(2)),
+          totalTiedCapital: roundMoney(Number((summaryAgg as any)?.total_tied_capital || 0), digits),
+          totalRetailValue: roundMoney(Number((summaryAgg as any)?.total_retail_value || 0), digits),
+          daysThreshold: days,
+        },
+      },
+      auth,
+    );
   }
 
   async customerRfmReport(query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
@@ -441,24 +458,32 @@ export class ReportsSummaryService {
       .groupBy(['c.id', 'c.name', 'c.phone', 'c.balance', 'c.loyalty_points']);
 
     if (search && searchPattern) {
-      baseQuery = baseQuery.where((eb: any) => eb.or([
-        eb(sql`lower(c.name)`, 'like', searchPattern),
-        eb(sql`lower(coalesce(c.phone, ''))`, 'like', searchPattern),
-      ]));
+      baseQuery = baseQuery.where((eb: any) =>
+        eb.or([
+          eb(sql`lower(c.name)`, 'like', searchPattern),
+          eb(sql`lower(coalesce(c.phone, ''))`, 'like', searchPattern),
+        ]),
+      );
     }
 
     const rows = await baseQuery.limit(500).execute();
     return this.withScope(buildCustomerRfmPayload(rows as any, (query as any).segment, digits), auth);
   }
 
-  private async partnerBalances(type: 'customer' | 'supplier', query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  private async partnerBalances(
+    type: 'customer' | 'supplier',
+    query: ReportRangeQueryDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const isCust = type === 'customer';
     const table = isCust ? 'customers' : 'suppliers';
     const ledgerTable = isCust ? 'customer_ledger' : 'supplier_ledger';
     const partnerIdCol = isCust ? 'customer_id' : 'supplier_id';
     const tenantId = this.tenantId(auth);
-    const digits = typeof (this.db as any).getExecutor === 'function'
-      ? currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId)) : 2;
+    const digits =
+      typeof (this.db as any).getExecutor === 'function'
+        ? currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId))
+        : 2;
 
     if (typeof (this.db as any).getExecutor !== 'function') {
       const partners = await (this.db as any)
@@ -477,8 +502,14 @@ export class ReportsSummaryService {
         .execute();
 
       const totals = isCust
-        ? buildCustomerLedgerTotals(ledgerRows as Array<{ customer_id?: number | string | null; balance_total?: number | string | null }>, digits)
-        : buildSupplierLedgerTotals(ledgerRows as Array<{ supplier_id?: number | string | null; balance_total?: number | string | null }>, digits);
+        ? buildCustomerLedgerTotals(
+            ledgerRows as Array<{ customer_id?: number | string | null; balance_total?: number | string | null }>,
+            digits,
+          )
+        : buildSupplierLedgerTotals(
+            ledgerRows as Array<{ supplier_id?: number | string | null; balance_total?: number | string | null }>,
+            digits,
+          );
 
       const payload = isCust
         ? buildCustomerBalancesPayload(partners, totals, query as Record<string, unknown>, digits)
@@ -503,11 +534,12 @@ export class ReportsSummaryService {
       where p.tenant_id = ${tenantId} and p.is_active = true
     `;
     const searchClause = search ? sql`and (b.name ilike ${`%${search}%`} or b.phone ilike ${`%${search}%`})` : sql``;
-    const filterClause = filter === 'high-balance'
-      ? sql`and b.balance >= 1000`
-      : isCust && filter === 'over-limit'
-        ? sql`and b.credit_limit > 0 and b.balance > b.credit_limit`
-        : sql``;
+    const filterClause =
+      filter === 'high-balance'
+        ? sql`and b.balance >= 1000`
+        : isCust && filter === 'over-limit'
+          ? sql`and b.credit_limit > 0 and b.balance > b.credit_limit`
+          : sql``;
     const filtered = sql`select * from (${balances}) b where b.balance > 0 ${searchClause} ${filterClause}`;
     const summaryResult = await sql<{ total_items: number; total_balance: number; over_limit: number }>`
       select count(*)::int as total_items, coalesce(sum(balance), 0) as total_balance,
@@ -518,7 +550,13 @@ export class ReportsSummaryService {
     const totalItems = Number(summaryRow?.total_items || 0);
     const pagination = buildPagination(page, pageSize, totalItems);
     const offset = (pagination.page - 1) * pageSize;
-    const pageResult = await sql<{ id: number; name: string | null; phone: string | null; balance: number; credit_limit: number }>`
+    const pageResult = await sql<{
+      id: number;
+      name: string | null;
+      phone: string | null;
+      balance: number;
+      credit_limit: number;
+    }>`
       select id, name, phone, balance, credit_limit from (${filtered}) f
       order by name asc, id asc limit ${pageSize} offset ${offset}
     `.execute(this.db);
@@ -526,27 +564,41 @@ export class ReportsSummaryService {
       const balance = Number(row.balance || 0);
       const base = { id: String(row.id), name: row.name || '', phone: row.phone || '', balance };
       return isCust
-        ? { ...base, creditLimit: Number(row.credit_limit || 0), availableCredit: toMoney(Number(row.credit_limit || 0) - balance, digits) }
+        ? {
+            ...base,
+            creditLimit: Number(row.credit_limit || 0),
+            availableCredit: toMoney(Number(row.credit_limit || 0) - balance, digits),
+          }
         : base;
     });
-    return this.withScope({
-      [isCust ? 'customers' : 'suppliers']: rows,
-      pagination,
-      summary: {
-        totalItems,
-        totalBalance: toMoney(summaryRow?.total_balance || 0, digits),
-        ...(isCust ? { overLimit: Number(summaryRow?.over_limit || 0) } : {}),
+    return this.withScope(
+      {
+        [isCust ? 'customers' : 'suppliers']: rows,
+        pagination,
+        summary: {
+          totalItems,
+          totalBalance: toMoney(summaryRow?.total_balance || 0, digits),
+          ...(isCust ? { overLimit: Number(summaryRow?.over_limit || 0) } : {}),
+        },
       },
-    }, auth);
+      auth,
+    );
   }
 
-  private async partnerLedger(type: 'customer' | 'supplier', partnerId: number, query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  private async partnerLedger(
+    type: 'customer' | 'supplier',
+    partnerId: number,
+    query: ReportRangeQueryDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const isCust = type === 'customer';
     const table = isCust ? 'customers' : 'suppliers';
     const ledgerTable = isCust ? 'customer_ledger' : 'supplier_ledger';
     const partnerIdCol = isCust ? 'customer_id' : 'supplier_id';
-    const digits = typeof (this.db as any).getExecutor === 'function'
-      ? currencyMoneyDigits(await tenantBaseCurrency(this.db, this.tenantId(auth))) : 2;
+    const digits =
+      typeof (this.db as any).getExecutor === 'function'
+        ? currencyMoneyDigits(await tenantBaseCurrency(this.db, this.tenantId(auth)))
+        : 2;
 
     const partner = await (this.db as any)
       .selectFrom(table)
@@ -555,9 +607,16 @@ export class ReportsSummaryService {
       .where('is_active', '=', true)
       .where(this.tenantPredicate(auth))
       .executeTakeFirst();
-    if (!partner) throw new AppError(isCust ? 'Customer not found' : 'Supplier not found', isCust ? 'CUSTOMER_NOT_FOUND' : 'SUPPLIER_NOT_FOUND', 404);
+    if (!partner)
+      throw new AppError(
+        isCust ? 'Customer not found' : 'Supplier not found',
+        isCust ? 'CUSTOMER_NOT_FOUND' : 'SUPPLIER_NOT_FOUND',
+        404,
+      );
 
-    const { fromDate, toDate, searchPattern, filter, page, pageSize, offset } = buildReportListState(query, 25, { timezone: await getTenantTimezone(this.db, this.tenantId(auth)) });
+    const { fromDate, toDate, searchPattern, filter, page, pageSize, offset } = buildReportListState(query, 25, {
+      timezone: await getTenantTimezone(this.db, this.tenantId(auth)),
+    });
 
     let countQuery = (this.db as any)
       .selectFrom(ledgerTable)
@@ -579,7 +638,12 @@ export class ReportsSummaryService {
 
     const totalRow = await countQuery.select(sql<number>`count(*)`.as('count')).executeTakeFirst();
     const totalItems = Number((totalRow as { count?: number | string | null } | undefined)?.count || 0);
-    const rows = await entriesQuery.orderBy('created_at', 'asc').orderBy('id', 'asc').limit(pageSize).offset(offset).execute();
+    const rows = await entriesQuery
+      .orderBy('created_at', 'asc')
+      .orderBy('id', 'asc')
+      .limit(pageSize)
+      .offset(offset)
+      .execute();
 
     /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: an advance leaves a
      * zero-amount marker row in supplier_ledger (so the ledger sums
@@ -600,7 +664,9 @@ export class ReportsSummaryService {
           .where('id', 'in', markerIds)
           .where(this.tenantPredicate(auth))
           .execute();
-        const amounts = new Map<number, number>(payments.map((payment: any) => [Number(payment.id), Number(payment.amount || 0)]));
+        const amounts = new Map<number, number>(
+          payments.map((payment: any) => [Number(payment.id), Number(payment.amount || 0)]),
+        );
         for (const row of rows as PartnerLedgerEntryRow[]) {
           if (row.entry_type === 'supplier_advance' && row.reference_id != null) {
             row.advance_amount = amounts.get(Number(row.reference_id)) ?? null;
@@ -610,12 +676,16 @@ export class ReportsSummaryService {
     }
 
     const hasSupplierAdvanceColumns = !isCust
-      ? Boolean((await sql<{ has_cols: boolean }>`
+      ? Boolean(
+          (
+            await sql<{ has_cols: boolean }>`
           select (
             exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'supplier_payments' and column_name = 'is_advance')
             and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'supplier_payments' and column_name = 'applied_amount')
           ) as has_cols
-        `.execute(this.db)).rows[0]?.has_cols)
+        `.execute(this.db)
+          ).rows[0]?.has_cols,
+        )
       : false;
 
     const [totalsRow, openingRow, openAdvanceRow] = await Promise.all([
@@ -647,11 +717,31 @@ export class ReportsSummaryService {
     ]);
 
     const openingBalance = Number(openingRow?.opening_balance || 0);
-    const openAdvanceBalance = !isCust && hasSupplierAdvanceColumns ? Number(openAdvanceRow?.open_advance || 0) : undefined;
+    const openAdvanceBalance =
+      !isCust && hasSupplierAdvanceColumns ? Number(openAdvanceRow?.open_advance || 0) : undefined;
 
     const payload = isCust
-      ? buildCustomerLedgerPayload({ customer: partner, rows: rows as PartnerLedgerEntryRow[], page, pageSize, totalItems, totalsRow: totalsRow as LedgerSummaryRow | undefined, openingBalance, digits })
-      : buildSupplierLedgerPayload({ supplier: partner, rows: rows as PartnerLedgerEntryRow[], page, pageSize, totalItems, totalsRow: totalsRow as LedgerSummaryRow | undefined, openingBalance, openAdvanceBalance, digits });
+      ? buildCustomerLedgerPayload({
+          customer: partner,
+          rows: rows as PartnerLedgerEntryRow[],
+          page,
+          pageSize,
+          totalItems,
+          totalsRow: totalsRow as LedgerSummaryRow | undefined,
+          openingBalance,
+          digits,
+        })
+      : buildSupplierLedgerPayload({
+          supplier: partner,
+          rows: rows as PartnerLedgerEntryRow[],
+          page,
+          pageSize,
+          totalItems,
+          totalsRow: totalsRow as LedgerSummaryRow | undefined,
+          openingBalance,
+          openAdvanceBalance,
+          digits,
+        });
 
     return this.withScope(payload, auth);
   }
@@ -660,7 +750,11 @@ export class ReportsSummaryService {
     return this.partnerBalances('customer', query, auth);
   }
 
-  async customerLedger(customerId: number, query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async customerLedger(
+    customerId: number,
+    query: ReportRangeQueryDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.partnerLedger('customer', customerId, query, auth);
   }
 
@@ -668,7 +762,11 @@ export class ReportsSummaryService {
     return this.partnerBalances('supplier', query, auth);
   }
 
-  async supplierLedger(supplierId: number, query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async supplierLedger(
+    supplierId: number,
+    query: ReportRangeQueryDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.partnerLedger('supplier', supplierId, query, auth);
   }
 }

@@ -15,18 +15,13 @@ import { sql, type Kysely } from 'kysely';
  * unresolved slug returns null and the caller fails closed. If the
  * lookup steps ever change, update both places together.
  */
-export async function findTenantByStorefrontSlug(
-  db: Kysely<any>,
-  slug: string,
-): Promise<{ id: string } | null> {
-  const cleanSlug = String(slug || '').trim().toLowerCase();
+export async function findTenantByStorefrontSlug(db: Kysely<any>, slug: string): Promise<{ id: string } | null> {
+  const cleanSlug = String(slug || '')
+    .trim()
+    .toLowerCase();
   if (!cleanSlug || cleanSlug === 'admin') return null;
 
-  const bySlug = await db
-    .selectFrom('tenants')
-    .select(['id'])
-    .where('slug', '=', cleanSlug)
-    .executeTakeFirst();
+  const bySlug = await db.selectFrom('tenants').select(['id']).where('slug', '=', cleanSlug).executeTakeFirst();
   if (bySlug) return { id: String((bySlug as any).id) };
 
   if (cleanSlug.includes('.')) {

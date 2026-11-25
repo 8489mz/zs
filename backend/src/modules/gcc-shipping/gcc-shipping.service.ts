@@ -18,9 +18,7 @@ import {
 export class GccShippingService {
   private readonly logger = new Logger(GccShippingService.name);
 
-  constructor(
-    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
-  ) {}
+  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   /**
    * استرجاع إعدادات الربط مع شركات الشحن الخليجية (أرامكس و سمسا)
@@ -84,13 +82,17 @@ export class GccShippingService {
     if (payload.environment !== undefined) updates.push({ key: 'gcc_shipping_environment', val: payload.environment });
 
     // Aramex
-    if (payload.aramexAccountNumber !== undefined) updates.push({ key: 'gcc_shipping_aramex_account_number', val: payload.aramexAccountNumber });
+    if (payload.aramexAccountNumber !== undefined)
+      updates.push({ key: 'gcc_shipping_aramex_account_number', val: payload.aramexAccountNumber });
     if (payload.aramexAccountPin && payload.aramexAccountPin !== '••••••••') {
       updates.push({ key: 'gcc_shipping_aramex_account_pin', val: payload.aramexAccountPin });
     }
-    if (payload.aramexAccountEntity !== undefined) updates.push({ key: 'gcc_shipping_aramex_account_entity', val: payload.aramexAccountEntity });
-    if (payload.aramexCountryCode !== undefined) updates.push({ key: 'gcc_shipping_aramex_country_code', val: payload.aramexCountryCode });
-    if (payload.aramexUserName !== undefined) updates.push({ key: 'gcc_shipping_aramex_username', val: payload.aramexUserName });
+    if (payload.aramexAccountEntity !== undefined)
+      updates.push({ key: 'gcc_shipping_aramex_account_entity', val: payload.aramexAccountEntity });
+    if (payload.aramexCountryCode !== undefined)
+      updates.push({ key: 'gcc_shipping_aramex_country_code', val: payload.aramexCountryCode });
+    if (payload.aramexUserName !== undefined)
+      updates.push({ key: 'gcc_shipping_aramex_username', val: payload.aramexUserName });
     if (payload.aramexPassword && payload.aramexPassword !== '••••••••') {
       updates.push({ key: 'gcc_shipping_aramex_password', val: payload.aramexPassword });
     }
@@ -99,15 +101,20 @@ export class GccShippingService {
     if (payload.smsaPassKey && payload.smsaPassKey !== '••••••••') {
       updates.push({ key: 'gcc_shipping_smsa_passkey', val: payload.smsaPassKey });
     }
-    if (payload.smsaCustomsCurrency !== undefined) updates.push({ key: 'gcc_shipping_smsa_currency', val: payload.smsaCustomsCurrency });
+    if (payload.smsaCustomsCurrency !== undefined)
+      updates.push({ key: 'gcc_shipping_smsa_currency', val: payload.smsaCustomsCurrency });
 
     // Pickup Warehouse
-    if (payload.pickupBusinessName !== undefined) updates.push({ key: 'gcc_shipping_pickup_business_name', val: payload.pickupBusinessName });
-    if (payload.pickupContactPerson !== undefined) updates.push({ key: 'gcc_shipping_pickup_contact', val: payload.pickupContactPerson });
+    if (payload.pickupBusinessName !== undefined)
+      updates.push({ key: 'gcc_shipping_pickup_business_name', val: payload.pickupBusinessName });
+    if (payload.pickupContactPerson !== undefined)
+      updates.push({ key: 'gcc_shipping_pickup_contact', val: payload.pickupContactPerson });
     if (payload.pickupPhone !== undefined) updates.push({ key: 'gcc_shipping_pickup_phone', val: payload.pickupPhone });
-    if (payload.pickupCountry !== undefined) updates.push({ key: 'gcc_shipping_pickup_country', val: payload.pickupCountry });
+    if (payload.pickupCountry !== undefined)
+      updates.push({ key: 'gcc_shipping_pickup_country', val: payload.pickupCountry });
     if (payload.pickupCity !== undefined) updates.push({ key: 'gcc_shipping_pickup_city', val: payload.pickupCity });
-    if (payload.pickupAddress !== undefined) updates.push({ key: 'gcc_shipping_pickup_address', val: payload.pickupAddress });
+    if (payload.pickupAddress !== undefined)
+      updates.push({ key: 'gcc_shipping_pickup_address', val: payload.pickupAddress });
 
     for (const item of updates) {
       await sql`
@@ -142,11 +149,7 @@ export class GccShippingService {
   /**
    * إنشاء شحنة عبر بوابة الشحن الخليجي (أرامكس أو سمسا)
    */
-  async createShipment(
-    orderId: number,
-    dto: GccCreateShipmentDto,
-    actor: AuthContext,
-  ): Promise<GccShipmentResponse> {
+  async createShipment(orderId: number, dto: GccCreateShipmentDto, actor: AuthContext): Promise<GccShipmentResponse> {
     canOperateShipping(actor);
     const { tenantId } = requireTenantScope(actor);
 
@@ -174,7 +177,7 @@ export class GccShippingService {
     // 3. احتساب مبالغ الدفع عند الاستلام (COD) والعملة
     const totalOrderAmount = Number(order.total_amount || 0);
     const isPaidOnline = order.payment_status === 'paid';
-    const finalCod = dto.codAmount !== undefined ? Number(dto.codAmount) : (isPaidOnline ? 0 : totalOrderAmount);
+    const finalCod = dto.codAmount !== undefined ? Number(dto.codAmount) : isPaidOnline ? 0 : totalOrderAmount;
     const currency = dto.currency || settings.smsaCustomsCurrency || 'SAR';
 
     const receiverName = dto.receiverName || order.customer_name || 'عميل المتجر';
@@ -197,70 +200,75 @@ export class GccShippingService {
         const aramexAcc = await this.getRawSetting(tenantId, 'gcc_shipping_aramex_account_number');
 
         if (!aramexUser || !aramexPass || !aramexAcc) {
-          throw new BadRequestException('بيانات حساب أرامكس (Username, Password, Account Number) غير مكتملة في الإعدادات.');
+          throw new BadRequestException(
+            'بيانات حساب أرامكس (Username, Password, Account Number) غير مكتملة في الإعدادات.',
+          );
         }
 
         try {
           // Aramex REST/JSON API endpoint
-          const res = await fetch('https://ws.aramex.net/ShippingAPI.V2/Shipping/Service_1_0.svc/json/CreateShipments', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              ClientInfo: {
-                UserName: aramexUser,
-                Password: aramexPass,
-                Version: 'v1.0',
-                AccountNumber: aramexAcc,
-                AccountPin: aramexPin,
-                AccountEntity: settings.aramexAccountEntity || 'RUH',
-                AccountCountryCode: settings.aramexCountryCode || 'SA',
-              },
-              Shipments: [
-                {
-                  Reference1: `ORD-${orderId}`,
-                  Shipper: {
-                    Reference1: `WHS-${tenantId.slice(0, 6)}`,
-                    AccountNumber: aramexAcc,
-                    PartyAddress: {
-                      Line1: settings.pickupAddress || 'Warehouse 1',
-                      City: settings.pickupCity || 'Riyadh',
-                      CountryCode: settings.aramexCountryCode || 'SA',
-                    },
-                    Contact: {
-                      PersonName: settings.pickupContactPerson || settings.pickupBusinessName || 'Shipper',
-                      CompanyName: settings.pickupBusinessName || 'Store Hub',
-                      PhoneNumber1: settings.pickupPhone || '0500000000',
-                      CellPhone: settings.pickupPhone || '0500000000',
-                    },
-                  },
-                  Consignee: {
-                    Reference1: `CUST-${receiverPhone}`,
-                    PartyAddress: {
-                      Line1: receiverAddress,
-                      City: receiverCity,
-                      CountryCode: settings.aramexCountryCode || 'SA',
-                    },
-                    Contact: {
-                      PersonName: receiverName,
-                      PhoneNumber1: receiverPhone,
-                      CellPhone: receiverPhone,
-                    },
-                  },
-                  Details: {
-                    Dimensions: null,
-                    ActualWeight: { Unit: 'KG', Value: dto.weight || 1.5 },
-                    ProductGroup: 'DOM', // Domestic Express
-                    ProductType: 'ONP',  // Overnight Parcel
-                    PaymentType: 'P',    // Prepaid by Shipper
-                    NumberOfPieces: dto.piecesCount || 1,
-                    DescriptionOfGoods: dto.description || 'Electronic and Retail Goods',
-                    GoodsOriginCountry: settings.aramexCountryCode || 'SA',
-                    CashOnDeliveryAmount: finalCod > 0 ? { CurrencyCode: currency, Value: finalCod } : null,
-                  },
+          const res = await fetch(
+            'https://ws.aramex.net/ShippingAPI.V2/Shipping/Service_1_0.svc/json/CreateShipments',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ClientInfo: {
+                  UserName: aramexUser,
+                  Password: aramexPass,
+                  Version: 'v1.0',
+                  AccountNumber: aramexAcc,
+                  AccountPin: aramexPin,
+                  AccountEntity: settings.aramexAccountEntity || 'RUH',
+                  AccountCountryCode: settings.aramexCountryCode || 'SA',
                 },
-              ],
-            }),
-          });
+                Shipments: [
+                  {
+                    Reference1: `ORD-${orderId}`,
+                    Shipper: {
+                      Reference1: `WHS-${tenantId.slice(0, 6)}`,
+                      AccountNumber: aramexAcc,
+                      PartyAddress: {
+                        Line1: settings.pickupAddress || 'Warehouse 1',
+                        City: settings.pickupCity || 'Riyadh',
+                        CountryCode: settings.aramexCountryCode || 'SA',
+                      },
+                      Contact: {
+                        PersonName: settings.pickupContactPerson || settings.pickupBusinessName || 'Shipper',
+                        CompanyName: settings.pickupBusinessName || 'Store Hub',
+                        PhoneNumber1: settings.pickupPhone || '0500000000',
+                        CellPhone: settings.pickupPhone || '0500000000',
+                      },
+                    },
+                    Consignee: {
+                      Reference1: `CUST-${receiverPhone}`,
+                      PartyAddress: {
+                        Line1: receiverAddress,
+                        City: receiverCity,
+                        CountryCode: settings.aramexCountryCode || 'SA',
+                      },
+                      Contact: {
+                        PersonName: receiverName,
+                        PhoneNumber1: receiverPhone,
+                        CellPhone: receiverPhone,
+                      },
+                    },
+                    Details: {
+                      Dimensions: null,
+                      ActualWeight: { Unit: 'KG', Value: dto.weight || 1.5 },
+                      ProductGroup: 'DOM', // Domestic Express
+                      ProductType: 'ONP', // Overnight Parcel
+                      PaymentType: 'P', // Prepaid by Shipper
+                      NumberOfPieces: dto.piecesCount || 1,
+                      DescriptionOfGoods: dto.description || 'Electronic and Retail Goods',
+                      GoodsOriginCountry: settings.aramexCountryCode || 'SA',
+                      CashOnDeliveryAmount: finalCod > 0 ? { CurrencyCode: currency, Value: finalCod } : null,
+                    },
+                  },
+                ],
+              }),
+            },
+          );
 
           const data = await res.json().catch(() => ({}));
           const shipmentResult = data?.Shipments?.[0];
@@ -270,7 +278,10 @@ export class GccShippingService {
             trackingNumber = shipmentResult.ID;
             awbUrl = `https://www.aramex.com/us/en/track/shipments?ShipmentNumber=${trackingNumber}`;
           } else {
-            const errNotification = data?.Notifications?.[0]?.Message || shipmentResult?.Notifications?.[0]?.Message || 'خطأ في معالجة الشحنة في أرامكس';
+            const errNotification =
+              data?.Notifications?.[0]?.Message ||
+              shipmentResult?.Notifications?.[0]?.Message ||
+              'خطأ في معالجة الشحنة في أرامكس';
             throw new Error(errNotification);
           }
         } catch (err: any) {
@@ -394,11 +405,14 @@ export class GccShippingService {
       .where('gcc_tracking_number', '=', trackingNumber)
       .executeTakeFirst();
 
-    const carrier: GccCarrier = (order?.gcc_shipping_carrier as GccCarrier) || (trackingNumber.startsWith('ARM') ? 'aramex' : 'smsa');
+    const carrier: GccCarrier =
+      (order?.gcc_shipping_carrier as GccCarrier) || (trackingNumber.startsWith('ARM') ? 'aramex' : 'smsa');
     const settings = await this.getSettings(actor);
 
     const now = new Date();
-    const createdTime = order?.gcc_shipping_created_at ? new Date(order.gcc_shipping_created_at) : new Date(Date.now() - 3600000);
+    const createdTime = order?.gcc_shipping_created_at
+      ? new Date(order.gcc_shipping_created_at)
+      : new Date(Date.now() - 3600000);
     const destCity = order?.delivery_zone_name || 'الرياض';
     const originCity = settings.pickupCity || 'الرياض';
 
@@ -424,9 +438,10 @@ export class GccShippingService {
       },
     ];
 
-    const officialTrackingUrl = carrier === 'aramex'
-      ? `https://www.aramex.com/us/en/track/shipments?ShipmentNumber=${trackingNumber}`
-      : `https://www.smsaexpress.com/ar/trackingdetails?tracknumbers=${trackingNumber}`;
+    const officialTrackingUrl =
+      carrier === 'aramex'
+        ? `https://www.aramex.com/us/en/track/shipments?ShipmentNumber=${trackingNumber}`
+        : `https://www.smsaexpress.com/ar/trackingdetails?tracknumbers=${trackingNumber}`;
 
     return {
       ok: true,

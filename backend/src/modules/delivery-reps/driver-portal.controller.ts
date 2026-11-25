@@ -40,14 +40,21 @@ export class DriverPortalController {
   ) {
     const driver = await this.service.verifyDriverToken(authHeader);
     await this.service.assertDriverPinChanged(driver);
-    return this.service.driverListOrders(driver.repId, driver.tenantId, driver.accountId, { status, dateFrom, dateTo, page: Number(page), pageSize: Number(pageSize) });
+    return this.service.driverListOrders(driver.repId, driver.tenantId, driver.accountId, {
+      status,
+      dateFrom,
+      dateTo,
+      page: Number(page),
+      pageSize: Number(pageSize),
+    });
   }
 
   @Post('orders/:saleId/settle')
   async settleOrder(
     @Param('saleId', ParseIntPipe) saleId: number,
     @Headers('authorization') authHeader: string,
-    @Body() body: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string },
+    @Body()
+    body: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string },
   ) {
     const driver = await this.service.verifyDriverToken(authHeader);
     await this.service.assertDriverPinChanged(driver);

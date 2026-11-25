@@ -7,9 +7,7 @@ export class VanSalesDriverTripsSettleSlice {
   constructor(
     private readonly vanSalesService: VanSalesService,
     private readonly deliveryRepsService: DeliveryRepsService,
-    private readonly verifyDriver: (
-      authHeader: string,
-    ) => Promise<{
+    private readonly verifyDriver: (authHeader: string) => Promise<{
       repId: number;
       tenantId: string;
       accountId: string;
@@ -33,7 +31,13 @@ export class VanSalesDriverTripsSettleSlice {
 
   async openTrip(
     authHeader: string,
-    body: { sourceWarehouseId?: number; items?: { productId: number; qty: number }[]; notes?: string; startOdometer?: number; vehicleId?: number },
+    body: {
+      sourceWarehouseId?: number;
+      items?: { productId: number; qty: number }[];
+      notes?: string;
+      startOdometer?: number;
+      vehicleId?: number;
+    },
   ) {
     const driver = await this.verifyDriver(authHeader);
     if (body?.items && Array.isArray(body.items) && body.items.length > 0) {

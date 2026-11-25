@@ -21,9 +21,7 @@ export interface KnowledgeSearchResult {
 export class AiKnowledgeService {
   private readonly logger = new Logger(AiKnowledgeService.name);
 
-  constructor(
-    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
-  ) {}
+  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   /**
    * Ingest and vectorize a new document, policy, or text into the knowledge base (Chatbase style)
@@ -258,11 +256,7 @@ export class AiKnowledgeService {
    * Auto-index active product catalog into a specialized knowledge source
    * allowing semantic search across products and specifications.
    */
-  async autoIndexProducts(
-    actor: AuthContext,
-    apiKey?: string,
-    provider: 'gemini' | 'openai' | 'custom' = 'gemini',
-  ) {
+  async autoIndexProducts(actor: AuthContext, apiKey?: string, provider: 'gemini' | 'openai' | 'custom' = 'gemini') {
     const { tenantId } = requireTenantScope(actor);
 
     const products = await this.db

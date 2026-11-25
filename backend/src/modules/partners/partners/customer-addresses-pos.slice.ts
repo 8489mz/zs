@@ -29,7 +29,11 @@ export class CustomerAddressesPosSlice {
   private async getCustomerAddresses(id: number, actor: AuthContext): Promise<string[]> {
     return this.bound.getCustomerAddresses(id, actor);
   }
-  async addCustomerAddress(id: number, newAddress: string, actor: AuthContext): Promise<{ ok: boolean; addresses: string[] }> {
+  async addCustomerAddress(
+    id: number,
+    newAddress: string,
+    actor: AuthContext,
+  ): Promise<{ ok: boolean; addresses: string[] }> {
     const trimmed = String(newAddress || '').trim();
     if (!trimmed) throw new AppError('Address is required', 'ADDRESS_REQUIRED', 400);
 
@@ -77,7 +81,11 @@ export class CustomerAddressesPosSlice {
     return { ok: true, addresses };
   }
 
-  async deleteCustomerAddress(id: number, addressToDelete: string, actor: AuthContext): Promise<{ ok: boolean; addresses: string[] }> {
+  async deleteCustomerAddress(
+    id: number,
+    addressToDelete: string,
+    actor: AuthContext,
+  ): Promise<{ ok: boolean; addresses: string[] }> {
     const target = String(addressToDelete || '').trim();
     if (!target) throw new AppError('Address to delete is required', 'ADDRESS_REQUIRED', 400);
 
@@ -108,7 +116,7 @@ export class CustomerAddressesPosSlice {
 
     let newMainAddress = customer.address || '';
     if (newMainAddress.trim() === target) {
-      newMainAddress = (meta.addresses && meta.addresses[0]) ? meta.addresses[0] : '';
+      newMainAddress = meta.addresses && meta.addresses[0] ? meta.addresses[0] : '';
     }
 
     await this.db
@@ -129,7 +137,15 @@ export class CustomerAddressesPosSlice {
   async getCustomerPosSummary(id: number, actor: AuthContext): Promise<Record<string, unknown>> {
     const customer = await this.db
       .selectFrom('customers')
-      .select(['id', 'balance', 'credit_limit', 'store_credit_balance', 'customer_type', 'price_list_id', 'loyalty_points'])
+      .select([
+        'id',
+        'balance',
+        'credit_limit',
+        'store_credit_balance',
+        'customer_type',
+        'price_list_id',
+        'loyalty_points',
+      ])
       .where('id', '=', id)
       .where('is_active', '=', true)
       .where(this.tenantPredicate(actor))
@@ -152,7 +168,9 @@ export class CustomerAddressesPosSlice {
         .executeTakeFirst(),
       this.db
         .selectFrom('return_documents as rd')
-        .innerJoin('sales as s', (join) => join.onRef('s.id', '=', 'rd.invoice_id').onRef('s.tenant_id', '=', 'rd.tenant_id'))
+        .innerJoin('sales as s', (join) =>
+          join.onRef('s.id', '=', 'rd.invoice_id').onRef('s.tenant_id', '=', 'rd.tenant_id'),
+        )
         .select(sql<number>`count(*)`.as('return_count'))
         .where('rd.return_type', '=', 'sale')
         .where('s.customer_id', '=', id)

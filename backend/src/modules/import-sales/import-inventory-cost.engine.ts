@@ -12,8 +12,7 @@ export interface ImportCostLine {
 }
 
 export function requireImportNumber(value: unknown, label: string, min = 0): number {
-  if (value === null || value === undefined || value === '' ||
-      !Number.isFinite(Number(value)) || Number(value) < min) {
+  if (value === null || value === undefined || value === '' || !Number.isFinite(Number(value)) || Number(value) < min) {
     throw new BadRequestException(`قيمة غير صالحة: ${label}`);
   }
   return Number(value);
@@ -26,8 +25,10 @@ export function validateImportLine(line: ImportCostLine): void {
   requireImportNumber(line.quantity, 'الكمية', 1);
   if (!Number.isInteger(line.quantity)) throw new BadRequestException('كمية البوليصة يجب أن تكون عددًا صحيحًا');
   requireImportNumber(line.receivedQuantity, 'الكمية المستلمة');
-  if (line.receivedQuantity > line.quantity ||
-      Math.abs(line.receivedQuantity - Number(line.receivedQuantity.toFixed(3))) > 1e-9) {
+  if (
+    line.receivedQuantity > line.quantity ||
+    Math.abs(line.receivedQuantity - Number(line.receivedQuantity.toFixed(3))) > 1e-9
+  ) {
     throw new BadRequestException('الكمية المستلمة تتجاوز البوليصة أو دقة المخزون (3 منازل)');
   }
   requireImportNumber(line.factoryUnitPriceUsd, 'سعر المصنع');
@@ -60,7 +61,10 @@ export function groupImportReceipts(lines: Array<ImportCostLine & { landedCost: 
     validateImportLine(line);
     requireImportNumber(line.landedCost, 'التكلفة المحملة');
     const group = products.get(line.productId) ?? {
-      productId: line.productId, quantity: 0, value: 0, shortageExpense: 0,
+      productId: line.productId,
+      quantity: 0,
+      value: 0,
+      shortageExpense: 0,
     };
     group.quantity = Number((group.quantity + line.receivedQuantity).toFixed(3));
     group.value += line.receivedQuantity * line.landedCost;

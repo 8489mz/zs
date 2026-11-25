@@ -40,37 +40,25 @@ export class MaritimeCustomerPortalController {
   }
 
   @Get('shipments/:id')
-  async getShipmentDetails(
-    @Headers('authorization') authHeader: string,
-    @Param('id') id: string,
-  ) {
+  async getShipmentDetails(@Headers('authorization') authHeader: string, @Param('id') id: string) {
     const auth = await this.portalService.verifyCustomerToken(authHeader);
     return this.portalService.getShipmentDetails(auth, id);
   }
 
   @Post('quotes/request')
-  async requestQuote(
-    @Headers('authorization') authHeader: string,
-    @Body() dto: CreatePortalQuoteRequestDto,
-  ) {
+  async requestQuote(@Headers('authorization') authHeader: string, @Body() dto: CreatePortalQuoteRequestDto) {
     const auth = await this.portalService.verifyCustomerToken(authHeader);
     return this.portalService.requestQuote(auth, dto);
   }
 
   @Get('quotes')
-  async getQuotations(
-    @Headers('authorization') authHeader: string,
-    @Query('status') status?: string,
-  ) {
+  async getQuotations(@Headers('authorization') authHeader: string, @Query('status') status?: string) {
     const auth = await this.portalService.verifyCustomerToken(authHeader);
     return this.portalService.getQuotations(auth, { status });
   }
 
   @Get('quotes/:id')
-  async getQuotationDetails(
-    @Headers('authorization') authHeader: string,
-    @Param('id') id: string,
-  ) {
+  async getQuotationDetails(@Headers('authorization') authHeader: string, @Param('id') id: string) {
     const auth = await this.portalService.verifyCustomerToken(authHeader);
     return this.portalService.getQuotationDetails(auth, id);
   }

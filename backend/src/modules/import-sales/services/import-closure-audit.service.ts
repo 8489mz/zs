@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
 import { Kysely, sql, Transaction } from 'kysely';
 import { Database } from '../../../database/database.types';
 import { ResolveExceptionDto } from '../dto/import-sales.dto';
@@ -80,7 +75,7 @@ export class ImportClosureAuditService {
   async setProjectPartners(
     tenantId: string,
     projectId: string,
-    partners: Array<{ partnerId: string; capitalShare?: number; profitPercentage: number }>
+    partners: Array<{ partnerId: string; capitalShare?: number; profitPercentage: number }>,
   ) {
     return await this.db.transaction().execute(async (trx) => {
       const project = await trx
@@ -98,7 +93,8 @@ export class ImportClosureAuditService {
 
       // Existing single-row partner allocations are not effective-dated history.
       // Freeze edits when financial execution has started to protect prior earnings.
-      const postedReceipt = await trx.selectFrom('import_shipments as shipment')
+      const postedReceipt = await trx
+        .selectFrom('import_shipments as shipment')
         .innerJoin('import_inventory_receipts as receipt', 'receipt.shipment_id', 'shipment.id')
         .select('shipment.id')
         .where('shipment.project_id', '=', projectId)
@@ -106,7 +102,8 @@ export class ImportClosureAuditService {
         .where('receipt.tenant_id', '=', tenantId)
         .where('receipt.state', '=', 'posted')
         .executeTakeFirst();
-      const paidProforma = await trx.selectFrom('import_proforma_invoices')
+      const paidProforma = await trx
+        .selectFrom('import_proforma_invoices')
         .select('id')
         .where('tenant_id', '=', tenantId)
         .where('project_id', '=', projectId)
@@ -114,7 +111,7 @@ export class ImportClosureAuditService {
         .executeTakeFirst();
       if (postedReceipt || paidProforma) {
         throw new BadRequestException(
-          'لا يجوز تعديل نسب المشروع بعد بدء السداد أو الاستلام دون سجل تاريخي لنسب الشراكة.'
+          'لا يجوز تعديل نسب المشروع بعد بدء السداد أو الاستلام دون سجل تاريخي لنسب الشراكة.',
         );
       }
 
@@ -174,7 +171,7 @@ export class ImportClosureAuditService {
               profit_percentage: Number(p.profitPercentage || 0),
               is_active: true,
               effective_from: todayKey,
-            })
+            }),
           )
           .execute();
       }
@@ -208,7 +205,9 @@ export class ImportClosureAuditService {
 
       for (const s of shipments) {
         if (s.status !== 'Arrived') {
-          throw new BadRequestException(`لا يمكن إقفال المشروع: الحاوية ${s.container_number} ما زالت بالحالة (${s.status}) ولم تصل بعد.`);
+          throw new BadRequestException(
+            `لا يمكن إقفال المشروع: الحاوية ${s.container_number} ما زالت بالحالة (${s.status}) ولم تصل بعد.`,
+          );
         }
         const receipt = await trx
           .selectFrom('import_inventory_receipts')
@@ -217,7 +216,9 @@ export class ImportClosureAuditService {
           .where('tenant_id', '=', tenantId)
           .executeTakeFirst();
         if (!receipt || receipt.state !== 'posted') {
-          throw new BadRequestException(`لا يمكن إقفال المشروع: الحاوية ${s.container_number} لم يتم ترحيل استلامها المخزني بالكامل.`);
+          throw new BadRequestException(
+            `لا يمكن إقفال المشروع: الحاوية ${s.container_number} لم يتم ترحيل استلامها المخزني بالكامل.`,
+          );
         }
       }
 
@@ -229,10 +230,11 @@ export class ImportClosureAuditService {
         .execute();
 
       for (const pi of proformas) {
-        const isPaid = pi.payment_status === 'paid' && Number(pi.paid_amount_foreign || 0) >= Number(pi.total_amount_foreign || 0);
+        const isPaid =
+          pi.payment_status === 'paid' && Number(pi.paid_amount_foreign || 0) >= Number(pi.total_amount_foreign || 0);
         if (!isPaid) {
           throw new BadRequestException(
-            `لا يمكن إقفال المشروع: الفاتورة المبدئية رقم ${pi.pi_number} للمورد غير مسددة بالكامل (الحالة: ${pi.payment_status}، المسدد: ${pi.paid_amount_foreign || 0} من ${pi.total_amount_foreign || 0}).`
+            `لا يمكن إقفال المشروع: الفاتورة المبدئية رقم ${pi.pi_number} للمورد غير مسددة بالكامل (الحالة: ${pi.payment_status}، المسدد: ${pi.paid_amount_foreign || 0} من ${pi.total_amount_foreign || 0}).`,
           );
         }
       }
@@ -251,7 +253,7 @@ export class ImportClosureAuditService {
         const total = Number(pur.total || 0);
         if (paid < total - 0.001) {
           throw new BadRequestException(
-            `لا يمكن إقفال المشروع: فاتورة الشراء رقم ${pur.doc_no || pur.id} غير مسددة بالكامل للمورد (المتبقي: ${(total - paid).toFixed(2)} ج.م).`
+            `لا يمكن إقفال المشروع: فاتورة الشراء رقم ${pur.doc_no || pur.id} غير مسددة بالكامل للمورد (المتبقي: ${(total - paid).toFixed(2)} ج.م).`,
           );
         }
       }
@@ -268,7 +270,7 @@ export class ImportClosureAuditService {
       if (activeAdvances.length > 0) {
         const first = activeAdvances[0];
         throw new BadRequestException(
-          `لا يمكن إقفال المشروع: توجد عهدة مخلص معلقة (إذن رقم ${first.advance_no}) بمبلغ متبقٍ ${Number(first.remaining_amount_egp).toFixed(2)} ج.م يلزم تسويتها أولاً.`
+          `لا يمكن إقفال المشروع: توجد عهدة مخلص معلقة (إذن رقم ${first.advance_no}) بمبلغ متبقٍ ${Number(first.remaining_amount_egp).toFixed(2)} ج.م يلزم تسويتها أولاً.`,
         );
       }
 
@@ -280,8 +282,14 @@ export class ImportClosureAuditService {
         .where((eb) =>
           eb.or([
             eb('project_id', '=', projectId),
-            shipments.length > 0 ? eb('shipment_id', 'in', shipments.map((s) => s.id)) : sql`1=0`,
-          ])
+            shipments.length > 0
+              ? eb(
+                  'shipment_id',
+                  'in',
+                  shipments.map((s) => s.id),
+                )
+              : sql`1=0`,
+          ]),
         )
         .where('refund_status', 'in', ['pending', 'partially_refunded'])
         .execute();
@@ -289,7 +297,7 @@ export class ImportClosureAuditService {
       if (pendingDeposits.length > 0) {
         const first = pendingDeposits[0];
         throw new BadRequestException(
-          `لا يمكن إقفال المشروع: يوجد تأمين حاوية معلق (#${first.container_no}) بحالة (${first.refund_status}) يلزم استرداده وتسويته أولاً.`
+          `لا يمكن إقفال المشروع: يوجد تأمين حاوية معلق (#${first.container_no}) بحالة (${first.refund_status}) يلزم استرداده وتسويته أولاً.`,
         );
       }
 
@@ -305,8 +313,14 @@ export class ImportClosureAuditService {
         .where((eb) =>
           eb.or([
             eb('project_id', '=', projectId),
-            shipments.length > 0 ? eb('shipment_id', 'in', shipments.map((s) => s.id)) : sql`1=0`,
-          ])
+            shipments.length > 0
+              ? eb(
+                  'shipment_id',
+                  'in',
+                  shipments.map((s) => s.id),
+                )
+              : sql`1=0`,
+          ]),
         )
         .where('is_verified', '=', false)
         .execute();
@@ -314,7 +328,7 @@ export class ImportClosureAuditService {
       if (unverifiedExpenses.length > 0) {
         const first = unverifiedExpenses[0];
         throw new BadRequestException(
-          `لا يمكن إقفال المشروع: يوجد مصروف مخلص غير متحقق منه (إيصال #${first.receipt_no}، ${Number(first.amount_egp).toFixed(2)} ج.م) يلزم التحقق منه بموافقة معتمدة أولاً.`
+          `لا يمكن إقفال المشروع: يوجد مصروف مخلص غير متحقق منه (إيصال #${first.receipt_no}، ${Number(first.amount_egp).toFixed(2)} ج.م) يلزم التحقق منه بموافقة معتمدة أولاً.`,
         );
       }
 
@@ -325,7 +339,7 @@ export class ImportClosureAuditService {
         // An unverified report may show zero sales precisely because allocation is missing.
         // Never treat that synthetic zero as safe to close.
         throw new UnprocessableEntityException(
-          'لا يمكن إقفال المشروع قبل اعتماد تتبع مصدر المبيعات وكميات المخزون بالكامل.'
+          'لا يمكن إقفال المشروع قبل اعتماد تتبع مصدر المبيعات وكميات المخزون بالكامل.',
         );
       }
 
@@ -337,8 +351,14 @@ export class ImportClosureAuditService {
         .where((eb) =>
           eb.or([
             eb('project_id', '=', projectId),
-            shipments.length > 0 ? eb('shipment_id', 'in', shipments.map((s) => s.id)) : sql`1=0`,
-          ])
+            shipments.length > 0
+              ? eb(
+                  'shipment_id',
+                  'in',
+                  shipments.map((s) => s.id),
+                )
+              : sql`1=0`,
+          ]),
         )
         .where('remaining_quantity', '>', 0)
         .execute();
@@ -346,18 +366,23 @@ export class ImportClosureAuditService {
       if (remainingLots.length > 0) {
         const first = remainingLots[0];
         throw new BadRequestException(
-          `لا يمكن إقفال المشروع: يوجد رصيد مخزني غير مباع بالباتش (${first.lot_number}) متبقٍ به ${first.remaining_quantity} وحدة يلزم بيعه أو تسويته مخزنيًا قبل الإقفال النهائي.`
+          `لا يمكن إقفال المشروع: يوجد رصيد مخزني غير مباع بالباتش (${first.lot_number}) متبقٍ به ${first.remaining_quantity} وحدة يلزم بيعه أو تسويته مخزنيًا قبل الإقفال النهائي.`,
         );
       }
 
-      const projectItems = shipments.length > 0
-        ? await trx
-            .selectFrom('import_shipment_items')
-            .select(['product_id', 'quantity', 'received_quantity'])
-            .where('tenant_id', '=', tenantId)
-            .where('shipment_id', 'in', shipments.map((s) => s.id))
-            .execute()
-        : [];
+      const projectItems =
+        shipments.length > 0
+          ? await trx
+              .selectFrom('import_shipment_items')
+              .select(['product_id', 'quantity', 'received_quantity'])
+              .where('tenant_id', '=', tenantId)
+              .where(
+                'shipment_id',
+                'in',
+                shipments.map((s) => s.id),
+              )
+              .execute()
+          : [];
 
       let totalReceived = 0;
       for (const it of projectItems) {
@@ -419,10 +444,18 @@ export class ImportClosureAuditService {
     const projects = await projectsQ.orderBy('created_at', 'asc').execute();
     for (const p of projects) {
       events.push({
-        kind: 'project', ref: String(p.project_no || p.id), label: String(p.title || ''),
-        state: String(p.status || ''), projectId: String(p.id), shipmentId: null,
-        amountEgp: num((p as any).allocated_capital), amountForeign: null, currency: String((p as any).budget_currency || '') || null,
-        journalEntryNo: null, journalMatched: null, createdAt: (p as any).created_at,
+        kind: 'project',
+        ref: String(p.project_no || p.id),
+        label: String(p.title || ''),
+        state: String(p.status || ''),
+        projectId: String(p.id),
+        shipmentId: null,
+        amountEgp: num((p as any).allocated_capital),
+        amountForeign: null,
+        currency: String((p as any).budget_currency || '') || null,
+        journalEntryNo: null,
+        journalMatched: null,
+        createdAt: (p as any).created_at,
       });
     }
 
@@ -431,11 +464,18 @@ export class ImportClosureAuditService {
     const pis = await piQ.orderBy('created_at', 'asc').execute();
     for (const pi of pis) {
       events.push({
-        kind: 'proforma_invoice', ref: String(pi.pi_number || pi.id), label: '',
+        kind: 'proforma_invoice',
+        ref: String(pi.pi_number || pi.id),
+        label: '',
         state: String(pi.status || ''),
-        projectId: pi.project_id ? String(pi.project_id) : null, shipmentId: null,
-        amountEgp: null, amountForeign: num(pi.total_amount_foreign), currency: String(pi.currency || '') || null,
-        journalEntryNo: null, journalMatched: null, createdAt: (pi as any).created_at,
+        projectId: pi.project_id ? String(pi.project_id) : null,
+        shipmentId: null,
+        amountEgp: null,
+        amountForeign: num(pi.total_amount_foreign),
+        currency: String(pi.currency || '') || null,
+        journalEntryNo: null,
+        journalMatched: null,
+        createdAt: (pi as any).created_at,
       });
     }
 
@@ -445,10 +485,18 @@ export class ImportClosureAuditService {
     const shipmentIds = shipments.map((s) => String(s.id));
     for (const s of shipments) {
       events.push({
-        kind: 'shipment', ref: String(s.container_number || s.id), label: String(s.bill_of_lading || ''),
-        state: String(s.status || ''), projectId: s.project_id ? String(s.project_id) : null,
-        shipmentId: String(s.id), amountEgp: null, amountForeign: null, currency: null,
-        journalEntryNo: null, journalMatched: null, createdAt: (s as any).created_at,
+        kind: 'shipment',
+        ref: String(s.container_number || s.id),
+        label: String(s.bill_of_lading || ''),
+        state: String(s.status || ''),
+        projectId: s.project_id ? String(s.project_id) : null,
+        shipmentId: String(s.id),
+        amountEgp: null,
+        amountForeign: null,
+        currency: null,
+        journalEntryNo: null,
+        journalMatched: null,
+        createdAt: (s as any).created_at,
       });
     }
 
@@ -462,10 +510,15 @@ export class ImportClosureAuditService {
       .leftJoin('journal_entries as je', 'je.id', 'r.journal_entry_id')
       .leftJoin('import_shipments as s', 's.id', 'r.shipment_id')
       .select([
-        'r.id as receipt_id', 'r.shipment_id as shipment_id', 'r.state as state',
-        'r.journal_entry_id as journal_entry_id', 'r.created_at as created_at',
-        'je.entry_no as entry_no', 'je.status as journal_status',
-        's.project_id as project_id', 's.container_number as container_number',
+        'r.id as receipt_id',
+        'r.shipment_id as shipment_id',
+        'r.state as state',
+        'r.journal_entry_id as journal_entry_id',
+        'r.created_at as created_at',
+        'je.entry_no as entry_no',
+        'je.status as journal_status',
+        's.project_id as project_id',
+        's.container_number as container_number',
       ])
       .where('r.tenant_id', '=', tenantId);
     if (projectId) receiptQ = receiptQ.where('s.project_id', '=', projectId);
@@ -474,11 +527,17 @@ export class ImportClosureAuditService {
     for (const r of receipts as any[]) {
       const matched = r.state === 'posted' && r.journal_entry_id != null && r.journal_status === 'posted';
       events.push({
-        kind: 'receipt', ref: `#${r.receipt_id}`, label: String(r.container_number || ''),
-        state: String(r.state || ''), projectId: r.project_id ? String(r.project_id) : null,
+        kind: 'receipt',
+        ref: `#${r.receipt_id}`,
+        label: String(r.container_number || ''),
+        state: String(r.state || ''),
+        projectId: r.project_id ? String(r.project_id) : null,
         shipmentId: r.shipment_id ? String(r.shipment_id) : null,
-        amountEgp: null, amountForeign: null, currency: null,
-        journalEntryNo: r.entry_no ? String(r.entry_no) : null, journalMatched: matched,
+        amountEgp: null,
+        amountForeign: null,
+        currency: null,
+        journalEntryNo: r.entry_no ? String(r.entry_no) : null,
+        journalMatched: matched,
         createdAt: r.created_at,
       });
     }
@@ -492,9 +551,13 @@ export class ImportClosureAuditService {
       .selectFrom('supplier_payments as sp')
       .innerJoin('import_proforma_invoices as pi', 'pi.id', 'sp.proforma_invoice_id')
       .select([
-        'sp.id as payment_id', 'sp.doc_no as doc_no', 'sp.amount as amount',
-        'sp.amount_foreign as amount_foreign', 'sp.currency as currency',
-        'sp.created_at as created_at', 'pi.project_id as project_id',
+        'sp.id as payment_id',
+        'sp.doc_no as doc_no',
+        'sp.amount as amount',
+        'sp.amount_foreign as amount_foreign',
+        'sp.currency as currency',
+        'sp.created_at as created_at',
+        'pi.project_id as project_id',
         'pi.pi_number as pi_number',
       ])
       .where('sp.tenant_id', '=', tenantId)
@@ -503,12 +566,18 @@ export class ImportClosureAuditService {
       .execute();
     for (const pay of payments as any[]) {
       events.push({
-        kind: 'supplier_payment', ref: String(pay.doc_no || `#${pay.payment_id}`),
-        label: String(pay.pi_number || ''), state: 'paid',
-        projectId: pay.project_id ? String(pay.project_id) : null, shipmentId: null,
-        amountEgp: num(pay.amount), amountForeign: num(pay.amount_foreign),
+        kind: 'supplier_payment',
+        ref: String(pay.doc_no || `#${pay.payment_id}`),
+        label: String(pay.pi_number || ''),
+        state: 'paid',
+        projectId: pay.project_id ? String(pay.project_id) : null,
+        shipmentId: null,
+        amountEgp: num(pay.amount),
+        amountForeign: num(pay.amount_foreign),
         currency: String(pay.currency || '') || null,
-        journalEntryNo: null, journalMatched: null, createdAt: pay.created_at,
+        journalEntryNo: null,
+        journalMatched: null,
+        createdAt: pay.created_at,
       });
     }
 
@@ -517,10 +586,18 @@ export class ImportClosureAuditService {
     const payouts = await payoutQ.orderBy('created_at', 'asc').execute();
     for (const po of payouts) {
       events.push({
-        kind: 'partner_payout', ref: `#${po.id}`, label: '',
-        state: 'paid', projectId: String(po.project_id), shipmentId: null,
-        amountEgp: num(po.amount_egp), amountForeign: null, currency: null,
-        journalEntryNo: null, journalMatched: null, createdAt: (po as any).created_at,
+        kind: 'partner_payout',
+        ref: `#${po.id}`,
+        label: '',
+        state: 'paid',
+        projectId: String(po.project_id),
+        shipmentId: null,
+        amountEgp: num(po.amount_egp),
+        amountForeign: null,
+        currency: null,
+        journalEntryNo: null,
+        journalMatched: null,
+        createdAt: (po as any).created_at,
       });
     }
 
@@ -529,8 +606,11 @@ export class ImportClosureAuditService {
       if (projectId) {
         let payload: any = {};
         try {
-          payload = typeof a.request_payload === 'string' ? JSON.parse(a.request_payload || '{}') : (a.request_payload || {});
-        } catch { payload = {}; }
+          payload =
+            typeof a.request_payload === 'string' ? JSON.parse(a.request_payload || '{}') : a.request_payload || {};
+        } catch {
+          payload = {};
+        }
         // The project binding is the payload's projectId when the
         // approval carries one (partner_distribution, project_closure,
         // large_transfer); otherwise the approval has no project and
@@ -539,10 +619,18 @@ export class ImportClosureAuditService {
         if (boundProject !== String(projectId)) continue;
       }
       events.push({
-        kind: 'approval_request', ref: `#${String(a.id).slice(0, 8)}`, label: String(a.action_type || ''),
-        state: String(a.status || ''), projectId: null, shipmentId: null,
-        amountEgp: null, amountForeign: null, currency: null,
-        journalEntryNo: null, journalMatched: null, createdAt: a.created_at,
+        kind: 'approval_request',
+        ref: `#${String(a.id).slice(0, 8)}`,
+        label: String(a.action_type || ''),
+        state: String(a.status || ''),
+        projectId: null,
+        shipmentId: null,
+        amountEgp: null,
+        amountForeign: null,
+        currency: null,
+        journalEntryNo: null,
+        journalMatched: null,
+        createdAt: a.created_at,
       });
     }
 
@@ -587,7 +675,8 @@ export class ImportClosureAuditService {
       // A fresh, not-yet-liquidated broker advance is a normal operation, not an exception.
       const disbursedOn = new Date(String(adv.disbursement_date));
       const ageDays = Number.isFinite(disbursedOn.getTime())
-        ? (today.getTime() - disbursedOn.getTime()) / (24 * 60 * 60 * 1000) : 0;
+        ? (today.getTime() - disbursedOn.getTime()) / (24 * 60 * 60 * 1000)
+        : 0;
       if (Number(adv.remaining_amount_egp) > 0 && ageDays > 30) {
         exceptions.push({
           tenant_id: tenantId,
@@ -633,18 +722,30 @@ export class ImportClosureAuditService {
       }
     }
 
-    const existingOpen = await this.db.selectFrom('import_reconciliation_exceptions')
+    const existingOpen = await this.db
+      .selectFrom('import_reconciliation_exceptions')
       .select(['exception_type', 'shipment_id', 'project_id', 'details'])
-      .where('tenant_id', '=', tenantId).where('status', '=', 'open').execute();
+      .where('tenant_id', '=', tenantId)
+      .where('status', '=', 'open')
+      .execute();
     let insertedCount = 0;
     for (const ex of exceptions) {
-      const duplicate = existingOpen.some((row: any) =>
-        row.exception_type === ex.exception_type &&
-        row.shipment_id === ex.shipment_id && row.project_id === ex.project_id &&
-        JSON.stringify(row.details) === JSON.stringify(typeof ex.details === 'string' ? JSON.parse(ex.details) : ex.details));
+      const duplicate = existingOpen.some(
+        (row: any) =>
+          row.exception_type === ex.exception_type &&
+          row.shipment_id === ex.shipment_id &&
+          row.project_id === ex.project_id &&
+          JSON.stringify(row.details) ===
+            JSON.stringify(typeof ex.details === 'string' ? JSON.parse(ex.details) : ex.details),
+      );
       if (duplicate) continue;
       await this.db.insertInto('import_reconciliation_exceptions').values(ex).execute();
-      existingOpen.push({ exception_type: ex.exception_type, shipment_id: ex.shipment_id, project_id: ex.project_id, details: JSON.parse(ex.details) });
+      existingOpen.push({
+        exception_type: ex.exception_type,
+        shipment_id: ex.shipment_id,
+        project_id: ex.project_id,
+        details: JSON.parse(ex.details),
+      });
       insertedCount++;
     }
 
@@ -661,7 +762,12 @@ export class ImportClosureAuditService {
     return await q.orderBy('created_at', 'desc').execute();
   }
 
-  async resolveReconciliationException(tenantId: string, userId: number, exceptionId: string, dto: ResolveExceptionDto) {
+  async resolveReconciliationException(
+    tenantId: string,
+    userId: number,
+    exceptionId: string,
+    dto: ResolveExceptionDto,
+  ) {
     return await this.db
       .updateTable('import_reconciliation_exceptions')
       .set({

@@ -6,10 +6,7 @@ import { getTenantTimezone, normalizePgDateOnly } from '../../../../common/utils
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../../accounting/engines/money-minor-units.engine';
 import { boundedPage } from '../../../../common/utils/bounded-page';
-import {
-  extractCoordinatesFromCustomerLocation,
-  evaluateGeofenceCompliance,
-} from '../../rep-target.engine';
+import { extractCoordinatesFromCustomerLocation, evaluateGeofenceCompliance } from '../../rep-target.engine';
 import { type DayBucket } from '../../van-settlement-split.engine';
 import { type VanTripSummary } from './van-trip-types';
 import { type SettlementHelpersService } from './settlement-helpers.service';
@@ -61,11 +58,14 @@ export class TripAdminReadsService {
       businessDay: (trip as any).business_day ? normalizePgDateOnly((trip as any).business_day) : null,
       timezone,
       days,
-      totalDue: roundMoney(days.reduce((s, d) => s + d.due, 0), bookDigits),
+      totalDue: roundMoney(
+        days.reduce((s, d) => s + d.due, 0),
+        bookDigits,
+      ),
     };
   }
 
-/**
+  /**
    * Admin audit list of all van trips.
    */
   async listTripsForAdmin(
@@ -154,7 +154,7 @@ export class TripAdminReadsService {
     }));
   }
 
-/**
+  /**
    * Admin detailed audit of a single van trip, including all sales (with GPS), collections (with GPS), and returns.
    */
   async getTripDetailsForAdmin(tenantId: string, tripId: number, pagination?: { page?: number; pageSize?: number }) {
@@ -203,7 +203,9 @@ export class TripAdminReadsService {
     // Sales executed in this trip
     const sales = await this.anyDb
       .selectFrom('sales as s')
-      .leftJoin('customers as c', (join: any) => join.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'))
+      .leftJoin('customers as c', (join: any) =>
+        join.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'),
+      )
       .select([
         's.id',
         's.doc_no as docNo',
@@ -219,13 +221,16 @@ export class TripAdminReadsService {
       .where('s.tenant_id', '=', tenantId)
       .where(sql<boolean>`s.van_trip_id = ${tripId}`)
       .orderBy('s.id', 'desc')
-      .limit(pageSize + 1).offset(offset)
+      .limit(pageSize + 1)
+      .offset(offset)
       .execute();
 
     // Collections recorded in this trip
     const collections = await this.anyDb
       .selectFrom('customer_ledger as cl')
-      .leftJoin('customers as c', (join: any) => join.onRef('c.id', '=', 'cl.customer_id').onRef('c.tenant_id', '=', 'cl.tenant_id'))
+      .leftJoin('customers as c', (join: any) =>
+        join.onRef('c.id', '=', 'cl.customer_id').onRef('c.tenant_id', '=', 'cl.tenant_id'),
+      )
       .select([
         'cl.id',
         sql<number>`cast(abs(coalesce(cl.amount, 0)) as numeric)`.as('amount'),
@@ -240,13 +245,16 @@ export class TripAdminReadsService {
       .where(sql<boolean>`cl.van_trip_id = ${tripId}`)
       .where('cl.entry_type', '=', 'payment')
       .orderBy('cl.id', 'desc')
-      .limit(pageSize + 1).offset(offset)
+      .limit(pageSize + 1)
+      .offset(offset)
       .execute();
 
     // Field returns recorded in this trip
     const returns = await this.anyDb
       .selectFrom('van_field_returns as vfr')
-      .leftJoin('customers as c', (join: any) => join.onRef('c.id', '=', 'vfr.customer_id').onRef('c.tenant_id', '=', 'vfr.tenant_id'))
+      .leftJoin('customers as c', (join: any) =>
+        join.onRef('c.id', '=', 'vfr.customer_id').onRef('c.tenant_id', '=', 'vfr.tenant_id'),
+      )
       .select([
         'vfr.id',
         'vfr.doc_no as docNo',
@@ -260,7 +268,8 @@ export class TripAdminReadsService {
       .where('vfr.tenant_id', '=', tenantId)
       .where('vfr.trip_id', '=', tripId)
       .orderBy('vfr.id', 'desc')
-      .limit(pageSize + 1).offset(offset)
+      .limit(pageSize + 1)
+      .offset(offset)
       .execute();
 
     // Inventory currently on van location
@@ -295,7 +304,13 @@ export class TripAdminReadsService {
         cashRefunds: Number((trip as any).cashRefunds || 0),
         variance: Number(trip.variance || 0),
       },
-      pagination: { page, pageSize, salesHasMore: sales.length > pageSize, collectionsHasMore: collections.length > pageSize, returnsHasMore: returns.length > pageSize },
+      pagination: {
+        page,
+        pageSize,
+        salesHasMore: sales.length > pageSize,
+        collectionsHasMore: collections.length > pageSize,
+        returnsHasMore: returns.length > pageSize,
+      },
       sales: sales.slice(0, pageSize).map((s: any) => {
         const custCoords = extractCoordinatesFromCustomerLocation({ metadata: s.customerMetadata });
         const geo = evaluateGeofenceCompliance({

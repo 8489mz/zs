@@ -33,7 +33,14 @@ export class HrTreasuryAdapter {
 
   async recordLoanRepayment(
     db: Kysely<Database>,
-    repayment: { ledgerId: number; loanId: number; amount: number; employeeName: string; branchId: number | null; locationId: number | null },
+    repayment: {
+      ledgerId: number;
+      loanId: number;
+      amount: number;
+      employeeName: string;
+      branchId: number | null;
+      locationId: number | null;
+    },
     auth: AuthContext,
   ): Promise<void> {
     const scope = requireTenantScope(auth);

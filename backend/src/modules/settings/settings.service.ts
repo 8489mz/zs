@@ -116,17 +116,34 @@ export class SettingsService {
   async createBranch(payload: { name?: string; code?: string }, actor: AuthContext): Promise<Record<string, unknown>> {
     return this.s6.createBranch(payload, actor);
   }
-  async createLocation(payload: { name?: string; code?: string; branchId?: string | number | null; locationType?: string }, actor: AuthContext): Promise<Record<string, unknown>> {
+  async createLocation(
+    payload: { name?: string; code?: string; branchId?: string | number | null; locationType?: string },
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.s6.createLocation(payload, actor);
   }
-  async updateBranch(id: number, payload: { name?: string; code?: string; defaultStockLocationId?: string | number | null; salesStockMode?: 'single_location' | 'all_operational_locations'; allowExternalSalesStock?: boolean; }, actor: AuthContext): Promise<Record<string, unknown>> {
+  async updateBranch(
+    id: number,
+    payload: {
+      name?: string;
+      code?: string;
+      defaultStockLocationId?: string | number | null;
+      salesStockMode?: 'single_location' | 'all_operational_locations';
+      allowExternalSalesStock?: boolean;
+    },
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.s6.updateBranch(id, payload, actor);
   }
 
   async deleteBranch(id: number, actor: AuthContext): Promise<Record<string, unknown>> {
     return this.s7.deleteBranch(id, actor);
   }
-  async updateLocation(id: number, payload: { name?: string; code?: string; branchId?: string | number | null; locationType?: string }, actor: AuthContext): Promise<Record<string, unknown>> {
+  async updateLocation(
+    id: number,
+    payload: { name?: string; code?: string; branchId?: string | number | null; locationType?: string },
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.s7.updateLocation(id, payload, actor);
   }
   async deleteLocation(id: number, actor: AuthContext): Promise<Record<string, unknown>> {

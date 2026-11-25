@@ -1,12 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { lockAccountingPeriod } from '../../accounting/accounting-period-lock';
 import { ensureDomainSupplier } from '../../accounting/partner-subledger';
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -56,14 +51,20 @@ export interface ContractingPostingDeps {
   // payment gate). Signature: getGuaranteesRaw(tenantId: string, filters?:
   // { projectId?: string; subcontractId?: string; status?: string }) =>
   // Promise<BankGuarantee[]>.
-  getGuaranteesRaw: (tenantId: string, filters?: { projectId?: string; subcontractId?: string; status?: string }) => Promise<BankGuarantee[]>;
+  getGuaranteesRaw: (
+    tenantId: string,
+    filters?: { projectId?: string; subcontractId?: string; status?: string },
+  ) => Promise<BankGuarantee[]>;
 }
 
 @Injectable()
 export class ContractingPostingService {
   private readonly db: Kysely<Database>;
   private readonly accountingPosting: AccountingPostingService;
-  private readonly getGuaranteesRaw: (tenantId: string, filters?: { projectId?: string; subcontractId?: string; status?: string }) => Promise<BankGuarantee[]>;
+  private readonly getGuaranteesRaw: (
+    tenantId: string,
+    filters?: { projectId?: string; subcontractId?: string; status?: string },
+  ) => Promise<BankGuarantee[]>;
 
   constructor(deps: ContractingPostingDeps) {
     this.db = deps.db;
@@ -85,7 +86,8 @@ export class ContractingPostingService {
         .selectAll()
         .where('tenant_id', '=', tenantId)
         .where('id', '=', invoiceId as any)
-        .forUpdate().executeTakeFirst();
+        .forUpdate()
+        .executeTakeFirst();
 
       if (!invoice) {
         throw new NotFoundException(`المستخلص برقم ${invoiceId} غير موجود`);
@@ -154,8 +156,16 @@ export class ContractingPostingService {
       }
 
       const isSubcontractor = invoice.ipc_type === 'subcontractor';
-      const supplierPartnerId = isSubcontractor && invoice.subcontractor_id
-        ? await ensureDomainSupplier(trx, tenantId, 'subcontractor', invoice.subcontractor_id, invoice.subcontractor_name || 'مقاول باطن') : null;
+      const supplierPartnerId =
+        isSubcontractor && invoice.subcontractor_id
+          ? await ensureDomainSupplier(
+              trx,
+              tenantId,
+              'subcontractor',
+              invoice.subcontractor_id,
+              invoice.subcontractor_name || 'مقاول باطن',
+            )
+          : null;
 
       // Resolve accounts based on invoice type
       let primaryAccountId: number | null = null;
@@ -276,7 +286,9 @@ export class ContractingPostingService {
         retentionAccountId = retentionAccount?.id ? Number(retentionAccount.id) : contraAccountId;
 
         if (!primaryAccountId || !contraAccountId) {
-          throw new BadRequestException('تعذر تحديد الحسابات المحاسبية الأساسية (العملاء أو الإيرادات) في شجرة الحسابات');
+          throw new BadRequestException(
+            'تعذر تحديد الحسابات المحاسبية الأساسية (العملاء أو الإيرادات) في شجرة الحسابات',
+          );
         }
       }
 
@@ -337,22 +349,25 @@ export class ContractingPostingService {
             // (O16). It previously wrote guarantee_type / reference_number / due_date, none
             // of which exist on that table, so Postgres rejected it with 42703 and the whole
             // posting transaction rolled back. See createRetentionRecord for the real shape.
-            await trx.insertInto('contracting_retention_records').values({
-              tenant_id: tenantId,
-              project_id: invoice.project_id,
-              subcontract_id: invoice.subcontract_id || null,
-              party_type: 'subcontractor',
-              party_id: invoice.subcontractor_id || null,
-              party_name: invoice.subcontractor_name || 'مقاول باطن',
-              held_amount: retentionHeld,
-              released_amount: 0,
-              retention_percent: ledgerRetentionPercent,
-              ipc_invoice_id: invoice.id,
-              guarantee_certificate_ref: invoice.ipc_number,
-              release_due_date: releaseDueKey,
-              status: 'held',
-              notes: `استقطاع ضمان حسن تنفيذ لمقاول الباطن من مستخلص ${invoice.ipc_number}`,
-            }).execute();
+            await trx
+              .insertInto('contracting_retention_records')
+              .values({
+                tenant_id: tenantId,
+                project_id: invoice.project_id,
+                subcontract_id: invoice.subcontract_id || null,
+                party_type: 'subcontractor',
+                party_id: invoice.subcontractor_id || null,
+                party_name: invoice.subcontractor_name || 'مقاول باطن',
+                held_amount: retentionHeld,
+                released_amount: 0,
+                retention_percent: ledgerRetentionPercent,
+                ipc_invoice_id: invoice.id,
+                guarantee_certificate_ref: invoice.ipc_number,
+                release_due_date: releaseDueKey,
+                status: 'held',
+                notes: `استقطاع ضمان حسن تنفيذ لمقاول الباطن من مستخلص ${invoice.ipc_number}`,
+              })
+              .execute();
           }
 
           // Line 4: Credit Other Deductions
@@ -431,22 +446,25 @@ export class ContractingPostingService {
             // Auto-insert into retention ledger for client — same schema mismatch as the
             // subcontractor branch above, and the same consequence: every client IPC that
             // held retention failed to post.
-            await trx.insertInto('contracting_retention_records').values({
-              tenant_id: tenantId,
-              project_id: invoice.project_id,
-              subcontract_id: null,
-              party_type: 'client',
-              party_id: project.client_id || null,
-              party_name: project.client_name || 'المالك',
-              held_amount: retentionHeld,
-              released_amount: 0,
-              retention_percent: Number(project.retention_percent ?? 5),
-              ipc_invoice_id: invoice.id,
-              guarantee_certificate_ref: invoice.ipc_number,
-              release_due_date: releaseDueKey,
-              status: 'held',
-              notes: `استقطاع ضمان حسن تنفيذ على المالك من مستخلص ${invoice.ipc_number}`,
-            }).execute();
+            await trx
+              .insertInto('contracting_retention_records')
+              .values({
+                tenant_id: tenantId,
+                project_id: invoice.project_id,
+                subcontract_id: null,
+                party_type: 'client',
+                party_id: project.client_id || null,
+                party_name: project.client_name || 'المالك',
+                held_amount: retentionHeld,
+                released_amount: 0,
+                retention_percent: Number(project.retention_percent ?? 5),
+                ipc_invoice_id: invoice.id,
+                guarantee_certificate_ref: invoice.ipc_number,
+                release_due_date: releaseDueKey,
+                status: 'held',
+                notes: `استقطاع ضمان حسن تنفيذ على المالك من مستخلص ${invoice.ipc_number}`,
+              })
+              .execute();
           }
 
           // Line 4: Debit Other Deductions
@@ -544,22 +562,45 @@ export class ContractingPostingService {
   async createSubcontractorPayment(auth: AuthContext, dto: CreateSubcontractorPaymentDto) {
     const { tenantId } = requireTenantScope(auth);
     const businessTz = await getTenantTimezone(this.db, tenantId);
-    return this.db.transaction().execute(async trx => {
+    return this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, tenantId);
-      if (!dto.requestKey || !/^[A-Za-z0-9_-]{16,128}$/.test(dto.requestKey)) throw new BadRequestException('يلزم مفتاح طلب ثابت لمنع تكرار الدفعة.');
-      const fingerprint = JSON.stringify([dto.subcontractorId, dto.projectId || null, dto.subcontractId || null, dto.invoiceId || null,
-        Number(dto.amount), dto.paymentDate || null, dto.paymentMethod || 'bank_transfer', dto.paymentCategory || null,
-        Boolean(dto.isAdvancePayment), dto.referenceNumber?.trim() || null, dto.notes?.trim() || null]);
-      const presentPayment = (payment: any) => ({ id: Number(payment.id), paymentNumber: payment.payment_number,
-        paymentDate: payment.payment_date, amount: Number(payment.amount), paymentMethod: payment.payment_method,
-        paymentCategory: payment.payment_category, referenceNumber: payment.reference_number });
-      const priorPayment = await (trx as any).selectFrom('contracting_subcontractor_payments').selectAll()
-        .where('tenant_id', '=', tenantId).where('request_key', '=', dto.requestKey).executeTakeFirst();
+      if (!dto.requestKey || !/^[A-Za-z0-9_-]{16,128}$/.test(dto.requestKey))
+        throw new BadRequestException('يلزم مفتاح طلب ثابت لمنع تكرار الدفعة.');
+      const fingerprint = JSON.stringify([
+        dto.subcontractorId,
+        dto.projectId || null,
+        dto.subcontractId || null,
+        dto.invoiceId || null,
+        Number(dto.amount),
+        dto.paymentDate || null,
+        dto.paymentMethod || 'bank_transfer',
+        dto.paymentCategory || null,
+        Boolean(dto.isAdvancePayment),
+        dto.referenceNumber?.trim() || null,
+        dto.notes?.trim() || null,
+      ]);
+      const presentPayment = (payment: any) => ({
+        id: Number(payment.id),
+        paymentNumber: payment.payment_number,
+        paymentDate: payment.payment_date,
+        amount: Number(payment.amount),
+        paymentMethod: payment.payment_method,
+        paymentCategory: payment.payment_category,
+        referenceNumber: payment.reference_number,
+      });
+      const priorPayment = await (trx as any)
+        .selectFrom('contracting_subcontractor_payments')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('request_key', '=', dto.requestKey)
+        .executeTakeFirst();
       if (priorPayment) {
-        if (priorPayment.request_fingerprint !== fingerprint) throw new ConflictException('مفتاح الدفعة استُخدم ببيانات مختلفة.');
+        if (priorPayment.request_fingerprint !== fingerprint)
+          throw new ConflictException('مفتاح الدفعة استُخدم ببيانات مختلفة.');
         return presentPayment(priorPayment);
       }
-      if (dto.paymentMethod === 'check') throw new BadRequestException('تسجل أوراق الدفع من محفظة الشيكات؛ لا يجوز خصم البنك قبل صرفها.');
+      if (dto.paymentMethod === 'check')
+        throw new BadRequestException('تسجل أوراق الدفع من محفظة الشيكات؛ لا يجوز خصم البنك قبل صرفها.');
       const userId = (auth as any).userId || (auth as any).user?.id || null;
       if (!dto.subcontractorId) {
         throw new BadRequestException('يجب تحديد مقاول الباطن');
@@ -569,7 +610,13 @@ export class ContractingPostingService {
         throw new BadRequestException('مبلغ الدفعة يجب أن يكون أكبر من الصفر');
       }
 
-      const party = await trx.selectFrom('contracting_subcontractors').select(['id', 'name']).where('tenant_id', '=', tenantId).where('id', '=', dto.subcontractorId).forUpdate().executeTakeFirstOrThrow();
+      const party = await trx
+        .selectFrom('contracting_subcontractors')
+        .select(['id', 'name'])
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', dto.subcontractorId)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
       const supplierId = await ensureDomainSupplier(trx, tenantId, 'subcontractor', party.id, party.name);
 
       // Fetch subcontract details if subcontractId is specified
@@ -583,13 +630,39 @@ export class ContractingPostingService {
           .executeTakeFirst();
       }
 
-      if (dto.subcontractId && (!subcontract || Number(subcontract.subcontractor_id) !== Number(dto.subcontractorId) ||
-        (dto.projectId && String(subcontract.project_id) !== String(dto.projectId)))) throw new BadRequestException('العقد لا يطابق المقاول أو المشروع.');
+      if (
+        dto.subcontractId &&
+        (!subcontract ||
+          Number(subcontract.subcontractor_id) !== Number(dto.subcontractorId) ||
+          (dto.projectId && String(subcontract.project_id) !== String(dto.projectId)))
+      )
+        throw new BadRequestException('العقد لا يطابق المقاول أو المشروع.');
       const projectId = dto.projectId || subcontract?.project_id;
-      if (projectId && !await trx.selectFrom('contracting_projects').select('id').where('tenant_id', '=', tenantId).where('id', '=', String(projectId)).executeTakeFirst()) throw new BadRequestException('المشروع غير موجود في المنشأة.');
+      if (
+        projectId &&
+        !(await trx
+          .selectFrom('contracting_projects')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', String(projectId))
+          .executeTakeFirst())
+      )
+        throw new BadRequestException('المشروع غير موجود في المنشأة.');
       if (dto.invoiceId) {
-        const invoice = await (trx as any).selectFrom('contracting_invoices').selectAll().where('tenant_id', '=', tenantId).where('id', '=', String(dto.invoiceId)).executeTakeFirst();
-        if (!invoice || invoice.ipc_type !== 'subcontractor' || !invoice.journal_entry_id || Number(invoice.subcontractor_id) !== Number(dto.subcontractorId) || (projectId && String(invoice.project_id) !== String(projectId))) throw new BadRequestException('المستخلص لا يطابق المقاول أو المشروع.');
+        const invoice = await (trx as any)
+          .selectFrom('contracting_invoices')
+          .selectAll()
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', String(dto.invoiceId))
+          .executeTakeFirst();
+        if (
+          !invoice ||
+          invoice.ipc_type !== 'subcontractor' ||
+          !invoice.journal_entry_id ||
+          Number(invoice.subcontractor_id) !== Number(dto.subcontractorId) ||
+          (projectId && String(invoice.project_id) !== String(projectId))
+        )
+          throw new BadRequestException('المستخلص لا يطابق المقاول أو المشروع.');
       }
 
       // Calculate prior advance disbursements against this subcontract or project (Invariant G1-C)
@@ -624,22 +697,30 @@ export class ContractingPostingService {
       const isSubstantivelyAdvance =
         userDeclaredAdvance ||
         (!dto.invoiceId &&
-         !isOperationalAdvance &&
-         dto.paymentCategory !== 'retention' &&
-         subcontract &&
-         Number(subcontract.advance_pct) > 0 &&
-         priorAdvanceDisbursed < Number(subcontract.advance_amount));
+          !isOperationalAdvance &&
+          dto.paymentCategory !== 'retention' &&
+          subcontract &&
+          Number(subcontract.advance_pct) > 0 &&
+          priorAdvanceDisbursed < Number(subcontract.advance_amount));
 
       // GATEWAY G1 ENFORCEMENT (With Cumulative Invariant G1-C Protection):
       if (isSubstantivelyAdvance) {
         const activeGuarantees = await this.getGuaranteesRaw(tenantId, {
-          projectId: dto.projectId ? String(dto.projectId) : (subcontract?.project_id ? String(subcontract.project_id) : undefined),
+          projectId: dto.projectId
+            ? String(dto.projectId)
+            : subcontract?.project_id
+              ? String(subcontract.project_id)
+              : undefined,
           subcontractId: dto.subcontractId ? String(dto.subcontractId) : undefined,
           status: 'active',
         });
         assertAdvancePaymentGate({
           subcontractId: dto.subcontractId,
-          projectId: dto.projectId ? String(dto.projectId) : (subcontract?.project_id ? String(subcontract.project_id) : ''),
+          projectId: dto.projectId
+            ? String(dto.projectId)
+            : subcontract?.project_id
+              ? String(subcontract.project_id)
+              : '',
           requestedDisbursementAmount: amount,
           priorAdvanceDisbursedAgainstGuarantee: priorAdvanceDisbursed,
           disbursementDate: dto.paymentDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
@@ -649,7 +730,7 @@ export class ContractingPostingService {
 
       const finalPaymentCategory = isSubstantivelyAdvance
         ? 'advance'
-        : (dto.paymentCategory || (dto.invoiceId ? 'progress' : 'progress'));
+        : dto.paymentCategory || (dto.invoiceId ? 'progress' : 'progress');
 
       const [payment] = await (trx as any)
         .insertInto('contracting_subcontractor_payments')
@@ -657,7 +738,11 @@ export class ContractingPostingService {
           tenant_id: tenantId,
           request_key: dto.requestKey,
           request_fingerprint: fingerprint,
-          project_id: dto.projectId ? String(dto.projectId) : (subcontract?.project_id ? String(subcontract.project_id) : null),
+          project_id: dto.projectId
+            ? String(dto.projectId)
+            : subcontract?.project_id
+              ? String(subcontract.project_id)
+              : null,
           subcontractor_id: dto.subcontractorId,
           subcontract_id: dto.subcontractId ? String(dto.subcontractId) : null,
           invoice_id: dto.invoiceId ? String(dto.invoiceId) : null,
@@ -674,28 +759,80 @@ export class ContractingPostingService {
         .returningAll()
         .execute();
 
-      const officialNumber = formatDailyDocumentNumber('SPAY', Number(payment.id), new Date(payment.payment_date), 4, businessTz);
-      await trx.updateTable('contracting_subcontractor_payments').set({ payment_number: officialNumber }).where('tenant_id', '=', tenantId).where('id', '=', payment.id).execute();
+      const officialNumber = formatDailyDocumentNumber(
+        'SPAY',
+        Number(payment.id),
+        new Date(payment.payment_date),
+        4,
+        businessTz,
+      );
+      await trx
+        .updateTable('contracting_subcontractor_payments')
+        .set({ payment_number: officialNumber })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', payment.id)
+        .execute();
       payment.payment_number = officialNumber;
       const advance = ['advance', 'operational_advance'].includes(finalPaymentCategory);
       const retention = finalPaymentCategory === 'retention';
       const debitCode = advance ? '1165' : retention ? '2160' : '2110';
       const debitAccount = await this.accountingPosting.resolveSystemAccountByCode(trx, tenantId, debitCode);
-      const bankAccount = await this.accountingPosting.resolveSystemAccountByCode(trx, tenantId, (dto.paymentMethod || 'bank_transfer') === 'cash' ? '1110' : '1120');
+      const bankAccount = await this.accountingPosting.resolveSystemAccountByCode(
+        trx,
+        tenantId,
+        (dto.paymentMethod || 'bank_transfer') === 'cash' ? '1110' : '1120',
+      );
       if (!advance) {
-        const balance = await trx.selectFrom('journal_entry_lines as l').innerJoin('journal_entries as j', join => join.onRef('j.id', '=', 'l.journal_entry_id').onRef('j.tenant_id', '=', 'l.tenant_id'))
-          .select(sql<number>`coalesce(sum(l.credit - l.debit), 0)`.as('amount')).where('l.tenant_id', '=', tenantId).where('l.account_id', '=', debitAccount)
-          .where('l.partner_type', '=', 'supplier').where('l.partner_id', '=', supplierId).where('j.status', '=', 'posted').executeTakeFirstOrThrow();
-        if (amount > Number(balance.amount) + 0.001) throw new BadRequestException('الدفعة تتجاوز الاستحقاق المرحل؛ يجب مطابقة المستخلصات القديمة أولاً.');
+        const balance = await trx
+          .selectFrom('journal_entry_lines as l')
+          .innerJoin('journal_entries as j', (join) =>
+            join.onRef('j.id', '=', 'l.journal_entry_id').onRef('j.tenant_id', '=', 'l.tenant_id'),
+          )
+          .select(sql<number>`coalesce(sum(l.credit - l.debit), 0)`.as('amount'))
+          .where('l.tenant_id', '=', tenantId)
+          .where('l.account_id', '=', debitAccount)
+          .where('l.partner_type', '=', 'supplier')
+          .where('l.partner_id', '=', supplierId)
+          .where('j.status', '=', 'posted')
+          .executeTakeFirstOrThrow();
+        if (amount > Number(balance.amount) + 0.001)
+          throw new BadRequestException('الدفعة تتجاوز الاستحقاق المرحل؛ يجب مطابقة المستخلصات القديمة أولاً.');
       }
       const description = `سداد مقاول الباطن ${party.name} - ${officialNumber}`;
-      await this.accountingPosting.postDomainJournal(trx, { tenantId, accountId: tenantId, sourceType: 'contracting_subcontractor_payment', sourceId: Number(payment.id), entryDate: new Date(payment.payment_date), description, createdBy: userId,
+      await this.accountingPosting.postDomainJournal(trx, {
+        tenantId,
+        accountId: tenantId,
+        sourceType: 'contracting_subcontractor_payment',
+        sourceId: Number(payment.id),
+        entryDate: new Date(payment.payment_date),
+        description,
+        createdBy: userId,
         lines: [
-          { accountId: debitAccount, description, debit: amount, credit: 0, partnerType: 'supplier', partnerId: supplierId },
+          {
+            accountId: debitAccount,
+            description,
+            debit: amount,
+            credit: 0,
+            partnerType: 'supplier',
+            partnerId: supplierId,
+          },
           { accountId: bankAccount, description, debit: 0, credit: amount, partnerType: 'none', partnerId: null },
         ],
       });
-      await trx.insertInto('treasury_transactions').values({ tenant_id: tenantId, account_id: tenantId, txn_type: 'supplier_payment', amount: -amount, note: description, reference_type: 'contracting_subcontractor_payment', reference_id: Number(payment.id), created_by: userId, payment_channel: (dto.paymentMethod || 'bank_transfer') === 'cash' ? 'cash' : 'bank_transfer' } as any).execute();
+      await trx
+        .insertInto('treasury_transactions')
+        .values({
+          tenant_id: tenantId,
+          account_id: tenantId,
+          txn_type: 'supplier_payment',
+          amount: -amount,
+          note: description,
+          reference_type: 'contracting_subcontractor_payment',
+          reference_id: Number(payment.id),
+          created_by: userId,
+          payment_channel: (dto.paymentMethod || 'bank_transfer') === 'cash' ? 'cash' : 'bank_transfer',
+        } as any)
+        .execute();
 
       return presentPayment(payment);
     });

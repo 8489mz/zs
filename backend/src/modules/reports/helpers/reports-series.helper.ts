@@ -82,16 +82,12 @@ export function buildSeriesBuckets(
   const [fromYear, fromMonth, fromDay] = fromKey.split('-').map(Number);
   const [toYear, toMonth, toDay] = toKey.split('-').map(Number);
   const spanDays =
-    Math.round(
-      (Date.UTC(toYear, toMonth - 1, toDay) - Date.UTC(fromYear, fromMonth - 1, fromDay)) / 86400000,
-    ) + 1;
+    Math.round((Date.UTC(toYear, toMonth - 1, toDay) - Date.UTC(fromYear, fromMonth - 1, fromDay)) / 86400000) + 1;
   if (spanDays <= DAILY_CUTOFF_DAYS) {
     const buckets: string[] = [];
     const cursor = new Date(Date.UTC(fromYear, fromMonth - 1, fromDay));
     for (let index = 0; index < spanDays; index += 1) {
-      buckets.push(
-        `${cursor.getUTCFullYear()}-${pad2(cursor.getUTCMonth() + 1)}-${pad2(cursor.getUTCDate())}`,
-      );
+      buckets.push(`${cursor.getUTCFullYear()}-${pad2(cursor.getUTCMonth() + 1)}-${pad2(cursor.getUTCDate())}`);
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
     return { granularity: 'day', buckets };
@@ -275,8 +271,7 @@ export async function buildSalesPurchasesSeriesComponents(args: {
   timezone: string;
 }): Promise<SeriesDayComponents[]> {
   const { db, query, fromDate, toDate, tenantId, timezone } = args;
-  const dayBucket = (column: string) =>
-    sql<string>`to_char(${sql.ref(column)} AT TIME ZONE ${timezone}, 'YYYY-MM-DD')`;
+  const dayBucket = (column: string) => sql<string>`to_char(${sql.ref(column)} AT TIME ZONE ${timezone}, 'YYYY-MM-DD')`;
   const salesQuery = applyReportScopeFilter(
     db
       .selectFrom('sales')
@@ -296,10 +291,7 @@ export async function buildSalesPurchasesSeriesComponents(args: {
   const servicesQuery = applyReportScopeFilter(
     (db as any)
       .selectFrom('services')
-      .select([
-        dayBucket('service_date').as('bucket'),
-        sql<number>`coalesce(sum(amount), 0)`.as('services_total'),
-      ])
+      .select([dayBucket('service_date').as('bucket'), sql<number>`coalesce(sum(amount), 0)`.as('services_total')])
       .where('is_active', '=', true)
       .where('service_date', '>=', fromDate)
       .where('service_date', '<=', toDate)
@@ -311,10 +303,7 @@ export async function buildSalesPurchasesSeriesComponents(args: {
   const saleReturnsQuery = applyReportScopeFilter(
     db
       .selectFrom('return_documents')
-      .select([
-        dayBucket('created_at').as('bucket'),
-        sql<number>`coalesce(sum(total), 0)`.as('sale_returns'),
-      ])
+      .select([dayBucket('created_at').as('bucket'), sql<number>`coalesce(sum(total), 0)`.as('sale_returns')])
       .where('return_type', '=', 'sale')
       .where('created_at', '>=', fromDate)
       .where('created_at', '<=', toDate)
@@ -346,10 +335,7 @@ export async function buildSalesPurchasesSeriesComponents(args: {
   const purchasesQuery = applyReportScopeFilter(
     db
       .selectFrom('purchases')
-      .select([
-        dayBucket('created_at').as('bucket'),
-        sql<number>`coalesce(sum(total), 0)`.as('purchases_total'),
-      ])
+      .select([dayBucket('created_at').as('bucket'), sql<number>`coalesce(sum(total), 0)`.as('purchases_total')])
       .where('status', '=', 'posted')
       .where('created_at', '>=', fromDate)
       .where('created_at', '<=', toDate)
@@ -361,10 +347,7 @@ export async function buildSalesPurchasesSeriesComponents(args: {
   const purchaseReturnsQuery = applyReportScopeFilter(
     db
       .selectFrom('return_documents')
-      .select([
-        dayBucket('created_at').as('bucket'),
-        sql<number>`coalesce(sum(total), 0)`.as('purchase_returns'),
-      ])
+      .select([dayBucket('created_at').as('bucket'), sql<number>`coalesce(sum(total), 0)`.as('purchase_returns')])
       .where('return_type', '=', 'purchase')
       .where('created_at', '>=', fromDate)
       .where('created_at', '<=', toDate)

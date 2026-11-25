@@ -158,10 +158,7 @@ export class ContractingAssuranceController {
   }
 
   @Get('guarantees/alerts')
-  async getGuaranteeExpiryAlerts(
-    @Query('projectId') projectId: string,
-    @Req() req: RequestWithAuth,
-  ) {
+  async getGuaranteeExpiryAlerts(@Query('projectId') projectId: string, @Req() req: RequestWithAuth) {
     return this.contractingService.getGuaranteeExpiryAlerts(req.authContext!, projectId);
   }
 
@@ -176,39 +173,22 @@ export class ContractingAssuranceController {
   }
 
   @Put('guarantees/:id')
-  async updateGuarantee(
-    @Param('id') id: string,
-    @Body() dto: UpdateGuaranteeDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async updateGuarantee(@Param('id') id: string, @Body() dto: UpdateGuaranteeDto, @Req() req: RequestWithAuth) {
     return this.contractingService.updateGuarantee(req.authContext!, id, dto);
   }
 
   @Post('guarantees/:id/extend')
-  async extendGuarantee(
-    @Param('id') id: string,
-    @Body() dto: ExtendGuaranteeDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async extendGuarantee(@Param('id') id: string, @Body() dto: ExtendGuaranteeDto, @Req() req: RequestWithAuth) {
     return this.contractingService.extendGuarantee(req.authContext!, id, dto);
   }
 
   @Post('guarantees/:id/release')
-  async releaseGuarantee(
-    @Param('id') id: string,
-    @Body() dto: ReleaseGuaranteeDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async releaseGuarantee(@Param('id') id: string, @Body() dto: ReleaseGuaranteeDto, @Req() req: RequestWithAuth) {
     return this.contractingService.releaseGuarantee(req.authContext!, id, dto);
   }
 
   @Post('guarantees/:id/invoke')
-  async invokeGuarantee(
-    @Param('id') id: string,
-    @Body() dto: InvokeGuaranteeDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async invokeGuarantee(@Param('id') id: string, @Body() dto: InvokeGuaranteeDto, @Req() req: RequestWithAuth) {
     return this.contractingService.invokeGuarantee(req.authContext!, id, dto);
   }
-
 }

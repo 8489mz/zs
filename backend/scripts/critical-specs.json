@@ -329,6 +329,7 @@
     "test/critical/backend-lint-prettier-tooling.spec.ts",
     "test/critical/backend-lint-clean.spec.ts",
     "test/critical/migrations-format-clean.spec.ts",
-    "test/critical/src-modules-a-format-clean.spec.ts"
+    "test/critical/src-modules-a-format-clean.spec.ts",
+    "test/critical/src-modules-b-format-clean.spec.ts"
   ]
 }

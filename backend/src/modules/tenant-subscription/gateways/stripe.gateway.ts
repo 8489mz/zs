@@ -1,9 +1,16 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { IPaymentGateway, PaymentInitiateInput, PaymentInitiateResult, WebhookValidationResult } from './payment-gateway.interface';
+import {
+  IPaymentGateway,
+  PaymentInitiateInput,
+  PaymentInitiateResult,
+  WebhookValidationResult,
+} from './payment-gateway.interface';
 
 function subscriptionPageUrl(): string {
-  const base = String(process.env.APP_PUBLIC_URL || '').trim().replace(/\/$/, '');
+  const base = String(process.env.APP_PUBLIC_URL || '')
+    .trim()
+    .replace(/\/$/, '');
   return `${/^https?:\/\/[^\s/]+$/i.test(base) ? base : ''}/settings/subscription`;
 }
 
@@ -31,12 +38,12 @@ export class StripeGatewayService implements IPaymentGateway {
           'line_items[0][price_data][product_data][name]': `Z-Systems Subscription: ${input.planName}`,
           'line_items[0][price_data][unit_amount]': String(Math.round(input.amount * 100)),
           'line_items[0][quantity]': '1',
-          'mode': 'payment',
+          mode: 'payment',
           // The default used to be app.z-systems.cloud, which is not our domain: a merchant paying
           // their own subscription landed nowhere. APP_PUBLIC_URL is where this deployment lives.
-          'success_url': input.redirectUrl || `${subscriptionPageUrl()}?status=success`,
-          'cancel_url': input.redirectUrl || `${subscriptionPageUrl()}?status=cancelled`,
-          'client_reference_id': input.tenantId,
+          success_url: input.redirectUrl || `${subscriptionPageUrl()}?status=success`,
+          cancel_url: input.redirectUrl || `${subscriptionPageUrl()}?status=cancelled`,
+          client_reference_id: input.tenantId,
           'metadata[tenant_id]': input.tenantId,
           'metadata[plan_id]': String(input.planId),
           'metadata[duration_months]': String(input.durationMonths),
@@ -45,7 +52,7 @@ export class StripeGatewayService implements IPaymentGateway {
         const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${this.secretKey}`,
+            Authorization: `Bearer ${this.secretKey}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           body: body.toString(),
@@ -75,11 +82,13 @@ export class StripeGatewayService implements IPaymentGateway {
   private verifySignature(rawBody: Buffer | undefined, signatureHeader: string): boolean {
     if (!this.webhookSecret || !signatureHeader || !rawBody) return false;
 
-    const parts = String(signatureHeader).split(',').reduce<Record<string, string>>((acc, part) => {
-      const [key, value] = part.split('=');
-      if (key && value) acc[key.trim()] = value.trim();
-      return acc;
-    }, {});
+    const parts = String(signatureHeader)
+      .split(',')
+      .reduce<Record<string, string>>((acc, part) => {
+        const [key, value] = part.split('=');
+        if (key && value) acc[key.trim()] = value.trim();
+        return acc;
+      }, {});
     const timestamp = parts['t'];
     const providedSig = parts['v1'];
     if (!timestamp || !providedSig) return false;
@@ -101,7 +110,11 @@ export class StripeGatewayService implements IPaymentGateway {
     }
   }
 
-  async verifyAndParseWebhook(headers: Record<string, any>, body: any, rawBody?: Buffer): Promise<WebhookValidationResult> {
+  async verifyAndParseWebhook(
+    headers: Record<string, any>,
+    body: any,
+    rawBody?: Buffer,
+  ): Promise<WebhookValidationResult> {
     const event = body;
     const isSuccessful = event?.type === 'checkout.session.completed' || event?.type === 'payment_intent.succeeded';
     const session = event?.data?.object || {};

@@ -38,17 +38,27 @@ export class SaasAdminSubscriptions {
     this.assertPlatformAccess(auth);
     const tenant = await this.getTenantForMutation(tenantId);
 
-    const subscriptions = await this.db.selectFrom('tenant_subscriptions as s')
+    const subscriptions = await this.db
+      .selectFrom('tenant_subscriptions as s')
       .leftJoin('saas_plans as p', 'p.id', 's.plan_id')
       .select([
-        's.id', 's.status', 's.starts_at', 's.ends_at', 's.grace_ends_at', 's.auto_renew',
-        'p.name as plan_name', 'p.code as plan_code', 'p.price as plan_price', 'p.billing_period_months'
+        's.id',
+        's.status',
+        's.starts_at',
+        's.ends_at',
+        's.grace_ends_at',
+        's.auto_renew',
+        'p.name as plan_name',
+        'p.code as plan_code',
+        'p.price as plan_price',
+        'p.billing_period_months',
       ])
       .where('s.tenant_id', '=', tenant.id)
       .orderBy('s.created_at', 'desc')
       .execute();
 
-    const payments = await this.db.selectFrom('tenant_subscription_payments')
+    const payments = await this.db
+      .selectFrom('tenant_subscription_payments')
       .selectAll()
       .where('tenant_id', '=', tenant.id)
       .orderBy('paid_at', 'desc')
@@ -62,7 +72,9 @@ export class SaasAdminSubscriptions {
     const tenant = await this.getTenantForMutation(id);
     this.assertNotPlatformTenantTarget(tenant.id);
 
-    const activeSub = await this.db.selectFrom('tenant_subscriptions').selectAll()
+    const activeSub = await this.db
+      .selectFrom('tenant_subscriptions')
+      .selectAll()
       .where('tenant_id', '=', tenant.id)
       .where('status', 'in', ['active', 'past_due'])
       .orderBy('created_at', 'desc')
@@ -84,24 +96,33 @@ export class SaasAdminSubscriptions {
         minDayOffset: -CLIENT_BUSINESS_DATE_PAST_DAYS,
         maxDayOffset: 0,
       });
-      if (!checked.ok) throw new BadRequestException('تاريخ الدفعة غير صالح أو خارج النطاق المسموح (آخر 7 أيام حتى اليوم).');
+      if (!checked.ok)
+        throw new BadRequestException('تاريخ الدفعة غير صالح أو خارج النطاق المسموح (آخر 7 أيام حتى اليوم).');
       paidAt = checked.date;
     }
-    await this.db.insertInto('tenant_subscription_payments').values({
-      tenant_id: tenant.id,
-      subscription_id: activeSub.id,
-      amount: body.amount,
-      currency: body.currency,
-      method: body.method || 'manual',
-      reference: body.reference || null,
-      paid_at: paidAt,
-      created_at: now,
-    } as any).execute();
+    await this.db
+      .insertInto('tenant_subscription_payments')
+      .values({
+        tenant_id: tenant.id,
+        subscription_id: activeSub.id,
+        amount: body.amount,
+        currency: body.currency,
+        method: body.method || 'manual',
+        reference: body.reference || null,
+        paid_at: paidAt,
+        created_at: now,
+      } as any)
+      .execute();
 
-    await this.audit.log('تسجيل دفعة', `تم تسجيل دفعة بقيمة ${body.amount} ${body.currency} لاشتراك النسخة: ${tenant.slug}`, auth, {
-      targetTenantId: tenant.id,
-      eventCode: AUDIT_EVENT_CODES.SAAS_PAYMENT_RECORDED,
-    });
+    await this.audit.log(
+      'تسجيل دفعة',
+      `تم تسجيل دفعة بقيمة ${body.amount} ${body.currency} لاشتراك النسخة: ${tenant.slug}`,
+      auth,
+      {
+        targetTenantId: tenant.id,
+        eventCode: AUDIT_EVENT_CODES.SAAS_PAYMENT_RECORDED,
+      },
+    );
     return { ok: true };
   }
 
@@ -115,7 +136,9 @@ export class SaasAdminSubscriptions {
 
     const now = new Date();
 
-    const activeSub = await this.db.selectFrom('tenant_subscriptions').selectAll()
+    const activeSub = await this.db
+      .selectFrom('tenant_subscriptions')
+      .selectAll()
       .where('tenant_id', '=', tenant.id)
       .where('status', 'in', ['active', 'past_due', 'expired'])
       .orderBy('ends_at', 'desc')
@@ -131,32 +154,43 @@ export class SaasAdminSubscriptions {
 
     await this.db.transaction().execute(async (trx) => {
       if (activeSub) {
-        await trx.updateTable('tenant_subscriptions').set({ status: 'expired', updated_at: now }).where('id', '=', activeSub.id).execute();
+        await trx
+          .updateTable('tenant_subscriptions')
+          .set({ status: 'expired', updated_at: now })
+          .where('id', '=', activeSub.id)
+          .execute();
       }
 
-      const newSub = await trx.insertInto('tenant_subscriptions').values({
-        tenant_id: tenant.id,
-        plan_id: plan.id,
-        status: 'active',
-        starts_at: newStart,
-        ends_at: newEnd,
-        grace_ends_at: null,
-        auto_renew: false,
-        created_at: now,
-        updated_at: now,
-      } as any).returning('id').executeTakeFirstOrThrow();
+      const newSub = await trx
+        .insertInto('tenant_subscriptions')
+        .values({
+          tenant_id: tenant.id,
+          plan_id: plan.id,
+          status: 'active',
+          starts_at: newStart,
+          ends_at: newEnd,
+          grace_ends_at: null,
+          auto_renew: false,
+          created_at: now,
+          updated_at: now,
+        } as any)
+        .returning('id')
+        .executeTakeFirstOrThrow();
 
       if (body.paymentAmount) {
-        await trx.insertInto('tenant_subscription_payments').values({
-          tenant_id: tenant.id,
-          subscription_id: newSub.id,
-          amount: body.paymentAmount,
-          currency: plan.currency,
-          method: body.paymentMethod || 'manual',
-          reference: body.paymentReference || null,
-          paid_at: now,
-          created_at: now,
-        } as any).execute();
+        await trx
+          .insertInto('tenant_subscription_payments')
+          .values({
+            tenant_id: tenant.id,
+            subscription_id: newSub.id,
+            amount: body.paymentAmount,
+            currency: plan.currency,
+            method: body.paymentMethod || 'manual',
+            reference: body.paymentReference || null,
+            paid_at: now,
+            created_at: now,
+          } as any)
+          .execute();
       }
 
       const tenantUpdateData: any = { status: 'active', updated_at: now };
@@ -172,10 +206,15 @@ export class SaasAdminSubscriptions {
     // been cached as 'not allowed' stayed locked out until the entry aged out.
     this.authCache.invalidateTenant(tenant.id);
 
-    await this.audit.log('تجديد اشتراك', `تم تجديد اشتراك النسخة: ${tenant.slug} لمدة ${body.durationMonths} أشهر`, auth, {
-      targetTenantId: tenant.id,
-      eventCode: AUDIT_EVENT_CODES.SAAS_SUBSCRIPTION_RENEWED,
-    });
+    await this.audit.log(
+      'تجديد اشتراك',
+      `تم تجديد اشتراك النسخة: ${tenant.slug} لمدة ${body.durationMonths} أشهر`,
+      auth,
+      {
+        targetTenantId: tenant.id,
+        eventCode: AUDIT_EVENT_CODES.SAAS_SUBSCRIPTION_RENEWED,
+      },
+    );
     return { ok: true };
   }
 }

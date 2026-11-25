@@ -279,4 +279,3 @@ export class UpdateStorefrontSettingsDto {
   @IsString()
   telegramUrl?: string;
 }
-

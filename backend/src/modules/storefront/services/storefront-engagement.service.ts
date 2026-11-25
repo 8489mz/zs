@@ -235,7 +235,9 @@ export class StorefrontEngagementService {
       .selectFrom('online_orders')
       .select([
         sql<number>`COUNT(*)::int`.as('total_orders'),
-        sql<number>`COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total_amount ELSE 0 END), 0)::float`.as('total_revenue'),
+        sql<number>`COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total_amount ELSE 0 END), 0)::float`.as(
+          'total_revenue',
+        ),
         sql<number>`COUNT(CASE WHEN status = 'pending' THEN 1 END)::int`.as('pending_orders'),
         sql<number>`COUNT(CASE WHEN status = 'confirmed' THEN 1 END)::int`.as('confirmed_orders'),
         sql<number>`COUNT(CASE WHEN status = 'processing' THEN 1 END)::int`.as('processing_orders'),
@@ -250,7 +252,9 @@ export class StorefrontEngagementService {
       .selectFrom('online_orders')
       .select([
         sql<number>`COUNT(*)::int`.as('today_orders'),
-        sql<number>`COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total_amount ELSE 0 END), 0)::float`.as('today_revenue'),
+        sql<number>`COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total_amount ELSE 0 END), 0)::float`.as(
+          'today_revenue',
+        ),
       ])
       .where(sql<boolean>`tenant_id = ${tenantId} AND DATE(created_at AT TIME ZONE ${tenantTz}) = ${todayKey}`)
       .executeTakeFirst();
@@ -291,10 +295,13 @@ export class StorefrontEngagementService {
       .limit(100)
       .execute();
 
-    const productSalesMap = new Map<number, { productId: number; productName: string; quantity: number; revenue: number }>();
+    const productSalesMap = new Map<
+      number,
+      { productId: number; productName: string; quantity: number; revenue: number }
+    >();
     for (const o of recentOrders) {
       try {
-        const items = typeof o.items_json === 'string' ? JSON.parse(o.items_json) : (o.items_json || []);
+        const items = typeof o.items_json === 'string' ? JSON.parse(o.items_json) : o.items_json || [];
         for (const it of items) {
           const pId = Number(it.productId || it.id);
           if (!pId) continue;
@@ -305,7 +312,7 @@ export class StorefrontEngagementService {
             revenue: 0,
           };
           existing.quantity += Number(it.quantity || 1);
-          existing.revenue += Number(it.total || (Number(it.unitPrice || 0) * Number(it.quantity || 1)));
+          existing.revenue += Number(it.total || Number(it.unitPrice || 0) * Number(it.quantity || 1));
           productSalesMap.set(pId, existing);
         }
       } catch {}

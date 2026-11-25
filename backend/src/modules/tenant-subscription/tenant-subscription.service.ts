@@ -93,20 +93,33 @@ export class TenantSubscriptionService {
     // 2. تلميح النطاق النشط من العميل إن وُجد ولم يكن عاماً
     if (!resolvedIndustry && verticalHint) {
       const cleanHint = String(verticalHint).trim().toLowerCase();
-      if (cleanHint && cleanHint !== 'general' && cleanHint !== 'retail_general' && cleanHint !== 'null' && cleanHint !== 'undefined') {
+      if (
+        cleanHint &&
+        cleanHint !== 'general' &&
+        cleanHint !== 'retail_general' &&
+        cleanHint !== 'null' &&
+        cleanHint !== 'undefined'
+      ) {
         resolvedIndustry = cleanHint;
       }
     }
 
     // 3. قراءة النطاق المحدد في الإعدادات أو سجل المنشأة مع استبعاد القيم الافتراضية العامة
     if (!resolvedIndustry) {
-      const rawActivity = String(settingsMap.get('activityType') ?? '').trim().replace(/^"|"$/g, '');
-      const rawIndustry = String(settingsMap.get('businessIndustry') ?? '').trim().replace(/^"|"$/g, '');
-      const rawPillar = String(settingsMap.get('pillar') ?? settingsMap.get('industryPillar') ?? '').trim().replace(/^"|"$/g, '');
+      const rawActivity = String(settingsMap.get('activityType') ?? '')
+        .trim()
+        .replace(/^"|"$/g, '');
+      const rawIndustry = String(settingsMap.get('businessIndustry') ?? '')
+        .trim()
+        .replace(/^"|"$/g, '');
+      const rawPillar = String(settingsMap.get('pillar') ?? settingsMap.get('industryPillar') ?? '')
+        .trim()
+        .replace(/^"|"$/g, '');
       const tenantActivity = String((tenantRow as any)?.activity_type ?? '').trim();
 
-      const nonGeneric = [rawActivity, rawPillar, rawIndustry, tenantActivity]
-        .filter((s) => s && s !== 'general' && s !== 'retail_general' && s !== 'retail' && s !== 'store');
+      const nonGeneric = [rawActivity, rawPillar, rawIndustry, tenantActivity].filter(
+        (s) => s && s !== 'general' && s !== 'retail_general' && s !== 'retail' && s !== 'store',
+      );
 
       if (nonGeneric.length > 0) {
         resolvedIndustry = nonGeneric[0];
@@ -173,7 +186,10 @@ export class TenantSubscriptionService {
     return plans;
   }
 
-  private async ensureTenant(tenantId: string, auth: AuthContext): Promise<{
+  private async ensureTenant(
+    tenantId: string,
+    auth: AuthContext,
+  ): Promise<{
     id: string;
     slug: string;
     business_name: string;
@@ -276,7 +292,9 @@ export class TenantSubscriptionService {
 
     const hasBasic = plans.some((p) => p.code?.toUpperCase() === 'BASIC');
     const hasPro = plans.some((p) => p.code?.toUpperCase() === 'PRO');
-    const hasUltimate = plans.some((p) => p.code?.toUpperCase() === 'ULTIMATE' || p.code?.toLowerCase() === 'enterprise');
+    const hasUltimate = plans.some(
+      (p) => p.code?.toUpperCase() === 'ULTIMATE' || p.code?.toLowerCase() === 'enterprise',
+    );
     const hasOmnichannel = plans.some((p) => p.code?.toUpperCase() === 'OMNICHANNEL');
 
     if (!hasBasic || !hasPro || !hasUltimate || !hasOmnichannel) {
@@ -400,11 +418,39 @@ export class TenantSubscriptionService {
 
     // 2. Resource usage calculation
     const [usersRes, branchesRes, locationsRes, productsRes, salesRes] = await Promise.all([
-      this.db.selectFrom('users').select(sql<number>`count(*)::int`.as('count')).where('tenant_id', '=', tenant.id).where('is_active', '=', true).executeTakeFirst().catch(() => ({ count: 1 })),
-      this.db.selectFrom('branches').select(sql<number>`count(*)::int`.as('count')).where('tenant_id', '=', tenant.id).where('is_active', '=', true).executeTakeFirst().catch(() => ({ count: 1 })),
-      this.db.selectFrom('stock_locations').select(sql<number>`count(*)::int`.as('count')).where('tenant_id', '=', tenant.id).where('is_active', '=', true).executeTakeFirst().catch(() => ({ count: 1 })),
-      this.db.selectFrom('products').select(sql<number>`count(*)::int`.as('count')).where('tenant_id', '=', tenant.id).executeTakeFirst().catch(() => ({ count: 0 })),
-      this.db.selectFrom('sales').select(sql<number>`count(*)::int`.as('count')).where('tenant_id', '=', tenant.id).executeTakeFirst().catch(() => ({ count: 0 })),
+      this.db
+        .selectFrom('users')
+        .select(sql<number>`count(*)::int`.as('count'))
+        .where('tenant_id', '=', tenant.id)
+        .where('is_active', '=', true)
+        .executeTakeFirst()
+        .catch(() => ({ count: 1 })),
+      this.db
+        .selectFrom('branches')
+        .select(sql<number>`count(*)::int`.as('count'))
+        .where('tenant_id', '=', tenant.id)
+        .where('is_active', '=', true)
+        .executeTakeFirst()
+        .catch(() => ({ count: 1 })),
+      this.db
+        .selectFrom('stock_locations')
+        .select(sql<number>`count(*)::int`.as('count'))
+        .where('tenant_id', '=', tenant.id)
+        .where('is_active', '=', true)
+        .executeTakeFirst()
+        .catch(() => ({ count: 1 })),
+      this.db
+        .selectFrom('products')
+        .select(sql<number>`count(*)::int`.as('count'))
+        .where('tenant_id', '=', tenant.id)
+        .executeTakeFirst()
+        .catch(() => ({ count: 0 })),
+      this.db
+        .selectFrom('sales')
+        .select(sql<number>`count(*)::int`.as('count'))
+        .where('tenant_id', '=', tenant.id)
+        .executeTakeFirst()
+        .catch(() => ({ count: 0 })),
     ]);
 
     const activeUsersCount = usersRes?.count || 0;
@@ -469,20 +515,22 @@ export class TenantSubscriptionService {
         trialEndsAt: tenant.trial_ends_at,
         createdAt: tenant.created_at,
       },
-      subscription: subscription ? {
-        id: subscription.id,
-        status: subscription.status,
-        startsAt: subscription.starts_at,
-        endsAt: subscription.ends_at,
-        graceEndsAt: subscription.grace_ends_at,
-        autoRenew: subscription.auto_renew,
-        planId: subscription.plan_id,
-        planName: subscription.plan_name,
-        planCode: subscription.plan_code,
-        planPrice: subscription.plan_price,
-        planCurrency: subscription.plan_currency,
-        billingPeriodMonths: subscription.billing_period_months,
-      } : null,
+      subscription: subscription
+        ? {
+            id: subscription.id,
+            status: subscription.status,
+            startsAt: subscription.starts_at,
+            endsAt: subscription.ends_at,
+            graceEndsAt: subscription.grace_ends_at,
+            autoRenew: subscription.auto_renew,
+            planId: subscription.plan_id,
+            planName: subscription.plan_name,
+            planCode: subscription.plan_code,
+            planPrice: subscription.plan_price,
+            planCurrency: subscription.plan_currency,
+            billingPeriodMonths: subscription.billing_period_months,
+          }
+        : null,
       usage: {
         users: {
           current: activeUsersCount,
@@ -536,7 +584,12 @@ export class TenantSubscriptionService {
 
   async resolvePlan(planId?: number) {
     if (planId) {
-      const plan = await this.db.selectFrom('saas_plans').selectAll().where('id', '=', planId).executeTakeFirst().catch(() => undefined);
+      const plan = await this.db
+        .selectFrom('saas_plans')
+        .selectAll()
+        .where('id', '=', planId)
+        .executeTakeFirst()
+        .catch(() => undefined);
       if (plan) return plan;
     }
 
@@ -572,7 +625,8 @@ export class TenantSubscriptionService {
 
     return {
       ok: true,
-      message: 'تم استلام طلب التجديد بنجاح. سيتم التواصل لتأكيد السداد وتفعيل الباقة، أو الدفع مباشرة فور تفعيل بوابة الدفع.',
+      message:
+        'تم استلام طلب التجديد بنجاح. سيتم التواصل لتأكيد السداد وتفعيل الباقة، أو الدفع مباشرة فور تفعيل بوابة الدفع.',
       plan: {
         id: plan.id,
         name: plan.name,
@@ -608,9 +662,7 @@ export class TenantSubscriptionService {
       ? this.pricing.priceForLevel({ ...scope, levelId, billingPeriodMonths: durationMonths })
       : null;
     if (!catalogPrice) {
-      throw new NotFoundException(
-        'لا يوجد سعر معتمد لهذه الباقة في بلد المنشأة. راجع كتالوج التسعير قبل إتمام الدفع.',
-      );
+      throw new NotFoundException('لا يوجد سعر معتمد لهذه الباقة في بلد المنشأة. راجع كتالوج التسعير قبل إتمام الدفع.');
     }
     const amount = catalogPrice.amount;
 

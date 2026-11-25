@@ -108,10 +108,7 @@ export class BiometricAttendanceController {
 
   @Post('create-employee')
   @RequirePermissions('hrAttendance')
-  async createEmployeeFromPin(
-    @Body() body: { pin: string; displayName?: string | null },
-    @Req() req: RequestWithAuth,
-  ) {
+  async createEmployeeFromPin(@Body() body: { pin: string; displayName?: string | null }, @Req() req: RequestWithAuth) {
     return this.stagingService.createEmployeeFromBiometricPin(body, req.authContext!);
   }
 

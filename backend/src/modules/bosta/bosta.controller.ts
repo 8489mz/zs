@@ -17,10 +17,7 @@ export class BostaController {
   }
 
   @Post('settings')
-  async saveSettings(
-    @Body() payload: Partial<BostaSettings>,
-    @Req() req: RequestWithAuth,
-  ) {
+  async saveSettings(@Body() payload: Partial<BostaSettings>, @Req() req: RequestWithAuth) {
     return this.bostaService.saveSettings(payload, req.authContext!);
   }
 
@@ -34,18 +31,12 @@ export class BostaController {
   }
 
   @Get('track/:trackingNumber')
-  async getTracking(
-    @Param('trackingNumber') trackingNumber: string,
-    @Req() req: RequestWithAuth,
-  ) {
+  async getTracking(@Param('trackingNumber') trackingNumber: string, @Req() req: RequestWithAuth) {
     return this.bostaService.getTracking(trackingNumber, req.authContext!);
   }
 
   @Post('cancel/:deliveryId')
-  async cancelDelivery(
-    @Param('deliveryId') deliveryId: string,
-    @Req() req: RequestWithAuth,
-  ) {
+  async cancelDelivery(@Param('deliveryId') deliveryId: string, @Req() req: RequestWithAuth) {
     return this.bostaService.cancelDelivery(deliveryId, req.authContext!);
   }
 
@@ -53,11 +44,7 @@ export class BostaController {
    * عرض وطباعة بوليصة الشحن الرسمية المتوافقة مع طابعات الملصقات 4x6 والفواتير
    */
   @Get('awb/:deliveryId')
-  async printAwb(
-    @Param('deliveryId') deliveryId: string,
-    @Req() req: RequestWithAuth,
-    @Res() res: Response,
-  ) {
+  async printAwb(@Param('deliveryId') deliveryId: string, @Req() req: RequestWithAuth, @Res() res: Response) {
     const awb = await this.bostaService.getAwbUrl(deliveryId, req.authContext!);
     if (!awb.isSandbox) {
       return res.redirect(302, awb.url);

@@ -51,10 +51,7 @@ export class UsersController {
 
   @Put()
   @RequirePermissions('canManageUsers')
-  sync(
-    @Body() payload: SyncUsersDto,
-    @Req() req: RequestWithAuth,
-  ): Promise<Record<string, unknown>> {
+  sync(@Body() payload: SyncUsersDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.usersService.syncUsers(payload.users ?? [], req.authContext!, req.authContext?.sessionId);
   }
 

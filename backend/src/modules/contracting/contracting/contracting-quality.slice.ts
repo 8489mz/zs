@@ -38,11 +38,19 @@ export class ContractingQualitySlice {
   // 33. Work Inspection Requests (WIR - طلبات فحص واستلام الأعمال الإنشائية)
   // ==========================================================================
 
-  async getInspectionRequests(auth: AuthContext, projectId: string, status?: string): Promise<ContractingInspectionRequest[]> {
+  async getInspectionRequests(
+    auth: AuthContext,
+    projectId: string,
+    status?: string,
+  ): Promise<ContractingInspectionRequest[]> {
     return this.qualityService.getInspectionRequests(auth, projectId, status);
   }
 
-  async createInspectionRequest(auth: AuthContext, projectId: string, dto: CreateInspectionRequestDto): Promise<ContractingInspectionRequest> {
+  async createInspectionRequest(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateInspectionRequestDto,
+  ): Promise<ContractingInspectionRequest> {
     return this.qualityService.createInspectionRequest(auth, projectId, dto);
   }
 
@@ -58,7 +66,12 @@ export class ContractingQualitySlice {
   // 34. Snag Items & Punch List (قائمة الملاحظات وعيوب المصنعية والتسليم)
   // ==========================================================================
 
-  async getSnagItems(auth: AuthContext, projectId: string, status?: string, severity?: string): Promise<ContractingSnagItem[]> {
+  async getSnagItems(
+    auth: AuthContext,
+    projectId: string,
+    status?: string,
+    severity?: string,
+  ): Promise<ContractingSnagItem[]> {
     return this.qualityService.getSnagItems(auth, projectId, status, severity);
   }
 
@@ -82,7 +95,11 @@ export class ContractingQualitySlice {
     return this.qualityService.getProjectHandovers(auth, projectId);
   }
 
-  async createProjectHandover(auth: AuthContext, projectId: string, dto: CreateProjectHandoverDto): Promise<ContractingProjectHandover> {
+  async createProjectHandover(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateProjectHandoverDto,
+  ): Promise<ContractingProjectHandover> {
     return this.qualityService.createProjectHandover(auth, projectId, dto);
   }
 
@@ -114,7 +131,11 @@ export class ContractingQualitySlice {
     return this.qualityService.getMaterialEscalations(auth, projectId);
   }
 
-  async createMaterialEscalation(auth: AuthContext, projectId: string, dto: CreateMaterialEscalationDto): Promise<ContractingMaterialEscalation> {
+  async createMaterialEscalation(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateMaterialEscalationDto,
+  ): Promise<ContractingMaterialEscalation> {
     return this.qualityService.createMaterialEscalation(auth, projectId, dto);
   }
 
@@ -126,11 +147,18 @@ export class ContractingQualitySlice {
   // 14. Subcontractor Back-Charges & Deductions
   // ==========================================================================
 
-  async getSubcontractorBackcharges(auth: AuthContext, projectId: string): Promise<ContractingSubcontractorBackcharge[]> {
+  async getSubcontractorBackcharges(
+    auth: AuthContext,
+    projectId: string,
+  ): Promise<ContractingSubcontractorBackcharge[]> {
     return this.qualityService.getSubcontractorBackcharges(auth, projectId);
   }
 
-  async createSubcontractorBackcharge(auth: AuthContext, projectId: string, dto: CreateSubcontractorBackchargeDto): Promise<ContractingSubcontractorBackcharge> {
+  async createSubcontractorBackcharge(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateSubcontractorBackchargeDto,
+  ): Promise<ContractingSubcontractorBackcharge> {
     return this.qualityService.createSubcontractorBackcharge(auth, projectId, dto);
   }
 

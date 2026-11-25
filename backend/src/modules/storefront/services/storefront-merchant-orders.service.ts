@@ -1,10 +1,4 @@
-import {
-  Logger,
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Logger, Injectable, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { type Transaction, Kysely, sql } from 'kysely';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -59,7 +53,11 @@ export class StorefrontMerchantOrdersService {
   private readonly db: Kysely<Database>;
   private readonly kdsService: KdsService;
   private readonly logger: Logger;
-  private readonly releaseCouponUse: (trx: Transaction<Database>, tenantId: string, couponCode: string) => Promise<void>;
+  private readonly releaseCouponUse: (
+    trx: Transaction<Database>,
+    tenantId: string,
+    couponCode: string,
+  ) => Promise<void>;
 
   constructor(deps: StorefrontMerchantOrdersDeps) {
     this.db = deps.db;
@@ -214,7 +212,9 @@ export class StorefrontMerchantOrdersService {
     }
 
     if (!authorizedAdminName) {
-      throw new UnauthorizedException('كلمة المرور غير صحيحة أو لا تنتمي لحساب أدمن. فقط مدير المنشأة مخول بإلغاء الطلبات جماعياً.');
+      throw new UnauthorizedException(
+        'كلمة المرور غير صحيحة أو لا تنتمي لحساب أدمن. فقط مدير المنشأة مخول بإلغاء الطلبات جماعياً.',
+      );
     }
 
     const validStatus = ['pending', 'confirmed', 'processing', 'all'].includes(targetStatus) ? targetStatus : 'pending';
@@ -224,7 +224,20 @@ export class StorefrontMerchantOrdersService {
     await this.db.transaction().execute(async (trx) => {
       let ordersQb = trx
         .selectFrom('online_orders')
-        .select(['id', 'order_number', 'status', 'payment_status', 'sale_id', 'coupon_code', 'stock_reserved', 'reserved_branch_id', 'reserved_location_id', 'branch_id', 'account_id', 'items_json'])
+        .select([
+          'id',
+          'order_number',
+          'status',
+          'payment_status',
+          'sale_id',
+          'coupon_code',
+          'stock_reserved',
+          'reserved_branch_id',
+          'reserved_location_id',
+          'branch_id',
+          'account_id',
+          'items_json',
+        ])
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .where('status', '!=', 'cancelled')
         .where('status', '!=', 'delivered')
@@ -261,7 +274,9 @@ export class StorefrontMerchantOrdersService {
           try {
             await this.releaseCouponUse(trx, tenantId, String(row.coupon_code));
           } catch (err: any) {
-            this.logger.error(`bulkCancelOrders: Failed to release coupon ${row.coupon_code} for order ${row.order_number || row.id}: ${err?.message}`);
+            this.logger.error(
+              `bulkCancelOrders: Failed to release coupon ${row.coupon_code} for order ${row.order_number || row.id}: ${err?.message}`,
+            );
             throw err;
           }
         }
@@ -285,7 +300,9 @@ export class StorefrontMerchantOrdersService {
                 })),
               });
             } catch (err: any) {
-              this.logger.error(`bulkCancelOrders: Failed to release stock for order ${row.order_number || row.id}: ${err?.message}`);
+              this.logger.error(
+                `bulkCancelOrders: Failed to release stock for order ${row.order_number || row.id}: ${err?.message}`,
+              );
               throw err;
             }
           }
@@ -319,7 +336,7 @@ export class StorefrontMerchantOrdersService {
 
     const page = Math.max(1, Number(query.page || 1));
     const hasExplicitLimit = query.limit !== undefined && query.limit !== '' && Number(query.limit) > 0;
-    const limit = hasExplicitLimit ? Math.min(Number(query.limit), 200) : (query.all === 'true' ? 10000 : 50);
+    const limit = hasExplicitLimit ? Math.min(Number(query.limit), 200) : query.all === 'true' ? 10000 : 50;
     const offset = (page - 1) * limit;
 
     const rows = await qb.orderBy('created_at', 'desc').limit(limit).offset(offset).execute();
@@ -454,10 +471,13 @@ export class StorefrontMerchantOrdersService {
       if (saleId !== undefined) {
         // POS sends the already-posted sale id as an acknowledgement. Only accept the
         // exact link established atomically by SalesWriteService; never create it here.
-        const linkedOrder = await trx.selectFrom('online_orders')
+        const linkedOrder = await trx
+          .selectFrom('online_orders')
           .select(['sale_id', 'status'])
-          .where('id', '=', id).where(sql<boolean>`tenant_id = ${tenantId}`)
-          .forUpdate().executeTakeFirst();
+          .where('id', '=', id)
+          .where(sql<boolean>`tenant_id = ${tenantId}`)
+          .forUpdate()
+          .executeTakeFirst();
         if (!linkedOrder || Number(linkedOrder.sale_id) !== saleId) {
           throw new BadRequestException('الفاتورة غير مرتبطة بهذا الطلب');
         }
@@ -471,7 +491,19 @@ export class StorefrontMerchantOrdersService {
       if (status === 'cancelled') {
         const row = await trx
           .selectFrom('online_orders')
-          .select(['id', 'status', 'payment_status', 'sale_id', 'coupon_code', 'stock_reserved', 'reserved_branch_id', 'reserved_location_id', 'branch_id', 'account_id', 'items_json'])
+          .select([
+            'id',
+            'status',
+            'payment_status',
+            'sale_id',
+            'coupon_code',
+            'stock_reserved',
+            'reserved_branch_id',
+            'reserved_location_id',
+            'branch_id',
+            'account_id',
+            'items_json',
+          ])
           .where('id', '=', id)
           .where(sql<boolean>`tenant_id = ${tenantId}`)
           .forUpdate()
@@ -517,17 +549,26 @@ export class StorefrontMerchantOrdersService {
           }
         }
       } else {
-        const current = await trx.selectFrom('online_orders')
+        const current = await trx
+          .selectFrom('online_orders')
           .select(['status', 'payment_status', 'sale_id'])
-          .where('id', '=', id).where(sql<boolean>`tenant_id = ${tenantId}`)
-          .forUpdate().executeTakeFirst();
+          .where('id', '=', id)
+          .where(sql<boolean>`tenant_id = ${tenantId}`)
+          .forUpdate()
+          .executeTakeFirst();
         if (!current) throw new NotFoundException('الطلب غير موجود');
-        if (current.status === 'review_required' || current.status === 'payment_failed' || current.status === 'cancelled') {
+        if (
+          current.status === 'review_required' ||
+          current.status === 'payment_failed' ||
+          current.status === 'cancelled'
+        ) {
           throw new BadRequestException('لا يمكن تغيير حالة طلب قيد مراجعة الدفع أو ملغي يدوياً');
         }
         const progress = ['pending', 'confirmed', 'processing', 'shipped', 'delivered'];
-        if (progress.indexOf(status) < progress.indexOf(current.status) ||
-            (current.sale_id && progress.indexOf(status) < progress.indexOf('shipped'))) {
+        if (
+          progress.indexOf(status) < progress.indexOf(current.status) ||
+          (current.sale_id && progress.indexOf(status) < progress.indexOf('shipped'))
+        ) {
           throw new BadRequestException('لا يمكن إرجاع الطلب إلى حالة سابقة بعد بدء تجهيزه أو إصدار فاتورته');
         }
         await trx
@@ -538,7 +579,8 @@ export class StorefrontMerchantOrdersService {
           .execute();
 
         if (status === 'delivered' && current.sale_id) {
-          await trx.updateTable('sales')
+          await trx
+            .updateTable('sales')
             .set({ delivery_status: 'delivered', updated_at: sql`NOW()` })
             .where('id', '=', current.sale_id)
             .where('delivery_status', 'in', ['pending', 'out_for_delivery', null])
@@ -595,7 +637,9 @@ export class StorefrontMerchantOrdersService {
       throw new BadRequestException('تم إصدار فاتورة لهذا الطلب بالفعل؛ يُسجَّل التحصيل من شاشة الفاتورة');
     }
 
-    const cleanReference = String(reference || '').trim().slice(0, 120);
+    const cleanReference = String(reference || '')
+      .trim()
+      .slice(0, 120);
     const now = new Date();
     const result = await this.db
       .updateTable('online_orders')

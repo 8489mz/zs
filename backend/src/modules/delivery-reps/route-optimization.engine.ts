@@ -112,8 +112,7 @@ export function optimizeRouteTsp(
   }
 
   // 1. Nearest Neighbor Initialization
-  const hasCustomStart =
-    isValidCoord(options?.startLat) && isValidCoord(options?.startLng);
+  const hasCustomStart = isValidCoord(options?.startLat) && isValidCoord(options?.startLng);
   const startLat = hasCustomStart ? Number(options!.startLat) : mappedStops[0].lat;
   const startLng = hasCustomStart ? Number(options!.startLng) : mappedStops[0].lng;
 
@@ -128,12 +127,7 @@ export function optimizeRouteTsp(
     let minDistance = Infinity;
 
     for (let i = 0; i < unvisited.length; i++) {
-      const dist = calculateHaversineDistanceMeters(
-        currentLat,
-        currentLng,
-        unvisited[i].lat,
-        unvisited[i].lng,
-      );
+      const dist = calculateHaversineDistanceMeters(currentLat, currentLng, unvisited[i].lat, unvisited[i].lng);
       if (dist < minDistance) {
         minDistance = dist;
         bestIdx = i;
@@ -207,12 +201,7 @@ export function optimizeRouteTsp(
         legDist = calculateHaversineDistanceMeters(startLat, startLng, tour[0].lat, tour[0].lng);
       }
     } else {
-      legDist = calculateHaversineDistanceMeters(
-        tour[i - 1].lat,
-        tour[i - 1].lng,
-        tour[i].lat,
-        tour[i].lng,
-      );
+      legDist = calculateHaversineDistanceMeters(tour[i - 1].lat, tour[i - 1].lng, tour[i].lat, tour[i].lng);
       optimizedDistanceMeters += legDist;
     }
 

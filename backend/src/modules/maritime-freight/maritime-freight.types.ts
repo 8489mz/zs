@@ -16,39 +16,39 @@ export type MaritimeRfqStatus = 'draft' | 'sent' | 'bids_received' | 'awarded' |
 export type MaritimeQuotationStatus = 'draft' | 'sent' | 'approved' | 'rejected' | 'converted_to_job';
 export type MaritimeJobStatus = 'active' | 'completed' | 'cancelled';
 
-export type DcsaMilestoneKey = 
-  | 'BOOK'  // Booking confirmed
-  | 'GTI'   // Gate-in at POL
-  | 'LOAD'  // Vessel Loaded
-  | 'DEPT'  // Vessel Departed (ETD)
-  | 'ARRI'  // Vessel Arrived (ETA)
-  | 'DISC'  // Container Discharged
-  | 'CUST'  // Customs Cleared
-  | 'GTO'   // Gate-out for Delivery / D/O Released
-  | 'DLVR'  // Cargo Delivered to Customer
+export type DcsaMilestoneKey =
+  | 'BOOK' // Booking confirmed
+  | 'GTI' // Gate-in at POL
+  | 'LOAD' // Vessel Loaded
+  | 'DEPT' // Vessel Departed (ETD)
+  | 'ARRI' // Vessel Arrived (ETA)
+  | 'DISC' // Container Discharged
+  | 'CUST' // Customs Cleared
+  | 'GTO' // Gate-out for Delivery / D/O Released
+  | 'DLVR' // Cargo Delivered to Customer
   | 'RETN'; // Empty Container Returned
 
 export type CargoIqMilestoneKey =
-  | 'BKD'   // Booking confirmed
-  | 'RCS'   // Cargo Received from Shipper
-  | 'MAN'   // Manifested on Flight
-  | 'DEP'   // Flight Departed
-  | 'ARR'   // Flight Arrived
-  | 'RCF'   // Cargo Received from Flight
-  | 'CUST'  // Customs Cleared
-  | 'NFD'   // Consignee Notified
-  | 'AWD'   // Documents / D.O Delivered
-  | 'DLV';  // Cargo Delivered to Consignee
+  | 'BKD' // Booking confirmed
+  | 'RCS' // Cargo Received from Shipper
+  | 'MAN' // Manifested on Flight
+  | 'DEP' // Flight Departed
+  | 'ARR' // Flight Arrived
+  | 'RCF' // Cargo Received from Flight
+  | 'CUST' // Customs Cleared
+  | 'NFD' // Consignee Notified
+  | 'AWD' // Documents / D.O Delivered
+  | 'DLV'; // Cargo Delivered to Consignee
 
 export type RoadMilestoneKey =
-  | 'TRK_ASSIGN'   // Truck & driver assigned
-  | 'TRK_GATE_IN'  // Arrived at origin / Gate In
-  | 'TRK_LOADED'   // Cargo loaded & lashed
+  | 'TRK_ASSIGN' // Truck & driver assigned
+  | 'TRK_GATE_IN' // Arrived at origin / Gate In
+  | 'TRK_LOADED' // Cargo loaded & lashed
   | 'TRK_DISPATCH' // Truck departed / En route
-  | 'TRK_BORDER'   // Customs border / Waypoint
-  | 'TRK_ARRIVED'  // Arrived at destination
+  | 'TRK_BORDER' // Customs border / Waypoint
+  | 'TRK_ARRIVED' // Arrived at destination
   | 'TRK_UNLOADED' // Cargo unloaded
-  | 'TRK_POD';     // Proof of delivery / Signed CMR
+  | 'TRK_POD'; // Proof of delivery / Signed CMR
 
 export type ShipmentMilestoneKey = DcsaMilestoneKey | CargoIqMilestoneKey | RoadMilestoneKey | string;
 
@@ -61,13 +61,48 @@ export interface RoadMilestoneDefinition {
 
 export const ROAD_FREIGHT_MILESTONES: RoadMilestoneDefinition[] = [
   { key: 'TRK_ASSIGN', title_ar: 'تعيين الشاحنة والسائق', title_en: 'Truck & Driver Assigned', category: 'origin' },
-  { key: 'TRK_GATE_IN', title_ar: 'وصول الشاحنة لموقع التحميل', title_en: 'Arrived at Origin / Gate In', category: 'origin' },
-  { key: 'TRK_LOADED', title_ar: 'إتمام التحميل وتربيط البضاعة', title_en: 'Cargo Loaded & Lashed', category: 'origin' },
-  { key: 'TRK_DISPATCH', title_ar: 'انطلاق الشاحنة على الطريق (En Route)', title_en: 'Truck Dispatched / En Route', category: 'transit' },
-  { key: 'TRK_BORDER', title_ar: 'الوصول للمنفذ الجمركي / معبر الحدود', title_en: 'Border Clearance / Waypoint', category: 'transit' },
-  { key: 'TRK_ARRIVED', title_ar: 'وصول الشاحنة لموقع العميل المستلم', title_en: 'Arrived at Destination', category: 'destination' },
-  { key: 'TRK_UNLOADED', title_ar: 'إتمام تفريغ البضاعة ومطابقة الطرود', title_en: 'Cargo Unloaded', category: 'destination' },
-  { key: 'TRK_POD', title_ar: 'توقيع بوليصة الشحن وإثبات التسليم (POD)', title_en: 'Proof of Delivery / Signed CMR', category: 'pod' },
+  {
+    key: 'TRK_GATE_IN',
+    title_ar: 'وصول الشاحنة لموقع التحميل',
+    title_en: 'Arrived at Origin / Gate In',
+    category: 'origin',
+  },
+  {
+    key: 'TRK_LOADED',
+    title_ar: 'إتمام التحميل وتربيط البضاعة',
+    title_en: 'Cargo Loaded & Lashed',
+    category: 'origin',
+  },
+  {
+    key: 'TRK_DISPATCH',
+    title_ar: 'انطلاق الشاحنة على الطريق (En Route)',
+    title_en: 'Truck Dispatched / En Route',
+    category: 'transit',
+  },
+  {
+    key: 'TRK_BORDER',
+    title_ar: 'الوصول للمنفذ الجمركي / معبر الحدود',
+    title_en: 'Border Clearance / Waypoint',
+    category: 'transit',
+  },
+  {
+    key: 'TRK_ARRIVED',
+    title_ar: 'وصول الشاحنة لموقع العميل المستلم',
+    title_en: 'Arrived at Destination',
+    category: 'destination',
+  },
+  {
+    key: 'TRK_UNLOADED',
+    title_ar: 'إتمام تفريغ البضاعة ومطابقة الطرود',
+    title_en: 'Cargo Unloaded',
+    category: 'destination',
+  },
+  {
+    key: 'TRK_POD',
+    title_ar: 'توقيع بوليصة الشحن وإثبات التسليم (POD)',
+    title_en: 'Proof of Delivery / Signed CMR',
+    category: 'pod',
+  },
 ];
 
 export interface DcsaMilestoneDefinition {
@@ -81,13 +116,38 @@ export const DCSA_STANDARD_MILESTONES: DcsaMilestoneDefinition[] = [
   { key: 'BOOK', title_ar: 'تأكيد الحجز الملاحي', title_en: 'Booking Confirmed', category: 'shipment' },
   { key: 'GTI', title_ar: 'دخول الحاوية ساحة ميناء الشحن', title_en: 'Gated-in Origin Port', category: 'equipment' },
   { key: 'LOAD', title_ar: 'شحن وتحميل الحاوية على السفينة', title_en: 'Vessel Loaded', category: 'equipment' },
-  { key: 'DEPT', title_ar: 'إبحار السفينة (تاريخ الإبحار الفعلي)', title_en: 'Vessel Departed (ETD)', category: 'transport' },
-  { key: 'ARRI', title_ar: 'وصول السفينة لميناء المقصد (ETA)', title_en: 'Vessel Arrived (ETA)', category: 'transport' },
+  {
+    key: 'DEPT',
+    title_ar: 'إبحار السفينة (تاريخ الإبحار الفعلي)',
+    title_en: 'Vessel Departed (ETD)',
+    category: 'transport',
+  },
+  {
+    key: 'ARRI',
+    title_ar: 'وصول السفينة لميناء المقصد (ETA)',
+    title_en: 'Vessel Arrived (ETA)',
+    category: 'transport',
+  },
   { key: 'DISC', title_ar: 'تفريغ الحاوية على رصيف الميناء', title_en: 'Container Discharged', category: 'equipment' },
   { key: 'CUST', title_ar: 'إنهاء الإفراج الجمركي والمطابقة', title_en: 'Customs Cleared', category: 'shipment' },
-  { key: 'GTO', title_ar: 'خروج الحاوية وتسليم إذن الإفراج (D/O)', title_en: 'Gated-out / Delivery Order Released', category: 'equipment' },
-  { key: 'DLVR', title_ar: 'وصول البضاعة وتسليمها للعميل', title_en: 'Cargo Delivered to Customer', category: 'shipment' },
-  { key: 'RETN', title_ar: 'إعادة الحاوية فارغة لساحة الخط الملاحي', title_en: 'Empty Container Returned', category: 'equipment' },
+  {
+    key: 'GTO',
+    title_ar: 'خروج الحاوية وتسليم إذن الإفراج (D/O)',
+    title_en: 'Gated-out / Delivery Order Released',
+    category: 'equipment',
+  },
+  {
+    key: 'DLVR',
+    title_ar: 'وصول البضاعة وتسليمها للعميل',
+    title_en: 'Cargo Delivered to Customer',
+    category: 'shipment',
+  },
+  {
+    key: 'RETN',
+    title_ar: 'إعادة الحاوية فارغة لساحة الخط الملاحي',
+    title_en: 'Empty Container Returned',
+    category: 'equipment',
+  },
 ];
 
 export interface RfqEmailDispatchPayload {
@@ -144,4 +204,3 @@ export const DEFAULT_PIPELINE_CONFIG: MaritimePipelineConfig = {
   autoSendWhatsAppQuote: true,
   autoSendEmailQuote: true,
 };
-

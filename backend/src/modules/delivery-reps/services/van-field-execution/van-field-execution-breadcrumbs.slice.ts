@@ -13,23 +13,14 @@ export class VanFieldExecutionBreadcrumbsSlice {
     private readonly bound: VanFieldExecutionBreadcrumbsSliceBoundDeps,
   ) {}
 
-  private async assertTripOwnedByRep(
-    tenantId: string,
-    tripId: number,
-    repId: number,
-  ) {
+  private async assertTripOwnedByRep(tenantId: string, tripId: number, repId: number) {
     return this.bound.assertTripOwnedByRep(tenantId, tripId, repId);
   }
 
   /**
    * 6. Live Breadcrumb Recording: Saves rep GPS points for breadcrumb trail
    */
-  async recordLiveBreadcrumb(
-    tenantId: string,
-    accountId: number,
-    repId: number,
-    payload: BreadcrumbPayload,
-  ) {
+  async recordLiveBreadcrumb(tenantId: string, accountId: number, repId: number, payload: BreadcrumbPayload) {
     if (!payload.tripId || payload.latitude == null || payload.longitude == null) {
       throw new AppError('بيانات التتبع ناقصة', 'INVALID_BREADCRUMB_DATA', 400);
     }

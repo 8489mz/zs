@@ -105,7 +105,7 @@ import {
 {
   // Formula: ((year-2000)*12*31 + (month-1)*31 + (day-1)) * 86400 + hour*3600 + min*60 + sec
   // 2026-11-21 09:30:15
-  const packed = ((26 * 12 * 31) + (10 * 31) + 20) * 86400 + 9 * 3600 + 30 * 60 + 15;
+  const packed = (26 * 12 * 31 + 10 * 31 + 20) * 86400 + 9 * 3600 + 30 * 60 + 15;
   assert.equal(decodeZkPackedTimestamp(packed), '2026-11-21 09:30:15');
 
   const commKeyBuf = makeZkCommKeyPayload(0, 59166);
@@ -119,10 +119,9 @@ import {
 // 6. Test Content-Based Auto-Detection on Reversed / Arbitrary Column Orders (Headerless & Multi-Column Excel/CSV)
 {
   // Case A: Headerless file where DateTime is in Column 0, Machine ID is in Column 1, and Employee PIN is in Column 2
-  const reversedHeaderless = [
-    '2026-11-21 08:45:00\tMACHINE_A\t4645',
-    '2026-11-21 17:15:00\tMACHINE_A\t4645',
-  ].join('\n');
+  const reversedHeaderless = ['2026-11-21 08:45:00\tMACHINE_A\t4645', '2026-11-21 17:15:00\tMACHINE_A\t4645'].join(
+    '\n',
+  );
 
   const summaryA = parseAndAggregateBiometricLog(reversedHeaderless, {
     knownEmployeePins: new Set(['4645']),
@@ -155,10 +154,7 @@ import {
 
   // Case C: Explicit User Column Mapping Override from UI
   const customOverrideSummary = parseAndAggregateBiometricLog(
-    [
-      '999\t4645\t2026-11-21 09:00:00',
-      '999\t4645\t2026-11-21 17:00:00',
-    ].join('\n'),
+    ['999\t4645\t2026-11-21 09:00:00', '999\t4645\t2026-11-21 17:00:00'].join('\n'),
     {
       columnMapping: {
         hasHeaderRow: false,

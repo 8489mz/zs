@@ -85,7 +85,10 @@ export class MaritimeFreightRateCardsService {
     };
   }
 
-  async listRateCards(auth: AuthContext, filters?: { polCode?: string; podCode?: string; containerType?: string; status?: string; transportMode?: string }) {
+  async listRateCards(
+    auth: AuthContext,
+    filters?: { polCode?: string; podCode?: string; containerType?: string; status?: string; transportMode?: string },
+  ) {
     const { tenantId } = requireTenantScope(auth);
     let query = this.db.selectFrom('maritime_rate_cards').selectAll().where('tenant_id', '=', tenantId);
 
@@ -106,7 +109,12 @@ export class MaritimeFreightRateCardsService {
       // Same stored-DATE rule as deadlineDayKey: the UTC slice renders
       // the previous day on any host east of UTC.
       value instanceof Date ? formatLocalCalendarDay(value) : String(value || '').slice(0, 10);
-    return rows.map((r) => this.mapRateCardRow({ ...r, status: r.status === 'active' && validUntilDayKey(r.valid_until) < today ? 'expired' : r.status }));
+    return rows.map((r) =>
+      this.mapRateCardRow({
+        ...r,
+        status: r.status === 'active' && validUntilDayKey(r.valid_until) < today ? 'expired' : r.status,
+      }),
+    );
   }
 
   /**
@@ -179,7 +187,7 @@ export class MaritimeFreightRateCardsService {
         total_freight_cost: totalFreightCost,
         transit_time_days: dto.transitTimeDays || 0,
         free_days: dto.freeDays || 14,
-        valid_from: dto.validFrom || await resolveBusinessDateKey(this.db, tenantId, new Date()),
+        valid_from: dto.validFrom || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
         valid_until: dto.validUntil,
         source: 'manual',
         status: 'active',
@@ -199,10 +207,24 @@ export class MaritimeFreightRateCardsService {
       .selectFrom('maritime_rfq_bids as b')
       .innerJoin('maritime_rfqs as r', 'r.id', 'b.rfq_id')
       .select([
-        'b.id', 'b.shipping_line_id', 'b.shipping_line_name', 'b.ocean_freight', 'b.currency',
-        'b.thc_origin', 'b.thc_destination', 'b.baf_charges', 'b.other_charges', 'b.total_freight_cost',
-        'b.transit_time_days', 'b.free_days',
-        'r.pol_code', 'r.pol_name', 'r.pod_code', 'r.pod_name', 'r.cargo_mode', 'r.container_type',
+        'b.id',
+        'b.shipping_line_id',
+        'b.shipping_line_name',
+        'b.ocean_freight',
+        'b.currency',
+        'b.thc_origin',
+        'b.thc_destination',
+        'b.baf_charges',
+        'b.other_charges',
+        'b.total_freight_cost',
+        'b.transit_time_days',
+        'b.free_days',
+        'r.pol_code',
+        'r.pol_name',
+        'r.pod_code',
+        'r.pod_name',
+        'r.cargo_mode',
+        'r.container_type',
       ])
       .where('b.tenant_id', '=', tenantId)
       .where('b.id', '=', bidId as any)

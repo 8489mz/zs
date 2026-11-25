@@ -1,4 +1,8 @@
-import { offlineUpdateManifestUrl, offlineUpdateReleasesApiUrl, offlineUpdateReleaseDownloadUrl } from './offline-releases-channel';
+import {
+  offlineUpdateManifestUrl,
+  offlineUpdateReleasesApiUrl,
+  offlineUpdateReleaseDownloadUrl,
+} from './offline-releases-channel';
 
 export class OfflineReleasesGitHub {
   constructor() {}
@@ -25,7 +29,9 @@ export class OfflineReleasesGitHub {
           return {
             version: manifest.version,
             changelog: manifest.changelog || 'تحديث شامل للنظام متوفر على GitHub.',
-            patchUrl: manifest.patchUrl || offlineUpdateReleaseDownloadUrl(manifest.version, `Z-ERP-Patch-v${manifest.version}.zip`),
+            patchUrl:
+              manifest.patchUrl ||
+              offlineUpdateReleaseDownloadUrl(manifest.version, `Z-ERP-Patch-v${manifest.version}.zip`),
             passcode: manifest.passcode,
           };
         }
@@ -49,15 +55,11 @@ export class OfflineReleasesGitHub {
         const data = (await apiRes.json()) as any;
         const tag = (data.tag_name || '').replace(/^v/, '').trim();
         if (tag) {
-          const zipAsset = (data.assets || []).find((a: any) =>
-            a.name?.endsWith('.zip'),
-          );
+          const zipAsset = (data.assets || []).find((a: any) => a.name?.endsWith('.zip'));
           return {
             version: tag,
             changelog: data.body || 'تحديث جديد عبر GitHub Releases.',
-            patchUrl:
-              zipAsset?.browser_download_url ||
-              offlineUpdateReleaseDownloadUrl(tag, `patch-${tag}.zip`),
+            patchUrl: zipAsset?.browser_download_url || offlineUpdateReleaseDownloadUrl(tag, `patch-${tag}.zip`),
           };
         }
       }

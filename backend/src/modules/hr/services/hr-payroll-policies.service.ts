@@ -97,18 +97,22 @@ export class HrPayrollPoliciesService {
       insuranceProratePartialEmployment: false,
     };
 
-    const result = await sql<{ value: string }>`SELECT value FROM hr_hr_settings WHERE tenant_id = ${tenantId} AND key = 'payroll_policies' LIMIT 1`.execute(db);
+    const result = await sql<{
+      value: string;
+    }>`SELECT value FROM hr_hr_settings WHERE tenant_id = ${tenantId} AND key = 'payroll_policies' LIMIT 1`.execute(db);
     if (result.rows.length === 0) return defaults;
     let parsed: any;
     try {
       parsed = JSON.parse(result.rows[0].value as string);
     } catch {
-      throw new AppError('سياسات الرواتب المحفوظة غير صالحة؛ راجع إعداداتها قبل الاحتساب',
-        'HR_PAYROLL_POLICY_CORRUPT', 409);
+      throw new AppError(
+        'سياسات الرواتب المحفوظة غير صالحة؛ راجع إعداداتها قبل الاحتساب',
+        'HR_PAYROLL_POLICY_CORRUPT',
+        409,
+      );
     }
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new AppError('سياسات الرواتب المحفوظة ليست كائناً صالحاً',
-        'HR_PAYROLL_POLICY_CORRUPT', 409);
+      throw new AppError('سياسات الرواتب المحفوظة ليست كائناً صالحاً', 'HR_PAYROLL_POLICY_CORRUPT', 409);
     }
     const merged = { ...defaults, ...parsed };
 
@@ -166,8 +170,14 @@ export class HrPayrollPoliciesService {
       policies.statutoryReviewed = true;
     }
 
-    try { validateHrStatutoryPolicy(policies as HrStatutoryPolicy); } catch (error) {
-      throw new AppError(error instanceof Error ? error.message : 'قواعد الاستقطاعات غير صحيحة', 'HR_STATUTORY_POLICY_INVALID', 400);
+    try {
+      validateHrStatutoryPolicy(policies as HrStatutoryPolicy);
+    } catch (error) {
+      throw new AppError(
+        error instanceof Error ? error.message : 'قواعد الاستقطاعات غير صحيحة',
+        'HR_STATUTORY_POLICY_INVALID',
+        400,
+      );
     }
     const jsonStr = JSON.stringify(policies);
     await this.tx.runInTransaction(this.db, async (trx) => {
@@ -181,8 +191,11 @@ export class HrPayrollPoliciesService {
         DO UPDATE SET value = ${jsonStr}, updated_by = ${auth.userId}, updated_at = NOW()
       `.execute(trx);
     });
-    await this.audit.log('Update HR payroll policies',
-      `Statutory payroll settings updated for country ${clean(policies.statutoryCountry) || 'unconfigured'} by ${auth.username}`, auth);
+    await this.audit.log(
+      'Update HR payroll policies',
+      `Statutory payroll settings updated for country ${clean(policies.statutoryCountry) || 'unconfigured'} by ${auth.username}`,
+      auth,
+    );
     return { success: true };
   }
 }

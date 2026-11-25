@@ -16,11 +16,7 @@ export class ListDriverSalesSlice {
    * supporting filtering by date scope, customer, payment method, or search query.
    * Includes line items for seamless reprinting on thermal receipts or sharing.
    */
-  async listDriverSales(
-    tenantId: string,
-    repId: number,
-    filters?: ListDriverSalesFilters,
-  ) {
+  async listDriverSales(tenantId: string, repId: number, filters?: ListDriverSalesFilters) {
     let query = this.anyDb
       .selectFrom('sales as s')
       .leftJoin('customers as c', 'c.id', 's.customer_id')
@@ -48,12 +44,7 @@ export class ListDriverSalesSlice {
         'vt.id as tripId',
       ])
       .where('s.tenant_id', '=', tenantId)
-      .where((eb: any) =>
-        eb.or([
-          eb('s.delivery_rep_id', '=', repId),
-          eb('vt.rep_id', '=', repId),
-        ]),
-      );
+      .where((eb: any) => eb.or([eb('s.delivery_rep_id', '=', repId), eb('vt.rep_id', '=', repId)]));
 
     if (filters?.customerId) {
       query = query.where('s.customer_id', '=', filters.customerId);
@@ -76,11 +67,7 @@ export class ListDriverSalesSlice {
     if (filters?.search && filters.search.trim()) {
       const q = `%${filters.search.trim()}%`;
       query = query.where((eb: any) =>
-        eb.or([
-          eb('s.doc_no', 'ilike', q),
-          eb('c.name', 'ilike', q),
-          eb('c.phone', 'ilike', q),
-        ]),
+        eb.or([eb('s.doc_no', 'ilike', q), eb('c.name', 'ilike', q), eb('c.phone', 'ilike', q)]),
       );
     }
 
@@ -151,9 +138,8 @@ export class ListDriverSalesSlice {
       let packagingBreakdown = null;
       if (r.packagingBreakdown) {
         try {
-          packagingBreakdown = typeof r.packagingBreakdown === 'string'
-            ? JSON.parse(r.packagingBreakdown)
-            : r.packagingBreakdown;
+          packagingBreakdown =
+            typeof r.packagingBreakdown === 'string' ? JSON.parse(r.packagingBreakdown) : r.packagingBreakdown;
         } catch {}
       }
 

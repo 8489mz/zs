@@ -101,11 +101,7 @@ export class VanFieldSalesService {
     return this.executeFieldSaleInternalSlice.executeFieldSaleInternal(repId, tenantId, accountId, payload);
   }
 
-  async listDriverSales(
-    tenantId: string,
-    repId: number,
-    filters?: ListDriverSalesFilters,
-  ) {
+  async listDriverSales(tenantId: string, repId: number, filters?: ListDriverSalesFilters) {
     return this.listDriverSalesSlice.listDriverSales(tenantId, repId, filters);
   }
 }

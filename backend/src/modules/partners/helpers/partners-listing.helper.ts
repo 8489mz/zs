@@ -33,7 +33,11 @@ export function mapCustomerRow(
 ): Record<string, unknown> {
   let meta: any = {};
   if (typeof row.metadata === 'string') {
-    try { meta = JSON.parse(row.metadata); } catch { meta = {}; }
+    try {
+      meta = JSON.parse(row.metadata);
+    } catch {
+      meta = {};
+    }
   } else if (row.metadata && typeof row.metadata === 'object') {
     meta = row.metadata;
   }

@@ -76,7 +76,12 @@ export class DeliveryRepsSharedHelpersService {
    * honoured exactly like the COD formula.
    */
   async repOrderCashDue(
-    order: { id: number; delivery_fee_mode: string | null; collection_status?: string | null; paid_amount?: number | string | null },
+    order: {
+      id: number;
+      delivery_fee_mode: string | null;
+      collection_status?: string | null;
+      paid_amount?: number | string | null;
+    },
     defaultMode: 'freelance_courier' | 'store_fleet',
     moneyDigits: MoneyDigits,
     actor: AuthContext,

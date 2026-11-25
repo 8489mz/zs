@@ -37,11 +37,7 @@ export class MarketplaceSyncOnboardingService {
 
   async getSellerOnboardingCheck(auth: AuthContext): Promise<MarketplaceOnboardingCheck> {
     const scope = requireTenantScope(auth);
-    const tenant = await this.db
-      .selectFrom('tenants')
-      .selectAll()
-      .where('id', '=', scope.tenantId)
-      .executeTakeFirst();
+    const tenant = await this.db.selectFrom('tenants').selectAll().where('id', '=', scope.tenantId).executeTakeFirst();
 
     const settingRows = await this.db
       .selectFrom('settings')
@@ -88,7 +84,8 @@ export class MarketplaceSyncOnboardingService {
 
       if (cleanCompany === cleanBank || cleanCompany.includes(cleanBank) || cleanBank.includes(cleanCompany)) {
         nameMatchStatus = 'perfect_match';
-        nameMatchDetails = 'اسم الشركة مطابق تماماً لاسم صاحب الحساب البنكي. نسبة قبول الحساب من روبوتات أمازون ونون تفوق 98%.';
+        nameMatchDetails =
+          'اسم الشركة مطابق تماماً لاسم صاحب الحساب البنكي. نسبة قبول الحساب من روبوتات أمازون ونون تفوق 98%.';
       } else {
         nameMatchStatus = 'name_mismatch';
         nameMatchDetails = `تحذير عالي الأهمية: اسم الشركة بالسجل (${companyLegalName}) يختلف عن اسم الحساب البنكي (${bankAccountName}). روبوتات أمازون ونون ترفض 95% من الحسابات آلياً فور رصد هذا الاختلاف! يرجى توحيد الاسمين.`;
@@ -101,42 +98,58 @@ export class MarketplaceSyncOnboardingService {
         key: 'commercial_register',
         label: 'السجل التجاري الساري (Commercial Register)',
         required: isBusiness,
-        status: !isBusiness ? 'ready' : (commercialRegister.length >= 4 ? 'ready' : 'missing'),
+        status: !isBusiness ? 'ready' : commercialRegister.length >= 4 ? 'ready' : 'missing',
         notes: !isBusiness
           ? 'غير إلزامي للبائع الفردي (مطلوب فقط لحسابات الشركات ومؤسسات الأعمال)'
-          : (commercialRegister.length >= 4 ? `مسجل برقم ${commercialRegister}` : 'إلزامي للشركات في أمازون مصر ونون! مطلوب نسخة سارية ممسوحة ضوئياً بدقة (Scan) دون اقتطاع الحواف.'),
+          : commercialRegister.length >= 4
+            ? `مسجل برقم ${commercialRegister}`
+            : 'إلزامي للشركات في أمازون مصر ونون! مطلوب نسخة سارية ممسوحة ضوئياً بدقة (Scan) دون اقتطاع الحواف.',
       },
       {
         key: 'tax_card',
         label: 'البطاقة الضريبية وشهادة القيمة المضافة (Tax Card & VAT)',
         required: isBusiness,
-        status: !isBusiness ? 'ready' : (taxNumber.length >= 6 ? 'ready' : 'missing'),
+        status: !isBusiness ? 'ready' : taxNumber.length >= 6 ? 'ready' : 'missing',
         notes: !isBusiness
           ? 'غير إلزامية للبائع الفردي'
-          : (taxNumber.length >= 6 ? `مسجلة برقم ${taxNumber}` : 'إلزامية للشركات في أمازون مصر ونون! وبدونها يتم تعليق الحساب تحت بند نقص البيانات الضريبية.'),
+          : taxNumber.length >= 6
+            ? `مسجلة برقم ${taxNumber}`
+            : 'إلزامية للشركات في أمازون مصر ونون! وبدونها يتم تعليق الحساب تحت بند نقص البيانات الضريبية.',
       },
       {
         key: 'bank_iban',
         label: 'الحساب البنكي الرسمي ورقم الآيبان (Bank Account & IBAN)',
         required: true,
         status: bankIban.length >= 15 ? 'ready' : bankName ? 'warning' : 'missing',
-        notes: bankIban.length >= 15 ? `الحساب والآيبان مسجل لدى ${bankName || 'البنك'}` : 'إلزامي 100% في أمازون ونون! يجب إدخال الآيبان (IBAN) وكود السويفت (SWIFT) وكشف حساب بنكي رسمي حديث.',
+        notes:
+          bankIban.length >= 15
+            ? `الحساب والآيبان مسجل لدى ${bankName || 'البنك'}`
+            : 'إلزامي 100% في أمازون ونون! يجب إدخال الآيبان (IBAN) وكود السويفت (SWIFT) وكشف حساب بنكي رسمي حديث.',
       },
       {
         key: 'national_id',
         label: 'هوية المالك / المفوض بالتوقيع (National ID / Passport)',
         required: true,
-        status: ownerName.length >= 3 && ownerNationalId.length >= 10 ? 'ready' : ownerName.length >= 3 ? 'warning' : 'missing',
-        notes: ownerName.length >= 3 && ownerNationalId.length >= 10
-          ? `مسجل باسم: ${ownerName} (رقم قومي: ${ownerNationalId})`
-          : 'إلزامي 100% في أمازون ونون! بطاقة رقم قومي سارية الوجهين أو جواز سفر ساري للممثل القانوني.',
+        status:
+          ownerName.length >= 3 && ownerNationalId.length >= 10
+            ? 'ready'
+            : ownerName.length >= 3
+              ? 'warning'
+              : 'missing',
+        notes:
+          ownerName.length >= 3 && ownerNationalId.length >= 10
+            ? `مسجل باسم: ${ownerName} (رقم قومي: ${ownerNationalId})`
+            : 'إلزامي 100% في أمازون ونون! بطاقة رقم قومي سارية الوجهين أو جواز سفر ساري للممثل القانوني.',
       },
       {
         key: 'business_address',
         label: 'العنوان الوطني وإثبات مقر العمل (Proof of Address)',
         required: true,
         status: businessAddress.length >= 6 ? 'ready' : 'missing',
-        notes: businessAddress.length >= 6 ? businessAddress : 'إلزامي 100% في أمازون ونون! يجب تطابق العنوان بالحرف مع فاتورة المرافق أو كشف الحساب البنكي.',
+        notes:
+          businessAddress.length >= 6
+            ? businessAddress
+            : 'إلزامي 100% في أمازون ونون! يجب تطابق العنوان بالحرف مع فاتورة المرافق أو كشف الحساب البنكي.',
       },
       {
         key: 'charge_method_card',
@@ -151,10 +164,12 @@ export class MarketplaceSyncOnboardingService {
         key: 'letter_of_auth',
         label: 'خطاب التفويض الإداري والبنكي المعتمد (Letter of Authorization - LOA)',
         required: isBusiness,
-        status: !isBusiness ? 'ready' : (companyLegalName && ownerName ? 'ready' : 'warning'),
+        status: !isBusiness ? 'ready' : companyLegalName && ownerName ? 'ready' : 'warning',
         notes: !isBusiness
           ? 'غير مطلوب للبائع الفردي'
-          : (companyLegalName && ownerName ? 'الخطاب تم توليده تلقائياً وجاهز للطباعة والختم' : 'مطلوب في أمازون ونون إذا كان المفوض بإدارة الحساب شخصاً ينوب عن مجلس الإدارة أو الشركة.'),
+          : companyLegalName && ownerName
+            ? 'الخطاب تم توليده تلقائياً وجاهز للطباعة والختم'
+            : 'مطلوب في أمازون ونون إذا كان المفوض بإدارة الحساب شخصاً ينوب عن مجلس الإدارة أو الشركة.',
       },
     ];
 
@@ -236,7 +251,8 @@ Official Company Stamp / Seal:
           {
             stepNumber: 1,
             title: 'اختيار نوع الكيان القانوني (Business Entity)',
-            instruction: 'ادخل على sellercentral.amazon.eg واختر "شركة مملوكة للقطاع الخاص" إذا كان لديك سجل تجاري، أو "فرد" في حال عدم وجود سجل.',
+            instruction:
+              'ادخل على sellercentral.amazon.eg واختر "شركة مملوكة للقطاع الخاص" إذا كان لديك سجل تجاري، أو "فرد" في حال عدم وجود سجل.',
             tip: 'تأكد أن الاسم المكتوب يطابق حرفياً الاسم الموجود في السجل التجاري والبطاقة الضريبية.',
           },
           {
@@ -248,13 +264,15 @@ Official Company Stamp / Seal:
           {
             stepNumber: 3,
             title: 'رفع وثائق إثبات الهوية والتفويض (Identity & LOA)',
-            instruction: 'ارفع صورة البطاقة الشخصية للمفوض، ثم ارفع صورة السجل التجاري، وخطاب التفويض المطبوع والمختوم (LOA).',
+            instruction:
+              'ارفع صورة البطاقة الشخصية للمفوض، ثم ارفع صورة السجل التجاري، وخطاب التفويض المطبوع والمختوم (LOA).',
             tip: 'تجنب التصوير الليلي أو الفلاش؛ استخدم ماسحاً ضوئياً (Scanner) واضحاً بدقة 300 DPI.',
           },
           {
             stepNumber: 4,
             title: 'جلسة التحقق المرئي (Video Verification Call)',
-            instruction: 'سيطلب فريق أمازون مكالمة فيديو مدتها 5 دقائق للتحقق من هوية المفوض وأصل بطاقة الرقم القومي وأصل السجل التجاري.',
+            instruction:
+              'سيطلب فريق أمازون مكالمة فيديو مدتها 5 دقائق للتحقق من هوية المفوض وأصل بطاقة الرقم القومي وأصل السجل التجاري.',
             tip: 'احرص على تواجد أصول الوثائق الورقية الأصلية معك أثناء المكالمة.',
           },
         ],
@@ -272,7 +290,8 @@ Official Company Stamp / Seal:
           {
             stepNumber: 2,
             title: 'رفع الأوراق القانونية (Legal Documents Submission)',
-            instruction: 'ارفع ملف PDF يضم: السجل التجاري الساري، البطاقة الضريبية، وشهادة التسجيل بضريبة القيمة المضافة.',
+            instruction:
+              'ارفع ملف PDF يضم: السجل التجاري الساري، البطاقة الضريبية، وشهادة التسجيل بضريبة القيمة المضافة.',
             tip: 'نون تشترط وجود شهادة القيمة المضافة إذا تجاوزت مبيعاتك السنوية حد التسجيل أو للشركات التجارية.',
           },
           {

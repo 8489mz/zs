@@ -47,8 +47,12 @@ export function calculateAttendancePenalty(input: AttendancePenaltyEngineInput):
   const toMoney = (v: number): number => roundMoney(v, input.minorUnits);
   // D4: the daily rate is the monthly wage over the days of the incident's
   // calendar month. daysInCalendarMonth throws on a malformed date.
-  const dailyRate = isHourly ? (hourlyRateInput * expectedHours) : (baseSalary > 0 ? (baseSalary / daysInCalendarMonth(input.referenceDate)) : 0);
-  const calculatedHourlyRate = isHourly ? hourlyRateInput : (expectedHours > 0 ? dailyRate / expectedHours : 0);
+  const dailyRate = isHourly
+    ? hourlyRateInput * expectedHours
+    : baseSalary > 0
+      ? baseSalary / daysInCalendarMonth(input.referenceDate)
+      : 0;
+  const calculatedHourlyRate = isHourly ? hourlyRateInput : expectedHours > 0 ? dailyRate / expectedHours : 0;
   const minuteRate = calculatedHourlyRate / 60;
 
   if (dailyRate === 0 && calculatedHourlyRate === 0) {
@@ -62,12 +66,15 @@ export function calculateAttendancePenalty(input: AttendancePenaltyEngineInput):
   }
 
   const duration = Math.max(0, Number(input.durationMinutes || 0));
-  const isOvertime = input.exceptionType === 'early_check_in' || input.exceptionType === 'late_check_out' || input.exceptionType === 'extra_hours';
+  const isOvertime =
+    input.exceptionType === 'early_check_in' ||
+    input.exceptionType === 'late_check_out' ||
+    input.exceptionType === 'extra_hours';
 
   if (isOvertime) {
     const rawMult = Number(input.overtimeMultiplier ?? 1.5);
     const mult = Number.isFinite(rawMult) && rawMult >= 1 ? rawMult : 1;
-    const amount = toMoney(((duration / 60) * calculatedHourlyRate * mult));
+    const amount = toMoney((duration / 60) * calculatedHourlyRate * mult);
     return {
       estimatedAmount: amount,
       policyDescription: `إضافي (${mult}x)`,
@@ -111,16 +118,16 @@ export function calculateAttendancePenalty(input: AttendancePenaltyEngineInput):
         fraction = Number(input.globalFirstTimeDeduction ?? 0.25);
         label = `تأخير 1: ${fraction === 0.25 ? 'ربع يوم' : `${fraction} يوم`}`;
       } else if (idx === 2) {
-        fraction = Number(input.globalSecondTimeDeduction ?? 0.50);
+        fraction = Number(input.globalSecondTimeDeduction ?? 0.5);
         label = `تأخير 2: ${fraction === 0.5 ? 'نصف يوم' : `${fraction} يوم`}`;
       } else if (idx === 3) {
-        fraction = Number(input.globalThirdTimeDeduction ?? 1.00);
+        fraction = Number(input.globalThirdTimeDeduction ?? 1.0);
         label = `تأخير 3: ${fraction === 1 ? 'يوم كامل' : `${fraction} يوم`}`;
       } else {
-        fraction = Number(input.globalFourthTimeDeduction ?? 1.00);
+        fraction = Number(input.globalFourthTimeDeduction ?? 1.0);
         label = `تأخير ${idx}: ${fraction === 1 ? 'يوم كامل' : `${fraction} يوم`}`;
       }
-      const amount = toMoney((dailyRate * fraction));
+      const amount = toMoney(dailyRate * fraction);
       return {
         estimatedAmount: amount,
         policyDescription: label,
@@ -133,7 +140,7 @@ export function calculateAttendancePenalty(input: AttendancePenaltyEngineInput):
     if (mode === 'strict') {
       const grace = Number(input.graceMinutes || 0);
       if (duration > grace) {
-        const amount = toMoney((dailyRate * 0.5));
+        const amount = toMoney(dailyRate * 0.5);
         return {
           estimatedAmount: amount,
           policyDescription: 'صارم (نصف يوم)',
@@ -142,7 +149,7 @@ export function calculateAttendancePenalty(input: AttendancePenaltyEngineInput):
           effectivePolicy: 'strict',
         };
       }
-      const amount = toMoney((duration * minuteRate));
+      const amount = toMoney(duration * minuteRate);
       return {
         estimatedAmount: amount,
         policyDescription: 'دقائق فعلية (سماح)',
@@ -153,7 +160,7 @@ export function calculateAttendancePenalty(input: AttendancePenaltyEngineInput):
     }
 
     // standard
-    const amount = toMoney((duration * minuteRate));
+    const amount = toMoney(duration * minuteRate);
     return {
       estimatedAmount: amount,
       policyDescription: 'دقائق فعلية',
@@ -164,7 +171,7 @@ export function calculateAttendancePenalty(input: AttendancePenaltyEngineInput):
   }
 
   if (input.exceptionType === 'missing_check_in' || input.exceptionType === 'missing_check_out') {
-    const amount = toMoney((dailyRate * 0.5));
+    const amount = toMoney(dailyRate * 0.5);
     return {
       estimatedAmount: amount,
       policyDescription: 'بصمة معلقة (نصف يوم)',

@@ -16,12 +16,7 @@ import { AuditService } from '../../../core/audit/audit.service';
 import { AmazonConfig, JumiaConfig, NoonConfig, SupportedMarketplace, TrendyolConfig } from './marketplace-sync.types';
 
 export interface MarketplaceSyncConfigDeps {
-  getSettingJson: <T>(
-    key: string,
-    tenantId: string,
-    defaultValue: T,
-    executor?: Kysely<Database>,
-  ) => Promise<T>;
+  getSettingJson: <T>(key: string, tenantId: string, defaultValue: T, executor?: Kysely<Database>) => Promise<T>;
   setSettingJson: <T>(key: string, tenantId: string, value: T) => Promise<void>;
   audit: AuditService;
 }
@@ -48,7 +43,11 @@ export class MarketplaceSyncConfigService {
     const rawAmazon = await this.getSettingJson<Partial<AmazonConfig>>('marketplace_amazon_config', scope.tenantId, {});
     const rawNoon = await this.getSettingJson<Partial<NoonConfig>>('marketplace_noon_config', scope.tenantId, {});
     const rawJumia = await this.getSettingJson<Partial<JumiaConfig>>('marketplace_jumia_config', scope.tenantId, {});
-    const rawTrendyol = await this.getSettingJson<Partial<TrendyolConfig>>('marketplace_trendyol_config', scope.tenantId, {});
+    const rawTrendyol = await this.getSettingJson<Partial<TrendyolConfig>>(
+      'marketplace_trendyol_config',
+      scope.tenantId,
+      {},
+    );
 
     const amazon: AmazonConfig = {
       enabled: Boolean(rawAmazon.enabled),
@@ -112,12 +111,21 @@ export class MarketplaceSyncConfigService {
     const scope = requireTenantScope(auth);
 
     if (payload.amazon) {
-      const existing = await this.getSettingJson<Partial<AmazonConfig>>('marketplace_amazon_config', scope.tenantId, {});
+      const existing = await this.getSettingJson<Partial<AmazonConfig>>(
+        'marketplace_amazon_config',
+        scope.tenantId,
+        {},
+      );
       const merged: Partial<AmazonConfig> = { ...existing, ...payload.amazon };
       if (payload.amazon.refreshToken === '••••••••') merged.refreshToken = existing.refreshToken;
       if (payload.amazon.clientSecret === '••••••••') merged.clientSecret = existing.clientSecret;
       if (payload.amazon.webhookSecret === '••••••••') merged.webhookSecret = existing.webhookSecret;
-      if (payload.amazon.webhookSecret && payload.amazon.webhookSecret !== '••••••••' && payload.amazon.webhookSecret.length < 32) throw new BadRequestException('Webhook secret must be at least 32 characters');
+      if (
+        payload.amazon.webhookSecret &&
+        payload.amazon.webhookSecret !== '••••••••' &&
+        payload.amazon.webhookSecret.length < 32
+      )
+        throw new BadRequestException('Webhook secret must be at least 32 characters');
       await this.setSettingJson('marketplace_amazon_config', scope.tenantId, merged);
     }
 
@@ -127,7 +135,12 @@ export class MarketplaceSyncConfigService {
       if (payload.noon.apiKey === '••••••••') merged.apiKey = existing.apiKey;
       if (payload.noon.appSecret === '••••••••') merged.appSecret = existing.appSecret;
       if (payload.noon.webhookSecret === '••••••••') merged.webhookSecret = existing.webhookSecret;
-      if (payload.noon.webhookSecret && payload.noon.webhookSecret !== '••••••••' && payload.noon.webhookSecret.length < 32) throw new BadRequestException('Webhook secret must be at least 32 characters');
+      if (
+        payload.noon.webhookSecret &&
+        payload.noon.webhookSecret !== '••••••••' &&
+        payload.noon.webhookSecret.length < 32
+      )
+        throw new BadRequestException('Webhook secret must be at least 32 characters');
       await this.setSettingJson('marketplace_noon_config', scope.tenantId, merged);
     }
 
@@ -136,21 +149,39 @@ export class MarketplaceSyncConfigService {
       const merged: Partial<JumiaConfig> = { ...existing, ...payload.jumia };
       if (payload.jumia.apiKey === '••••••••') merged.apiKey = existing.apiKey;
       if (payload.jumia.webhookSecret === '••••••••') merged.webhookSecret = existing.webhookSecret;
-      if (payload.jumia.webhookSecret && payload.jumia.webhookSecret !== '••••••••' && payload.jumia.webhookSecret.length < 32) throw new BadRequestException('Webhook secret must be at least 32 characters');
+      if (
+        payload.jumia.webhookSecret &&
+        payload.jumia.webhookSecret !== '••••••••' &&
+        payload.jumia.webhookSecret.length < 32
+      )
+        throw new BadRequestException('Webhook secret must be at least 32 characters');
       await this.setSettingJson('marketplace_jumia_config', scope.tenantId, merged);
     }
 
     if (payload.trendyol) {
-      const existing = await this.getSettingJson<Partial<TrendyolConfig>>('marketplace_trendyol_config', scope.tenantId, {});
+      const existing = await this.getSettingJson<Partial<TrendyolConfig>>(
+        'marketplace_trendyol_config',
+        scope.tenantId,
+        {},
+      );
       const merged: Partial<TrendyolConfig> = { ...existing, ...payload.trendyol };
       if (payload.trendyol.apiKey === '••••••••') merged.apiKey = existing.apiKey;
       if (payload.trendyol.apiSecret === '••••••••') merged.apiSecret = existing.apiSecret;
       if (payload.trendyol.webhookSecret === '••••••••') merged.webhookSecret = existing.webhookSecret;
-      if (payload.trendyol.webhookSecret && payload.trendyol.webhookSecret !== '••••••••' && payload.trendyol.webhookSecret.length < 32) throw new BadRequestException('Webhook secret must be at least 32 characters');
+      if (
+        payload.trendyol.webhookSecret &&
+        payload.trendyol.webhookSecret !== '••••••••' &&
+        payload.trendyol.webhookSecret.length < 32
+      )
+        throw new BadRequestException('Webhook secret must be at least 32 characters');
       await this.setSettingJson('marketplace_trendyol_config', scope.tenantId, merged);
     }
 
-    await this.audit.log('تحديث إعدادات ربط منصات التجارة الإلكترونية', `تم تحديث بيانات الربط السحابي بواسطة ${auth.username}`, auth);
+    await this.audit.log(
+      'تحديث إعدادات ربط منصات التجارة الإلكترونية',
+      `تم تحديث بيانات الربط السحابي بواسطة ${auth.username}`,
+      auth,
+    );
     return { ok: true };
   }
 

@@ -57,7 +57,8 @@ export class WhatsAppGatewayService {
       webhookSecret: map.get('whatsapp_gateway_webhook_secret') ? '••••••••' : '',
       autoSendInvoice: map.get('whatsapp_gateway_auto_invoice') === true,
       autoSendOnlineOrder: map.get('whatsapp_gateway_auto_order') === true,
-      invoiceTemplate: map.get('whatsapp_gateway_invoice_template') ||
+      invoiceTemplate:
+        map.get('whatsapp_gateway_invoice_template') ||
         'مرحباً بك يا {customerName} في {businessName}، يسعدنا تسوقك معنا! يمكنك استعراض فاتورتك رقم #{invoiceNo} بقيمة {totalAmount} ج.م عبر الرابط التالي: {invoiceLink}',
       aiBotEnabled: map.get('whatsapp_gateway_ai_bot_enabled') === true,
       aiBotPrompt: map.get('whatsapp_gateway_ai_bot_prompt') || '',
@@ -73,21 +74,30 @@ export class WhatsAppGatewayService {
     if (payload.enabled !== undefined) updates.push({ key: 'whatsapp_gateway_enabled', val: payload.enabled });
     if (payload.provider !== undefined) updates.push({ key: 'whatsapp_gateway_provider', val: payload.provider });
     if (payload.apiUrl !== undefined) updates.push({ key: 'whatsapp_gateway_api_url', val: payload.apiUrl });
-    if (payload.instanceId !== undefined) updates.push({ key: 'whatsapp_gateway_instance_id', val: payload.instanceId });
+    if (payload.instanceId !== undefined)
+      updates.push({ key: 'whatsapp_gateway_instance_id', val: payload.instanceId });
     if (payload.token && payload.token !== '••••••••') {
       updates.push({ key: 'whatsapp_gateway_token', val: payload.token });
     }
     if (payload.webhookSecret && payload.webhookSecret !== '••••••••') {
-      if (payload.webhookSecret.length < 32) throw new BadRequestException('Webhook secret must be at least 32 characters');
+      if (payload.webhookSecret.length < 32)
+        throw new BadRequestException('Webhook secret must be at least 32 characters');
       updates.push({ key: 'whatsapp_gateway_webhook_secret', val: payload.webhookSecret });
     }
-    if (payload.autoSendInvoice !== undefined) updates.push({ key: 'whatsapp_gateway_auto_invoice', val: payload.autoSendInvoice });
-    if (payload.autoSendOnlineOrder !== undefined) updates.push({ key: 'whatsapp_gateway_auto_order', val: payload.autoSendOnlineOrder });
-    if (payload.invoiceTemplate !== undefined) updates.push({ key: 'whatsapp_gateway_invoice_template', val: payload.invoiceTemplate });
-    if (payload.aiBotEnabled !== undefined) updates.push({ key: 'whatsapp_gateway_ai_bot_enabled', val: payload.aiBotEnabled });
-    if (payload.aiBotPrompt !== undefined) updates.push({ key: 'whatsapp_gateway_ai_bot_prompt', val: payload.aiBotPrompt });
-    if (payload.aiBotWelcomeMessage !== undefined) updates.push({ key: 'whatsapp_gateway_ai_bot_welcome', val: payload.aiBotWelcomeMessage });
-    if (payload.aiBotOffHoursOnly !== undefined) updates.push({ key: 'whatsapp_gateway_ai_bot_off_hours', val: payload.aiBotOffHoursOnly });
+    if (payload.autoSendInvoice !== undefined)
+      updates.push({ key: 'whatsapp_gateway_auto_invoice', val: payload.autoSendInvoice });
+    if (payload.autoSendOnlineOrder !== undefined)
+      updates.push({ key: 'whatsapp_gateway_auto_order', val: payload.autoSendOnlineOrder });
+    if (payload.invoiceTemplate !== undefined)
+      updates.push({ key: 'whatsapp_gateway_invoice_template', val: payload.invoiceTemplate });
+    if (payload.aiBotEnabled !== undefined)
+      updates.push({ key: 'whatsapp_gateway_ai_bot_enabled', val: payload.aiBotEnabled });
+    if (payload.aiBotPrompt !== undefined)
+      updates.push({ key: 'whatsapp_gateway_ai_bot_prompt', val: payload.aiBotPrompt });
+    if (payload.aiBotWelcomeMessage !== undefined)
+      updates.push({ key: 'whatsapp_gateway_ai_bot_welcome', val: payload.aiBotWelcomeMessage });
+    if (payload.aiBotOffHoursOnly !== undefined)
+      updates.push({ key: 'whatsapp_gateway_ai_bot_off_hours', val: payload.aiBotOffHoursOnly });
 
     for (const item of updates) {
       await sql`
@@ -201,17 +211,34 @@ export class WhatsAppGatewayService {
         code = row.value;
       }
     }
-    code = String(code || 'EGP').trim().toUpperCase();
+    code = String(code || 'EGP')
+      .trim()
+      .toUpperCase();
     const isThreeDec = code === 'KWD' || code === 'BHD' || code === 'OMR';
-    const symbol = code === 'KWD' ? 'د.ك' : code === 'SAR' ? 'ر.س' : code === 'AED' ? 'د.إ' : code === 'QAR' ? 'ر.ق' : code === 'BHD' ? 'د.ب' : code === 'OMR' ? 'ر.ع' : 'ج.م';
+    const symbol =
+      code === 'KWD'
+        ? 'د.ك'
+        : code === 'SAR'
+          ? 'ر.س'
+          : code === 'AED'
+            ? 'د.إ'
+            : code === 'QAR'
+              ? 'ر.ق'
+              : code === 'BHD'
+                ? 'د.ب'
+                : code === 'OMR'
+                  ? 'ر.ع'
+                  : 'ج.م';
     return { symbol, decimals: isThreeDec ? 3 : 2, code };
   }
 
-  private formatAmountWithCurrency(amount: number | string | undefined | null, curr: { symbol: string; decimals: number; code: string }): string {
+  private formatAmountWithCurrency(
+    amount: number | string | undefined | null,
+    curr: { symbol: string; decimals: number; code: string },
+  ): string {
     const num = Number(amount || 0);
-    const formatted = curr.decimals === 3
-      ? num.toFixed(3)
-      : (curr.code === 'EGP' && num % 1 === 0 ? num.toFixed(0) : num.toFixed(2));
+    const formatted =
+      curr.decimals === 3 ? num.toFixed(3) : curr.code === 'EGP' && num % 1 === 0 ? num.toFixed(0) : num.toFixed(2);
     return `${formatted} ${curr.symbol}`;
   }
 
@@ -229,7 +256,11 @@ export class WhatsAppGatewayService {
     return this.sendRawMessage(tenantId, phone, testText);
   }
 
-  async sendInvoiceNotification(saleId: number, actor: AuthContext, options?: { autoOnly?: boolean }): Promise<{ success: boolean; message?: string }> {
+  async sendInvoiceNotification(
+    saleId: number,
+    actor: AuthContext,
+    options?: { autoOnly?: boolean },
+  ): Promise<{ success: boolean; message?: string }> {
     const { tenantId } = requireTenantScope(actor);
 
     const cfg = await this.getRawConfig(tenantId);
@@ -266,7 +297,8 @@ export class WhatsAppGatewayService {
 
     const curr = await this.getTenantCurrencyInfo(tenantId);
 
-    let template = cfg.whatsapp_gateway_invoice_template ||
+    let template =
+      cfg.whatsapp_gateway_invoice_template ||
       'مرحباً بك يا {customerName} في {businessName}، يسعدنا تسوقك معنا! يمكنك استعراض فاتورتك رقم #{invoiceNo} بقيمة {totalAmount} عبر الرابط التالي: {invoiceLink}';
 
     const customerName = customer?.name || 'عميلنا العزيز';
@@ -376,16 +408,18 @@ export class WhatsAppGatewayService {
     const counted = this.formatAmountWithCurrency(shift.counted_cash, curr);
     const expected = this.formatAmountWithCurrency(shift.expected_cash, curr);
     const varianceVal = Number(shift.variance || 0);
-    const varianceText = varianceVal === 0
-      ? `متطابق تماماً (0 ${curr.symbol})`
-      : varianceVal > 0
-        ? `زيادة بمقدار +${this.formatAmountWithCurrency(varianceVal, curr)} 🟢`
-        : `عجز بمقدار ${this.formatAmountWithCurrency(Math.abs(varianceVal), curr)} 🔴`;
+    const varianceText =
+      varianceVal === 0
+        ? `متطابق تماماً (0 ${curr.symbol})`
+        : varianceVal > 0
+          ? `زيادة بمقدار +${this.formatAmountWithCurrency(varianceVal, curr)} 🟢`
+          : `عجز بمقدار ${this.formatAmountWithCurrency(Math.abs(varianceVal), curr)} 🔴`;
 
     const closeNote = shift.close_note ? `\n📝 ملاحظة: ${shift.close_note}` : '';
     const closeTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
 
-    const msg = `🔔 *إشعار إغلاق وردية كاشير - ${businessName}*\n\n` +
+    const msg =
+      `🔔 *إشعار إغلاق وردية كاشير - ${businessName}*\n\n` +
       `📍 *الفرع:* ${branchName}\n` +
       `👤 *الكاشير:* ${cashierName}\n` +
       `🔢 *رقم الوردية:* ${docNo}\n` +
@@ -400,7 +434,13 @@ export class WhatsAppGatewayService {
     return { success: true };
   }
 
-  async sendRefundNotification(docNo: string, amount: number, reason: string, tenantId: string, authorName: string): Promise<{ success: boolean; message?: string }> {
+  async sendRefundNotification(
+    docNo: string,
+    amount: number,
+    reason: string,
+    tenantId: string,
+    authorName: string,
+  ): Promise<{ success: boolean; message?: string }> {
     const cfg = await this.getRawConfig(tenantId);
     if (!cfg.whatsapp_gateway_enabled) {
       return { success: false, message: 'بوابة الواتساب غير مفعلة' };
@@ -420,7 +460,8 @@ export class WhatsAppGatewayService {
     const formattedAmount = this.formatAmountWithCurrency(amount, curr);
     const time = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
 
-    const msg = `⚠️ *تنبيه عملية مرتجع مبيعات - ${businessName}*\n\n` +
+    const msg =
+      `⚠️ *تنبيه عملية مرتجع مبيعات - ${businessName}*\n\n` +
       `📄 *رقم المرتجع:* #${docNo}\n` +
       `💰 *المبلغ المسترد للعميل:* ${formattedAmount}\n` +
       `👤 *الموظف المنفذ:* ${authorName}\n` +
@@ -432,15 +473,28 @@ export class WhatsAppGatewayService {
     return { success: true };
   }
 
-  async handleVerifiedInboundWebhook(payload: any, tenantId: string | undefined, signature: string | undefined, rawBody: Buffer | undefined) {
+  async handleVerifiedInboundWebhook(
+    payload: any,
+    tenantId: string | undefined,
+    signature: string | undefined,
+    rawBody: Buffer | undefined,
+  ) {
     if (!tenantId || !signature || !rawBody) throw new ForbiddenException('Webhook authentication required');
-    const setting = await this.db.selectFrom('settings').select('value')
-      .where('tenant_id', '=', tenantId).where('key', '=', 'whatsapp_gateway_webhook_secret')
+    const setting = await this.db
+      .selectFrom('settings')
+      .select('value')
+      .where('tenant_id', '=', tenantId)
+      .where('key', '=', 'whatsapp_gateway_webhook_secret')
       .executeTakeFirst();
     if (!setting) throw new ForbiddenException('Webhook authentication required');
     let secret: string;
-    try { secret = JSON.parse(setting.value); } catch { secret = setting.value; }
-    if (typeof secret !== 'string' || secret.length < 32) throw new ForbiddenException('Webhook authentication required');
+    try {
+      secret = JSON.parse(setting.value);
+    } catch {
+      secret = setting.value;
+    }
+    if (typeof secret !== 'string' || secret.length < 32)
+      throw new ForbiddenException('Webhook authentication required');
     const supplied = signature.replace(/^sha256=/i, '');
     if (!/^[a-f0-9]{64}$/i.test(supplied)) throw new ForbiddenException('Invalid webhook signature');
     const expected = crypto.createHmac('sha256', secret).update(rawBody).digest();
@@ -450,7 +504,10 @@ export class WhatsAppGatewayService {
     return this.handleInboundWebhook(payload, tenantId);
   }
 
-  async handleInboundWebhook(payload: any, trustedTenantId?: string): Promise<{
+  async handleInboundWebhook(
+    payload: any,
+    trustedTenantId?: string,
+  ): Promise<{
     handled: boolean;
     reply?: string;
     to?: string;
@@ -468,7 +525,9 @@ export class WhatsAppGatewayService {
     }
     // GreenAPI format
     else if (payload?.typeWebhook === 'incomingMessageReceived') {
-      messageText = String(payload?.messageData?.textMessageData?.textMessage || payload?.messageData?.extendedTextMessageData?.text || '');
+      messageText = String(
+        payload?.messageData?.textMessageData?.textMessage || payload?.messageData?.extendedTextMessageData?.text || '',
+      );
       fromPhone = String(payload?.senderData?.sender || '');
     }
     // Meta Cloud API format
@@ -487,7 +546,10 @@ export class WhatsAppGatewayService {
       return { handled: false, message: 'لا توجد بيانات رسالة أو رقم هاتف في الطلب' };
     }
 
-    fromPhone = fromPhone.replace('@c.us', '').replace('@s.whatsapp.net', '').replace(/[^0-9]/g, '');
+    fromPhone = fromPhone
+      .replace('@c.us', '')
+      .replace('@s.whatsapp.net', '')
+      .replace(/[^0-9]/g, '');
 
     // 2. Resolve Tenant
     const resolvedTenantId = trustedTenantId;

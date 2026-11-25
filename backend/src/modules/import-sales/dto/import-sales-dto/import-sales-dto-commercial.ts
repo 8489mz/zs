@@ -7,7 +7,6 @@ export class VerifyBankDetailsDto {
   verificationNotes?: string;
 }
 
-
 export class CreateQuotationDto {
   @IsOptional()
   @IsString()

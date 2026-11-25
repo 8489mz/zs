@@ -26,11 +26,12 @@ export class StorefrontMediaService {
     if (isImageDataUrl(raw)) {
       const parsed = parseImageDataUrl(raw);
       if (!parsed.ok) {
-        const message = parsed.reason === 'TOO_LARGE'
-          ? 'حجم الصورة أكبر من المسموح (2 ميجابايت)'
-          : parsed.reason === 'UNSUPPORTED_TYPE'
-          ? 'نوع الصورة غير مدعوم (المسموح: WebP أو JPEG أو PNG)'
-          : 'ملف الصورة غير صالح';
+        const message =
+          parsed.reason === 'TOO_LARGE'
+            ? 'حجم الصورة أكبر من المسموح (2 ميجابايت)'
+            : parsed.reason === 'UNSUPPORTED_TYPE'
+              ? 'نوع الصورة غير مدعوم (المسموح: WebP أو JPEG أو PNG)'
+              : 'ملف الصورة غير صالح';
         throw new BadRequestException(message);
       }
       const { mime, bytes, sha256 } = parsed.image;

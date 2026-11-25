@@ -33,11 +33,7 @@ export function extractCoordinatesFromCustomerLocation(input: {
   }
 
   const rawUrl = String(
-    input.locationUrl ||
-      metaObj?.location_url ||
-      metaObj?.locationUrl ||
-      metaObj?.google_maps_url ||
-      '',
+    input.locationUrl || metaObj?.location_url || metaObj?.locationUrl || metaObj?.google_maps_url || '',
   ).trim();
   if (!rawUrl) return null;
 
@@ -50,7 +46,9 @@ export function extractCoordinatesFromCustomerLocation(input: {
   }
 
   // Pattern 2: ?q=lat,lng or &q=lat,lng or query=lat,lng or ll=lat,lng or destination=lat,lng
-  const queryMatch = rawUrl.match(/(?:[?&](?:q|query|ll|center|daddr|saddr|destination)=)(-?\d+(?:\.\d+)?)\s*(?:,|%2C)\s*(-?\d+(?:\.\d+)?)/i);
+  const queryMatch = rawUrl.match(
+    /(?:[?&](?:q|query|ll|center|daddr|saddr|destination)=)(-?\d+(?:\.\d+)?)\s*(?:,|%2C)\s*(-?\d+(?:\.\d+)?)/i,
+  );
   if (queryMatch) {
     const lat = Number(queryMatch[1]);
     const lng = Number(queryMatch[2]);
@@ -79,12 +77,7 @@ export function extractCoordinatesFromCustomerLocation(input: {
 /**
  * Calculates great-circle distance in meters between two GPS coordinates using Haversine formula.
  */
-export function calculateHaversineDistanceMeters(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number,
-): number {
+export function calculateHaversineDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000; // Earth radius in meters
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);

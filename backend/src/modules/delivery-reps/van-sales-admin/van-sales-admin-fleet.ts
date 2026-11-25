@@ -3,9 +3,7 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { VanSalesService } from '../van-sales.service';
 
 export class VanSalesAdminFleetSlice {
-  constructor(
-    private readonly vanSalesService: VanSalesService,
-  ) {}
+  constructor(private readonly vanSalesService: VanSalesService) {}
 
   async listVehicles(req: RequestWithAuth) {
     const { tenantId } = requireTenantScope(req.authContext!);
@@ -57,24 +55,14 @@ export class VanSalesAdminFleetSlice {
     return { ok: true, vehicles };
   }
 
-  async assignRep(
-    req: RequestWithAuth,
-    id: number,
-    body: { repId: number | null; shiftName?: string },
-  ) {
+  async assignRep(req: RequestWithAuth, id: number, body: { repId: number | null; shiftName?: string }) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const vehicles = await this.vanSalesService.assignVehicleRep(tenantId, id, body.repId, body.shiftName);
     return { ok: true, vehicles };
   }
 
   // Returns Management Endpoints
-  async listReturns(
-    req: RequestWithAuth,
-    status?: string,
-    repId?: string,
-    tripId?: string,
-    customerId?: string,
-  ) {
+  async listReturns(req: RequestWithAuth, status?: string, repId?: string, tripId?: string, customerId?: string) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const returns = await this.vanSalesService.listFieldReturns(tenantId, {
       status,
@@ -85,31 +73,21 @@ export class VanSalesAdminFleetSlice {
     return { ok: true, returns };
   }
 
-  async approveReturn(
-    req: RequestWithAuth,
-    id: number,
-  ) {
+  async approveReturn(req: RequestWithAuth, id: number) {
     const { tenantId, accountId } = requireTenantScope(req.authContext!);
     const userId = req.authContext!.userId;
     const res = await this.vanSalesService.approveFieldReturn(tenantId, accountId, id, userId);
     return res;
   }
 
-  async rejectReturn(
-    req: RequestWithAuth,
-    id: number,
-    body: { reason?: string },
-  ) {
+  async rejectReturn(req: RequestWithAuth, id: number, body: { reason?: string }) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const userId = req.authContext!.userId;
     const res = await this.vanSalesService.rejectFieldReturn(tenantId, id, body.reason || '', userId);
     return res;
   }
 
-  async getAdminAvailableProducts(
-    req: RequestWithAuth,
-    warehouseId?: string,
-  ) {
+  async getAdminAvailableProducts(req: RequestWithAuth, warehouseId?: string) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const parsedWhId = warehouseId && warehouseId !== 'all' ? Number(warehouseId) : undefined;
     const products = await this.vanSalesService.getDriverAvailableProducts(tenantId, parsedWhId);
@@ -117,11 +95,7 @@ export class VanSalesAdminFleetSlice {
   }
 
   // Requisitions Management Endpoints
-  async listAdminRequisitions(
-    req: RequestWithAuth,
-    status?: string,
-    repId?: string,
-  ) {
+  async listAdminRequisitions(req: RequestWithAuth, status?: string, repId?: string) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const requisitions = await this.vanSalesService.listLoadRequisitions(tenantId, {
       status,
@@ -159,35 +133,31 @@ export class VanSalesAdminFleetSlice {
     body: { approvedItems: { productId: number; qty: number }[]; notes?: string; sourceWarehouseId?: number },
   ) {
     const { tenantId } = requireTenantScope(req.authContext!);
-    const res = await this.vanSalesService.reviewLoadRequisition(tenantId, id, body.approvedItems, body.notes, body.sourceWarehouseId);
+    const res = await this.vanSalesService.reviewLoadRequisition(
+      tenantId,
+      id,
+      body.approvedItems,
+      body.notes,
+      body.sourceWarehouseId,
+    );
     return res;
   }
 
-  async dispatchRequisition(
-    req: RequestWithAuth,
-    id: number,
-  ) {
+  async dispatchRequisition(req: RequestWithAuth, id: number) {
     const { tenantId, accountId } = requireTenantScope(req.authContext!);
     const userId = req.authContext!.userId;
     const res = await this.vanSalesService.approveAndDispatchRequisition(tenantId, accountId, id, userId);
     return res;
   }
 
-  async rejectRequisition(
-    req: RequestWithAuth,
-    id: number,
-    body: { reason?: string },
-  ) {
+  async rejectRequisition(req: RequestWithAuth, id: number, body: { reason?: string }) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const userId = req.authContext!.userId;
     const res = await this.vanSalesService.rejectLoadRequisition(tenantId, id, body.reason || '', userId);
     return res;
   }
 
-  async deleteRequisition(
-    req: RequestWithAuth,
-    id: number,
-  ) {
+  async deleteRequisition(req: RequestWithAuth, id: number) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const res = await this.vanSalesService.deleteLoadRequisition(tenantId, id);
     return res;

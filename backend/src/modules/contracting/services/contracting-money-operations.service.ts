@@ -48,10 +48,7 @@ export class ContractingMoneyOperationsService {
 
   async getRetentionRecords(auth: AuthContext, query?: { projectId?: string; status?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any)
-      .selectFrom('contracting_retention_records')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let q = (this.db as any).selectFrom('contracting_retention_records').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.projectId && query.projectId !== 'all') {
       q = q.where('project_id', '=', query.projectId as any);
@@ -144,10 +141,7 @@ export class ContractingMoneyOperationsService {
 
   async getPaymentHolds(auth: AuthContext, query?: { projectId?: string; isReleased?: boolean }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any)
-      .selectFrom('contracting_payment_holds')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let q = (this.db as any).selectFrom('contracting_payment_holds').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.projectId && query.projectId !== 'all') {
       q = q.where('project_id', '=', query.projectId as any);
@@ -220,10 +214,7 @@ export class ContractingMoneyOperationsService {
 
   async getSupplierReturns(auth: AuthContext, query?: { projectId?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any)
-      .selectFrom('contracting_supplier_returns')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let q = (this.db as any).selectFrom('contracting_supplier_returns').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.projectId && query.projectId !== 'all') {
       q = q.where('project_id', '=', query.projectId as any);
@@ -258,7 +249,10 @@ export class ContractingMoneyOperationsService {
     const prefix = getDailyDocumentPrefix('RTN', undefined, businessTz);
     const tempNumber = `RTN-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
-    const totalAmount = dto.items.reduce((sum: number, it: any) => sum + Number(it.totalAmount || Number(it.quantity) * Number(it.unitCost)), 0);
+    const totalAmount = dto.items.reduce(
+      (sum: number, it: any) => sum + Number(it.totalAmount || Number(it.quantity) * Number(it.unitCost)),
+      0,
+    );
 
     const values: any = {
       tenant_id: tenantId,
@@ -305,10 +299,7 @@ export class ContractingMoneyOperationsService {
 
   async getLaborAttendance(auth: AuthContext, query?: { projectId?: string; workDate?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any)
-      .selectFrom('contracting_labor_attendance')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let q = (this.db as any).selectFrom('contracting_labor_attendance').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.projectId && query.projectId !== 'all') {
       q = q.where('project_id', '=', query.projectId as any);
@@ -341,7 +332,7 @@ export class ContractingMoneyOperationsService {
     const { tenantId } = requireTenantScope(auth);
     const hours = Number(dto.hoursWorked || 8);
     const dailyRate = Number(dto.dailyRate || 0);
-    const totalWage = Math.round((dailyRate * (hours / 8)) * 100) / 100;
+    const totalWage = Math.round(dailyRate * (hours / 8) * 100) / 100;
 
     const [inserted] = await (this.db as any)
       .insertInto('contracting_labor_attendance')
@@ -368,10 +359,7 @@ export class ContractingMoneyOperationsService {
 
   async getPettyCashRecords(auth: AuthContext, query?: { projectId?: string; status?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any)
-      .selectFrom('contracting_petty_cash')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let q = (this.db as any).selectFrom('contracting_petty_cash').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.projectId && query.projectId !== 'all') {
       q = q.where('project_id', '=', query.projectId as any);
@@ -414,7 +402,7 @@ export class ContractingMoneyOperationsService {
 
     if (activeCustody) {
       throw new BadRequestException(
-        `لا يمكن صرف عهدة نقدية جديدة للمهندس/المشرف (${dto.custodianName}) لوجود عهدة نشطة سابقة برقم (${activeCustody.disbursement_number}) بمبلغ متبقي (${activeCustody.remaining_balance} ر.س) لم يتم تسويتها وإغلاقها بعد.`
+        `لا يمكن صرف عهدة نقدية جديدة للمهندس/المشرف (${dto.custodianName}) لوجود عهدة نشطة سابقة برقم (${activeCustody.disbursement_number}) بمبلغ متبقي (${activeCustody.remaining_balance} ر.س) لم يتم تسويتها وإغلاقها بعد.`,
       );
     }
 

@@ -130,16 +130,21 @@ export function evaluateFmcgCartPromotions(params: {
   const qtyByProduct = new Map<number, { totalQty: number; name: string; unitPrice: number }>();
   for (const item of nonBonusItems) {
     const pid = Number(item.productId);
-    const existing = qtyByProduct.get(pid) || { totalQty: 0, name: item.productName || `صنف #${pid}`, unitPrice: item.unitPrice };
+    const existing = qtyByProduct.get(pid) || {
+      totalQty: 0,
+      name: item.productName || `صنف #${pid}`,
+      unitPrice: item.unitPrice,
+    };
     const effectiveQty = item.qty * (item.multiplier && item.multiplier > 0 ? item.multiplier : 1);
     existing.totalQty += effectiveQty;
     qtyByProduct.set(pid, existing);
   }
 
   // Calculate clean subtotal
-  const computedSubtotal = params.invoiceSubtotal !== undefined && params.invoiceSubtotal !== null
-    ? Number(params.invoiceSubtotal)
-    : nonBonusItems.reduce((acc, it) => acc + (it.qty * it.unitPrice), 0);
+  const computedSubtotal =
+    params.invoiceSubtotal !== undefined && params.invoiceSubtotal !== null
+      ? Number(params.invoiceSubtotal)
+      : nonBonusItems.reduce((acc, it) => acc + it.qty * it.unitPrice, 0);
 
   // The reference day is a business day (INV-BUSINESS-DATE-TENANT-LOCAL):
   // the UTC day is the wrong day around local midnight (a promo starting
@@ -149,7 +154,9 @@ export function evaluateFmcgCartPromotions(params: {
   // day string, and the env fallback covers pure-engine callers.
   const businessTz = params.businessTimezone ?? (process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
   const refDateStr = params.referenceDate
-    ? (typeof params.referenceDate === 'string' ? params.referenceDate.slice(0, 10) : todayTenantDate(businessTz, params.referenceDate))
+    ? typeof params.referenceDate === 'string'
+      ? params.referenceDate.slice(0, 10)
+      : todayTenantDate(businessTz, params.referenceDate)
     : todayTenantDate(businessTz);
 
   const appliedPromotions: AppliedPromotionReward[] = [];
@@ -168,7 +175,12 @@ export function evaluateFmcgCartPromotions(params: {
     if (promo.endDate && promo.endDate < refDateStr) continue;
 
     // 2. Check Customer Type
-    if (promo.customerTypes && Array.isArray(promo.customerTypes) && promo.customerTypes.length > 0 && !promo.customerTypes.includes('all')) {
+    if (
+      promo.customerTypes &&
+      Array.isArray(promo.customerTypes) &&
+      promo.customerTypes.length > 0 &&
+      !promo.customerTypes.includes('all')
+    ) {
       const cType = params.customerType || 'regular';
       if (!promo.customerTypes.includes(cType)) continue;
     }
@@ -253,9 +265,7 @@ export function evaluateFmcgCartPromotions(params: {
         });
       } else if (hasAtLeastOneItem && missingConditions.length > 0) {
         // Nudge upsell
-        const missingDesc = missingConditions
-          .map((m) => `${m.neededQty} ${m.productName}`)
-          .join(' و ');
+        const missingDesc = missingConditions.map((m) => `${m.neededQty} ${m.productName}`).join(' و ');
         upsellNudges.push({
           promoId: promo.id,
           promoName: promo.name,
@@ -325,11 +335,13 @@ export function evaluateFmcgCartPromotions(params: {
           promoId: promo.id,
           promoName: promo.name,
           hintText: `أضف ${needed} قطعة إضافية من ${itemInCart?.name || cond.productName || 'الصنف'} للاستفادة من ${promo.name}`,
-          missingItems: [{
-            productId: pid,
-            productName: itemInCart?.name || cond.productName,
-            neededQty: needed,
-          }],
+          missingItems: [
+            {
+              productId: pid,
+              productName: itemInCart?.name || cond.productName,
+              neededQty: needed,
+            },
+          ],
         });
       }
     } else if (promo.promoType === 'invoice_threshold') {

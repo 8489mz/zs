@@ -1,4 +1,15 @@
-import { Controller, ForbiddenException, Get, Post, Delete, Body, Param, Req, UseGuards, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Param,
+  Req,
+  UseGuards,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
@@ -17,9 +28,13 @@ export class AiCopilotController {
 
   private assertCanManageAiSettings(req: RequestWithAuth): void {
     const auth = req.authContext;
-    if (!auth || (auth.role !== 'admin' && auth.role !== 'super_admin'
-      && !auth.permissions?.includes('settings')
-      && !auth.permissions?.includes('canManageSettings'))) {
+    if (
+      !auth ||
+      (auth.role !== 'admin' &&
+        auth.role !== 'super_admin' &&
+        !auth.permissions?.includes('settings') &&
+        !auth.permissions?.includes('canManageSettings'))
+    ) {
       throw new ForbiddenException('Missing settings management permission');
     }
   }
@@ -82,12 +97,7 @@ export class AiCopilotController {
     const { tenantId } = requireTenantScope(actor);
     const aiConfig = await this.copilotService.getEffectiveAiConfig(tenantId);
 
-    return this.knowledgeService.addSource(
-      body,
-      actor,
-      aiConfig.apiKey?.trim(),
-      aiConfig.provider,
-    );
+    return this.knowledgeService.addSource(body, actor, aiConfig.apiKey?.trim(), aiConfig.provider);
   }
 
   /**
@@ -115,20 +125,13 @@ export class AiCopilotController {
     const { tenantId } = requireTenantScope(actor);
     const aiConfig = await this.copilotService.getEffectiveAiConfig(tenantId);
 
-    return this.knowledgeService.autoIndexProducts(
-      actor,
-      aiConfig.apiKey?.trim(),
-      aiConfig.provider,
-    );
+    return this.knowledgeService.autoIndexProducts(actor, aiConfig.apiKey?.trim(), aiConfig.provider);
   }
 
   // --- Legacy Endpoints for Backwards Compatibility ---
 
   @Post('ask')
-  ask(
-    @Body('question') question: string,
-    @Req() req: RequestWithAuth,
-  ): Promise<CopilotResponse> {
+  ask(@Body('question') question: string, @Req() req: RequestWithAuth): Promise<CopilotResponse> {
     return this.copilotService.ask(question, req.authContext!);
   }
 
@@ -183,10 +186,7 @@ export class AiCopilotController {
   }
 
   @Post('simulate-bot')
-  simulateBot(
-    @Body('question') question: string,
-    @Req() req: RequestWithAuth,
-  ) {
+  simulateBot(@Body('question') question: string, @Req() req: RequestWithAuth) {
     const { tenantId } = requireTenantScope(req.authContext!);
     return this.copilotService.generateSalesBotReply({
       question,

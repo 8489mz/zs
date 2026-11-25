@@ -15,7 +15,14 @@ export class AiCopilotSalesBot {
         model: string;
         baseUrl?: string;
       }>;
-      askOpenAiSalesBot: (customerMessage: string, products: Array<{ name: string; price: number; stock: number; color?: string | null; size?: string | null }>, businessInfo: { name: string; currency: string; storefrontUrl?: string; customPrompt?: string }, apiKey: string, model?: string, baseUrl?: string) => Promise<string | null>;
+      askOpenAiSalesBot: (
+        customerMessage: string,
+        products: Array<{ name: string; price: number; stock: number; color?: string | null; size?: string | null }>,
+        businessInfo: { name: string; currency: string; storefrontUrl?: string; customPrompt?: string },
+        apiKey: string,
+        model?: string,
+        baseUrl?: string,
+      ) => Promise<string | null>;
     },
   ) {}
 
@@ -71,7 +78,11 @@ export class AiCopilotSalesBot {
 
     let customPrompt = '';
     if (promptRow?.value) {
-      try { customPrompt = JSON.parse(promptRow.value); } catch { customPrompt = promptRow.value; }
+      try {
+        customPrompt = JSON.parse(promptRow.value);
+      } catch {
+        customPrompt = promptRow.value;
+      }
     }
 
     // 3. Fetch active catalog products
@@ -146,15 +157,11 @@ export class AiCopilotSalesBot {
     }
 
     // Fallback to local smart sales responder
-    const localReply = this.runLocalSalesResponder(
-      q,
-      products,
-      {
-        name: businessName,
-        currency: 'ج.م',
-        storefrontUrl,
-      },
-    );
+    const localReply = this.runLocalSalesResponder(q, products, {
+      name: businessName,
+      currency: 'ج.م',
+      storefrontUrl,
+    });
 
     return {
       reply: localReply,
@@ -169,9 +176,13 @@ export class AiCopilotSalesBot {
     businessInfo: { name: string; currency: string; storefrontUrl?: string; customPrompt?: string; model?: string },
     apiKey: string,
   ): Promise<string | null> {
-    const catalogText = products.slice(0, 45).map((p, idx) =>
-      `${idx + 1}. ${p.name} | السعر: ${p.price} ${businessInfo.currency} | المتوفر بالمخزن: ${p.stock > 0 ? p.stock + ' قطعة' : 'غير متوفر حالياً'}${p.color ? ' | اللون: ' + p.color : ''}${p.size ? ' | المقاس: ' + p.size : ''}`
-    ).join('\n');
+    const catalogText = products
+      .slice(0, 45)
+      .map(
+        (p, idx) =>
+          `${idx + 1}. ${p.name} | السعر: ${p.price} ${businessInfo.currency} | المتوفر بالمخزن: ${p.stock > 0 ? p.stock + ' قطعة' : 'غير متوفر حالياً'}${p.color ? ' | اللون: ' + p.color : ''}${p.size ? ' | المقاس: ' + p.size : ''}`,
+      )
+      .join('\n');
 
     const prompt = `أنت المساعد الذكي لمبيعات وخدمة عملاء متجر "${businessInfo.name}".
 مهمتك: الرد على استفسار الزبون على تطبيق واتساب بأسلوب لطيف ومحترف باللهجة العربية/المصرية السلسة والمحترمة.
@@ -259,7 +270,10 @@ ${businessInfo.customPrompt ? `تعليمات التاجر الإضافية: ${b
     if (matched.length > 0) {
       const top = matched.slice(0, 3);
       const itemsList = top
-        .map((p) => `• *${p.name}*: سعره ${p.price} ${businessInfo.currency} (${p.stock > 0 ? `متوفر ${p.stock} قطعة` : 'غير متوفر حالياً'})`)
+        .map(
+          (p) =>
+            `• *${p.name}*: سعره ${p.price} ${businessInfo.currency} (${p.stock > 0 ? `متوفر ${p.stock} قطعة` : 'غير متوفر حالياً'})`,
+        )
         .join('\n');
       return `أهلاً بك يا فندم في ${businessInfo.name}! 🌟\n\nبخصوص استفسارك، إليك المنتجات المتوفرة:\n${itemsList}\n\n${businessInfo.storefrontUrl ? `تقدر تطلب أونلاين مباشرة عبر متجرنا: ${businessInfo.storefrontUrl}\n` : ''}لو محتاج أي مساعدة في الطلب أنا تحت أمرك!`;
     }

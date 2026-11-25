@@ -15,8 +15,13 @@ import { SaasDiagnosticsService } from './saas-diagnostics.service';
 @Module({
   imports: [DatabaseModule, AuthFoundationModule, AuditModule, SettingsModule],
   controllers: [SaasAdminController, DeveloperController, SaasDiagnosticsController],
-  providers: [SaasAdminService, TrialTenantProvisioningService, SaasDiagnosticsService, InMemoryRateLimitService, DiagnosticsUploadRateLimitGuard],
+  providers: [
+    SaasAdminService,
+    TrialTenantProvisioningService,
+    SaasDiagnosticsService,
+    InMemoryRateLimitService,
+    DiagnosticsUploadRateLimitGuard,
+  ],
   exports: [TrialTenantProvisioningService, SaasDiagnosticsService],
 })
 export class SaasAdminModule {}
-

@@ -70,7 +70,7 @@ export class ContractingBoqService {
       contractQty: Number(r.contract_qty ?? 0),
       revisedQty: Number(r.revised_qty ?? r.contract_qty ?? 0),
       unitPrice: Number(r.unit_price ?? 0),
-      totalPrice: Number(r.total_price ?? (Number(r.contract_qty ?? 0) * Number(r.unit_price ?? 0))),
+      totalPrice: Number(r.total_price ?? Number(r.contract_qty ?? 0) * Number(r.unit_price ?? 0)),
       estimatedUnitCost: Number(r.estimated_unit_cost ?? 0),
       executedQty: Number(r.executed_qty ?? 0),
       notes: r.notes,
@@ -250,7 +250,8 @@ export class ContractingBoqService {
         revised_qty: contractQty,
         unit_price: unitPrice,
         total_price: totalPrice,
-        estimated_unit_cost: dto.estimatedUnitCost !== undefined ? Number(dto.estimatedUnitCost) : existing.estimated_unit_cost,
+        estimated_unit_cost:
+          dto.estimatedUnitCost !== undefined ? Number(dto.estimatedUnitCost) : existing.estimated_unit_cost,
         notes: dto.notes !== undefined ? dto.notes : existing.notes,
         updated_at: new Date(),
       })
@@ -358,7 +359,7 @@ export class ContractingBoqService {
       .updateTable('contracting_change_orders')
       .set({
         status: dto.status,
-        approved_by: dto.status === 'approved' ? (auth.username || 'الإدارة') : null,
+        approved_by: dto.status === 'approved' ? auth.username || 'الإدارة' : null,
         approved_at: dto.status === 'approved' ? new Date() : null,
         notes: dto.notes ? `${co.notes || ''}\n${dto.notes}`.trim() : co.notes,
         updated_at: new Date(),
@@ -434,8 +435,16 @@ export class ContractingBoqService {
     const project = await this.getProjectById(auth, projectId);
     const boqItems = await this.getBoqItems(auth, projectId);
 
-    const totalBudgetCost = (boqItems as any[]).reduce((acc: number, it: any) => acc + Number(it.estimated_unit_cost || it.estimatedUnitCost || 0) * Number(it.contract_qty || it.contractQty || 0), 0);
-    const totalContractValue = (boqItems as any[]).reduce((acc: number, it: any) => acc + Number(it.total_price || it.totalPrice || 0), 0);
+    const totalBudgetCost = (boqItems as any[]).reduce(
+      (acc: number, it: any) =>
+        acc +
+        Number(it.estimated_unit_cost || it.estimatedUnitCost || 0) * Number(it.contract_qty || it.contractQty || 0),
+      0,
+    );
+    const totalContractValue = (boqItems as any[]).reduce(
+      (acc: number, it: any) => acc + Number(it.total_price || it.totalPrice || 0),
+      0,
+    );
 
     const [inserted] = await (this.db as any)
       .insertInto('contracting_cost_snapshots')

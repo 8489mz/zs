@@ -112,7 +112,10 @@ export function buildDynamicPivotMatrix(input: PivotEngineInput): PivotResult {
   // row percents — a grouped report would lie otherwise. Every record
   // therefore accumulates BOTH sums, and the percent is derived from
   // the group's own sums at cell, row, column and grand level.
-  const cellAccumulators: Record<string, Record<string, { sum: number; count: number; profitSum: number; amountSum: number }>> = {};
+  const cellAccumulators: Record<
+    string,
+    Record<string, { sum: number; count: number; profitSum: number; amountSum: number }>
+  > = {};
   const rowAccumulators: Record<string, { sum: number; count: number; profitSum: number; amountSum: number }> = {};
   const colAccumulators: Record<string, { sum: number; count: number; profitSum: number; amountSum: number }> = {};
   let grandSum = 0;

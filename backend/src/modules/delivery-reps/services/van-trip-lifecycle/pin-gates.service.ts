@@ -17,7 +17,7 @@ export class VanTripPinGatesService {
     return this.db as any;
   }
 
-/**
+  /**
    * Verifies a supervisor approval secret via the ONE shared
    * manager-approval rule (INV-SPIRIT-MANAGER-APPROVAL-SHARED /
    * INV-VAN-SUPERVISOR-PIN-AUTHORIZED): the shared manager PIN from
@@ -194,7 +194,7 @@ export class VanTripPinGatesService {
     };
   }
 
-/**
+  /**
    * Checks whether the tenant requires supervisor PIN authorization for settling van trips.
    * Configurable via system settings (vanSettlementRequireSupervisorPin).
    * INV-VAN-SELF-SETTLE-PIN-REQUIRED: the PIN is required by DEFAULT
@@ -225,7 +225,7 @@ export class VanTripPinGatesService {
     }
   }
 
-/**
+  /**
    * Checks whether the tenant enforces blind cash settlement for van trips.
    * In blind settlement mode, expected cash target and breakdown are hidden from the representative,
    * requiring physical cash counting without target confirmation.
@@ -237,10 +237,7 @@ export class VanTripPinGatesService {
       .select(['value'])
       .where('tenant_id', '=', tenantId)
       .where((eb: any) =>
-        eb.or([
-          eb('key', '=', 'vanSettlementBlindMode'),
-          eb('key', '=', 'van_settlement_blind_mode'),
-        ]),
+        eb.or([eb('key', '=', 'vanSettlementBlindMode'), eb('key', '=', 'van_settlement_blind_mode')]),
       )
       .executeTakeFirst();
     if (!row?.value) return false;

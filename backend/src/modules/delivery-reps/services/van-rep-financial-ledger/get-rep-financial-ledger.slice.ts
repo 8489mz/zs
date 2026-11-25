@@ -1,7 +1,11 @@
 import { sql } from '../../../../database/kysely';
 import { normalizePgDateOnly } from '../../../../common/utils/tenant-timezone.util';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
+import {
+  currencyMoneyDigits,
+  roundMoney,
+  type MoneyDigits,
+} from '../../../accounting/engines/money-minor-units.engine';
 import type { VanRepFinancialLedgerDeps } from './van-rep-financial-ledger.types';
 
 export class GetRepFinancialLedgerSlice {
@@ -89,22 +93,27 @@ export class GetRepFinancialLedgerSlice {
       repId: Number(r.repId || r.rep_id || r.repid || 0),
       repName: String(r.repName || r.rep_name || r.repname || ''),
       repPhone: r.repPhone || r.rep_phone || r.repphone || undefined,
-      employeeId: (r.employeeId || r.employee_id || r.employeeid) ? Number(r.employeeId || r.employee_id || r.employeeid) : null,
+      employeeId:
+        r.employeeId || r.employee_id || r.employeeid ? Number(r.employeeId || r.employee_id || r.employeeid) : null,
       employeeName: r.employeeName || r.employee_name || r.employeename || null,
       employeeNo: r.employeeNo || r.employee_no || r.employeeno || null,
-      tripId: (r.tripId || r.trip_id || r.tripid) ? Number(r.tripId || r.trip_id || r.tripid) : null,
+      tripId: r.tripId || r.trip_id || r.tripid ? Number(r.tripId || r.trip_id || r.tripid) : null,
       shiftName: r.shiftName || r.shift_name || r.shiftname || null,
       vehiclePlate: r.vehiclePlate || r.vehicle_plate || r.vehicleplate || null,
       entryType: String(r.entryType || r.entry_type || r.entrytype || ''),
       amount: Number(r.amount || 0),
       status: String(r.status || 'pending'),
       settledAt: r.settledAt || r.settled_at || r.settledat || null,
-      settledById: (r.settledById || r.settled_by || r.settledby) ? Number(r.settledById || r.settled_by || r.settledby) : null,
+      settledById:
+        r.settledById || r.settled_by || r.settledby ? Number(r.settledById || r.settled_by || r.settledby) : null,
       settledByName: r.settledByName || r.settled_by_name || r.settledbyname || null,
       settlementMethod: r.settlementMethod || r.settlement_method || r.settlementmethod || null,
       notes: r.notes || null,
       receiptVoucherNo: r.receiptVoucherNo || r.receipt_voucher_no || r.receiptvoucherno || null,
-      payrollRunId: (r.payrollRunId || r.payroll_run_id || r.payrollrunid) ? Number(r.payrollRunId || r.payroll_run_id || r.payrollrunid) : null,
+      payrollRunId:
+        r.payrollRunId || r.payroll_run_id || r.payrollrunid
+          ? Number(r.payrollRunId || r.payroll_run_id || r.payrollrunid)
+          : null,
       businessDay: normalizePgDateOnly(r.businessDay || r.business_day || r.businessday || null) || null,
       createdAt: r.createdAt || r.created_at || r.createdat,
       updatedAt: r.updatedAt || r.updated_at || r.updatedat,
@@ -162,21 +171,24 @@ export class GetRepFinancialLedgerSlice {
     let totalCommissions = 0;
     let totalOverages = 0;
 
-    const repMap = new Map<number, {
-      repId: number;
-      repName: string;
-      repPhone?: string;
-      employeeId?: number | null;
-      employeeName?: string | null;
-      pendingShortages: number;
-      settledShortages: number;
-      waivedShortages: number;
-      pushedToPayroll: number;
-      commissions: number;
-      overages: number;
-      netBalance: number;
-      itemsCount: number;
-    }>();
+    const repMap = new Map<
+      number,
+      {
+        repId: number;
+        repName: string;
+        repPhone?: string;
+        employeeId?: number | null;
+        employeeName?: string | null;
+        pendingShortages: number;
+        settledShortages: number;
+        waivedShortages: number;
+        pushedToPayroll: number;
+        commissions: number;
+        overages: number;
+        netBalance: number;
+        itemsCount: number;
+      }
+    >();
 
     for (const it of items) {
       const amt = Number(it.amount || 0);

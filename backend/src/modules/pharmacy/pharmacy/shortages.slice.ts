@@ -23,9 +23,7 @@ export class ShortagesSlice {
     },
   ) {
     const scope = requireTenantScope(auth);
-    let query = this.db
-      .selectFrom('pharmacy_shortages')
-      .where('tenant_id', '=', scope.tenantId);
+    let query = this.db.selectFrom('pharmacy_shortages').where('tenant_id', '=', scope.tenantId);
 
     if (filters?.status && filters.status !== 'all') {
       query = query.where('status', '=', filters.status);
@@ -52,12 +50,7 @@ export class ShortagesSlice {
     const pageSize = Math.min(100, Math.max(1, Number(filters?.pageSize || 25)));
     const offset = (page - 1) * pageSize;
 
-    const shortages = await query
-      .selectAll()
-      .orderBy('id', 'desc')
-      .limit(pageSize)
-      .offset(offset)
-      .execute();
+    const shortages = await query.selectAll().orderBy('id', 'desc').limit(pageSize).offset(offset).execute();
 
     return {
       shortages,

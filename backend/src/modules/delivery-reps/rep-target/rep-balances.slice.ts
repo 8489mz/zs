@@ -94,11 +94,13 @@ export function aggregateCustomerBalancesByRep(
       return a.repId - b.repId;
     });
     item.repBalances = repList;
-    item.totalRepBalance = roundBookMoney(repList.reduce((sum, r) => sum + r.balance, 0), digits);
+    item.totalRepBalance = roundBookMoney(
+      repList.reduce((sum, r) => sum + r.balance, 0),
+      digits,
+    );
 
     const hasExplicitCustomerTotal =
-      customerTotalBalances !== undefined &&
-      Object.prototype.hasOwnProperty.call(customerTotalBalances, cid);
+      customerTotalBalances !== undefined && Object.prototype.hasOwnProperty.call(customerTotalBalances, cid);
 
     if (hasExplicitCustomerTotal) {
       const explicitTotal = roundBookMoney(Number(customerTotalBalances![cid] || 0), digits);
@@ -150,16 +152,12 @@ export function resolveIsolatedRepCustomerBalance(params: {
   const ownEntry = breakdown.byRepId[repId];
   const ownLedgerBalance = ownEntry ? roundBookMoney(ownEntry.balance, params.moneyDigits) : 0;
   const otherRepsLedgerBalance = roundBookMoney(
-    breakdown.repBalances
-      .filter((r) => r.repId !== repId && r.balance > 0)
-      .reduce((sum, r) => sum + r.balance, 0),
+    breakdown.repBalances.filter((r) => r.repId !== repId && r.balance > 0).reduce((sum, r) => sum + r.balance, 0),
     params.moneyDigits,
   );
 
   const isExclusivelyAssignedToRep =
-    assignedIds.length === 1 &&
-    Number(assignedIds[0]) === repId &&
-    otherRepsLedgerBalance === 0;
+    assignedIds.length === 1 && Number(assignedIds[0]) === repId && otherRepsLedgerBalance === 0;
 
   const effectiveRepBalance =
     isExclusivelyAssignedToRep && breakdown.unassignedBalance > 0

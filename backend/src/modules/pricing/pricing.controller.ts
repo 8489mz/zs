@@ -20,35 +20,45 @@ export class PricingController {
   @Post('preview')
   @RequirePermissions('pricingCenterView')
   preview(@Body() payload: PricingPreviewDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
-    return this.pricingService.preview({
-      ...payload,
-      options: {
-        applyToWholeStyleCode: Boolean(payload.options?.applyToWholeStyleCode),
-        applyToPricingGroup: Boolean(payload.options?.applyToPricingGroup),
-        skipActiveOffers: Boolean(payload.options?.skipActiveOffers ?? payload.safeguards?.skipActiveOffers),
-        skipCustomerPrices: Boolean(payload.options?.skipCustomerPrices),
-        skipManualExceptions: Boolean(payload.options?.skipManualExceptions ?? payload.safeguards?.skipManualExceptions),
+    return this.pricingService.preview(
+      {
+        ...payload,
+        options: {
+          applyToWholeStyleCode: Boolean(payload.options?.applyToWholeStyleCode),
+          applyToPricingGroup: Boolean(payload.options?.applyToPricingGroup),
+          skipActiveOffers: Boolean(payload.options?.skipActiveOffers ?? payload.safeguards?.skipActiveOffers),
+          skipCustomerPrices: Boolean(payload.options?.skipCustomerPrices),
+          skipManualExceptions: Boolean(
+            payload.options?.skipManualExceptions ?? payload.safeguards?.skipManualExceptions,
+          ),
+        },
+        safeguards: payload.safeguards,
+        reason: payload.reason,
       },
-      safeguards: payload.safeguards,
-      reason: payload.reason,
-    }, req.authContext!);
+      req.authContext!,
+    );
   }
 
   @Post('apply')
   @RequirePermissions('pricingCenterManage')
   apply(@Body() payload: PricingPreviewDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
-    return this.pricingService.apply({
-      ...payload,
-      options: {
-        applyToWholeStyleCode: Boolean(payload.options?.applyToWholeStyleCode),
-        applyToPricingGroup: Boolean(payload.options?.applyToPricingGroup),
-        skipActiveOffers: Boolean(payload.options?.skipActiveOffers ?? payload.safeguards?.skipActiveOffers),
-        skipCustomerPrices: Boolean(payload.options?.skipCustomerPrices),
-        skipManualExceptions: Boolean(payload.options?.skipManualExceptions ?? payload.safeguards?.skipManualExceptions),
+    return this.pricingService.apply(
+      {
+        ...payload,
+        options: {
+          applyToWholeStyleCode: Boolean(payload.options?.applyToWholeStyleCode),
+          applyToPricingGroup: Boolean(payload.options?.applyToPricingGroup),
+          skipActiveOffers: Boolean(payload.options?.skipActiveOffers ?? payload.safeguards?.skipActiveOffers),
+          skipCustomerPrices: Boolean(payload.options?.skipCustomerPrices),
+          skipManualExceptions: Boolean(
+            payload.options?.skipManualExceptions ?? payload.safeguards?.skipManualExceptions,
+          ),
+        },
+        safeguards: payload.safeguards,
+        reason: payload.reason,
       },
-      safeguards: payload.safeguards,
-      reason: payload.reason,
-    }, req.authContext!);
+      req.authContext!,
+    );
   }
 
   @Get('runs')
@@ -65,7 +75,10 @@ export class PricingController {
 
   @Post('profiles/bulk-set')
   @RequirePermissions('pricingCenterManage')
-  bulkSetProfiles(@Body() payload: PricingBulkSetProfileDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  bulkSetProfiles(
+    @Body() payload: PricingBulkSetProfileDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.pricingService.bulkSetProfiles(payload, req.authContext!);
   }
 

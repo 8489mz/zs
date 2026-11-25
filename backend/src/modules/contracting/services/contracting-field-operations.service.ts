@@ -358,7 +358,10 @@ export class ContractingFieldOperationsService {
     return { success: true };
   }
 
-  async getEquipmentAssets(auth: AuthContext, query?: { projectId?: string; operationalStatus?: string; search?: string }) {
+  async getEquipmentAssets(
+    auth: AuthContext,
+    query?: { projectId?: string; operationalStatus?: string; search?: string },
+  ) {
     const { tenantId } = requireTenantScope(auth);
     let q = (this.db as any)
       .selectFrom('contracting_equipment_assets as e')
@@ -398,7 +401,7 @@ export class ContractingFieldOperationsService {
           eb('e.name', 'ilike', s),
           eb('e.assigned_supervisor', 'ilike', s),
           eb('e.current_location_desc', 'ilike', s),
-        ])
+        ]),
       );
     }
 
@@ -545,7 +548,10 @@ export class ContractingFieldOperationsService {
     }));
   }
 
-  async getSupplierPriceMemory(auth: AuthContext, query?: { supplierId?: number; materialName?: string; governorate?: string; paymentTerms?: string }) {
+  async getSupplierPriceMemory(
+    auth: AuthContext,
+    query?: { supplierId?: number; materialName?: string; governorate?: string; paymentTerms?: string },
+  ) {
     const { tenantId } = requireTenantScope(auth);
     let q = (this.db as any)
       .selectFrom('contracting_supplier_price_memory as m')
@@ -625,7 +631,8 @@ export class ContractingFieldOperationsService {
           governorate: dto.governorate || existing.governorate,
           payment_terms: dto.paymentTerms || existing.payment_terms,
           quality_rating: dto.qualityRating !== undefined ? Number(dto.qualityRating) : existing.quality_rating,
-          delivery_speed_rating: dto.deliverySpeedRating !== undefined ? Number(dto.deliverySpeedRating) : existing.delivery_speed_rating,
+          delivery_speed_rating:
+            dto.deliverySpeedRating !== undefined ? Number(dto.deliverySpeedRating) : existing.delivery_speed_rating,
           notes: dto.notes || existing.notes,
           updated_at: new Date() as any,
         })

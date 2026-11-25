@@ -1,16 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  ParseIntPipe,
-  Patch,
-  Post,
-  Query,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { PharmacyService } from './pharmacy.service';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
@@ -212,10 +200,7 @@ export class PharmacyController {
   @Get('clinical-services')
   @RequireAnyPermission('pharmacy', 'sales')
   listClinicalServices(@Req() req: RequestWithAuth, @Query('limit') limit?: string) {
-    return this.pharmacyService.listClinicalServices(
-      req.authContext!,
-      limit ? parseInt(limit, 10) : undefined,
-    );
+    return this.pharmacyService.listClinicalServices(req.authContext!, limit ? parseInt(limit, 10) : undefined);
   }
 
   @Post('clinical-services')

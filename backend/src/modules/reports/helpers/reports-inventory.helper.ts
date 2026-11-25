@@ -78,7 +78,9 @@ function formatLocationLabel(item: InventoryLocationSnapshot): string {
   return `${item.locationName}${branchSuffix}: ${item.qty}`;
 }
 
-export function groupInventoryLocationBreakdown(rows: InventoryLocationBreakdownRow[]): Map<string, InventoryLocationSnapshot[]> {
+export function groupInventoryLocationBreakdown(
+  rows: InventoryLocationBreakdownRow[],
+): Map<string, InventoryLocationSnapshot[]> {
   const breakdownByProduct = new Map<string, InventoryLocationSnapshot[]>();
 
   for (const row of rows) {
@@ -111,8 +113,9 @@ export function buildInventoryReportItems(
   return rows.map((row) => {
     const stockQty = toPositiveNumber(row.stock_qty);
     const minStock = toPositiveNumber(row.min_stock_qty);
-    const breakdown = [...(breakdownByProduct.get(String(row.id)) || [])]
-      .sort((a, b) => b.qty - a.qty || a.locationName.localeCompare(b.locationName, 'ar'));
+    const breakdown = [...(breakdownByProduct.get(String(row.id)) || [])].sort(
+      (a, b) => b.qty - a.qty || a.locationName.localeCompare(b.locationName, 'ar'),
+    );
     const topLocation = breakdown[0] || null;
     const assignedQty = breakdown.reduce((sum, item) => sum + (item.locationId ? item.qty : 0), 0);
     const unassignedQty = Math.max(0, stockQty - assignedQty);
@@ -136,7 +139,7 @@ export function buildInventoryReportItems(
       costPrice: toPositiveNumber(row.cost_price),
       category: row.category_name || '',
       supplier: row.supplier_name || '',
-      status: stockQty <= 0 ? 'out' : (stockQty <= minStock ? 'low' : 'ok'),
+      status: stockQty <= 0 ? 'out' : stockQty <= minStock ? 'low' : 'ok',
       topLocationName: topLocation?.locationName || '',
       topLocationQty: topLocation?.qty || 0,
       locationsLabel,
@@ -183,9 +186,12 @@ export function buildInventoryLocationHighlights(
   }
 
   const highlights = Array.from(summary.values())
-    .sort((left, right) => (right.attentionItems - left.attentionItems)
-      || (right.totalQty - left.totalQty)
-      || left.locationName.localeCompare(right.locationName, 'ar'))
+    .sort(
+      (left, right) =>
+        right.attentionItems - left.attentionItems ||
+        right.totalQty - left.totalQty ||
+        left.locationName.localeCompare(right.locationName, 'ar'),
+    )
     .slice(0, limit);
 
   return {
@@ -194,7 +200,13 @@ export function buildInventoryLocationHighlights(
   };
 }
 
-export function buildInventorySummary(totalItems: number, outOfStock: number, lowStock: number, totalActive: number, trackedLocations: number) {
+export function buildInventorySummary(
+  totalItems: number,
+  outOfStock: number,
+  lowStock: number,
+  totalActive: number,
+  trackedLocations: number,
+) {
   return {
     totalItems,
     outOfStock,

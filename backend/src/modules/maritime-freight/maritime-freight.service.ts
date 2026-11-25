@@ -13,7 +13,11 @@ import { CreateMaritimeQuotationDto } from './dto/create-quotation.dto';
 import { CreateMaritimeJobDto } from './dto/create-job.dto';
 import { UpdateMaritimeContainerDto } from './dto/update-container.dto';
 import { CreateRateCardDto, UpdateRateCardStatusDto } from './dto/rate-card.dto';
-import { CreateCustomsDeclarationDto, CreateCustomsDeclarationItemDto, UpdateCustomsDeclarationStatusDto } from './dto/customs-declaration.dto';
+import {
+  CreateCustomsDeclarationDto,
+  CreateCustomsDeclarationItemDto,
+  UpdateCustomsDeclarationStatusDto,
+} from './dto/customs-declaration.dto';
 import { CreateCargoInsuranceDto, UpdateCargoInsuranceDto, ClaimCargoInsuranceDto } from './dto/cargo-insurance.dto';
 import { CreateWarehouseReceiptDto, ReleaseWarehouseReceiptDto } from './dto/warehouse-receipt.dto';
 import { ShipmentMilestoneKey, MaritimePipelineConfig } from './maritime-freight.types';
@@ -122,7 +126,9 @@ export class MaritimeFreightService {
     this.jobsCoreService = new MaritimeFreightJobsCoreService({
       db: this.db,
       accountingPosting: this.accountingPosting,
-      resolveTenantConfiguredTaxRate: this.quotationsService.resolveTenantConfiguredTaxRate.bind(this.quotationsService),
+      resolveTenantConfiguredTaxRate: this.quotationsService.resolveTenantConfiguredTaxRate.bind(
+        this.quotationsService,
+      ),
       resolveFreightExchangeRate: this.resolveFreightExchangeRate.bind(this),
       resolveAccountId: this.resolveAccountId.bind(this),
       assertMaritimeJournalPeriodOpen: this.assertMaritimeJournalPeriodOpen.bind(this),
@@ -155,7 +161,9 @@ export class MaritimeFreightService {
       assertUniqueMasterBl: this.jobsCoreService.assertUniqueMasterBl.bind(this.jobsCoreService),
       syncConsolidationParentTotals: this.jobsCoreService.syncConsolidationParentTotals.bind(this.jobsCoreService),
       getJobById: this.jobsCoreService.getJobById.bind(this.jobsCoreService),
-      resolveTenantConfiguredTaxRate: this.quotationsService.resolveTenantConfiguredTaxRate.bind(this.quotationsService),
+      resolveTenantConfiguredTaxRate: this.quotationsService.resolveTenantConfiguredTaxRate.bind(
+        this.quotationsService,
+      ),
       hasPostedCloseJournal: this.customsService.hasPostedCloseJournal.bind(this.customsService),
       resolveMaritimeAccountIdOn: this.customsService.resolveMaritimeAccountIdOn.bind(this.customsService),
     });
@@ -183,10 +191,7 @@ export class MaritimeFreightService {
     });
   }
 
-  private async resolveTenantConfiguredTaxRate(
-    queryable: Kysely<Database>,
-    tenantId: string,
-  ): Promise<unknown> {
+  private async resolveTenantConfiguredTaxRate(queryable: Kysely<Database>, tenantId: string): Promise<unknown> {
     return this.quotationsService.resolveTenantConfiguredTaxRate(queryable, tenantId);
   }
 
@@ -198,18 +203,41 @@ export class MaritimeFreightService {
     return this.jobsCoreService.assertRoadProofOfDelivery(tenantId, jobId, bookingNumber);
   }
 
-  private async assertUniqueMasterBl(tenantId: string, mbl: string | null | undefined, jobId?: string, parentJobId?: string | null, trx?: any) {
+  private async assertUniqueMasterBl(
+    tenantId: string,
+    mbl: string | null | undefined,
+    jobId?: string,
+    parentJobId?: string | null,
+    trx?: any,
+  ) {
     return this.jobsCoreService.assertUniqueMasterBl(tenantId, mbl, jobId, parentJobId, trx);
   }
 
   private async postContainerDepositJournal(
-    trx: any, tenantId: string, containerId: string, amount: number, currency: string,
-    event: 'open' | 'refund' | 'forfeit', userId: number,
+    trx: any,
+    tenantId: string,
+    containerId: string,
+    amount: number,
+    currency: string,
+    event: 'open' | 'refund' | 'forfeit',
+    userId: number,
   ) {
-    return this.jobsCoreService.postContainerDepositJournal(trx, tenantId, containerId, amount, currency, event, userId);
+    return this.jobsCoreService.postContainerDepositJournal(
+      trx,
+      tenantId,
+      containerId,
+      amount,
+      currency,
+      event,
+      userId,
+    );
   }
 
-  private async resolveFreightExchangeRate(tenantId: string, currency: string | undefined, suppliedRate?: number): Promise<number> {
+  private async resolveFreightExchangeRate(
+    tenantId: string,
+    currency: string | undefined,
+    suppliedRate?: number,
+  ): Promise<number> {
     // INV-FX-RATE-RESOLUTION-SINGLE-RESOLVER: one shared resolver for
     // every maritime path. The base currency is now derived strictly
     // through tenantBaseCurrency: a settings/rate mismatch fails
@@ -223,7 +251,15 @@ export class MaritimeFreightService {
     return this.quotationsService.resolveAutoQuoteExchangeRate(tenantId, bidCurrency);
   }
 
-  async ensureDefaultMasterData(tenantId: string): Promise<{ portsAdded: number; linesAdded: number; agentsAdded: number; airlinesAdded: number; airportsAdded: number; truckingAdded: number; dryPortsAdded: number }> {
+  async ensureDefaultMasterData(tenantId: string): Promise<{
+    portsAdded: number;
+    linesAdded: number;
+    agentsAdded: number;
+    airlinesAdded: number;
+    airportsAdded: number;
+    truckingAdded: number;
+    dryPortsAdded: number;
+  }> {
     return this.masterDataService.ensureDefaultMasterData(tenantId);
   }
 
@@ -239,34 +275,43 @@ export class MaritimeFreightService {
     return this.masterDataService.getPorts(auth);
   }
 
-  async createPort(auth: AuthContext, data: { code: string; nameAr: string; nameEn: string; countryCode: string; countryName: string }) {
+  async createPort(
+    auth: AuthContext,
+    data: { code: string; nameAr: string; nameEn: string; countryCode: string; countryName: string },
+  ) {
     return this.masterDataService.createPort(auth, data);
   }
 
-  async getShippingLines(auth: AuthContext, filters?: { carrierType?: string; tradeLane?: string; countryCode?: string; search?: string }) {
+  async getShippingLines(
+    auth: AuthContext,
+    filters?: { carrierType?: string; tradeLane?: string; countryCode?: string; search?: string },
+  ) {
     return this.masterDataService.getShippingLines(auth, filters);
   }
 
-  async createShippingLine(auth: AuthContext, data: {
-    code: string;
-    nameAr: string;
-    nameEn?: string;
-    carrierType?: 'shipping_line' | 'overseas_agent';
-    tradeLanes?: string;
-    countryName?: string;
-    countryCode?: string;
-    cityName?: string;
-    contactPerson?: string;
-    email?: string;
-    rfqEmail?: string;
-    bookingEmail?: string;
-    phone?: string;
-    whatsapp?: string;
-    wechat?: string;
-    servicesOffered?: string;
-    supportedPorts?: string;
-    notes?: string;
-  }) {
+  async createShippingLine(
+    auth: AuthContext,
+    data: {
+      code: string;
+      nameAr: string;
+      nameEn?: string;
+      carrierType?: 'shipping_line' | 'overseas_agent';
+      tradeLanes?: string;
+      countryName?: string;
+      countryCode?: string;
+      cityName?: string;
+      contactPerson?: string;
+      email?: string;
+      rfqEmail?: string;
+      bookingEmail?: string;
+      phone?: string;
+      whatsapp?: string;
+      wechat?: string;
+      servicesOffered?: string;
+      supportedPorts?: string;
+      notes?: string;
+    },
+  ) {
     return this.masterDataService.createShippingLine(auth, data);
   }
 
@@ -374,7 +419,13 @@ export class MaritimeFreightService {
     return this.jobCloseService.updateJob(auth, id, dto);
   }
 
-  async addJobMilestone(auth: AuthContext, jobId: string, milestoneKey: ShipmentMilestoneKey, notes?: string, location?: string) {
+  async addJobMilestone(
+    auth: AuthContext,
+    jobId: string,
+    milestoneKey: ShipmentMilestoneKey,
+    notes?: string,
+    location?: string,
+  ) {
     return this.jobsMilestonesService.addJobMilestone(auth, jobId, milestoneKey, notes, location);
   }
 
@@ -382,7 +433,12 @@ export class MaritimeFreightService {
     return this.jobsMilestonesService.releaseDeliveryOrder(auth, jobId, dto);
   }
 
-  async sendMilestoneWhatsApp(auth: AuthContext, jobId: string, milestoneKey: ShipmentMilestoneKey, targetPhone?: string) {
+  async sendMilestoneWhatsApp(
+    auth: AuthContext,
+    jobId: string,
+    milestoneKey: ShipmentMilestoneKey,
+    targetPhone?: string,
+  ) {
     return this.jobsMilestonesService.sendMilestoneWhatsApp(auth, jobId, milestoneKey, targetPhone);
   }
 
@@ -390,7 +446,10 @@ export class MaritimeFreightService {
     return this.jobsMilestonesService.getMilestoneWhatsAppMessage(auth, jobId, milestoneKey);
   }
 
-  async getContainers(auth: AuthContext, filters?: { overdueOnly?: boolean; depositHeldOnly?: boolean; search?: string }) {
+  async getContainers(
+    auth: AuthContext,
+    filters?: { overdueOnly?: boolean; depositHeldOnly?: boolean; search?: string },
+  ) {
     return this.jobsContainersService.getContainers(auth, filters);
   }
 
@@ -482,7 +541,11 @@ export class MaritimeFreightService {
     return this.invoicingService.getJobFinancialLedger(auth, jobId, pagination);
   }
 
-  async settleJobFromCustomerBalance(auth: AuthContext, jobId: string, dto?: { amount?: number; exchangeRate?: number }) {
+  async settleJobFromCustomerBalance(
+    auth: AuthContext,
+    jobId: string,
+    dto?: { amount?: number; exchangeRate?: number },
+  ) {
     return this.invoicingService.settleJobFromCustomerBalance(auth, jobId, dto);
   }
 
@@ -515,7 +578,10 @@ export class MaritimeFreightService {
     return this.rateCardsService.mapRateCardRow(r);
   }
 
-  async listRateCards(auth: AuthContext, filters?: { polCode?: string; podCode?: string; containerType?: string; status?: string; transportMode?: string }) {
+  async listRateCards(
+    auth: AuthContext,
+    filters?: { polCode?: string; podCode?: string; containerType?: string; status?: string; transportMode?: string },
+  ) {
     return this.rateCardsService.listRateCards(auth, filters);
   }
 
@@ -600,17 +666,11 @@ export class MaritimeFreightService {
     return this.carrierInvoicesService.createCarrierInvoice(auth, jobId, dto);
   }
 
-
   async overrideCarrierInvoice(auth: AuthContext, invoiceId: string, dto: { reason: string }) {
     return this.carrierInvoicesService.overrideCarrierInvoice(auth, invoiceId, dto);
   }
 
-
-  async createCarrierDispute(
-    auth: AuthContext,
-    invoiceId: string,
-    dto: { reason: string; disputedAmount?: number },
-  ) {
+  async createCarrierDispute(auth: AuthContext, invoiceId: string, dto: { reason: string; disputedAmount?: number }) {
     return this.carrierDisputesService.createCarrierDispute(auth, invoiceId, dto);
   }
 
@@ -692,11 +752,21 @@ export class MaritimeFreightService {
     return this.jobCloseService.calculateJobForexGainLoss(auth, jobId, actualRoe);
   }
 
-  private async resolveMaritimeAccountIdOn(queryable: any, tenantId: string, code: string, fallbackCode?: string): Promise<number | null> {
+  private async resolveMaritimeAccountIdOn(
+    queryable: any,
+    tenantId: string,
+    code: string,
+    fallbackCode?: string,
+  ): Promise<number | null> {
     return this.customsService.resolveMaritimeAccountIdOn(queryable, tenantId, code, fallbackCode);
   }
 
-  private async hasPostedCloseJournal(queryable: any, tenantId: string, sourceType: string, sourceId: number): Promise<boolean> {
+  private async hasPostedCloseJournal(
+    queryable: any,
+    tenantId: string,
+    sourceType: string,
+    sourceId: number,
+  ): Promise<boolean> {
     return this.customsService.hasPostedCloseJournal(queryable, tenantId, sourceType, sourceId);
   }
 

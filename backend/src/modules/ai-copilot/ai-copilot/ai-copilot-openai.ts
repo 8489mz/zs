@@ -90,7 +90,10 @@ ${JSON.stringify(snapshot, null, 2)}
         body: JSON.stringify({
           model: model || 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: 'You are a helpful business analytics assistant. Respond only with JSON as requested.' },
+            {
+              role: 'system',
+              content: 'You are a helpful business analytics assistant. Respond only with JSON as requested.',
+            },
             { role: 'user', content: prompt },
           ],
           response_format: { type: 'json_object' },
@@ -126,9 +129,13 @@ ${JSON.stringify(snapshot, null, 2)}
     model = 'gpt-4o-mini',
     baseUrl = 'https://api.openai.com/v1',
   ): Promise<string | null> {
-    const catalogText = products.slice(0, 45).map((p, idx) =>
-      `${idx + 1}. ${p.name} | السعر: ${p.price} ${businessInfo.currency} | المتوفر بالمخزن: ${p.stock > 0 ? p.stock + ' قطعة' : 'غير متوفر حالياً'}${p.color ? ' | اللون: ' + p.color : ''}${p.size ? ' | المقاس: ' + p.size : ''}`
-    ).join('\n');
+    const catalogText = products
+      .slice(0, 45)
+      .map(
+        (p, idx) =>
+          `${idx + 1}. ${p.name} | السعر: ${p.price} ${businessInfo.currency} | المتوفر بالمخزن: ${p.stock > 0 ? p.stock + ' قطعة' : 'غير متوفر حالياً'}${p.color ? ' | اللون: ' + p.color : ''}${p.size ? ' | المقاس: ' + p.size : ''}`,
+      )
+      .join('\n');
 
     const prompt = `أنت المساعد الذكي لمبيعات وخدمة عملاء متجر "${businessInfo.name}".
 مهمتك: الرد على استفسار الزبون على تطبيق واتساب بأسلوب لطيف ومحترف باللهجة العربية/المصرية السلسة والمحترمة.

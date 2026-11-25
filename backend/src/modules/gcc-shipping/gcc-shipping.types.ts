@@ -9,7 +9,7 @@ export interface GccShippingSettings {
   aramexAccountNumber?: string;
   aramexAccountPin?: string;
   aramexAccountEntity?: string; // e.g. 'RUH' / 'DXB' / 'KWI' / 'DOH'
-  aramexCountryCode?: string;   // 'SA', 'AE', 'KW', 'QA', 'BH', 'OM'
+  aramexCountryCode?: string; // 'SA', 'AE', 'KW', 'QA', 'BH', 'OM'
   aramexUserName?: string;
   aramexPassword?: string;
 
@@ -22,7 +22,7 @@ export interface GccShippingSettings {
   pickupContactPerson?: string;
   pickupPhone?: string;
   pickupCountry?: string; // 'Saudi Arabia', 'United Arab Emirates', 'Kuwait', 'Qatar', 'Bahrain', 'Oman'
-  pickupCity?: string;    // 'الرياض', 'جدة', 'الدمام', 'دبي', 'أبو ظبي', 'الدوحة', 'الكويت'
+  pickupCity?: string; // 'الرياض', 'جدة', 'الدمام', 'دبي', 'أبو ظبي', 'الدوحة', 'الكويت'
   pickupAddress?: string;
 }
 
@@ -33,7 +33,7 @@ export interface GccCreateShipmentDto {
   piecesCount?: number;
   description?: string;
   codAmount?: number; // Cash On Delivery in local currency
-  currency?: string;  // SAR, AED, KWD, QAR
+  currency?: string; // SAR, AED, KWD, QAR
   receiverName?: string;
   receiverPhone?: string;
   receiverCountry?: string;

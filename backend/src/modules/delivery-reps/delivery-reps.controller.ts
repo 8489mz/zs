@@ -53,7 +53,14 @@ export class DeliveryRepsController {
     @Query('pageSize') pageSize: string,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
-    return this.service.listOrders(id, req.authContext!, { dateFrom, dateTo, status, discountedOnly: discountedOnly === 'true', page: Number(page), pageSize: Number(pageSize) });
+    return this.service.listOrders(id, req.authContext!, {
+      dateFrom,
+      dateTo,
+      status,
+      discountedOnly: discountedOnly === 'true',
+      page: Number(page),
+      pageSize: Number(pageSize),
+    });
   }
 
   @Get(':id/settlements')
@@ -66,15 +73,17 @@ export class DeliveryRepsController {
     @Query('pageSize') pageSize: string,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
-    return this.service.listSettlements(id, req.authContext!, { dateFrom, dateTo, page: Number(page), pageSize: Number(pageSize) });
+    return this.service.listSettlements(id, req.authContext!, {
+      dateFrom,
+      dateTo,
+      page: Number(page),
+      pageSize: Number(pageSize),
+    });
   }
 
   @Get(':id/kpi')
   @RequirePermissions('deliveryReps')
-  getKPIs(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth,
-  ): Promise<Record<string, unknown>> {
+  getKPIs(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.service.getRepKPIs(id, req.authContext!);
   }
 
@@ -82,7 +91,15 @@ export class DeliveryRepsController {
   @RequirePermissions('deliveryReps')
   settleOrder(
     @Param('saleId', ParseIntPipe) saleId: number,
-    @Body() body: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string; countedCashAmount?: number },
+    @Body()
+    body: {
+      signatureDataUrl?: string;
+      proofPhotoUrl?: string;
+      gpsLat?: number;
+      gpsLng?: number;
+      notes?: string;
+      countedCashAmount?: number;
+    },
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.service.settleOrder(saleId, req.authContext!, body);
@@ -92,7 +109,15 @@ export class DeliveryRepsController {
   @RequirePermissions('deliveryReps')
   settlePartialOrder(
     @Param('saleId', ParseIntPipe) saleId: number,
-    @Body() body: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string; countedCashAmount?: number },
+    @Body()
+    body: {
+      signatureDataUrl?: string;
+      proofPhotoUrl?: string;
+      gpsLat?: number;
+      gpsLng?: number;
+      notes?: string;
+      countedCashAmount?: number;
+    },
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.service.settlePartialOrder(saleId, req.authContext!, body);
@@ -110,10 +135,7 @@ export class DeliveryRepsController {
 
   @Get(':id/summary')
   @RequirePermissions('deliveryReps')
-  getRepSummary(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth,
-  ): Promise<Record<string, unknown>> {
+  getRepSummary(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.service.getRepSummary(id, req.authContext!);
   }
 

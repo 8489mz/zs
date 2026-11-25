@@ -82,7 +82,10 @@ export function resolveUserLimit(input: UserLimitInput): UserLimit {
   // 3. مطابقة صريحة لاسم/معرف الباقة المعلق على المنشأة (tenants.plan_id)
   const resolvedRank = resolvePlanRank(rawTenantPlan);
   if (rawTenantPlan.includes('pro') || resolvedRank === 2) {
-    const subUsers = typeof input.subscriptionMaxUsers === 'number' && (rawSubCode === 'PRO' || rawSubCode.endsWith('_L2')) ? input.subscriptionMaxUsers : 0;
+    const subUsers =
+      typeof input.subscriptionMaxUsers === 'number' && (rawSubCode === 'PRO' || rawSubCode.endsWith('_L2'))
+        ? input.subscriptionMaxUsers
+        : 0;
     return Math.max(subUsers, 6);
   }
 

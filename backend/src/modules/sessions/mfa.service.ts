@@ -51,7 +51,12 @@ export class MfaService {
    * يشغّله بعد أن يفعّله المالك على حسابه فعلاً — والواجهة تنبّه عليه قبل ذلك.
    */
   isRequiredFor(auth: AuthContext): boolean {
-    if (String(process.env.MFA_REQUIRED_FOR_PLATFORM || '').trim().toLowerCase() !== 'true') return false;
+    if (
+      String(process.env.MFA_REQUIRED_FOR_PLATFORM || '')
+        .trim()
+        .toLowerCase() !== 'true'
+    )
+      return false;
     const isPlatformTenant = isPlatformTenantId(auth.tenantId);
     return isPlatformTenant && ['super_admin', 'admin'].includes(String(auth.role || ''));
   }
@@ -89,7 +94,11 @@ export class MfaService {
       .executeTakeFirst();
 
     if (existing?.confirmed_at) {
-      throw new AppError('المصادقة الثنائية مفعّلة بالفعل. أوقفها أولاً إن أردت ربط تطبيق آخر.', 'MFA_ALREADY_ENABLED', 400);
+      throw new AppError(
+        'المصادقة الثنائية مفعّلة بالفعل. أوقفها أولاً إن أردت ربط تطبيق آخر.',
+        'MFA_ALREADY_ENABLED',
+        400,
+      );
     }
 
     const secret = generateTotpSecret();
@@ -108,21 +117,31 @@ export class MfaService {
         recovery_codes: JSON.stringify([]),
         updated_at: now,
       })
-      .onConflict((oc) => oc.column('user_id').doUpdateSet({
-        tenant_id: tenantId,
-        account_id: accountId,
-        secret_encrypted: encrypted,
-        confirmed_at: null,
-        last_used_step: 0,
-        recovery_codes: JSON.stringify([]),
-        updated_at: now,
-      // Concurrent confirmation must NEVER be reset back to an unenrolled factor.
-      }).where('tenant_id', '=', tenantId).where('confirmed_at', 'is', null))
+      .onConflict((oc) =>
+        oc
+          .column('user_id')
+          .doUpdateSet({
+            tenant_id: tenantId,
+            account_id: accountId,
+            secret_encrypted: encrypted,
+            confirmed_at: null,
+            last_used_step: 0,
+            recovery_codes: JSON.stringify([]),
+            updated_at: now,
+            // Concurrent confirmation must NEVER be reset back to an unenrolled factor.
+          })
+          .where('tenant_id', '=', tenantId)
+          .where('confirmed_at', 'is', null),
+      )
       .returning('user_id')
       .executeTakeFirst();
 
     if (!saved) {
-      throw new AppError('المصادقة الثنائية مفعّلة بالفعل. أوقفها أولاً إن أردت ربط تطبيق آخر.', 'MFA_ALREADY_ENABLED', 400);
+      throw new AppError(
+        'المصادقة الثنائية مفعّلة بالفعل. أوقفها أولاً إن أردت ربط تطبيق آخر.',
+        'MFA_ALREADY_ENABLED',
+        400,
+      );
     }
 
     return {
@@ -147,7 +166,8 @@ export class MfaService {
     if (row.confirmed_at) throw new AppError('المصادقة الثنائية مفعّلة بالفعل.', 'MFA_ALREADY_ENABLED', 400);
 
     const step = verifyTotpCode(decryptMfaSecret(row.secret_encrypted), code);
-    if (step === null) throw new AppError('رمز التحقق غير صحيح. تأكد من وقت الهاتف ثم أعد المحاولة.', 'MFA_CODE_INVALID', 400);
+    if (step === null)
+      throw new AppError('رمز التحقق غير صحيح. تأكد من وقت الهاتف ثم أعد المحاولة.', 'MFA_CODE_INVALID', 400);
 
     const recoveryCodes = generateRecoveryCodes();
     const confirmed = await this.db
@@ -210,11 +230,7 @@ export class MfaService {
     const byRecovery = stored.includes(hashRecoveryCode(code));
     if (!byTotp && !byRecovery) throw new AppError('رمز التحقق غير صحيح.', 'MFA_CODE_INVALID', 400);
 
-    await this.db
-      .deleteFrom('user_mfa')
-      .where('user_id', '=', auth.userId)
-      .where('tenant_id', '=', tenantId)
-      .execute();
+    await this.db.deleteFrom('user_mfa').where('user_id', '=', auth.userId).where('tenant_id', '=', tenantId).execute();
 
     await this.audit.log('إيقاف المصادقة الثنائية', `أوقف المستخدم ${auth.username} المصادقة الثنائية`, auth, {
       targetTenantId: tenantId,

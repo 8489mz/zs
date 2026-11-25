@@ -55,11 +55,7 @@ export class DailyCommercialRollupService {
    * Computes and upserts daily commercial rollup for a specific tenant, date, and optional branch.
    * Runs in 100% SQL aggregation mode (0 raw rows fetched into Node.js).
    */
-  async computeAndStoreDailyRollup(
-    tenantId: string,
-    dateStr: string,
-    branchId?: number,
-  ): Promise<DailyRollupSummary> {
+  async computeAndStoreDailyRollup(tenantId: string, dateStr: string, branchId?: number): Promise<DailyRollupSummary> {
     const branchKey = branchId ?? -1;
     // The rollup day is a business day (INV-BUSINESS-DATE-TENANT-LOCAL):
     // an empty date defaults to the tenant-local today, and the window
@@ -81,8 +77,12 @@ export class DailyCommercialRollupService {
       .select([
         sql<number>`COALESCE(COUNT(*), 0)`.as('sales_count'),
         sql<number>`COALESCE(SUM(total), 0)`.as('sales_total'),
-        sql<number>`COALESCE(SUM(CASE WHEN payment_channel = 'cash' OR (payment_type = 'cash' AND payment_channel IS NULL) THEN total ELSE 0 END), 0)`.as('cash_total'),
-        sql<number>`COALESCE(SUM(CASE WHEN payment_type = 'credit' OR payment_channel = 'credit' THEN total ELSE 0 END), 0)`.as('credit_total'),
+        sql<number>`COALESCE(SUM(CASE WHEN payment_channel = 'cash' OR (payment_type = 'cash' AND payment_channel IS NULL) THEN total ELSE 0 END), 0)`.as(
+          'cash_total',
+        ),
+        sql<number>`COALESCE(SUM(CASE WHEN payment_type = 'credit' OR payment_channel = 'credit' THEN total ELSE 0 END), 0)`.as(
+          'credit_total',
+        ),
       ])
       .where('tenant_id', '=', tenantId)
       .where('status', '!=', 'cancelled')
@@ -97,9 +97,7 @@ export class DailyCommercialRollupService {
     let cogsQuery = (this.db as any)
       .selectFrom('sale_items as si')
       .innerJoin('sales as s', 's.id', 'si.sale_id')
-      .select(
-        sql<number>`COALESCE(SUM(si.qty * COALESCE(si.cost_price, 0)), 0)`.as('cogs_total'),
-      )
+      .select(sql<number>`COALESCE(SUM(si.qty * COALESCE(si.cost_price, 0)), 0)`.as('cogs_total'))
       .where('s.tenant_id', '=', tenantId)
       .where('si.tenant_id', '=', tenantId)
       .where('s.status', '!=', 'cancelled')
@@ -126,7 +124,9 @@ export class DailyCommercialRollupService {
     // applies to return_documents.
     let returnsQuery = (this.db as any)
       .selectFrom('return_documents as rd')
-      .innerJoin('sales as s', (j: any) => j.onRef('s.id', '=', 'rd.invoice_id').onRef('s.tenant_id', '=', 'rd.tenant_id'))
+      .innerJoin('sales as s', (j: any) =>
+        j.onRef('s.id', '=', 'rd.invoice_id').onRef('s.tenant_id', '=', 'rd.tenant_id'),
+      )
       .select([
         sql<number>`COALESCE(COUNT(*), 0)`.as('returns_count'),
         sql<number>`COALESCE(SUM(rd.total), 0)`.as('returns_total'),
@@ -147,8 +147,12 @@ export class DailyCommercialRollupService {
     // gross_profit = (sales_total − returns_total) − cogs_total.
     let returnedCogsQuery = (this.db as any)
       .selectFrom('return_items as ri')
-      .innerJoin('return_documents as rd', (j: any) => j.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
-      .leftJoin('sale_items as si', (j: any) => j.onRef('si.id', '=', 'ri.sale_item_id').onRef('si.tenant_id', '=', 'ri.tenant_id'))
+      .innerJoin('return_documents as rd', (j: any) =>
+        j.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'),
+      )
+      .leftJoin('sale_items as si', (j: any) =>
+        j.onRef('si.id', '=', 'ri.sale_item_id').onRef('si.tenant_id', '=', 'ri.tenant_id'),
+      )
       .select(
         sql<number>`COALESCE(SUM(ri.qty * COALESCE(ri.cost_price, si.cost_price, 0)), 0)`.as('returned_cogs_total'),
       )
@@ -316,10 +320,7 @@ export class DailyCommercialRollupService {
       .where('tenant_id', '=', tenantId)
       .where('branch_key', '=', branchKey)
       .where(sql<boolean>`EXTRACT(YEAR FROM rollup_date) IN (${sql.join(years)})`)
-      .groupBy([
-        sql`EXTRACT(YEAR FROM rollup_date)`,
-        sql`EXTRACT(MONTH FROM rollup_date)`,
-      ])
+      .groupBy([sql`EXTRACT(YEAR FROM rollup_date)`, sql`EXTRACT(MONTH FROM rollup_date)`])
       .orderBy(sql`EXTRACT(YEAR FROM rollup_date)`, 'asc')
       .orderBy(sql`EXTRACT(MONTH FROM rollup_date)`, 'asc');
 
@@ -352,10 +353,19 @@ export class DailyCommercialRollupService {
       if (targetYear) {
         targetYear.salesCount += Number(r.sales_count || 0);
         targetYear.salesTotal = this.toBookMoney(targetYear.salesTotal + rowSales, bookDigits);
-        targetYear.cogsTotal = this.toBookMoney(targetYear.cogsTotal + this.toBookMoney(r.cogs_total, bookDigits), bookDigits);
+        targetYear.cogsTotal = this.toBookMoney(
+          targetYear.cogsTotal + this.toBookMoney(r.cogs_total, bookDigits),
+          bookDigits,
+        );
         targetYear.grossProfit = this.toBookMoney(targetYear.grossProfit + rowGross, bookDigits);
-        targetYear.returnsTotal = this.toBookMoney(targetYear.returnsTotal + this.toBookMoney(r.returns_total, bookDigits), bookDigits);
-        targetYear.expensesTotal = this.toBookMoney(targetYear.expensesTotal + this.toBookMoney(r.expenses_total, bookDigits), bookDigits);
+        targetYear.returnsTotal = this.toBookMoney(
+          targetYear.returnsTotal + this.toBookMoney(r.returns_total, bookDigits),
+          bookDigits,
+        );
+        targetYear.expensesTotal = this.toBookMoney(
+          targetYear.expensesTotal + this.toBookMoney(r.expenses_total, bookDigits),
+          bookDigits,
+        );
         targetYear.netProfit = this.toBookMoney(targetYear.netProfit + rowNet, bookDigits);
         targetYear.monthlyBreakdown.push({
           month,

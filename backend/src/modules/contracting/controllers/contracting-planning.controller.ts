@@ -208,5 +208,4 @@ export class ContractingPlanningController {
   async deleteClientPaymentMilestone(@Param('id') id: string, @Req() req: RequestWithAuth) {
     return this.contractingService.deleteClientPaymentMilestone(req.authContext!, id);
   }
-
 }

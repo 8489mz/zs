@@ -29,12 +29,7 @@ export class MasterRegistrySlice {
         const bar = (d.barcode || '').toLowerCase();
         const man = (d.manufacturer || '').toLowerCase();
         return (
-          tEn.includes(q) ||
-          tAr.includes(q) ||
-          aEn.includes(q) ||
-          aAr.includes(q) ||
-          bar.includes(q) ||
-          man.includes(q)
+          tEn.includes(q) || tAr.includes(q) || aEn.includes(q) || aAr.includes(q) || bar.includes(q) || man.includes(q)
         );
       });
     }
@@ -65,12 +60,7 @@ export class MasterRegistrySlice {
       const existing = await this.db
         .selectFrom('pharmacy_drugs')
         .where('tenant_id', '=', scope.tenantId)
-        .where((eb) =>
-          eb.or([
-            eb('trade_name', '=', drug.trade_name),
-            eb('barcode', '=', drug.barcode),
-          ])
-        )
+        .where((eb) => eb.or([eb('trade_name', '=', drug.trade_name), eb('barcode', '=', drug.barcode)]))
         .select(['id'])
         .executeTakeFirst();
 

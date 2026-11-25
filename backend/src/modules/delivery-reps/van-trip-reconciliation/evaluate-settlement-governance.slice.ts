@@ -1,4 +1,11 @@
-import type { MakerCheckerParams, MakerCheckerResult, NightStockEvaluationParams, NightStockEvaluationResult, FieldCardPaymentEvaluationParams, FieldCardPaymentEvaluationResult } from './van-trip-reconciliation.types';
+import type {
+  MakerCheckerParams,
+  MakerCheckerResult,
+  NightStockEvaluationParams,
+  NightStockEvaluationResult,
+  FieldCardPaymentEvaluationParams,
+  FieldCardPaymentEvaluationResult,
+} from './van-trip-reconciliation.types';
 
 /**
  * Evaluates Maker-Checker segregation of duties.
@@ -9,7 +16,8 @@ export function evaluateMakerCheckerSettlement(params: MakerCheckerParams): Make
     return {
       allowed: false,
       reasonCode: 'MAKER_CHECKER_SELF_APPROVAL',
-      errorMessageAr: 'لا يجوز لمندوب المبيعات اعتماد وإبراء تصفية رحلته بنفسه طبقاً لمبدأ فصل المهام الرقابي (Maker-Checker)',
+      errorMessageAr:
+        'لا يجوز لمندوب المبيعات اعتماد وإبراء تصفية رحلته بنفسه طبقاً لمبدأ فصل المهام الرقابي (Maker-Checker)',
     };
   }
 
@@ -43,7 +51,8 @@ export function evaluateNightStockRetention(params: NightStockEvaluationParams):
       return {
         allowed: false,
         status: 'rejected_missing_approval',
-        errorMessageAr: 'إبقاء بضاعة متبقية في سيارة التوزيع لليوم التالي (Night Stock) يتطلب اعتماداً رسمياً صريحاً من المشرف مع تدوين المبررات',
+        errorMessageAr:
+          'إبقاء بضاعة متبقية في سيارة التوزيع لليوم التالي (Night Stock) يتطلب اعتماداً رسمياً صريحاً من المشرف مع تدوين المبررات',
       };
     }
 
@@ -71,7 +80,8 @@ export function evaluateFieldCardPayment(params: FieldCardPaymentEvaluationParam
     return {
       allowed: false,
       reasonCode: 'CARD_PAYMENT_REQUIRES_SUPERVISOR_PIN',
-      errorMessageAr: 'الدفع بالشبكة أو التحويل البنكي في الميدان يتطلب إدخال رمز اعتماد المشرف (Supervisor PIN) للتحقق من وصول الإشعار البنكي ومنع التلاعب بالنقدية المحصلة',
+      errorMessageAr:
+        'الدفع بالشبكة أو التحويل البنكي في الميدان يتطلب إدخال رمز اعتماد المشرف (Supervisor PIN) للتحقق من وصول الإشعار البنكي ومنع التلاعب بالنقدية المحصلة',
     };
   }
 
@@ -79,7 +89,8 @@ export function evaluateFieldCardPayment(params: FieldCardPaymentEvaluationParam
     return {
       allowed: false,
       reasonCode: 'CARD_PAYMENT_REFERENCE_REQUIRED',
-      errorMessageAr: 'يرجى تدوين رقم مرجع إيصال الشبكة أو الحوالة البنكية (3 أحرف/أرقام على الأقل) لاعتماد عملية الدفع بالبطاقة',
+      errorMessageAr:
+        'يرجى تدوين رقم مرجع إيصال الشبكة أو الحوالة البنكية (3 أحرف/أرقام على الأقل) لاعتماد عملية الدفع بالبطاقة',
     };
   }
 

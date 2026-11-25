@@ -16,7 +16,12 @@ import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_PAST_DAYS } from '../../co
 import { canonicalLockIds } from '../../common/utils/canonical-lock-order';
 import { lockAccountingPeriod } from '../accounting/accounting-period-lock';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
-import { currencyMoneyDigits, fromMinorUnits, roundMoney, toMinorUnits } from '../accounting/engines/money-minor-units.engine';
+import {
+  currencyMoneyDigits,
+  fromMinorUnits,
+  roundMoney,
+  toMinorUnits,
+} from '../accounting/engines/money-minor-units.engine';
 
 @Injectable()
 export class TreasuryService {
@@ -34,7 +39,7 @@ export class TreasuryService {
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const search = String(query.search || '').trim();
     const searchPattern = search ? `%${search}%` : null;
-    
+
     const page = Math.max(1, Number(query.page || 1));
     const pageSize = Math.min(100, Math.max(1, Number(query.pageSize || 20)));
     const offset = (page - 1) * pageSize;
@@ -42,7 +47,7 @@ export class TreasuryService {
     const lastSeenId = Math.max(0, Number(query.lastSeenId || query.lastId || query.cursor || 0));
     const safeOffset = lastSeenId > 0 ? 0 : offset;
 
-    const querySql = search 
+    const querySql = search
       ? sql`
           WITH filtered_expenses AS (
             SELECT
@@ -91,7 +96,7 @@ export class TreasuryService {
           LIMIT ${pageSize} OFFSET ${safeOffset}
         `;
 
-    const result = await querySql.execute(this.db) as any;
+    const result = (await querySql.execute(this.db)) as any;
 
     const rows = result.rows.map((row: any) => ({
       id: String(row.id),
@@ -172,8 +177,13 @@ export class TreasuryService {
     const locationId = payload.locationId ? Number(payload.locationId) : null;
     const costCenterId = payload.costCenterId ? Number(payload.costCenterId) : null;
     const samePayload = (row: {
-      title: string; amount: number; expense_date: Date | string; note: string;
-      branch_id: number | null; location_id: number | null; cost_center_id: number | null;
+      title: string;
+      amount: number;
+      expense_date: Date | string;
+      note: string;
+      branch_id: number | null;
+      location_id: number | null;
+      cost_center_id: number | null;
     }): boolean => {
       if (String(row.title || '').trim() !== title) return false;
       if (toMinorUnits(Number(row.amount), digits) !== minorAmount) return false;
@@ -184,10 +194,17 @@ export class TreasuryService {
       if ((row.cost_center_id == null ? null : Number(row.cost_center_id)) !== costCenterId) return false;
       return true;
     };
-    const findPrior = async (trx: Kysely<Database>) => sql<{
-      id: number; title: string; amount: number; expense_date: Date; note: string;
-      branch_id: number | null; location_id: number | null; cost_center_id: number | null;
-    }>`
+    const findPrior = async (trx: Kysely<Database>) =>
+      sql<{
+        id: number;
+        title: string;
+        amount: number;
+        expense_date: Date;
+        note: string;
+        branch_id: number | null;
+        location_id: number | null;
+        cost_center_id: number | null;
+      }>`
       SELECT id, title, amount, expense_date, note, branch_id, location_id, cost_center_id
       FROM expenses
       WHERE tenant_id = ${scope.tenantId} AND request_key = ${requestKey}
@@ -203,20 +220,45 @@ export class TreasuryService {
       const prior = existing.rows[0];
       if (prior) {
         if (!samePayload(prior)) {
-          throw new AppError('Expense request key was already used with different data', 'EXPENSE_IDEMPOTENCY_CONFLICT', 409);
+          throw new AppError(
+            'Expense request key was already used with different data',
+            'EXPENSE_IDEMPOTENCY_CONFLICT',
+            409,
+          );
         }
         return { expenseId: Number(prior.id), idempotent: true };
       }
-      if (branchId && !await trx.selectFrom('branches').select('id')
-        .where('tenant_id', '=', scope.tenantId).where('id', '=', branchId).executeTakeFirst()) {
+      if (
+        branchId &&
+        !(await trx
+          .selectFrom('branches')
+          .select('id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', branchId)
+          .executeTakeFirst())
+      ) {
         throw new AppError('Branch does not belong to this tenant', 'INVALID_EXPENSE_BRANCH', 400);
       }
-      if (locationId && !await trx.selectFrom('stock_locations').select('id')
-        .where('tenant_id', '=', scope.tenantId).where('id', '=', locationId).executeTakeFirst()) {
+      if (
+        locationId &&
+        !(await trx
+          .selectFrom('stock_locations')
+          .select('id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', locationId)
+          .executeTakeFirst())
+      ) {
         throw new AppError('Location does not belong to this tenant', 'INVALID_EXPENSE_LOCATION', 400);
       }
-      if (costCenterId && !await trx.selectFrom('cost_centers').select('id')
-        .where('tenant_id', '=', scope.tenantId).where('id', '=', costCenterId).executeTakeFirst()) {
+      if (
+        costCenterId &&
+        !(await trx
+          .selectFrom('cost_centers')
+          .select('id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', costCenterId)
+          .executeTakeFirst())
+      ) {
         throw new AppError('Cost center does not belong to this tenant', 'INVALID_EXPENSE_COST_CENTER', 400);
       }
       // The initial idempotency lookup may miss another request whose row
@@ -228,7 +270,11 @@ export class TreasuryService {
       const completed = visibleAfterChecks.rows[0];
       if (completed) {
         if (!samePayload(completed)) {
-          throw new AppError('Expense request key was already used with different data', 'EXPENSE_IDEMPOTENCY_CONFLICT', 409);
+          throw new AppError(
+            'Expense request key was already used with different data',
+            'EXPENSE_IDEMPOTENCY_CONFLICT',
+            409,
+          );
         }
         return { expenseId: Number(completed.id), idempotent: true };
       }
@@ -252,27 +298,34 @@ export class TreasuryService {
 
       const expenseId = Number(insert.rows[0]?.id || 0);
 
-      await trx.insertInto('treasury_transactions').values({
-        txn_type: 'expense',
-        amount: -amount,
-        note: 'مصروف: ' + title,
-        reference_type: 'expense',
-        reference_id: expenseId,
-        branch_id: branchId,
-        location_id: locationId,
-        created_by: auth.userId,
-        tenant_id: scope.tenantId,
-        account_id: scope.accountId,
-      }).execute();
+      await trx
+        .insertInto('treasury_transactions')
+        .values({
+          txn_type: 'expense',
+          amount: -amount,
+          note: 'مصروف: ' + title,
+          reference_type: 'expense',
+          reference_id: expenseId,
+          branch_id: branchId,
+          location_id: locationId,
+          created_by: auth.userId,
+          tenant_id: scope.tenantId,
+          account_id: scope.accountId,
+        })
+        .execute();
 
       // Source-of-truth accounting post is the expense document itself.
       // Treasury transaction is an operational cash movement side-effect for the same expense.
       const accountingResult = await this.accountingPosting.postExpense(trx, expenseId, auth);
       if (!accountingResult.journalEntryId) throw new Error(`Expense ${expenseId} has no journal entry`);
       if (accountingResult.posted) {
-        this.logger.log(`Posted expense journal for expense ${expenseId} with entry ${accountingResult.journalEntryId}`);
+        this.logger.log(
+          `Posted expense journal for expense ${expenseId} with entry ${accountingResult.journalEntryId}`,
+        );
       } else {
-        this.logger.warn(`Skipped expense journal posting for expense ${expenseId}; existing entry ${accountingResult.journalEntryId ?? 'none'}`);
+        this.logger.warn(
+          `Skipped expense journal posting for expense ${expenseId}; existing entry ${accountingResult.journalEntryId ?? 'none'}`,
+        );
       }
       return { expenseId, idempotent: false };
     });
@@ -289,7 +342,9 @@ export class TreasuryService {
           auth,
         );
       } catch (auditError) {
-        this.logger.error(`Expense ${result.expenseId} committed but audit log failed: ${(auditError as Error)?.message || auditError}`);
+        this.logger.error(
+          `Expense ${result.expenseId} committed but audit log failed: ${(auditError as Error)?.message || auditError}`,
+        );
       }
     }
     return { ok: true, ...(await this.listExpenses({}, auth)) };
@@ -312,12 +367,18 @@ export class TreasuryService {
    * posting twice; the posting layer's reversalOfEntryId check is the
    * concurrent backstop.
    */
-  async cancelExpense(expenseId: number, payload: CancelExpenseDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async cancelExpense(
+    expenseId: number,
+    payload: CancelExpenseDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     if (!Number.isInteger(expenseId) || expenseId <= 0) {
       throw new AppError('Expense was not found', 'EXPENSE_NOT_FOUND', 404);
     }
-    const reason = String(payload?.reason || '').trim().slice(0, 500);
+    const reason = String(payload?.reason || '')
+      .trim()
+      .slice(0, 500);
 
     const findReversalEntryId = async (trx: Kysely<Database>): Promise<number | null> => {
       const row = await sql<{ id: number }>`
@@ -333,7 +394,11 @@ export class TreasuryService {
       // The row lock serializes concurrent cancels of the same expense:
       // the second caller blocks here, then sees cancelled_at set.
       const existing = await sql<{
-        id: number; title: string; amount: number; branch_id: number | null; location_id: number | null;
+        id: number;
+        title: string;
+        amount: number;
+        branch_id: number | null;
+        location_id: number | null;
         cancelled_at: Date | string | null;
       }>`
         SELECT id, title, amount, branch_id, location_id, cancelled_at
@@ -364,18 +429,21 @@ export class TreasuryService {
       // its own reference type so no shift query double-counts it --
       // the shift math attributes expenses through the expenses table,
       // which now excludes this cancelled row.
-      await trx.insertInto('treasury_transactions').values({
-        txn_type: 'expense_reversal',
-        amount,
-        note: 'إلغاء مصروف: ' + title,
-        reference_type: 'expense_reversal',
-        reference_id: expenseId,
-        branch_id: expense.branch_id,
-        location_id: expense.location_id,
-        created_by: auth.userId,
-        tenant_id: scope.tenantId,
-        account_id: scope.accountId,
-      }).execute();
+      await trx
+        .insertInto('treasury_transactions')
+        .values({
+          txn_type: 'expense_reversal',
+          amount,
+          note: 'إلغاء مصروف: ' + title,
+          reference_type: 'expense_reversal',
+          reference_id: expenseId,
+          branch_id: expense.branch_id,
+          location_id: expense.location_id,
+          created_by: auth.userId,
+          tenant_id: scope.tenantId,
+          account_id: scope.accountId,
+        })
+        .execute();
 
       await sql`
         UPDATE expenses
@@ -398,7 +466,9 @@ export class TreasuryService {
           auth,
         );
       } catch (auditError) {
-        this.logger.error(`Expense ${result.expenseId} cancelled but audit log failed: ${(auditError as Error)?.message || auditError}`);
+        this.logger.error(
+          `Expense ${result.expenseId} cancelled but audit log failed: ${(auditError as Error)?.message || auditError}`,
+        );
       }
     }
     return { ok: true, ...result, ...(await this.listExpenses({}, auth)) };
@@ -417,12 +487,20 @@ export class TreasuryService {
     try {
       minorAmount = toMinorUnits(requestedAmount, moneyDigits);
     } catch {
-      throw new AppError('Transfer amount must match the tenant currency minor units', 'INVALID_TRANSFER_PRECISION', 400);
+      throw new AppError(
+        'Transfer amount must match the tenant currency minor units',
+        'INVALID_TRANSFER_PRECISION',
+        400,
+      );
     }
     const amount = fromMinorUnits(minorAmount, moneyDigits);
     const requestKey = String(payload.requestKey || '').trim();
     if (!Number.isInteger(fromAccountId) || !Number.isInteger(toAccountId) || fromAccountId === toAccountId) {
-      throw new AppError('Source and destination accounts must be different valid accounts', 'INVALID_TRANSFER_ACCOUNTS', 400);
+      throw new AppError(
+        'Source and destination accounts must be different valid accounts',
+        'INVALID_TRANSFER_ACCOUNTS',
+        400,
+      );
     }
     if (requestKey.length < 8 || requestKey.length > 160) {
       throw new AppError('A stable transfer request key is required', 'TRANSFER_REQUEST_KEY_REQUIRED', 400);
@@ -446,10 +524,16 @@ export class TreasuryService {
       `.execute(trx);
       const prior = existing.rows[0];
       if (prior) {
-        if (Number(prior.from_account_id) !== fromAccountId
-          || Number(prior.to_account_id) !== toAccountId
-          || toMinorUnits(Number(prior.amount), moneyDigits) !== minorAmount) {
-          throw new AppError('Transfer request key was already used with different data', 'TRANSFER_IDEMPOTENCY_CONFLICT', 409);
+        if (
+          Number(prior.from_account_id) !== fromAccountId ||
+          Number(prior.to_account_id) !== toAccountId ||
+          toMinorUnits(Number(prior.amount), moneyDigits) !== minorAmount
+        ) {
+          throw new AppError(
+            'Transfer request key was already used with different data',
+            'TRANSFER_IDEMPOTENCY_CONFLICT',
+            409,
+          );
         }
         return { transferId: Number(prior.id), journalEntryId: Number(prior.journal_entry_id || 0), idempotent: true };
       }
@@ -470,7 +554,11 @@ export class TreasuryService {
         .orderBy('id', 'asc')
         .execute();
       if (accounts.length !== 2) {
-        throw new AppError('Both accounts must be active cash or bank accounts in this tenant', 'TREASURY_ACCOUNT_NOT_FOUND', 400);
+        throw new AppError(
+          'Both accounts must be active cash or bank accounts in this tenant',
+          'TREASURY_ACCOUNT_NOT_FOUND',
+          400,
+        );
       }
 
       // The initial idempotency lookup may miss another request whose row
@@ -478,8 +566,11 @@ export class TreasuryService {
       // This makes same-key simultaneous retries return the committed receipt,
       // without ever attempting a second insert/GL write.
       const visibleAfterLock = await sql<{
-        id: number; from_account_id: number; to_account_id: number;
-        amount: number; journal_entry_id: number | null;
+        id: number;
+        from_account_id: number;
+        to_account_id: number;
+        amount: number;
+        journal_entry_id: number | null;
       }>`
         SELECT id, from_account_id, to_account_id, amount, journal_entry_id
         FROM treasury_transfers
@@ -488,12 +579,22 @@ export class TreasuryService {
       `.execute(trx);
       const completed = visibleAfterLock.rows[0];
       if (completed) {
-        if (Number(completed.from_account_id) !== fromAccountId
-          || Number(completed.to_account_id) !== toAccountId
-          || toMinorUnits(Number(completed.amount), moneyDigits) !== minorAmount) {
-          throw new AppError('Transfer request key was already used with different data', 'TRANSFER_IDEMPOTENCY_CONFLICT', 409);
+        if (
+          Number(completed.from_account_id) !== fromAccountId ||
+          Number(completed.to_account_id) !== toAccountId ||
+          toMinorUnits(Number(completed.amount), moneyDigits) !== minorAmount
+        ) {
+          throw new AppError(
+            'Transfer request key was already used with different data',
+            'TRANSFER_IDEMPOTENCY_CONFLICT',
+            409,
+          );
         }
-        return { transferId: Number(completed.id), journalEntryId: Number(completed.journal_entry_id || 0), idempotent: true };
+        return {
+          transferId: Number(completed.id),
+          journalEntryId: Number(completed.journal_entry_id || 0),
+          idempotent: true,
+        };
       }
 
       const balanceResult = await sql<{ balance: string }>`
@@ -508,7 +609,11 @@ export class TreasuryService {
       const available = Number(balanceResult.rows[0]?.balance || 0);
       const availableMinor = toMinorUnits(available, moneyDigits);
       if (availableMinor < minorAmount) {
-        throw new AppError(`Insufficient balance in source treasury (available ${available.toFixed(moneyDigits)})`, 'INSUFFICIENT_TREASURY_BALANCE', 400);
+        throw new AppError(
+          `Insufficient balance in source treasury (available ${available.toFixed(moneyDigits)})`,
+          'INSUFFICIENT_TREASURY_BALANCE',
+          400,
+        );
       }
 
       const inserted = await sql<{ id: number }>`
@@ -534,8 +639,26 @@ export class TreasuryService {
         createdBy: auth.userId,
         postedBy: auth.userId,
         lines: [
-          { accountId: toAccountId, description: 'استلام تحويل خزينة', debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId: null, locationId: null },
-          { accountId: fromAccountId, description: 'إرسال تحويل خزينة', debit: 0, credit: amount, partnerType: 'none', partnerId: null, branchId: null, locationId: null },
+          {
+            accountId: toAccountId,
+            description: 'استلام تحويل خزينة',
+            debit: amount,
+            credit: 0,
+            partnerType: 'none',
+            partnerId: null,
+            branchId: null,
+            locationId: null,
+          },
+          {
+            accountId: fromAccountId,
+            description: 'إرسال تحويل خزينة',
+            debit: 0,
+            credit: amount,
+            partnerType: 'none',
+            partnerId: null,
+            branchId: null,
+            locationId: null,
+          },
         ],
       });
 
@@ -545,20 +668,37 @@ export class TreasuryService {
         WHERE id = ${transferId} AND tenant_id = ${scope.tenantId}
       `.execute(trx);
 
-      await trx.insertInto('treasury_transactions').values([
-        {
-          txn_type: 'transfer_out', amount: -amount, note: String(payload.note || '').trim(),
-          reference_type: 'treasury_transfer', reference_id: transferId, return_document_id: null,
-          branch_id: null, location_id: null, created_by: auth.userId,
-          tenant_id: scope.tenantId, account_id: scope.accountId,
-        },
-        {
-          txn_type: 'transfer_in', amount, note: String(payload.note || '').trim(),
-          reference_type: 'treasury_transfer', reference_id: transferId, return_document_id: null,
-          branch_id: null, location_id: null, created_by: auth.userId,
-          tenant_id: scope.tenantId, account_id: scope.accountId,
-        },
-      ]).execute();
+      await trx
+        .insertInto('treasury_transactions')
+        .values([
+          {
+            txn_type: 'transfer_out',
+            amount: -amount,
+            note: String(payload.note || '').trim(),
+            reference_type: 'treasury_transfer',
+            reference_id: transferId,
+            return_document_id: null,
+            branch_id: null,
+            location_id: null,
+            created_by: auth.userId,
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+          },
+          {
+            txn_type: 'transfer_in',
+            amount,
+            note: String(payload.note || '').trim(),
+            reference_type: 'treasury_transfer',
+            reference_id: transferId,
+            return_document_id: null,
+            branch_id: null,
+            location_id: null,
+            created_by: auth.userId,
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+          },
+        ])
+        .execute();
 
       return { transferId, journalEntryId, idempotent: false };
     });

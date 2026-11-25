@@ -37,10 +37,13 @@ export class SettingsImportService {
   }
 
   private get balances(): SettingsImportOpeningBalances {
-    return (this._balances ??= new SettingsImportOpeningBalances({
-      scope: (actor) => this.guards.scope(actor),
-      tenantFields: (actor) => this.guards.tenantFields(actor),
-    }, this.accountingPosting));
+    return (this._balances ??= new SettingsImportOpeningBalances(
+      {
+        scope: (actor) => this.guards.scope(actor),
+        tenantFields: (actor) => this.guards.tenantFields(actor),
+      },
+      this.accountingPosting,
+    ));
   }
 
   private get products(): SettingsImportProducts {
@@ -60,7 +63,8 @@ export class SettingsImportService {
     return (this._customers ??= new SettingsImportCustomers(this.db, this.audit, {
       scope: (actor) => this.guards.scope(actor),
       tenantFields: (actor) => this.guards.tenantFields(actor),
-      addCustomerOpeningBalance: (db, customerId, amount, actor) => this.balances.addCustomerOpeningBalance(db, customerId, amount, actor),
+      addCustomerOpeningBalance: (db, customerId, amount, actor) =>
+        this.balances.addCustomerOpeningBalance(db, customerId, amount, actor),
     }));
   }
 
@@ -68,7 +72,8 @@ export class SettingsImportService {
     return (this._suppliersStock ??= new SettingsImportSuppliersStock(this.db, this.audit, {
       scope: (actor) => this.guards.scope(actor),
       tenantFields: (actor) => this.guards.tenantFields(actor),
-      addSupplierOpeningBalance: (db, supplierId, amount, actor) => this.balances.addSupplierOpeningBalance(db, supplierId, amount, actor),
+      addSupplierOpeningBalance: (db, supplierId, amount, actor) =>
+        this.balances.addSupplierOpeningBalance(db, supplierId, amount, actor),
       ensureLocation: (db, name, actor, cache) => this.guards.ensureLocation(db, name, actor, cache),
       postImportedOpeningStock: (trx, opts) => this.balances.postImportedOpeningStock(trx, opts),
     }));
@@ -84,8 +89,10 @@ export class SettingsImportService {
       normalizeEmployeeStatus: (value) => this.guards.normalizeEmployeeStatus(value),
       normalizeOvertimePolicy: (value) => this.guards.normalizeOvertimePolicy(value),
       ensureHrMasterName: (db, table, name, actor) => this.guards.ensureHrMasterName(db, table, name, actor),
-      findEmployeeByContact: (db, contactType, value, actor) => this.guards.findEmployeeByContact(db, contactType, value, actor),
-      upsertEmployeeContact: (db, employeeId, contactType, value, actor) => this.guards.upsertEmployeeContact(db, employeeId, contactType, value, actor),
+      findEmployeeByContact: (db, contactType, value, actor) =>
+        this.guards.findEmployeeByContact(db, contactType, value, actor),
+      upsertEmployeeContact: (db, employeeId, contactType, value, actor) =>
+        this.guards.upsertEmployeeContact(db, employeeId, contactType, value, actor),
       nextAvailableEmployeeNo: (db, actor) => this.guards.nextAvailableEmployeeNo(db, actor),
     }));
   }

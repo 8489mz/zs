@@ -2,7 +2,11 @@ import { sql } from '../../../../database/kysely';
 import { AppError } from '../../../../common/errors/app-error';
 import { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
+import {
+  currencyMoneyDigits,
+  roundMoney,
+  type MoneyDigits,
+} from '../../../accounting/engines/money-minor-units.engine';
 import type { VanRepFinancialLedgerDeps } from './van-rep-financial-ledger.types';
 
 export class AddRepBonusOrCommissionSlice {

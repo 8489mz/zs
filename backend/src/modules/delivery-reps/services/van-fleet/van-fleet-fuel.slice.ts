@@ -5,7 +5,12 @@ import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../../accounting/engines/money-minor-units.engine';
 
 export interface VanFleetFuelSliceBoundDeps {
-  assertVehicleUsableByRep: (tenantId: string, vehicleId: number, repId: number, tripId?: number | null) => Promise<void>;
+  assertVehicleUsableByRep: (
+    tenantId: string,
+    vehicleId: number,
+    repId: number,
+    tripId?: number | null,
+  ) => Promise<void>;
 }
 
 export class VanFleetFuelSlice {

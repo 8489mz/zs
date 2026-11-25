@@ -175,7 +175,7 @@ export class ImportSourcingService {
       .leftJoin('import_suppliers_meta', (join) =>
         join
           .onRef('import_suppliers_meta.supplier_id', '=', 'suppliers.id')
-          .onRef('import_suppliers_meta.tenant_id', '=', 'suppliers.tenant_id')
+          .onRef('import_suppliers_meta.tenant_id', '=', 'suppliers.tenant_id'),
       )
       .select([
         'suppliers.id',
@@ -224,9 +224,7 @@ export class ImportSourcingService {
         .executeTakeFirst();
 
       // Newly added bank accounts must be 'unverified' by default until formally audited
-      const auditStatus = dto.auditStatus && existing?.audit_status === 'verified'
-        ? dto.auditStatus
-        : 'unverified';
+      const auditStatus = dto.auditStatus && existing?.audit_status === 'verified' ? dto.auditStatus : 'unverified';
 
       const payload: any = {
         chinese_name: dto.chineseName,
@@ -235,7 +233,9 @@ export class ImportSourcingService {
         moq_description: dto.moqDescription,
         production_lead_time_days: dto.productionLeadTimeDays ?? 30,
         verified_bank_details: dto.verifiedBankDetails ? JSON.stringify(dto.verifiedBankDetails) : '{}',
-        incoterms_accepted: dto.incotermsAccepted ? JSON.stringify(dto.incotermsAccepted) : JSON.stringify(['FOB', 'EXW', 'CIF']),
+        incoterms_accepted: dto.incotermsAccepted
+          ? JSON.stringify(dto.incotermsAccepted)
+          : JSON.stringify(['FOB', 'EXW', 'CIF']),
         qc_rating: dto.qcRating ?? 5.0,
         quality_certifications: dto.qualityCertifications ? JSON.stringify(dto.qualityCertifications) : '[]',
         audit_status: auditStatus,
@@ -265,12 +265,7 @@ export class ImportSourcingService {
     });
   }
 
-  async verifySupplierBankDetails(
-    tenantId: string,
-    userId: number,
-    supplierId: string,
-    verificationNotes?: string
-  ) {
+  async verifySupplierBankDetails(tenantId: string, userId: number, supplierId: string, verificationNotes?: string) {
     const sId = Number(supplierId);
     return await this.db.transaction().execute(async (trx) => {
       const existing = await trx
@@ -353,9 +348,13 @@ export class ImportSourcingService {
       throw new BadRequestException('ترحيل مصروف رحلة توريد يتطلب موافقة Maker-Checker معتمدة.');
     }
     return await this.db.transaction().execute(async (trx) => {
-      const trip: any = await trx.selectFrom('import_sourcing_trips').selectAll()
-        .where('tenant_id', '=', tenantId).where('id', '=', tripId)
-        .forUpdate().executeTakeFirst();
+      const trip: any = await trx
+        .selectFrom('import_sourcing_trips')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', tripId)
+        .forUpdate()
+        .executeTakeFirst();
       if (!trip) throw new BadRequestException('رحلة التوريد غير تابعة للمنشأة.');
       if (trip.journal_entry_id !== null && trip.journal_entry_id !== undefined) {
         throw new ConflictException('تم ترحيل مصروف هذه الرحلة مسبقاً بقيد محاسبي.');
@@ -364,24 +363,38 @@ export class ImportSourcingService {
       if (!Number.isFinite(actualCost) || actualCost <= 0) {
         throw new BadRequestException('لا يمكن ترحيل رحلة بلا تكلفة فعلية موجبة؛ حدد التكلفة الفعلية أولاً.');
       }
-      const supplier: any = await trx.selectFrom('suppliers').select(['id', 'account_id'])
-        .where('tenant_id', '=', tenantId).where('id', '=', Number(dto.supplierId)).executeTakeFirst();
+      const supplier: any = await trx
+        .selectFrom('suppliers')
+        .select(['id', 'account_id'])
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', Number(dto.supplierId))
+        .executeTakeFirst();
       if (!supplier) throw new BadRequestException('المورد المستحق لمصروف الرحلة غير تابع للمنشأة.');
-      const expenseAccount: any = await trx.selectFrom('accounting_accounts')
+      const expenseAccount: any = await trx
+        .selectFrom('accounting_accounts')
         .select(['id', 'account_type', 'is_active'])
-        .where('tenant_id', '=', tenantId).where('id', '=', Number(dto.expenseAccountId)).executeTakeFirst();
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', Number(dto.expenseAccountId))
+        .executeTakeFirst();
       if (!expenseAccount || !expenseAccount.is_active || expenseAccount.account_type !== 'expense') {
         throw new BadRequestException('حساب مصروف الرحلة يجب أن يكون حساب مصروف نشطاً في دليل حسابات المنشأة.');
       }
-      await this.verifyAndConsumeApprovalRequest(trx, tenantId, 'sourcing_trip_expense', tripId, dto.approvalRequestId, {
+      await this.verifyAndConsumeApprovalRequest(
+        trx,
+        tenantId,
+        'sourcing_trip_expense',
         tripId,
-        amount: actualCost,
-        supplierId: String(dto.supplierId),
-        // No projectId binding: the project is implied by the
-        // locked trip row (trips have no update path, so the
-        // project cannot drift between minting and execution),
-        // and the minter knows the trip id, not its project.
-      });
+        dto.approvalRequestId,
+        {
+          tripId,
+          amount: actualCost,
+          supplierId: String(dto.supplierId),
+          // No projectId binding: the project is implied by the
+          // locked trip row (trips have no update path, so the
+          // project cannot drift between minting and execution),
+          // and the minter knows the trip id, not its project.
+        },
+      );
       const payableAccountId = await this.resolveTenantAccount(trx, tenantId, 'payable');
       // start_date is a stored DATE (a Date object from pg): String()
       // on it yields 'Wed Jan 15', not a calendar day. Normalize it
@@ -390,25 +403,30 @@ export class ImportSourcingService {
       // day on any host east of UTC. The fallback is the tenant-local
       // business day.
       const expenseDate = trip.start_date
-        ? (trip.start_date instanceof Date
+        ? trip.start_date instanceof Date
           ? formatLocalCalendarDay(trip.start_date)
-          : String(trip.start_date).slice(0, 10))
+          : String(trip.start_date).slice(0, 10)
         : await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date());
-      await trx.insertInto('expenses').values({
-        tenant_id: tenantId,
-        account_id: String(dto.expenseAccountId),
-        title: `مصروف رحلة توريد - ${trip.trip_title}`,
-        amount: actualCost,
-        expense_date: expenseDate,
-        created_by: userId,
-        note: `رحلة ${trip.trip_title} إلى ${trip.destination_city} - ترحيل معتمد`,
-        branch_id: null,
-        location_id: null,
-      }).execute();
+      await trx
+        .insertInto('expenses')
+        .values({
+          tenant_id: tenantId,
+          account_id: String(dto.expenseAccountId),
+          title: `مصروف رحلة توريد - ${trip.trip_title}`,
+          amount: actualCost,
+          expense_date: expenseDate,
+          created_by: userId,
+          note: `رحلة ${trip.trip_title} إلى ${trip.destination_city} - ترحيل معتمد`,
+          branch_id: null,
+          location_id: null,
+        })
+        .execute();
       const posting = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
       const tripSerialId = Number(trip.serial_id);
       if (!Number.isSafeInteger(tripSerialId)) {
-        throw new BadRequestException('ترحيل مصروف الرحلة يتطلب تشغيل الترحيل 0287 أولاً (الرقم المسلسل لربط القيد). [IMPORT_TRIP_SERIAL_MISSING]');
+        throw new BadRequestException(
+          'ترحيل مصروف الرحلة يتطلب تشغيل الترحيل 0287 أولاً (الرقم المسلسل لربط القيد). [IMPORT_TRIP_SERIAL_MISSING]',
+        );
       }
       const journalEntryId = await posting.postDomainJournal(trx, {
         sourceType: 'import_sourcing_trip_expense',
@@ -444,8 +462,12 @@ export class ImportSourcingService {
           },
         ],
       });
-      await trx.updateTable('import_sourcing_trips').set({ journal_entry_id: journalEntryId })
-        .where('tenant_id', '=', tenantId).where('id', '=', tripId).execute();
+      await trx
+        .updateTable('import_sourcing_trips')
+        .set({ journal_entry_id: journalEntryId })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', tripId)
+        .execute();
       return { ...trip, journal_entry_id: journalEntryId };
     });
   }
@@ -582,7 +604,9 @@ export class ImportSourcingService {
       .selectFrom('import_aci_compliance')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where((eb) => eb.or([eb('id', '=', targetId), eb('shipment_id', '=', targetId), eb('project_id', '=', targetId)]))
+      .where((eb) =>
+        eb.or([eb('id', '=', targetId), eb('shipment_id', '=', targetId), eb('project_id', '=', targetId)]),
+      )
       .executeTakeFirst();
   }
 
@@ -636,7 +660,7 @@ export class ImportSourcingService {
           eb.or([
             eb('acid_number', '=', dto.acidNumber),
             ...(dto.shipmentId ? [eb('shipment_id', '=', dto.shipmentId)] : []),
-          ])
+          ]),
         )
         .executeTakeFirst();
 
@@ -745,10 +769,7 @@ export class ImportSourcingService {
    * labels an unknown HS code instead of silently using zeros.
    */
   async listCustomsTariffs(tenantId: string, search?: string, sector?: string) {
-    let query = this.db
-      .selectFrom('import_customs_tariffs')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('import_customs_tariffs').selectAll().where('tenant_id', '=', tenantId);
 
     if (sector && sector !== 'all') {
       query = query.where('sector', '=', sector);
@@ -762,7 +783,7 @@ export class ImportSourcingService {
           eb('description_ar', 'like', s),
           eb('description_en', 'like', s),
           eb('category_ar', 'like', s),
-        ])
+        ]),
       );
     }
 
@@ -773,7 +794,7 @@ export class ImportSourcingService {
     tenantId: string,
     hsCode: string,
     cifValueEgp: number,
-    overrides?: { overrideDutyRatePercent?: number; overrideVatRatePercent?: number }
+    overrides?: { overrideDutyRatePercent?: number; overrideVatRatePercent?: number },
   ) {
     const tariff = await this.db
       .selectFrom('import_customs_tariffs')

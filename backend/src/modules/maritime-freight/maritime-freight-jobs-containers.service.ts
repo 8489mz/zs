@@ -3,12 +3,7 @@ import { resolveFxRate } from '../accounting/fx-rate-resolution';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { convertFxAmount } from '../accounting/engines/fx-conversion.engine';
 import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.engine';
-import {
-  NotFoundException,
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { NotFoundException, BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { sql, type Kysely } from '../../database/kysely';
 import { type Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
@@ -86,7 +81,10 @@ export class MaritimeFreightJobsContainersService {
   // --------------------------------------------------------------------------
   // 7. Containers & Demurrage Radar
   // --------------------------------------------------------------------------
-  async getContainers(auth: AuthContext, filters?: { overdueOnly?: boolean; depositHeldOnly?: boolean; search?: string }) {
+  async getContainers(
+    auth: AuthContext,
+    filters?: { overdueOnly?: boolean; depositHeldOnly?: boolean; search?: string },
+  ) {
     const { tenantId } = requireTenantScope(auth);
     let query = this.db
       .selectFrom('maritime_containers as c')
@@ -112,7 +110,7 @@ export class MaritimeFreightJobsContainersService {
         'j.customer_name',
         'j.shipping_line_name',
         'j.vessel_name',
-        'j.delivery_order_released'
+        'j.delivery_order_released',
       ])
       .where('c.tenant_id', '=', tenantId);
 
@@ -126,11 +124,13 @@ export class MaritimeFreightJobsContainersService {
 
     if (filters?.search) {
       const term = `%${filters.search}%`;
-      query = query.where((eb) => eb.or([
-        eb('c.container_number', 'ilike', term),
-        eb('j.job_number', 'ilike', term),
-        eb('j.customer_name', 'ilike', term)
-      ]));
+      query = query.where((eb) =>
+        eb.or([
+          eb('c.container_number', 'ilike', term),
+          eb('j.job_number', 'ilike', term),
+          eb('j.customer_name', 'ilike', term),
+        ]),
+      );
     }
 
     const rows = await query.orderBy('c.id', 'desc').execute();
@@ -197,7 +197,9 @@ export class MaritimeFreightJobsContainersService {
     amountUsd: number,
   ): Promise<'created' | 'updated' | 'skipped'> {
     const jobIdStr = String(jobId);
-    const numberKey = String(containerNumber || '').trim().toUpperCase();
+    const numberKey = String(containerNumber || '')
+      .trim()
+      .toUpperCase();
     if (!(amountUsd > 0) || !numberKey) return 'skipped';
     const job = await this.db
       .selectFrom('maritime_jobs')
@@ -212,7 +214,9 @@ export class MaritimeFreightJobsContainersService {
     try {
       rate = await resolveFxRate(this.db, tenantId, 'USD');
     } catch (err: any) {
-      this.logger.warn(`Demurrage auto-charge skipped for container ${containerNumber} (job ${jobIdStr}): no live USD rate -- ${err?.message}`);
+      this.logger.warn(
+        `Demurrage auto-charge skipped for container ${containerNumber} (job ${jobIdStr}): no live USD rate -- ${err?.message}`,
+      );
       return 'skipped';
     }
     const converted = convertFxAmount(amountUsd, rate, currencyMoneyDigits(baseCurrency));
@@ -273,135 +277,177 @@ export class MaritimeFreightJobsContainersService {
   async updateContainer(auth: AuthContext, containerId: string, dto: UpdateMaritimeContainerDto) {
     const { tenantId } = requireTenantScope(auth);
     return await this.db.transaction().execute(async (trx) => {
-    const container = await trx
-      .selectFrom('maritime_containers')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', containerId as any)
-      .forUpdate()
-      .executeTakeFirst();
+      const container = await trx
+        .selectFrom('maritime_containers')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', containerId as any)
+        .forUpdate()
+        .executeTakeFirst();
 
-    if (!container) throw new NotFoundException('Container not found');
-    const dischargedAtValue = dto.dischargedAt !== undefined ? dto.dischargedAt : container.discharged_at;
-    const returnedAtValue = dto.emptyReturnedAt !== undefined ? dto.emptyReturnedAt : container.empty_returned_at;
-    if ([dischargedAtValue, returnedAtValue].some((value) => value && !Number.isFinite(new Date(String(value)).getTime()))) {
-      throw new BadRequestException('تاريخ تفريغ أو إرجاع الحاوية غير صالح');
-    }
-    if (dischargedAtValue && returnedAtValue && new Date(String(returnedAtValue)).getTime() < new Date(String(dischargedAtValue)).getTime()) {
-      throw new BadRequestException('تاريخ إرجاع الحاوية لا يمكن أن يسبق تاريخ التفريغ');
-    }
-    if (dto.depositAmount !== undefined && Number(dto.depositAmount) !== Number(container.deposit_amount)) {
-      throw new BadRequestException('لا يمكن تغيير مبلغ تأمين سبق قيده محاسبياً');
-    }
-    if (dto.depositCurrency !== undefined && dto.depositCurrency !== container.deposit_currency) {
-      throw new BadRequestException('لا يمكن تغيير عملة تأمين سبق قيده محاسبياً');
-    }
-    if (dto.depositStatus === 'not_required' && Number(container.deposit_amount) > 0) {
-      throw new BadRequestException('لا يمكن إلغاء تأمين حاوية له مبلغ وقيد محاسبي');
-    }
-    const terminalDepositStatus = String(dto.depositStatus || '');
-    if (['refunded_to_treasury', 'forfeited'].includes(terminalDepositStatus)) {
-      if (['refunded_to_treasury', 'forfeited'].includes(container.deposit_status)) {
-        if (container.deposit_status !== terminalDepositStatus) throw new BadRequestException('تمت تسوية تأمين الحاوية مسبقاً');
+      if (!container) throw new NotFoundException('Container not found');
+      const dischargedAtValue = dto.dischargedAt !== undefined ? dto.dischargedAt : container.discharged_at;
+      const returnedAtValue = dto.emptyReturnedAt !== undefined ? dto.emptyReturnedAt : container.empty_returned_at;
+      if (
+        [dischargedAtValue, returnedAtValue].some(
+          (value) => value && !Number.isFinite(new Date(String(value)).getTime()),
+        )
+      ) {
+        throw new BadRequestException('تاريخ تفريغ أو إرجاع الحاوية غير صالح');
+      }
+      if (
+        dischargedAtValue &&
+        returnedAtValue &&
+        new Date(String(returnedAtValue)).getTime() < new Date(String(dischargedAtValue)).getTime()
+      ) {
+        throw new BadRequestException('تاريخ إرجاع الحاوية لا يمكن أن يسبق تاريخ التفريغ');
+      }
+      if (dto.depositAmount !== undefined && Number(dto.depositAmount) !== Number(container.deposit_amount)) {
+        throw new BadRequestException('لا يمكن تغيير مبلغ تأمين سبق قيده محاسبياً');
+      }
+      if (dto.depositCurrency !== undefined && dto.depositCurrency !== container.deposit_currency) {
+        throw new BadRequestException('لا يمكن تغيير عملة تأمين سبق قيده محاسبياً');
+      }
+      if (dto.depositStatus === 'not_required' && Number(container.deposit_amount) > 0) {
+        throw new BadRequestException('لا يمكن إلغاء تأمين حاوية له مبلغ وقيد محاسبي');
+      }
+      const terminalDepositStatus = String(dto.depositStatus || '');
+      if (['refunded_to_treasury', 'forfeited'].includes(terminalDepositStatus)) {
+        if (['refunded_to_treasury', 'forfeited'].includes(container.deposit_status)) {
+          if (container.deposit_status !== terminalDepositStatus)
+            throw new BadRequestException('تمت تسوية تأمين الحاوية مسبقاً');
+        } else {
+          await this.postContainerDepositJournal(
+            trx,
+            tenantId,
+            containerId,
+            Number(container.deposit_amount),
+            container.deposit_currency,
+            terminalDepositStatus === 'forfeited' ? 'forfeit' : 'refund',
+            auth.userId,
+          );
+        }
+      } else if (
+        ['refunded_to_treasury', 'forfeited'].includes(container.deposit_status) &&
+        dto.depositStatus !== undefined &&
+        dto.depositStatus !== container.deposit_status
+      ) {
+        throw new BadRequestException('لا يمكن إعادة فتح تأمين تمت تسويته محاسبياً');
+      }
+
+      if (dto.freeDays !== undefined && (!Number.isInteger(dto.freeDays) || dto.freeDays < 0)) {
+        throw new BadRequestException('فترة السماح يجب أن تكون عدداً صحيحاً غير سالب');
+      }
+      if (
+        dto.demurrageRatePerDay !== undefined &&
+        (!Number.isFinite(dto.demurrageRatePerDay) || dto.demurrageRatePerDay < 0)
+      ) {
+        throw new BadRequestException('الغرامة اليومية يجب أن تكون غير سالبة');
+      }
+
+      const updatePayload: any = {
+        updated_at: sql`NOW()`,
+      };
+
+      if (dto.sealNumber !== undefined) updatePayload.seal_number = dto.sealNumber;
+      if (dto.gatedInAt !== undefined) updatePayload.gated_in_at = dto.gatedInAt ? new Date(dto.gatedInAt) : null;
+      if (dto.vesselLoadedAt !== undefined)
+        updatePayload.vessel_loaded_at = dto.vesselLoadedAt ? new Date(dto.vesselLoadedAt) : null;
+      if (dto.dischargedAt !== undefined)
+        updatePayload.discharged_at = dto.dischargedAt ? new Date(dto.dischargedAt) : null;
+      if (dto.gatedOutAt !== undefined) updatePayload.gated_out_at = dto.gatedOutAt ? new Date(dto.gatedOutAt) : null;
+      if (dto.emptyReturnedAt !== undefined)
+        updatePayload.empty_returned_at = dto.emptyReturnedAt ? new Date(dto.emptyReturnedAt) : null;
+      if (dto.freeDays !== undefined) updatePayload.free_days = dto.freeDays;
+      if (dto.demurrageRatePerDay !== undefined) updatePayload.demurrage_rate_per_day = dto.demurrageRatePerDay;
+      if (dto.depositAmount !== undefined) updatePayload.deposit_amount = dto.depositAmount;
+      if (dto.depositCurrency !== undefined) updatePayload.deposit_currency = dto.depositCurrency;
+      if (dto.depositStatus !== undefined) updatePayload.deposit_status = dto.depositStatus;
+      if (dto.emptyReturnProofUrl !== undefined) updatePayload.empty_return_proof_url = dto.emptyReturnProofUrl;
+      if (dto.notes !== undefined) updatePayload.notes = dto.notes;
+
+      // An explicit return date takes precedence; otherwise free time starts at discharge.
+      const dischargedAt = dto.dischargedAt !== undefined ? dto.dischargedAt : container.discharged_at;
+      let deadlineDate = dto.returnDeadline !== undefined ? dto.returnDeadline : container.return_deadline;
+      if (
+        dto.returnDeadline === undefined &&
+        dischargedAt &&
+        (dto.dischargedAt !== undefined || dto.freeDays !== undefined || !deadlineDate)
+      ) {
+        // Free time starts at the tenant-local discharge day, not its UTC day.
+        const dischargeDay = await resolveBusinessDateKey(trx, tenantId, dischargedAt);
+        const baseDate = new Date(`${dischargeDay}T00:00:00.000Z`);
+        baseDate.setUTCDate(baseDate.getUTCDate() + Number(dto.freeDays ?? container.free_days ?? 14));
+        deadlineDate = baseDate.toISOString().slice(0, 10);
+      }
+      if (dto.returnDeadline !== undefined || deadlineDate !== container.return_deadline) {
+        updatePayload.return_deadline = deadlineDate || null;
+      }
+      if (deadlineDate) {
+        const returnedAt = dto.emptyReturnedAt !== undefined ? dto.emptyReturnedAt : container.empty_returned_at;
+        const endDay = await resolveBusinessDateKey(trx, tenantId, returnedAt ? new Date(returnedAt) : new Date());
+        // database.types says string, but pg delivers a DATE column as a
+        // host-local-midnight Date at runtime; key whichever shape
+        // actually arrives from host-local calendar parts.
+        const deadlineDay =
+          (deadlineDate as unknown) instanceof Date
+            ? formatLocalCalendarDay(deadlineDate as unknown as Date)
+            : String(deadlineDate).slice(0, 10);
+        const overdueDays = Math.max(0, Math.round((Date.parse(endDay) - Date.parse(deadlineDay)) / 86_400_000));
+        updatePayload.is_overdue = !returnedAt && overdueDays > 0;
+        updatePayload.overdue_days = overdueDays;
+        updatePayload.demurrage_amount =
+          overdueDays * Number(dto.demurrageRatePerDay ?? container.demurrage_rate_per_day ?? 0);
       } else {
-        await this.postContainerDepositJournal(trx, tenantId, containerId, Number(container.deposit_amount),
-          container.deposit_currency, terminalDepositStatus === 'forfeited' ? 'forfeit' : 'refund', auth.userId);
+        updatePayload.is_overdue = false;
+        updatePayload.overdue_days = 0;
+        updatePayload.demurrage_amount = 0;
       }
-    } else if (['refunded_to_treasury', 'forfeited'].includes(container.deposit_status) &&
-      dto.depositStatus !== undefined && dto.depositStatus !== container.deposit_status) {
-      throw new BadRequestException('لا يمكن إعادة فتح تأمين تمت تسويته محاسبياً');
-    }
 
-    if (dto.freeDays !== undefined && (!Number.isInteger(dto.freeDays) || dto.freeDays < 0)) {
-      throw new BadRequestException('فترة السماح يجب أن تكون عدداً صحيحاً غير سالب');
-    }
-    if (dto.demurrageRatePerDay !== undefined && (!Number.isFinite(dto.demurrageRatePerDay) || dto.demurrageRatePerDay < 0)) {
-      throw new BadRequestException('الغرامة اليومية يجب أن تكون غير سالبة');
-    }
-
-    const updatePayload: any = {
-      updated_at: sql`NOW()`,
-    };
-
-    if (dto.sealNumber !== undefined) updatePayload.seal_number = dto.sealNumber;
-    if (dto.gatedInAt !== undefined) updatePayload.gated_in_at = dto.gatedInAt ? new Date(dto.gatedInAt) : null;
-    if (dto.vesselLoadedAt !== undefined) updatePayload.vessel_loaded_at = dto.vesselLoadedAt ? new Date(dto.vesselLoadedAt) : null;
-    if (dto.dischargedAt !== undefined) updatePayload.discharged_at = dto.dischargedAt ? new Date(dto.dischargedAt) : null;
-    if (dto.gatedOutAt !== undefined) updatePayload.gated_out_at = dto.gatedOutAt ? new Date(dto.gatedOutAt) : null;
-    if (dto.emptyReturnedAt !== undefined) updatePayload.empty_returned_at = dto.emptyReturnedAt ? new Date(dto.emptyReturnedAt) : null;
-    if (dto.freeDays !== undefined) updatePayload.free_days = dto.freeDays;
-    if (dto.demurrageRatePerDay !== undefined) updatePayload.demurrage_rate_per_day = dto.demurrageRatePerDay;
-    if (dto.depositAmount !== undefined) updatePayload.deposit_amount = dto.depositAmount;
-    if (dto.depositCurrency !== undefined) updatePayload.deposit_currency = dto.depositCurrency;
-    if (dto.depositStatus !== undefined) updatePayload.deposit_status = dto.depositStatus;
-    if (dto.emptyReturnProofUrl !== undefined) updatePayload.empty_return_proof_url = dto.emptyReturnProofUrl;
-    if (dto.notes !== undefined) updatePayload.notes = dto.notes;
-
-    // An explicit return date takes precedence; otherwise free time starts at discharge.
-    const dischargedAt = dto.dischargedAt !== undefined ? dto.dischargedAt : container.discharged_at;
-    let deadlineDate = dto.returnDeadline !== undefined ? dto.returnDeadline : container.return_deadline;
-    if (dto.returnDeadline === undefined && dischargedAt && (dto.dischargedAt !== undefined || dto.freeDays !== undefined || !deadlineDate)) {
-      // Free time starts at the tenant-local discharge day, not its UTC day.
-      const dischargeDay = await resolveBusinessDateKey(trx, tenantId, dischargedAt);
-      const baseDate = new Date(`${dischargeDay}T00:00:00.000Z`);
-      baseDate.setUTCDate(baseDate.getUTCDate() + Number(dto.freeDays ?? container.free_days ?? 14));
-      deadlineDate = baseDate.toISOString().slice(0, 10);
-    }
-    if (dto.returnDeadline !== undefined || deadlineDate !== container.return_deadline) {
-      updatePayload.return_deadline = deadlineDate || null;
-    }
-    if (deadlineDate) {
-      const returnedAt = dto.emptyReturnedAt !== undefined ? dto.emptyReturnedAt : container.empty_returned_at;
-      const endDay = await resolveBusinessDateKey(trx, tenantId, returnedAt ? new Date(returnedAt) : new Date());
-      // database.types says string, but pg delivers a DATE column as a
-      // host-local-midnight Date at runtime; key whichever shape
-      // actually arrives from host-local calendar parts.
-      const deadlineDay = (deadlineDate as unknown) instanceof Date
-        ? formatLocalCalendarDay(deadlineDate as unknown as Date)
-        : String(deadlineDate).slice(0, 10);
-      const overdueDays = Math.max(0, Math.round((Date.parse(endDay) - Date.parse(deadlineDay)) / 86_400_000));
-      updatePayload.is_overdue = !returnedAt && overdueDays > 0;
-      updatePayload.overdue_days = overdueDays;
-      updatePayload.demurrage_amount = overdueDays * Number(dto.demurrageRatePerDay ?? container.demurrage_rate_per_day ?? 0);
-    } else {
-      updatePayload.is_overdue = false;
-      updatePayload.overdue_days = 0;
-      updatePayload.demurrage_amount = 0;
-    }
-
-    const originalDemurrage = Math.max(Number(container.demurrage_amount || 0),
-      Number(updatePayload.overdue_days || 0) * Number(container.demurrage_rate_per_day || 0));
-    if (Number(updatePayload.demurrage_amount || 0) > Number(container.demurrage_amount || 0) + 0.01) {
-      const job = await trx.selectFrom('maritime_jobs').select('status')
-        .where('tenant_id', '=', tenantId).where('id', '=', container.job_id as any).executeTakeFirst();
-      if (job?.status === 'completed') {
-        throw new BadRequestException('أعد فتح الشحنة وفوتر غرامة التأخير الجديدة قبل تعديل الحاوية');
+      const originalDemurrage = Math.max(
+        Number(container.demurrage_amount || 0),
+        Number(updatePayload.overdue_days || 0) * Number(container.demurrage_rate_per_day || 0),
+      );
+      if (Number(updatePayload.demurrage_amount || 0) > Number(container.demurrage_amount || 0) + 0.01) {
+        const job = await trx
+          .selectFrom('maritime_jobs')
+          .select('status')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', container.job_id as any)
+          .executeTakeFirst();
+        if (job?.status === 'completed') {
+          throw new BadRequestException('أعد فتح الشحنة وفوتر غرامة التأخير الجديدة قبل تعديل الحاوية');
+        }
       }
-    }
-    if (originalDemurrage > Number(updatePayload.demurrage_amount || 0) + 0.01) {
-      const reason = (dto.notes || '').trim();
-      if (!['admin', 'super_admin', 'finance_manager'].includes(auth.role.toLowerCase()) ||
-        !reason || reason === (container.notes || '').trim()) {
-        throw new BadRequestException('خفض غرامة التأخير يتطلب اعتماد مدير مالي وسبباً موثقاً');
+      if (originalDemurrage > Number(updatePayload.demurrage_amount || 0) + 0.01) {
+        const reason = (dto.notes || '').trim();
+        if (
+          !['admin', 'super_admin', 'finance_manager'].includes(auth.role.toLowerCase()) ||
+          !reason ||
+          reason === (container.notes || '').trim()
+        ) {
+          throw new BadRequestException('خفض غرامة التأخير يتطلب اعتماد مدير مالي وسبباً موثقاً');
+        }
+        updatePayload.notes = `${container.notes || ''}\nاعتماد خفض الغرامة من ${originalDemurrage} إلى ${updatePayload.demurrage_amount}: ${reason} (مستخدم ${auth.userId})`;
       }
-      updatePayload.notes = `${container.notes || ''}\nاعتماد خفض الغرامة من ${originalDemurrage} إلى ${updatePayload.demurrage_amount}: ${reason} (مستخدم ${auth.userId})`;
-    }
 
-    const [updated] = await trx
-      .updateTable('maritime_containers')
-      .set(updatePayload)
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', containerId as any)
-      .returningAll()
-      .execute();
+      const [updated] = await trx
+        .updateTable('maritime_containers')
+        .set(updatePayload)
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', containerId as any)
+        .returningAll()
+        .execute();
 
-    return updated;
+      return updated;
     });
   }
 
   async createContainer(auth: AuthContext, dto: any) {
     const { tenantId } = requireTenantScope(auth);
-    const containerNumber = String(dto.containerNumber || '').trim().toUpperCase();
+    const containerNumber = String(dto.containerNumber || '')
+      .trim()
+      .toUpperCase();
     if (!containerNumber) throw new BadRequestException('رقم الحاوية مطلوب');
 
     const freeDays = Number(dto.freeDays ?? 14);
@@ -409,7 +455,9 @@ export class MaritimeFreightJobsContainersService {
     if (!Number.isInteger(freeDays) || freeDays < 0 || !Number.isFinite(demurrageRate) || demurrageRate < 0) {
       throw new BadRequestException('فترة السماح أو الغرامة اليومية غير صالحة');
     }
-    const deadlineDate = dto.returnDeadline ? await resolveBusinessDateKey(this.db, tenantId, dto.returnDeadline) : null;
+    const deadlineDate = dto.returnDeadline
+      ? await resolveBusinessDateKey(this.db, tenantId, dto.returnDeadline)
+      : null;
     // Overdue days count from the tenant-local today, not the UTC day.
     const todayKey = await resolveBusinessDateKey(this.db, tenantId, new Date());
     const overdueDays = deadlineDate
@@ -422,42 +470,57 @@ export class MaritimeFreightJobsContainersService {
     }
 
     const inserted = await this.db.transaction().execute(async (trx) => {
-    const job = await trx.selectFrom('maritime_jobs').select('id')
-      .where('tenant_id', '=', tenantId).where('id', '=', String(dto.jobId) as any)
-      .forUpdate().executeTakeFirst();
-    if (!job) throw new NotFoundException('Shipment Job not found');
-    const duplicate = await trx.selectFrom('maritime_containers').select('id')
-      .where('tenant_id', '=', tenantId).where('job_id', '=', String(dto.jobId))
-      .where(sql<string>`UPPER(TRIM(container_number))`, '=', containerNumber).executeTakeFirst();
-    if (duplicate) throw new BadRequestException('رقم الحاوية موجود مسبقاً في أمر الشحن');
-    const [container] = await trx
-      .insertInto('maritime_containers')
-      .values({
-        tenant_id: tenantId,
-        job_id: dto.jobId,
-        container_number: containerNumber,
-        container_type: dto.containerType || "40' HC",
-        seal_number: dto.sealNumber || null,
-        gross_weight_kg: Number(dto.grossWeightKg) || 0,
-        cbm: Number(dto.cbm) || 0,
-        free_days: freeDays,
-        return_deadline: deadlineDate,
-        is_overdue: overdueDays > 0,
-        overdue_days: overdueDays,
-        demurrage_rate_per_day: demurrageRate,
-        demurrage_amount: overdueDays * demurrageRate,
-        deposit_amount: Number(dto.depositAmount) || 0,
-        deposit_currency: dto.depositCurrency || 'USD',
-        deposit_status: depositStatus,
-        notes: dto.notes || null,
-      })
-      .returningAll()
-      .execute();
-    if (Number(dto.depositAmount || 0) > 0) {
-      await this.postContainerDepositJournal(trx, tenantId, String(container.id), Number(dto.depositAmount),
-        dto.depositCurrency || 'USD', 'open', auth.userId);
-    }
-    return container;
+      const job = await trx
+        .selectFrom('maritime_jobs')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(dto.jobId) as any)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!job) throw new NotFoundException('Shipment Job not found');
+      const duplicate = await trx
+        .selectFrom('maritime_containers')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('job_id', '=', String(dto.jobId))
+        .where(sql<string>`UPPER(TRIM(container_number))`, '=', containerNumber)
+        .executeTakeFirst();
+      if (duplicate) throw new BadRequestException('رقم الحاوية موجود مسبقاً في أمر الشحن');
+      const [container] = await trx
+        .insertInto('maritime_containers')
+        .values({
+          tenant_id: tenantId,
+          job_id: dto.jobId,
+          container_number: containerNumber,
+          container_type: dto.containerType || "40' HC",
+          seal_number: dto.sealNumber || null,
+          gross_weight_kg: Number(dto.grossWeightKg) || 0,
+          cbm: Number(dto.cbm) || 0,
+          free_days: freeDays,
+          return_deadline: deadlineDate,
+          is_overdue: overdueDays > 0,
+          overdue_days: overdueDays,
+          demurrage_rate_per_day: demurrageRate,
+          demurrage_amount: overdueDays * demurrageRate,
+          deposit_amount: Number(dto.depositAmount) || 0,
+          deposit_currency: dto.depositCurrency || 'USD',
+          deposit_status: depositStatus,
+          notes: dto.notes || null,
+        })
+        .returningAll()
+        .execute();
+      if (Number(dto.depositAmount || 0) > 0) {
+        await this.postContainerDepositJournal(
+          trx,
+          tenantId,
+          String(container.id),
+          Number(dto.depositAmount),
+          dto.depositCurrency || 'USD',
+          'open',
+          auth.userId,
+        );
+      }
+      return container;
     });
 
     return inserted;

@@ -88,7 +88,10 @@ export class ContractingFieldOperationsSlice {
   // 29. Equipment & Tools Asset Tracking (سجل وتتبع العِدة والمعدات بالمشاريع)
   // ==========================================================================
 
-  async getEquipmentAssets(auth: AuthContext, query?: { projectId?: string; operationalStatus?: string; search?: string }) {
+  async getEquipmentAssets(
+    auth: AuthContext,
+    query?: { projectId?: string; operationalStatus?: string; search?: string },
+  ) {
     return this.fieldOperationsService.getEquipmentAssets(auth, query);
   }
 
@@ -108,7 +111,10 @@ export class ContractingFieldOperationsSlice {
   // 30. Supplier Price Memory & Directory (دليل الموردين والذاكرة السعرية والتقييم)
   // ==========================================================================
 
-  async getSupplierPriceMemory(auth: AuthContext, query?: { supplierId?: number; materialName?: string; governorate?: string; paymentTerms?: string }) {
+  async getSupplierPriceMemory(
+    auth: AuthContext,
+    query?: { supplierId?: number; materialName?: string; governorate?: string; paymentTerms?: string },
+  ) {
     return this.fieldOperationsService.getSupplierPriceMemory(auth, query);
   }
 

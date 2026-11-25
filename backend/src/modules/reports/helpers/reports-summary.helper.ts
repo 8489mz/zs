@@ -1,7 +1,14 @@
 import { type Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { ReportRangeQueryDto } from '../dto/report-query.dto';
-import { applyDeliveryRepReturnsFilter, applyDeliveryRepSalesFilter, applyDiscountedOnlyReturnsFilter, applyDiscountedOnlySalesFilter, applyReportScopeFilter, buildTenantPredicate } from './reports-query.helper';
+import {
+  applyDeliveryRepReturnsFilter,
+  applyDeliveryRepSalesFilter,
+  applyDiscountedOnlyReturnsFilter,
+  applyDiscountedOnlySalesFilter,
+  applyReportScopeFilter,
+  buildTenantPredicate,
+} from './reports-query.helper';
 import { sumMoney, toMoney } from './reports-math.helper';
 import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
@@ -88,7 +95,10 @@ type SummarySaleItemRow = {
   unit_multiplier?: string | number | null;
 };
 
-export function buildTopProducts(rows: TopProductAccumulatorRow[], limit = 10): Array<{ name: string; qty: number; revenue: number; total: number }> {
+export function buildTopProducts(
+  rows: TopProductAccumulatorRow[],
+  limit = 10,
+): Array<{ name: string; qty: number; revenue: number; total: number }> {
   const topProductsMap = new Map<string, { name: string; qty: number; revenue: number; total: number }>();
 
   for (const row of rows) {
@@ -248,39 +258,99 @@ export function buildReportSummaryPayload(args: {
   } = args;
   const splitReturns = splitReturnRowsByType(returnsRows);
 
-  const salesTotal = totalsOverride?.salesTotal != null ? toMoney(totalsOverride.salesTotal) : sumMoney(salesRows, (row) => row.total);
-  const servicesTotal = totalsOverride?.servicesTotal != null ? toMoney(totalsOverride.servicesTotal) : sumMoney(servicesRows, (row) => row.total);
-  const purchasesTotal = totalsOverride?.purchasesTotal != null ? toMoney(totalsOverride.purchasesTotal) : sumMoney(purchasesRows, (row) => row.total);
-  const expensesTotal = totalsOverride?.expensesTotal != null ? toMoney(totalsOverride.expensesTotal) : sumMoney(expensesRows, (row) => row.amount);
-  const salesReturnsTotal = totalsOverride?.salesReturnsTotal != null ? toMoney(totalsOverride.salesReturnsTotal) : sumMoney(splitReturns.sales, (row) => row.total);
-  const purchaseReturnsTotal = totalsOverride?.purchaseReturnsTotal != null ? toMoney(totalsOverride.purchaseReturnsTotal) : sumMoney(splitReturns.purchases, (row) => row.total);
+  const salesTotal =
+    totalsOverride?.salesTotal != null ? toMoney(totalsOverride.salesTotal) : sumMoney(salesRows, (row) => row.total);
+  const servicesTotal =
+    totalsOverride?.servicesTotal != null
+      ? toMoney(totalsOverride.servicesTotal)
+      : sumMoney(servicesRows, (row) => row.total);
+  const purchasesTotal =
+    totalsOverride?.purchasesTotal != null
+      ? toMoney(totalsOverride.purchasesTotal)
+      : sumMoney(purchasesRows, (row) => row.total);
+  const expensesTotal =
+    totalsOverride?.expensesTotal != null
+      ? toMoney(totalsOverride.expensesTotal)
+      : sumMoney(expensesRows, (row) => row.amount);
+  const salesReturnsTotal =
+    totalsOverride?.salesReturnsTotal != null
+      ? toMoney(totalsOverride.salesReturnsTotal)
+      : sumMoney(splitReturns.sales, (row) => row.total);
+  const purchaseReturnsTotal =
+    totalsOverride?.purchaseReturnsTotal != null
+      ? toMoney(totalsOverride.purchaseReturnsTotal)
+      : sumMoney(splitReturns.purchases, (row) => row.total);
   // INV-SALES-REPORT-RETURNS-CARD: sum the invoice discount granted on
   // posted sales in the period (sales.discount, already selected by the
   // row-evaluation path). The aggregate path supplies it via override.
-  const salesDiscountsTotal = totalsOverride?.salesDiscountsTotal != null ? toMoney(totalsOverride.salesDiscountsTotal) : sumMoney(salesRows, (row) => row.discount);
-  
-  const salesTaxTotal = totalsOverride?.salesTaxTotal != null
-    ? toMoney(totalsOverride.salesTaxTotal)
-    : sumMoney(salesRows as Array<{ tax_amount?: number | string | null }>, (row) => row.tax_amount);
-  const salesReturnTaxTotal = totalsOverride?.salesReturnTaxTotal != null
-    ? toMoney(totalsOverride.salesReturnTaxTotal)
-    : sumMoney(returnedSaleItemsRows, (row) => row.allocated_tax);
-  const rawCogs = saleItemsRows.reduce((sum, row) => sum + (Number(row.qty || 0) * Number(row.cost_price || 0)), 0);
-  const returnedCogs = returnedSaleItemsRows.reduce((sum, row) => sum + (Number(row.qty || 0) * Number(row.cost_price || 0)), 0);
-  const cogs = cogsOverride != null ? toMoney(cogsOverride) : (totalsOverride?.cogs != null ? toMoney(totalsOverride.cogs) : toMoney(rawCogs - returnedCogs));
-  
-  const cashIn = totalsOverride?.cashIn != null ? toMoney(totalsOverride.cashIn) : sumMoney(treasuryRows.filter((row) => Number(row.amount || 0) > 0), (row) => row.amount);
-  const cashOut = totalsOverride?.cashOut != null ? toMoney(totalsOverride.cashOut) : Math.abs(sumMoney(treasuryRows.filter((row) => Number(row.amount || 0) < 0), (row) => row.amount));
+  const salesDiscountsTotal =
+    totalsOverride?.salesDiscountsTotal != null
+      ? toMoney(totalsOverride.salesDiscountsTotal)
+      : sumMoney(salesRows, (row) => row.discount);
+
+  const salesTaxTotal =
+    totalsOverride?.salesTaxTotal != null
+      ? toMoney(totalsOverride.salesTaxTotal)
+      : sumMoney(salesRows as Array<{ tax_amount?: number | string | null }>, (row) => row.tax_amount);
+  const salesReturnTaxTotal =
+    totalsOverride?.salesReturnTaxTotal != null
+      ? toMoney(totalsOverride.salesReturnTaxTotal)
+      : sumMoney(returnedSaleItemsRows, (row) => row.allocated_tax);
+  const rawCogs = saleItemsRows.reduce((sum, row) => sum + Number(row.qty || 0) * Number(row.cost_price || 0), 0);
+  const returnedCogs = returnedSaleItemsRows.reduce(
+    (sum, row) => sum + Number(row.qty || 0) * Number(row.cost_price || 0),
+    0,
+  );
+  const cogs =
+    cogsOverride != null
+      ? toMoney(cogsOverride)
+      : totalsOverride?.cogs != null
+        ? toMoney(totalsOverride.cogs)
+        : toMoney(rawCogs - returnedCogs);
+
+  const cashIn =
+    totalsOverride?.cashIn != null
+      ? toMoney(totalsOverride.cashIn)
+      : sumMoney(
+          treasuryRows.filter((row) => Number(row.amount || 0) > 0),
+          (row) => row.amount,
+        );
+  const cashOut =
+    totalsOverride?.cashOut != null
+      ? toMoney(totalsOverride.cashOut)
+      : Math.abs(
+          sumMoney(
+            treasuryRows.filter((row) => Number(row.amount || 0) < 0),
+            (row) => row.amount,
+          ),
+        );
 
   const deliveryRows = (salesRows as any[]) || [];
-  const freelanceRows = deliveryRows.filter((row) => Number(row.delivery_fee || 0) > 0 && (row.delivery_fee_mode === 'freelance_courier' || (!row.delivery_fee_mode && deliveryFeeMode === 'freelance_courier')));
-  const storeFleetRows = deliveryRows.filter((row) => Number(row.delivery_fee || 0) > 0 && (row.delivery_fee_mode === 'store_fleet' || (!row.delivery_fee_mode && deliveryFeeMode === 'store_fleet')));
+  const freelanceRows = deliveryRows.filter(
+    (row) =>
+      Number(row.delivery_fee || 0) > 0 &&
+      (row.delivery_fee_mode === 'freelance_courier' ||
+        (!row.delivery_fee_mode && deliveryFeeMode === 'freelance_courier')),
+  );
+  const storeFleetRows = deliveryRows.filter(
+    (row) =>
+      Number(row.delivery_fee || 0) > 0 &&
+      (row.delivery_fee_mode === 'store_fleet' || (!row.delivery_fee_mode && deliveryFeeMode === 'store_fleet')),
+  );
 
-  const freelanceTotal = totalsOverride?.freelanceTotal != null ? toMoney(totalsOverride.freelanceTotal) : toMoney(freelanceRows.reduce((sum, row) => sum + Number(row.delivery_fee || 0), 0));
-  const freelanceCount = totalsOverride?.freelanceCount != null ? Number(totalsOverride.freelanceCount) : freelanceRows.length;
+  const freelanceTotal =
+    totalsOverride?.freelanceTotal != null
+      ? toMoney(totalsOverride.freelanceTotal)
+      : toMoney(freelanceRows.reduce((sum, row) => sum + Number(row.delivery_fee || 0), 0));
+  const freelanceCount =
+    totalsOverride?.freelanceCount != null ? Number(totalsOverride.freelanceCount) : freelanceRows.length;
 
-  const storeFleetTotal = totalsOverride?.storeFleetTotal != null ? toMoney(totalsOverride.storeFleetTotal) : toMoney(storeFleetRows.reduce((sum, row) => sum + Number(row.delivery_fee || 0), 0));
-  const storeFleetCount = totalsOverride?.storeFleetCount != null ? Number(totalsOverride.storeFleetCount) : storeFleetRows.length;
+  const storeFleetTotal =
+    totalsOverride?.storeFleetTotal != null
+      ? toMoney(totalsOverride.storeFleetTotal)
+      : toMoney(storeFleetRows.reduce((sum, row) => sum + Number(row.delivery_fee || 0), 0));
+  const storeFleetCount =
+    totalsOverride?.storeFleetCount != null ? Number(totalsOverride.storeFleetCount) : storeFleetRows.length;
 
   const commissionRate = Math.max(0, Math.min(100, Number(storeFleetCommissionRate || 0)));
   const storeFleetCourierShare = toMoney(storeFleetTotal * (commissionRate / 100));
@@ -290,39 +360,42 @@ export function buildReportSummaryPayload(args: {
   const deliveryCount = freelanceCount + storeFleetCount;
 
   return {
-    ...buildCommercialSummary({
-      salesCount: countsOverride?.salesCount ?? salesRows.length,
-      servicesCount: countsOverride?.servicesCount ?? servicesRows.length,
-      purchasesCount: countsOverride?.purchasesCount ?? purchasesRows.length,
-      expensesCount: countsOverride?.expensesCount ?? expensesRows.length,
-      returnsCount: countsOverride?.returnsCount ?? returnsRows.length,
-      salesReturnCount: countsOverride?.salesReturnCount ?? splitReturns.sales.length,
-      purchaseReturnCount: countsOverride?.purchaseReturnCount ?? splitReturns.purchases.length,
-    }, {
-      salesTotal,
-      servicesTotal,
-      purchasesTotal,
-      expensesTotal,
-      operatingMaterialsTotal: totalsOverride?.operatingMaterialsTotal ?? 0,
-      salesReturnsTotal,
-      purchaseReturnsTotal,
-      salesDiscountsTotal,
-      salesTaxTotal,
-      salesReturnTaxTotal,
-      cashIn,
-      cashOut,
-      cogs,
-      deliveryTotal,
-      deliveryCount,
-      deliveryFeeMode,
-      deliveryStoreProfit,
-      freelanceCount,
-      freelanceTotal,
-      storeFleetCount,
-      storeFleetTotal,
-      storeFleetCourierShare,
-      storeFleetCommissionRate: commissionRate,
-    }),
+    ...buildCommercialSummary(
+      {
+        salesCount: countsOverride?.salesCount ?? salesRows.length,
+        servicesCount: countsOverride?.servicesCount ?? servicesRows.length,
+        purchasesCount: countsOverride?.purchasesCount ?? purchasesRows.length,
+        expensesCount: countsOverride?.expensesCount ?? expensesRows.length,
+        returnsCount: countsOverride?.returnsCount ?? returnsRows.length,
+        salesReturnCount: countsOverride?.salesReturnCount ?? splitReturns.sales.length,
+        purchaseReturnCount: countsOverride?.purchaseReturnCount ?? splitReturns.purchases.length,
+      },
+      {
+        salesTotal,
+        servicesTotal,
+        purchasesTotal,
+        expensesTotal,
+        operatingMaterialsTotal: totalsOverride?.operatingMaterialsTotal ?? 0,
+        salesReturnsTotal,
+        purchaseReturnsTotal,
+        salesDiscountsTotal,
+        salesTaxTotal,
+        salesReturnTaxTotal,
+        cashIn,
+        cashOut,
+        cogs,
+        deliveryTotal,
+        deliveryCount,
+        deliveryFeeMode,
+        deliveryStoreProfit,
+        freelanceCount,
+        freelanceTotal,
+        storeFleetCount,
+        storeFleetTotal,
+        storeFleetCourierShare,
+        storeFleetCommissionRate: commissionRate,
+      },
+    ),
     topProducts: topProductsOverride != null ? topProductsOverride : buildTopProducts(saleItemsRows, topProductsLimit),
   };
 }
@@ -353,35 +426,38 @@ export async function buildReportSummaryAggregates(args: {
   // INV-VAN-PROFIT-REP-REPORTING: the rep filter scopes the sales side.
   // F13 (trial problem 18): the discounted-only filter scopes the same
   // sales side (invoice discount OR any line discount > 0).
-  const salesAggQuery = applyDiscountedOnlySalesFilter(applyDeliveryRepSalesFilter(applyReportScopeFilter(
-    db
-      .selectFrom('sales')
-      .select([
-        sql<number>`count(*)`.as('sales_count'),
-        sql<number>`coalesce(sum(total), 0)`.as('sales_total'),
-        sql<number>`coalesce(sum(tax_amount), 0)`.as('sales_tax_total'),
-        // INV-SALES-REPORT-RETURNS-CARD: invoice discounts granted on
-        // posted sales in the period feed the returns-and-discounts card.
-        sql<number>`coalesce(sum(discount), 0)`.as('sales_discounts_total'),
-        sql<number>`count(*) filter (where ${freelanceCondition})`.as('freelance_count'),
-        sql<number>`coalesce(sum(delivery_fee) filter (where ${freelanceCondition}), 0)`.as('freelance_total'),
-        sql<number>`count(*) filter (where ${storeFleetCondition})`.as('store_fleet_count'),
-        sql<number>`coalesce(sum(delivery_fee) filter (where ${storeFleetCondition}), 0)`.as('store_fleet_total'),
-      ])
-      .where('status', '=', 'posted')
-      .where('created_at', '>=', fromDate)
-      .where('created_at', '<=', toDate)
-      .where(buildTenantPredicate(tenantId)),
+  const salesAggQuery = applyDiscountedOnlySalesFilter(
+    applyDeliveryRepSalesFilter(
+      applyReportScopeFilter(
+        db
+          .selectFrom('sales')
+          .select([
+            sql<number>`count(*)`.as('sales_count'),
+            sql<number>`coalesce(sum(total), 0)`.as('sales_total'),
+            sql<number>`coalesce(sum(tax_amount), 0)`.as('sales_tax_total'),
+            // INV-SALES-REPORT-RETURNS-CARD: invoice discounts granted on
+            // posted sales in the period feed the returns-and-discounts card.
+            sql<number>`coalesce(sum(discount), 0)`.as('sales_discounts_total'),
+            sql<number>`count(*) filter (where ${freelanceCondition})`.as('freelance_count'),
+            sql<number>`coalesce(sum(delivery_fee) filter (where ${freelanceCondition}), 0)`.as('freelance_total'),
+            sql<number>`count(*) filter (where ${storeFleetCondition})`.as('store_fleet_count'),
+            sql<number>`coalesce(sum(delivery_fee) filter (where ${storeFleetCondition}), 0)`.as('store_fleet_total'),
+          ])
+          .where('status', '=', 'posted')
+          .where('created_at', '>=', fromDate)
+          .where('created_at', '<=', toDate)
+          .where(buildTenantPredicate(tenantId)),
+        query,
+      ),
+      query,
+    ),
     query,
-  ), query), query);
+  );
 
   const purchasesAggQuery = applyReportScopeFilter(
     db
       .selectFrom('purchases')
-      .select([
-        sql<number>`count(*)`.as('purchases_count'),
-        sql<number>`coalesce(sum(total), 0)`.as('purchases_total'),
-      ])
+      .select([sql<number>`count(*)`.as('purchases_count'), sql<number>`coalesce(sum(total), 0)`.as('purchases_total')])
       .where('status', '=', 'posted')
       .where('created_at', '>=', fromDate)
       .where('created_at', '<=', toDate)
@@ -392,10 +468,7 @@ export async function buildReportSummaryAggregates(args: {
   const servicesAggQuery = applyReportScopeFilter(
     (db as any)
       .selectFrom('services')
-      .select([
-        sql<number>`count(*)`.as('services_count'),
-        sql<number>`coalesce(sum(amount), 0)`.as('services_total'),
-      ])
+      .select([sql<number>`count(*)`.as('services_count'), sql<number>`coalesce(sum(amount), 0)`.as('services_total')])
       .where('is_active', '=', true)
       .where('service_date', '>=', fromDate)
       .where('service_date', '<=', toDate)
@@ -406,10 +479,7 @@ export async function buildReportSummaryAggregates(args: {
   const expensesAggQuery = applyReportScopeFilter(
     db
       .selectFrom('expenses')
-      .select([
-        sql<number>`count(*)`.as('expenses_count'),
-        sql<number>`coalesce(sum(amount), 0)`.as('expenses_total'),
-      ])
+      .select([sql<number>`count(*)`.as('expenses_count'), sql<number>`coalesce(sum(amount), 0)`.as('expenses_total')])
       .where('expense_date', '>=', fromDate)
       .where('expense_date', '<=', toDate)
       .where(buildTenantPredicate(tenantId)),
@@ -420,43 +490,58 @@ export async function buildReportSummaryAggregates(args: {
   // without a row in the standalone expenses table. Excluding it from this
   // summary overstates operating profit compared with the general ledger.
   const operatingMaterialsQuery = applyReportScopeFilter(
-    db.selectFrom('stock_movements as m')
+    db
+      .selectFrom('stock_movements as m')
       .select(sql<number>`coalesce(sum(m.total_cost), 0)`.as('materials_total'))
       .where('m.movement_type', '=', 'transfer_final_issue')
       .where('m.reason', '=', 'final_issue')
       .where('m.created_at', '>=', fromDate)
       .where('m.created_at', '<=', toDate)
       .where(buildTenantPredicate(tenantId, 'm')),
-    query, 'm',
+    query,
+    'm',
   );
 
-  const returnsAggQuery = applyDiscountedOnlyReturnsFilter(applyDeliveryRepReturnsFilter(applyReportScopeFilter(
-    db
-      .selectFrom('return_documents')
-      .select([
-        'return_type',
-        sql<number>`count(*)`.as('count'),
-        sql<number>`coalesce(sum(total), 0)`.as('total'),
-      ])
-      .where('created_at', '>=', fromDate)
-      .where('created_at', '<=', toDate)
-      .where(buildTenantPredicate(tenantId))
-      .groupBy('return_type'),
+  const returnsAggQuery = applyDiscountedOnlyReturnsFilter(
+    applyDeliveryRepReturnsFilter(
+      applyReportScopeFilter(
+        db
+          .selectFrom('return_documents')
+          .select(['return_type', sql<number>`count(*)`.as('count'), sql<number>`coalesce(sum(total), 0)`.as('total')])
+          .where('created_at', '>=', fromDate)
+          .where('created_at', '<=', toDate)
+          .where(buildTenantPredicate(tenantId))
+          .groupBy('return_type'),
+        query,
+      ),
+      query,
+    ),
     query,
-  ), query), query);
+  );
 
-  const salesReturnTaxQuery = applyDiscountedOnlyReturnsFilter(applyDeliveryRepReturnsFilter(applyReportScopeFilter(
-    db.selectFrom('return_items as ri')
-      .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
-      .select(sql<number>`coalesce(sum(ri.allocated_tax), 0)`.as('tax_total'))
-      .where('rd.return_type', '=', 'sale')
-      .where('rd.created_at', '>=', fromDate)
-      .where('rd.created_at', '<=', toDate)
-      .where(buildTenantPredicate(tenantId, 'rd'))
-      .where(buildTenantPredicate(tenantId, 'ri')),
+  const salesReturnTaxQuery = applyDiscountedOnlyReturnsFilter(
+    applyDeliveryRepReturnsFilter(
+      applyReportScopeFilter(
+        db
+          .selectFrom('return_items as ri')
+          .innerJoin('return_documents as rd', (join) =>
+            join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'),
+          )
+          .select(sql<number>`coalesce(sum(ri.allocated_tax), 0)`.as('tax_total'))
+          .where('rd.return_type', '=', 'sale')
+          .where('rd.created_at', '>=', fromDate)
+          .where('rd.created_at', '<=', toDate)
+          .where(buildTenantPredicate(tenantId, 'rd'))
+          .where(buildTenantPredicate(tenantId, 'ri')),
+        query,
+        'rd',
+      ),
+      query,
+      'rd',
+    ),
     query,
     'rd',
-  ), query, 'rd'), query, 'rd');
+  );
 
   const treasuryAggQuery = applyReportScopeFilter(
     db
@@ -471,66 +556,100 @@ export async function buildReportSummaryAggregates(args: {
     query,
   );
 
-  const rawCogsQuery = applyDiscountedOnlySalesFilter(applyDeliveryRepSalesFilter(applyReportScopeFilter(
-    db
-      .selectFrom('sale_items as si')
-      .innerJoin('sales as s', (join) => join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'))
-      .select(sql<number>`coalesce(sum(si.qty * si.cost_price), 0)`.as('raw_cogs'))
-      .where('s.status', '=', 'posted')
-      .where('s.created_at', '>=', fromDate)
-      .where('s.created_at', '<=', toDate)
-      .where(buildTenantPredicate(tenantId, 's'))
-      .where(buildTenantPredicate(tenantId, 'si')),
+  const rawCogsQuery = applyDiscountedOnlySalesFilter(
+    applyDeliveryRepSalesFilter(
+      applyReportScopeFilter(
+        db
+          .selectFrom('sale_items as si')
+          .innerJoin('sales as s', (join) =>
+            join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'),
+          )
+          .select(sql<number>`coalesce(sum(si.qty * si.cost_price), 0)`.as('raw_cogs'))
+          .where('s.status', '=', 'posted')
+          .where('s.created_at', '>=', fromDate)
+          .where('s.created_at', '<=', toDate)
+          .where(buildTenantPredicate(tenantId, 's'))
+          .where(buildTenantPredicate(tenantId, 'si')),
+        query,
+        's',
+      ),
+      query,
+      's',
+    ),
     query,
     's',
-  ), query, 's'), query, 's');
+  );
 
-  const returnedCogsQuery = applyDiscountedOnlyReturnsFilter(applyDeliveryRepReturnsFilter(applyReportScopeFilter(
-    db
-      .selectFrom('return_items as ri')
-      .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
-      .leftJoin('sale_items as si', (join) =>
-        join.onRef('si.id', '=', 'ri.sale_item_id').onRef('si.tenant_id', '=', 'ri.tenant_id'),
-      )
-      .leftJoin('products as p', (join) => join.onRef('p.id', '=', 'ri.product_id').onRef('p.tenant_id', '=', 'ri.tenant_id'))
-      .select(
-        sql<number>`coalesce(sum(ri.qty * coalesce(ri.cost_price, si.cost_price, p.cost_price, 0)), 0)`.as('returned_cogs'),
-      )
-      .where('rd.return_type', '=', 'sale')
-      .where('rd.created_at', '>=', fromDate!)
-      .where('rd.created_at', '<=', toDate!)
-      .where(buildTenantPredicate(tenantId, 'rd'))
-      .where(buildTenantPredicate(tenantId, 'ri')),
+  const returnedCogsQuery = applyDiscountedOnlyReturnsFilter(
+    applyDeliveryRepReturnsFilter(
+      applyReportScopeFilter(
+        db
+          .selectFrom('return_items as ri')
+          .innerJoin('return_documents as rd', (join) =>
+            join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'),
+          )
+          .leftJoin('sale_items as si', (join) =>
+            join.onRef('si.id', '=', 'ri.sale_item_id').onRef('si.tenant_id', '=', 'ri.tenant_id'),
+          )
+          .leftJoin('products as p', (join) =>
+            join.onRef('p.id', '=', 'ri.product_id').onRef('p.tenant_id', '=', 'ri.tenant_id'),
+          )
+          .select(
+            sql<number>`coalesce(sum(ri.qty * coalesce(ri.cost_price, si.cost_price, p.cost_price, 0)), 0)`.as(
+              'returned_cogs',
+            ),
+          )
+          .where('rd.return_type', '=', 'sale')
+          .where('rd.created_at', '>=', fromDate!)
+          .where('rd.created_at', '<=', toDate!)
+          .where(buildTenantPredicate(tenantId, 'rd'))
+          .where(buildTenantPredicate(tenantId, 'ri')),
+        query,
+        'rd',
+      ),
+      query,
+      'rd',
+    ),
     query,
     'rd',
-  ), query, 'rd'), query, 'rd');
+  );
 
-  const topProductsQuery = applyDiscountedOnlySalesFilter(applyDeliveryRepSalesFilter(applyReportScopeFilter(
-    db
-      .selectFrom('sale_items as si')
-      .innerJoin('sales as s', (join) => join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'))
-      .select([
-        sql<string>`coalesce(si.product_name, 'صنف غير محدد')`.as('name'),
-        // F13 (trial problem 39): quantity in BASE pieces — qty is stored
-        // in sold units, unit_multiplier is the pack size (see
-        // buildTopProducts). COGS above is untouched: cost_price is
-        // already stored per sold unit x multiplier.
-        sql<number>`coalesce(sum(si.qty * coalesce(si.unit_multiplier, 1)), 0)`.as('qty'),
-        sql<number>`coalesce(sum(si.line_total), 0)`.as('revenue'),
-        sql<number>`coalesce(sum(si.line_total), 0)`.as('total'),
-      ])
-      .where('s.status', '=', 'posted')
-      .where('s.created_at', '>=', fromDate)
-      .where('s.created_at', '<=', toDate)
-      .where(buildTenantPredicate(tenantId, 's'))
-      .where(buildTenantPredicate(tenantId, 'si'))
-      .where('si.product_name', 'is not', null)
-      .groupBy('si.product_name')
-      .orderBy(sql`sum(si.line_total)`, 'desc')
-      .limit(10),
+  const topProductsQuery = applyDiscountedOnlySalesFilter(
+    applyDeliveryRepSalesFilter(
+      applyReportScopeFilter(
+        db
+          .selectFrom('sale_items as si')
+          .innerJoin('sales as s', (join) =>
+            join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'),
+          )
+          .select([
+            sql<string>`coalesce(si.product_name, 'صنف غير محدد')`.as('name'),
+            // F13 (trial problem 39): quantity in BASE pieces — qty is stored
+            // in sold units, unit_multiplier is the pack size (see
+            // buildTopProducts). COGS above is untouched: cost_price is
+            // already stored per sold unit x multiplier.
+            sql<number>`coalesce(sum(si.qty * coalesce(si.unit_multiplier, 1)), 0)`.as('qty'),
+            sql<number>`coalesce(sum(si.line_total), 0)`.as('revenue'),
+            sql<number>`coalesce(sum(si.line_total), 0)`.as('total'),
+          ])
+          .where('s.status', '=', 'posted')
+          .where('s.created_at', '>=', fromDate)
+          .where('s.created_at', '<=', toDate)
+          .where(buildTenantPredicate(tenantId, 's'))
+          .where(buildTenantPredicate(tenantId, 'si'))
+          .where('si.product_name', 'is not', null)
+          .groupBy('si.product_name')
+          .orderBy(sql`sum(si.line_total)`, 'desc')
+          .limit(10),
+        query,
+        's',
+      ),
+      query,
+      's',
+    ),
     query,
     's',
-  ), query, 's'), query, 's');
+  );
 
   const [
     salesAggRow,
@@ -604,7 +723,9 @@ export async function buildReportSummaryAggregates(args: {
     salesReturnTaxTotal: Number((salesReturnTaxRow as any)?.tax_total || 0),
     servicesTotal: Number((servicesAggRow as any)?.services_total || 0),
     purchasesTotal: Number((purchasesAggRow as any)?.purchases_total || 0),
-    expensesTotal: Number((expensesAggRow as any)?.expenses_total || 0) + Number((operatingMaterialsRow as any)?.materials_total || 0),
+    expensesTotal:
+      Number((expensesAggRow as any)?.expenses_total || 0) +
+      Number((operatingMaterialsRow as any)?.materials_total || 0),
     operatingMaterialsTotal: Number((operatingMaterialsRow as any)?.materials_total || 0),
     salesReturnsTotal,
     purchaseReturnsTotal,
@@ -678,15 +799,16 @@ export function buildCustomerRfmPayload(rows: CustomerRfmRow[], targetSegment?: 
   const promisingCount = mapped.filter((c) => c.segment === 'promising').length;
   const atRiskCount = mapped.filter((c) => c.segment === 'at_risk').length;
   const lostCount = mapped.filter((c) => c.segment === 'lost').length;
-  const totalRevenue = roundMoney(mapped.reduce((sum, c) => sum + c.monetary, 0), digits);
+  const totalRevenue = roundMoney(
+    mapped.reduce((sum, c) => sum + c.monetary, 0),
+    digits,
+  );
   const totalOrders = mapped.reduce((sum, c) => sum + c.frequency, 0);
   const averageAov = totalOrders > 0 ? roundMoney(totalRevenue / totalOrders, digits) : 0;
   const repeatCount = mapped.filter((c) => c.frequency > 1).length;
   const repeatRate = totalCustomers > 0 ? Number(((repeatCount / totalCustomers) * 100).toFixed(1)) : 0;
 
-  const items = targetSegment && targetSegment !== 'all'
-    ? mapped.filter((c) => c.segment === targetSegment)
-    : mapped;
+  const items = targetSegment && targetSegment !== 'all' ? mapped.filter((c) => c.segment === targetSegment) : mapped;
 
   items.sort((a, b) => b.monetary - a.monetary);
 
@@ -705,4 +827,3 @@ export function buildCustomerRfmPayload(rows: CustomerRfmRow[], targetSegment?: 
     items,
   };
 }
-

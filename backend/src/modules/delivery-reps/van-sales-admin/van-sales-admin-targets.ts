@@ -3,14 +3,9 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { VanSalesService } from '../van-sales.service';
 
 export class VanSalesAdminTargetsSlice {
-  constructor(
-    private readonly vanSalesService: VanSalesService,
-  ) {}
+  constructor(private readonly vanSalesService: VanSalesService) {}
 
-  async listRepTargets(
-    req: RequestWithAuth,
-    month?: string,
-  ) {
+  async listRepTargets(req: RequestWithAuth, month?: string) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const [targets, commissionConfig] = await Promise.all([
       this.vanSalesService.listAllRepTargets(tenantId, month),
@@ -87,11 +82,7 @@ export class VanSalesAdminTargetsSlice {
   }
 
   // Route KPIs & Field Visits Endpoints
-  async getRouteKpis(
-    req: RequestWithAuth,
-    dateFrom?: string,
-    dateTo?: string,
-  ) {
+  async getRouteKpis(req: RequestWithAuth, dateFrom?: string, dateTo?: string) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const kpis = await this.vanSalesService.getSupervisorRouteKpis(tenantId, dateFrom, dateTo);
     return { ok: true, ...kpis };
@@ -173,13 +164,7 @@ export class VanSalesAdminTargetsSlice {
   }
 
   // Fleet Fuel Logs Endpoints
-  async listFuelLogs(
-    req: RequestWithAuth,
-    vehicleId?: string,
-    repId?: string,
-    dateFrom?: string,
-    dateTo?: string,
-  ) {
+  async listFuelLogs(req: RequestWithAuth, vehicleId?: string, repId?: string, dateFrom?: string, dateTo?: string) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const logs = await this.vanSalesService.listFuelLogs(tenantId, {
       vehicleId: vehicleId ? Number(vehicleId) : undefined,

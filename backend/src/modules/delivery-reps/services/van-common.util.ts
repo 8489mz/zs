@@ -266,11 +266,7 @@ export async function generateDailySequenceNumber(
   date = new Date(),
 ): Promise<string> {
   if (trxOrDb === db) {
-    throw new AppError(
-      'Daily sequence numbering requires a transaction handle',
-      'SEQUENCE_REQUIRES_TRANSACTION',
-      500,
-    );
+    throw new AppError('Daily sequence numbering requires a transaction handle', 'SEQUENCE_REQUIRES_TRANSACTION', 500);
   }
 
   // Resolve through the caller's handle (trxOrDb), NOT the pool db:
@@ -288,11 +284,7 @@ export async function generateDailySequenceNumber(
     );
   } catch (err) {
     if (err instanceof AppError) throw err;
-    throw new AppError(
-      'Daily sequence lock failed; the document was not numbered',
-      'SEQUENCE_LOCK_FAILED',
-      500,
-    );
+    throw new AppError('Daily sequence lock failed; the document was not numbered', 'SEQUENCE_LOCK_FAILED', 500);
   }
 
   let lastSeq = 0;
@@ -444,12 +436,10 @@ export async function getCustomerRepBalancesMap(
         .onRef('vfr.tenant_id', '=', 'cl.tenant_id')
         .on('cl.reference_type', '=', 'van_field_return'),
     )
-    .leftJoin(
-      'delivery_representatives as dr',
-      (join: any) =>
-        join
-          .on('dr.id', '=', sql`COALESCE(vt.rep_id, s.delivery_rep_id, vfr.rep_id)`)
-          .onRef('dr.tenant_id', '=', 'cl.tenant_id'),
+    .leftJoin('delivery_representatives as dr', (join: any) =>
+      join
+        .on('dr.id', '=', sql`COALESCE(vt.rep_id, s.delivery_rep_id, vfr.rep_id)`)
+        .onRef('dr.tenant_id', '=', 'cl.tenant_id'),
     )
     .select([
       'cl.customer_id',
@@ -459,11 +449,7 @@ export async function getCustomerRepBalancesMap(
       sql<number>`COALESCE(SUM(CASE WHEN cl.amount < 0 THEN cl.amount ELSE 0 END), 0)`.as('total_credit_neg'),
     ])
     .where('cl.tenant_id', '=', tenantId)
-    .groupBy([
-      'cl.customer_id',
-      sql`COALESCE(vt.rep_id, s.delivery_rep_id, vfr.rep_id)`,
-      'dr.name',
-    ]);
+    .groupBy(['cl.customer_id', sql`COALESCE(vt.rep_id, s.delivery_rep_id, vfr.rep_id)`, 'dr.name']);
 
   if (customerIds.length > 0) {
     query = query.where('cl.customer_id', 'in', customerIds);
@@ -535,7 +521,6 @@ export function fieldCollectionPaymentScope(input: {
     payment_channel: resolveFieldCollectionChannel(input.paymentMethod),
   };
 }
-
 
 /**
  * M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the rep's linked login

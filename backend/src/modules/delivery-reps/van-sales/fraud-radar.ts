@@ -1,12 +1,8 @@
 import type { VanFraudRadarService, RecordVanSuspicionParams } from '../services/van-fraud-radar.service';
-import type {
-  GetFraudRadarEventsOptions,
-} from './van-sales-types';
+import type { GetFraudRadarEventsOptions } from './van-sales-types';
 
 export class FraudRadarService {
-  constructor(
-    private readonly vanFraudRadarService: VanFraudRadarService,
-  ) {}
+  constructor(private readonly vanFraudRadarService: VanFraudRadarService) {}
   async recordSuspicionEvent(params: RecordVanSuspicionParams) {
     return this.vanFraudRadarService.recordSuspicionEvent(params);
   }
@@ -15,10 +11,7 @@ export class FraudRadarService {
     return this.vanFraudRadarService.getSummary(tenantId, options);
   }
 
-  async getFraudRadarEvents(
-    tenantId: string,
-    options?: GetFraudRadarEventsOptions,
-  ) {
+  async getFraudRadarEvents(tenantId: string, options?: GetFraudRadarEventsOptions) {
     return this.vanFraudRadarService.getEvents(tenantId, options);
   }
 }

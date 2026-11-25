@@ -90,9 +90,7 @@ import {
   ContractingEquipmentFuelLog,
   ContractingProjectEvmMetrics,
 } from './contracting.types';
-import {
-  BankGuarantee,
-} from './guarantee-gateway.engine';
+import { BankGuarantee } from './guarantee-gateway.engine';
 import { BatchAllocationSummary } from './field-indirect-allocation.engine';
 import { ContractingProjectsSlice } from './contracting/contracting-projects.slice';
 import { ContractingBoqSlice } from './contracting/contracting-boq.slice';
@@ -112,158 +110,103 @@ import { ContractingGuaranteesSlice } from './contracting/contracting-guarantees
 
 @Injectable()
 export class ContractingService {
-
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly accountingPosting: AccountingPostingService,
-  ) {
-  }
+  ) {}
 
   private projectsSliceInstance?: ContractingProjectsSlice;
   private get projectsSlice(): ContractingProjectsSlice {
-    return (this.projectsSliceInstance ??= new ContractingProjectsSlice(
-      this.db,
-    ));
+    return (this.projectsSliceInstance ??= new ContractingProjectsSlice(this.db));
   }
 
   private boqSliceInstance?: ContractingBoqSlice;
   private get boqSlice(): ContractingBoqSlice {
-    return (this.boqSliceInstance ??= new ContractingBoqSlice(
-      this.db,
-      {
-        getProjectById: (auth, id) =>
-          this.projectsSlice.getProjectById(auth, id),
-      },
-    ));
+    return (this.boqSliceInstance ??= new ContractingBoqSlice(this.db, {
+      getProjectById: (auth, id) => this.projectsSlice.getProjectById(auth, id),
+    }));
   }
 
   private ipcInvoicesSliceInstance?: ContractingIpcInvoicesSlice;
   private get ipcInvoicesSlice(): ContractingIpcInvoicesSlice {
-    return (this.ipcInvoicesSliceInstance ??= new ContractingIpcInvoicesSlice(
-      this.db,
-      {
-        getGuaranteesRaw: (tenantId, filters) =>
-          this.guaranteesSlice.getGuaranteesRaw(tenantId, filters),
-      },
-    ));
+    return (this.ipcInvoicesSliceInstance ??= new ContractingIpcInvoicesSlice(this.db, {
+      getGuaranteesRaw: (tenantId, filters) => this.guaranteesSlice.getGuaranteesRaw(tenantId, filters),
+    }));
   }
 
   private postingSliceInstance?: ContractingPostingSlice;
   private get postingSlice(): ContractingPostingSlice {
-    return (this.postingSliceInstance ??= new ContractingPostingSlice(
-      this.db,
-      this.accountingPosting,
-      {
-        getGuaranteesRaw: (tenantId, filters) =>
-          this.guaranteesSlice.getGuaranteesRaw(tenantId, filters),
-      },
-    ));
+    return (this.postingSliceInstance ??= new ContractingPostingSlice(this.db, this.accountingPosting, {
+      getGuaranteesRaw: (tenantId, filters) => this.guaranteesSlice.getGuaranteesRaw(tenantId, filters),
+    }));
   }
 
   private subcontractorsSliceInstance?: ContractingSubcontractorsSlice;
   private get subcontractorsSlice(): ContractingSubcontractorsSlice {
-    return (this.subcontractorsSliceInstance ??= new ContractingSubcontractorsSlice(
-      this.db,
-    ));
+    return (this.subcontractorsSliceInstance ??= new ContractingSubcontractorsSlice(this.db));
   }
 
   private siteOperationsSliceInstance?: ContractingSiteOperationsSlice;
   private get siteOperationsSlice(): ContractingSiteOperationsSlice {
-    return (this.siteOperationsSliceInstance ??= new ContractingSiteOperationsSlice(
-      this.db,
-    ));
+    return (this.siteOperationsSliceInstance ??= new ContractingSiteOperationsSlice(this.db));
   }
 
   private pricingSliceInstance?: ContractingPricingSlice;
   private get pricingSlice(): ContractingPricingSlice {
-    return (this.pricingSliceInstance ??= new ContractingPricingSlice(
-      this.db,
-    ));
+    return (this.pricingSliceInstance ??= new ContractingPricingSlice(this.db));
   }
 
   private moneyOperationsSliceInstance?: ContractingMoneyOperationsSlice;
   private get moneyOperationsSlice(): ContractingMoneyOperationsSlice {
-    return (this.moneyOperationsSliceInstance ??= new ContractingMoneyOperationsSlice(
-      this.db,
-    ));
+    return (this.moneyOperationsSliceInstance ??= new ContractingMoneyOperationsSlice(this.db));
   }
 
   private analyticsSliceInstance?: ContractingAnalyticsSlice;
   private get analyticsSlice(): ContractingAnalyticsSlice {
-    return (this.analyticsSliceInstance ??= new ContractingAnalyticsSlice(
-      this.db,
-      {
-        getProjectById: (auth, id) =>
-          this.projectsSlice.getProjectById(auth, id),
-        getBoqItems: (auth, projectId) =>
-          this.boqSlice.getBoqItems(auth, projectId),
-        getEngineeringConstants: (auth) =>
-          this.pricingSlice.getEngineeringConstants(auth),
-        getMaterialRequisitions: (auth, projectId) =>
-          this.siteOperationsSlice.getMaterialRequisitions(auth, projectId),
-        getScheduleTasks: (auth, projectId) =>
-          this.siteOperationsSlice.getScheduleTasks(auth, projectId),
-        getGovernmentLicenses: (auth, query) =>
-          this.moneyOperationsSlice.getGovernmentLicenses(auth, query),
-        getPaymentHolds: (auth, query) =>
-          this.moneyOperationsSlice.getPaymentHolds(auth, query),
-        getMobilizationExpenses: (auth, projectId) =>
-          this.fieldOperationsSlice.getMobilizationExpenses(auth, projectId),
-      },
-    ));
+    return (this.analyticsSliceInstance ??= new ContractingAnalyticsSlice(this.db, {
+      getProjectById: (auth, id) => this.projectsSlice.getProjectById(auth, id),
+      getBoqItems: (auth, projectId) => this.boqSlice.getBoqItems(auth, projectId),
+      getEngineeringConstants: (auth) => this.pricingSlice.getEngineeringConstants(auth),
+      getMaterialRequisitions: (auth, projectId) => this.siteOperationsSlice.getMaterialRequisitions(auth, projectId),
+      getScheduleTasks: (auth, projectId) => this.siteOperationsSlice.getScheduleTasks(auth, projectId),
+      getGovernmentLicenses: (auth, query) => this.moneyOperationsSlice.getGovernmentLicenses(auth, query),
+      getPaymentHolds: (auth, query) => this.moneyOperationsSlice.getPaymentHolds(auth, query),
+      getMobilizationExpenses: (auth, projectId) => this.fieldOperationsSlice.getMobilizationExpenses(auth, projectId),
+    }));
   }
 
   private masterBoqSliceInstance?: ContractingMasterBoqSlice;
   private get masterBoqSlice(): ContractingMasterBoqSlice {
-    return (this.masterBoqSliceInstance ??= new ContractingMasterBoqSlice(
-      this.db,
-      {
-        getProjectById: (auth, id) =>
-          this.projectsSlice.getProjectById(auth, id),
-      },
-    ));
+    return (this.masterBoqSliceInstance ??= new ContractingMasterBoqSlice(this.db, {
+      getProjectById: (auth, id) => this.projectsSlice.getProjectById(auth, id),
+    }));
   }
 
   private fieldOperationsSliceInstance?: ContractingFieldOperationsSlice;
   private get fieldOperationsSlice(): ContractingFieldOperationsSlice {
-    return (this.fieldOperationsSliceInstance ??= new ContractingFieldOperationsSlice(
-      this.db,
-      {
-        getProjectById: (auth, id) =>
-          this.projectsSlice.getProjectById(auth, id),
-      },
-    ));
+    return (this.fieldOperationsSliceInstance ??= new ContractingFieldOperationsSlice(this.db, {
+      getProjectById: (auth, id) => this.projectsSlice.getProjectById(auth, id),
+    }));
   }
 
   private qualitySliceInstance?: ContractingQualitySlice;
   private get qualitySlice(): ContractingQualitySlice {
-    return (this.qualitySliceInstance ??= new ContractingQualitySlice(
-      this.db,
-    ));
+    return (this.qualitySliceInstance ??= new ContractingQualitySlice(this.db));
   }
 
   private documentsSliceInstance?: ContractingDocumentsSlice;
   private get documentsSlice(): ContractingDocumentsSlice {
-    return (this.documentsSliceInstance ??= new ContractingDocumentsSlice(
-      this.db,
-    ));
+    return (this.documentsSliceInstance ??= new ContractingDocumentsSlice(this.db));
   }
 
   private guaranteesSliceInstance?: ContractingGuaranteesSlice;
   private get guaranteesSlice(): ContractingGuaranteesSlice {
-    return (this.guaranteesSliceInstance ??= new ContractingGuaranteesSlice(
-      this.db,
-      {
-        getProjectById: (auth, id) =>
-          this.projectsSlice.getProjectById(auth, id),
-        getBoqItems: (auth, projectId) =>
-          this.boqSlice.getBoqItems(auth, projectId),
-        getSubcontractById: (auth, id) =>
-          this.subcontractorsSlice.getSubcontractById(auth, id),
-        getSubcontractorById: (auth, id) =>
-          this.subcontractorsSlice.getSubcontractorById(auth, id),
-      },
-    ));
+    return (this.guaranteesSliceInstance ??= new ContractingGuaranteesSlice(this.db, {
+      getProjectById: (auth, id) => this.projectsSlice.getProjectById(auth, id),
+      getBoqItems: (auth, projectId) => this.boqSlice.getBoqItems(auth, projectId),
+      getSubcontractById: (auth, id) => this.subcontractorsSlice.getSubcontractById(auth, id),
+      getSubcontractorById: (auth, id) => this.subcontractorsSlice.getSubcontractorById(auth, id),
+    }));
   }
 
   async getProjects(auth: AuthContext, query?: { status?: string; search?: string }) {
@@ -610,7 +553,10 @@ export class ContractingService {
     return this.fieldOperationsSlice.deleteClientPaymentMilestone(auth, id);
   }
 
-  async getEquipmentAssets(auth: AuthContext, query?: { projectId?: string; operationalStatus?: string; search?: string }) {
+  async getEquipmentAssets(
+    auth: AuthContext,
+    query?: { projectId?: string; operationalStatus?: string; search?: string },
+  ) {
     return this.fieldOperationsSlice.getEquipmentAssets(auth, query);
   }
 
@@ -626,7 +572,10 @@ export class ContractingService {
     return this.fieldOperationsSlice.getEquipmentTransfers(auth, equipmentId);
   }
 
-  async getSupplierPriceMemory(auth: AuthContext, query?: { supplierId?: number; materialName?: string; governorate?: string; paymentTerms?: string }) {
+  async getSupplierPriceMemory(
+    auth: AuthContext,
+    query?: { supplierId?: number; materialName?: string; governorate?: string; paymentTerms?: string },
+  ) {
     return this.fieldOperationsSlice.getSupplierPriceMemory(auth, query);
   }
 
@@ -642,11 +591,19 @@ export class ContractingService {
     return this.analyticsSlice.getProjectCostBreakdown(auth, projectId);
   }
 
-  async getInspectionRequests(auth: AuthContext, projectId: string, status?: string): Promise<ContractingInspectionRequest[]> {
+  async getInspectionRequests(
+    auth: AuthContext,
+    projectId: string,
+    status?: string,
+  ): Promise<ContractingInspectionRequest[]> {
     return this.qualitySlice.getInspectionRequests(auth, projectId, status);
   }
 
-  async createInspectionRequest(auth: AuthContext, projectId: string, dto: CreateInspectionRequestDto): Promise<ContractingInspectionRequest> {
+  async createInspectionRequest(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateInspectionRequestDto,
+  ): Promise<ContractingInspectionRequest> {
     return this.qualitySlice.createInspectionRequest(auth, projectId, dto);
   }
 
@@ -658,7 +615,12 @@ export class ContractingService {
     return this.qualitySlice.deleteInspectionRequest(auth, id);
   }
 
-  async getSnagItems(auth: AuthContext, projectId: string, status?: string, severity?: string): Promise<ContractingSnagItem[]> {
+  async getSnagItems(
+    auth: AuthContext,
+    projectId: string,
+    status?: string,
+    severity?: string,
+  ): Promise<ContractingSnagItem[]> {
     return this.qualitySlice.getSnagItems(auth, projectId, status, severity);
   }
 
@@ -678,7 +640,11 @@ export class ContractingService {
     return this.qualitySlice.getProjectHandovers(auth, projectId);
   }
 
-  async createProjectHandover(auth: AuthContext, projectId: string, dto: CreateProjectHandoverDto): Promise<ContractingProjectHandover> {
+  async createProjectHandover(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateProjectHandoverDto,
+  ): Promise<ContractingProjectHandover> {
     return this.qualitySlice.createProjectHandover(auth, projectId, dto);
   }
 
@@ -702,7 +668,11 @@ export class ContractingService {
     return this.qualitySlice.getMaterialEscalations(auth, projectId);
   }
 
-  async createMaterialEscalation(auth: AuthContext, projectId: string, dto: CreateMaterialEscalationDto): Promise<ContractingMaterialEscalation> {
+  async createMaterialEscalation(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateMaterialEscalationDto,
+  ): Promise<ContractingMaterialEscalation> {
     return this.qualitySlice.createMaterialEscalation(auth, projectId, dto);
   }
 
@@ -710,11 +680,18 @@ export class ContractingService {
     return this.qualitySlice.updateMaterialEscalationStatus(auth, id, dto);
   }
 
-  async getSubcontractorBackcharges(auth: AuthContext, projectId: string): Promise<ContractingSubcontractorBackcharge[]> {
+  async getSubcontractorBackcharges(
+    auth: AuthContext,
+    projectId: string,
+  ): Promise<ContractingSubcontractorBackcharge[]> {
     return this.qualitySlice.getSubcontractorBackcharges(auth, projectId);
   }
 
-  async createSubcontractorBackcharge(auth: AuthContext, projectId: string, dto: CreateSubcontractorBackchargeDto): Promise<ContractingSubcontractorBackcharge> {
+  async createSubcontractorBackcharge(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateSubcontractorBackchargeDto,
+  ): Promise<ContractingSubcontractorBackcharge> {
     return this.qualitySlice.createSubcontractorBackcharge(auth, projectId, dto);
   }
 
@@ -722,11 +699,15 @@ export class ContractingService {
     return this.qualitySlice.updateBackchargeStatus(auth, id, dto);
   }
 
-    async getEquipmentFuelLogs(auth: AuthContext, projectId: string): Promise<ContractingEquipmentFuelLog[]> {
+  async getEquipmentFuelLogs(auth: AuthContext, projectId: string): Promise<ContractingEquipmentFuelLog[]> {
     return this.documentsSlice.getEquipmentFuelLogs(auth, projectId);
   }
 
-    async createEquipmentFuelLog(auth: AuthContext, projectId: string, dto: CreateEquipmentFuelLogDto): Promise<ContractingEquipmentFuelLog> {
+  async createEquipmentFuelLog(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateEquipmentFuelLogDto,
+  ): Promise<ContractingEquipmentFuelLog> {
     return this.documentsSlice.createEquipmentFuelLog(auth, projectId, dto);
   }
 
@@ -754,7 +735,11 @@ export class ContractingService {
     return this.subcontractorsSlice.deleteSubcontractor(auth, id);
   }
 
-  async getSubcontractorLedger(auth: AuthContext, subcontractorId: number, query?: { projectId?: string; fromDate?: string; toDate?: string }) {
+  async getSubcontractorLedger(
+    auth: AuthContext,
+    subcontractorId: number,
+    query?: { projectId?: string; fromDate?: string; toDate?: string },
+  ) {
     return this.subcontractorsSlice.getSubcontractorLedger(auth, subcontractorId, query);
   }
 
@@ -764,7 +749,7 @@ export class ContractingService {
 
   async getGuaranteesRaw(
     tenantId: string,
-    filters: { projectId?: string; subcontractId?: string; status?: string } = {}
+    filters: { projectId?: string; subcontractId?: string; status?: string } = {},
   ): Promise<BankGuarantee[]> {
     return this.guaranteesSlice.getGuaranteesRaw(tenantId, filters);
   }
@@ -777,7 +762,7 @@ export class ContractingService {
       subcontractorId?: number;
       status?: string;
       guaranteeType?: string;
-    } = {}
+    } = {},
   ) {
     return this.guaranteesSlice.getGuarantees(auth, query);
   }
@@ -834,7 +819,11 @@ export class ContractingService {
     return this.guaranteesSlice.getAllocationBatches(auth, projectId);
   }
 
-  async previewBatchAllocation(auth: AuthContext, projectId: string, dto: CreateAllocationBatchDto): Promise<BatchAllocationSummary> {
+  async previewBatchAllocation(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateAllocationBatchDto,
+  ): Promise<BatchAllocationSummary> {
     return this.guaranteesSlice.previewBatchAllocation(auth, projectId, dto);
   }
 
@@ -858,7 +847,11 @@ export class ContractingService {
     return this.documentsSlice.addDocumentRevision(auth, documentId, dto);
   }
 
-  async updateDocumentRevisionStatus(auth: AuthContext, revisionId: string, dto: UpdateContractingDocumentRevisionStatusDto) {
+  async updateDocumentRevisionStatus(
+    auth: AuthContext,
+    revisionId: string,
+    dto: UpdateContractingDocumentRevisionStatusDto,
+  ) {
     return this.documentsSlice.updateDocumentRevisionStatus(auth, revisionId, dto);
   }
 

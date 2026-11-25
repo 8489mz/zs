@@ -12,7 +12,11 @@ import { HrTreasuryAdapter } from '../hr-treasury.adapter';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { allocateLoanDeduction } from '../payroll-loan-allocation.engine';
 import { requireBankPayrollPaymentReference } from '../engines/hr-payroll-run.engine';
-import { validateHrStatutoryPolicy, requireHrPayrollJurisdictionCurrency, type HrStatutoryPolicy } from '../engines/hr-statutory-policy.engine';
+import {
+  validateHrStatutoryPolicy,
+  requireHrPayrollJurisdictionCurrency,
+  type HrStatutoryPolicy,
+} from '../engines/hr-statutory-policy.engine';
 import { clean, tenantBookDigits } from '../hr-helpers';
 
 /**
@@ -77,7 +81,12 @@ export interface HrPayrollPostingDeps {
   getPayrollRun: (id: number, auth: AuthContext) => Promise<Record<string, unknown>>;
   getPayrollRunStatusForUpdate: (db: Kysely<Database>, runId: number, tenantId: string) => Promise<string>;
   invalidatePayrollRunReview: (db: Kysely<Database>, runId: number, tenantId: string) => Promise<void>;
-  rebuildPayrollRunItems: (db: Kysely<Database>, runId: number, itemStatus: 'draft' | 'reviewed' | 'approved', scopeTenantId: string) => Promise<void>;
+  rebuildPayrollRunItems: (
+    db: Kysely<Database>,
+    runId: number,
+    itemStatus: 'draft' | 'reviewed' | 'approved',
+    scopeTenantId: string,
+  ) => Promise<void>;
 }
 
 @Injectable()
@@ -90,9 +99,18 @@ export class HrPayrollPostingService {
   private readonly cashDrawer?: CashDrawerService;
   private readonly getPayrollPolicies: (db: any, tenantId: string) => Promise<any>;
   private readonly getPayrollRun: (id: number, auth: AuthContext) => Promise<Record<string, unknown>>;
-  private readonly getPayrollRunStatusForUpdate: (db: Kysely<Database>, runId: number, tenantId: string) => Promise<string>;
+  private readonly getPayrollRunStatusForUpdate: (
+    db: Kysely<Database>,
+    runId: number,
+    tenantId: string,
+  ) => Promise<string>;
   private readonly invalidatePayrollRunReview: (db: Kysely<Database>, runId: number, tenantId: string) => Promise<void>;
-  private readonly rebuildPayrollRunItems: (db: Kysely<Database>, runId: number, itemStatus: 'draft' | 'reviewed' | 'approved', scopeTenantId: string) => Promise<void>;
+  private readonly rebuildPayrollRunItems: (
+    db: Kysely<Database>,
+    runId: number,
+    itemStatus: 'draft' | 'reviewed' | 'approved',
+    scopeTenantId: string,
+  ) => Promise<void>;
 
   constructor(deps: HrPayrollPostingDeps) {
     this.db = deps.db;
@@ -114,7 +132,11 @@ export class HrPayrollPostingService {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + tenantId}))`.execute(trx);
       const status = await this.getPayrollRunStatusForUpdate(trx, id, tenantId);
       if (status !== 'draft' && status !== 'reviewed') {
-        throw new AppError('Only draft or reviewed payroll runs can be recalculated', 'HR_PAYROLL_APPLY_DEDUCTIONS_LOCKED', 400);
+        throw new AppError(
+          'Only draft or reviewed payroll runs can be recalculated',
+          'HR_PAYROLL_APPLY_DEDUCTIONS_LOCKED',
+          400,
+        );
       }
       // Legacy versions inserted the same attendance/insurance/tax deductions twice.
       // Remove ONLY these auto-generated adjustments; keep human-entered adjustments.
@@ -130,7 +152,11 @@ export class HrPayrollPostingService {
         await this.invalidatePayrollRunReview(trx, id, tenantId);
       }
     });
-    await this.audit.log('Recalculate HR payroll deductions', `Payroll run #${id} recalculated by ${auth.username}`, auth);
+    await this.audit.log(
+      'Recalculate HR payroll deductions',
+      `Payroll run #${id} recalculated by ${auth.username}`,
+      auth,
+    );
     return this.getPayrollRun(id, auth);
   }
 
@@ -202,14 +228,8 @@ export class HrPayrollPostingService {
         });
         if (!allocation) continue;
 
-        const {
-          deductAmount,
-          newInstallmentPaid,
-          newInstallmentStatus,
-          newLoanRemaining,
-          newLoanPaid,
-          newLoanStatus,
-        } = allocation;
+        const { deductAmount, newInstallmentPaid, newInstallmentStatus, newLoanRemaining, newLoanPaid, newLoanStatus } =
+          allocation;
         remainingToDeduct = allocation.remainingToDeductAfter;
 
         await sql`
@@ -249,7 +269,11 @@ export class HrPayrollPostingService {
       }
 
       if (remainingToDeduct > 0.01) {
-        throw new AppError('Unable to allocate the full loan deduction amount for employee. Balances do not match.', 'HR_PAYROLL_LOAN_ALLOCATION_MISMATCH', 400);
+        throw new AppError(
+          'Unable to allocate the full loan deduction amount for employee. Balances do not match.',
+          'HR_PAYROLL_LOAN_ALLOCATION_MISMATCH',
+          400,
+        );
       }
     }
   }
@@ -260,7 +284,8 @@ export class HrPayrollPostingService {
       // Weekly, monthly and all-employees runs cannot approve the same person twice.
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
       const status = await this.getPayrollRunStatusForUpdate(trx, id, auth.tenantId || '');
-      if (status !== 'reviewed') throw new AppError('Only reviewed payroll runs can be approved', 'HR_PAYROLL_APPROVE_LOCKED', 400);
+      if (status !== 'reviewed')
+        throw new AppError('Only reviewed payroll runs can be approved', 'HR_PAYROLL_APPROVE_LOCKED', 400);
 
       // Serialize statutory policy edits with approval/posting. The same lock
       // is held by updatePayrollPolicies; no update can slip between the policy
@@ -282,7 +307,8 @@ export class HrPayrollPostingService {
       if (unconfiguredEmployee.rows.length) {
         throw new AppError(
           `الموظف ${unconfiguredEmployee.rows[0].display_name} عليه استقطاعات نظامية ولكن تم تعطيل سياسة احتسابها`,
-          'HR_PAYROLL_EMPLOYEE_STATUTORY_DISABLED', 409,
+          'HR_PAYROLL_EMPLOYEE_STATUTORY_DISABLED',
+          409,
         );
       }
       const payrollPeriod = await sql<{ start_date: string; end_date: string }>`
@@ -294,10 +320,14 @@ export class HrPayrollPostingService {
       if (!period) throw new AppError('مسير الرواتب غير موجود', 'HR_PAYROLL_RUN_NOT_FOUND', 404);
       try {
         const hasStatutoryDeductions = Boolean(policies.hrSocialInsuranceEnabled || policies.hrIncomeTaxEnabled);
-        validateHrStatutoryPolicy((policies as unknown) as HrStatutoryPolicy, {
-          from: period.start_date,
-          to: period.end_date,
-        }, hasStatutoryDeductions);
+        validateHrStatutoryPolicy(
+          policies as unknown as HrStatutoryPolicy,
+          {
+            from: period.start_date,
+            to: period.end_date,
+          },
+          hasStatutoryDeductions,
+        );
         if (hasStatutoryDeductions) {
           const currencyRows = await sql<{ value: string }>`
             SELECT value FROM settings WHERE tenant_id = ${auth.tenantId} AND key = 'currency' LIMIT 1
@@ -308,7 +338,8 @@ export class HrPayrollPostingService {
       } catch (error) {
         throw new AppError(
           error instanceof Error ? error.message : 'قواعد الضرائب والتأمينات غير معتمدة',
-          'HR_PAYROLL_STATUTORY_RULES_UNVERIFIED', 409,
+          'HR_PAYROLL_STATUTORY_RULES_UNVERIFIED',
+          409,
         );
       }
       // A reviewer must re-review changed statutory settings rather than approve
@@ -325,7 +356,8 @@ export class HrPayrollPostingService {
       if (policyChangedAfterReview.rows[0]?.stale) {
         throw new AppError(
           'تم تغيير سياسات الاستقطاعات بعد مراجعة الكشف؛ أعد مراجعة المرتبات قبل الاعتماد',
-          'HR_PAYROLL_POLICY_CHANGED_AFTER_REVIEW', 409,
+          'HR_PAYROLL_POLICY_CHANGED_AFTER_REVIEW',
+          409,
         );
       }
       const duplicatePay = await sql<{ display_name: string }>`
@@ -349,8 +381,9 @@ export class HrPayrollPostingService {
       `.execute(trx);
       if (duplicatePay.rows.length) {
         throw new AppError(
-          `الموظف/الموظفون ${duplicatePay.rows.map(r => r.display_name).join('، ')} مدرجون في مسير متداخل؛ امنع صرف نفس الأيام مرتين`,
-          'HR_PAYROLL_EMPLOYEE_PERIOD_COLLISION', 409,
+          `الموظف/الموظفون ${duplicatePay.rows.map((r) => r.display_name).join('، ')} مدرجون في مسير متداخل؛ امنع صرف نفس الأيام مرتين`,
+          'HR_PAYROLL_EMPLOYEE_PERIOD_COLLISION',
+          409,
         );
       }
       // Never post/settle a payroll that silently contains only zero wages.
@@ -363,7 +396,11 @@ export class HrPayrollPostingService {
         WHERE run_id = ${id} AND tenant_id = ${auth.tenantId} AND status = 'reviewed'
       `.execute(trx);
       if (Number(wageSummary.rows[0]?.count || 0) === 0 || Number(wageSummary.rows[0]?.total || 0) <= 0) {
-        throw new AppError('لا يمكن اعتماد كشف مرتبات فارغ أو جميع أجوره صفر. راجع الأجر والعقود والحضور أولًا.', 'HR_PAYROLL_ZERO_WAGES', 400);
+        throw new AppError(
+          'لا يمكن اعتماد كشف مرتبات فارغ أو جميع أجوره صفر. راجع الأجر والعقود والحضور أولًا.',
+          'HR_PAYROLL_ZERO_WAGES',
+          400,
+        );
       }
       // A single employee must never be silently included with an undefined
       // rate/contract while another employee makes the overall run non-zero.
@@ -387,8 +424,12 @@ export class HrPayrollPostingService {
         LIMIT 5
       `.execute(trx);
       if (missingRates.rows.length) {
-        const names = missingRates.rows.map(row => String(row.display_name)).join('، ');
-        throw new AppError(`يوجد موظفون بدون أجر ساعة أو عقد براتب نشط وصحيح: ${names}`, 'HR_PAYROLL_MISSING_EMPLOYEE_RATES', 400);
+        const names = missingRates.rows.map((row) => String(row.display_name)).join('، ');
+        throw new AppError(
+          `يوجد موظفون بدون أجر ساعة أو عقد براتب نشط وصحيح: ${names}`,
+          'HR_PAYROLL_MISSING_EMPLOYEE_RATES',
+          400,
+        );
       }
       // Hourly base salary counts only completed punches. An unclosed or
       // malformed paid work session must never be silently omitted at approval.
@@ -413,8 +454,9 @@ export class HrPayrollPostingService {
       `.execute(trx);
       if (invalidHourlyPunch.rows.length) {
         throw new AppError(
-          `يوجد دوام ساعات غير مكتمل أو غير صالح للموظفين: ${invalidHourlyPunch.rows.map(r => r.display_name).join('، ')}؛ صحح الحضور قبل اعتماد المرتبات`,
-          'HR_PAYROLL_HOURLY_PUNCH_UNRESOLVED', 409,
+          `يوجد دوام ساعات غير مكتمل أو غير صالح للموظفين: ${invalidHourlyPunch.rows.map((r) => r.display_name).join('، ')}؛ صحح الحضور قبل اعتماد المرتبات`,
+          'HR_PAYROLL_HOURLY_PUNCH_UNRESOLVED',
+          409,
         );
       }
       // A reviewed payroll still cannot be approved with disputed attendance.
@@ -432,7 +474,8 @@ export class HrPayrollPostingService {
       if (Number(pendingAttendance.rows[0]?.pending || 0) > 0) {
         throw new AppError(
           `يوجد ${pendingAttendance.rows[0].pending} استثناء حضور أو تأخير يحتاج مراجعة قبل اعتماد المرتبات`,
-          'HR_PAYROLL_ATTENDANCE_PENDING', 400,
+          'HR_PAYROLL_ATTENDANCE_PENDING',
+          400,
         );
       }
       // A reviewer approves a concrete financial snapshot, not an arbitrary
@@ -459,7 +502,8 @@ export class HrPayrollPostingService {
       if (reviewedAmounts !== recalculatedAmounts) {
         throw new AppError(
           'تغيرت بيانات المرتبات أو الحضور أو السلف بعد المراجعة؛ يجب إعادة مراجعة الكشف قبل الاعتماد النهائي',
-          'HR_PAYROLL_REVIEW_STALE', 409,
+          'HR_PAYROLL_REVIEW_STALE',
+          409,
         );
       }
 
@@ -479,16 +523,26 @@ export class HrPayrollPostingService {
         const row = untrackedDeferred.rows[0];
         throw new AppError(
           `الموظف #${row.employee_id} عليه استقطاعات مؤجلة بقيمة ${row.amount} لا توجد آلية آمنة لترحيلها تلقائيًا؛ يلزم تسوية معتمدة قبل اعتماد المسير`,
-          'HR_PAYROLL_UNTRACKED_CARRIED_FORWARD', 409,
+          'HR_PAYROLL_UNTRACKED_CARRIED_FORWARD',
+          409,
         );
       }
       await this.settlePayrollLoanDeductions(trx, id, auth);
 
       const { posted } = await this.accountingPosting.postPayrollAccrual(trx, id, auth);
-      if (!posted) throw new AppError('Payroll accrual journal entry could not be created or already exists', 'HR_PAYROLL_ACCRUAL_FAILED', 400);
+      if (!posted)
+        throw new AppError(
+          'Payroll accrual journal entry could not be created or already exists',
+          'HR_PAYROLL_ACCRUAL_FAILED',
+          400,
+        );
 
-      await sql`UPDATE hr_payroll_run_items SET status = 'approved', updated_at = NOW() WHERE run_id = ${id} AND status = 'reviewed' AND tenant_id = ${auth.tenantId}`.execute(trx);
-      await sql`UPDATE hr_payroll_runs SET status = 'approved', approved_by = ${auth.userId}, approved_at = NOW(), updated_at = NOW() WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(trx);
+      await sql`UPDATE hr_payroll_run_items SET status = 'approved', updated_at = NOW() WHERE run_id = ${id} AND status = 'reviewed' AND tenant_id = ${auth.tenantId}`.execute(
+        trx,
+      );
+      await sql`UPDATE hr_payroll_runs SET status = 'approved', approved_by = ${auth.userId}, approved_at = NOW(), updated_at = NOW() WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(
+        trx,
+      );
     });
     await this.audit.log('Approve HR payroll run', `Payroll run #${id} approved by ${auth.username}`, auth);
     return this.getPayrollRun(id, auth);
@@ -500,7 +554,11 @@ export class HrPayrollPostingService {
       try {
         paymentReference = requireBankPayrollPaymentReference(payload.paymentChannel, payload.paymentReference);
       } catch (error) {
-        throw new AppError(error instanceof Error ? error.message : 'المرجع البنكي غير صحيح', 'HR_PAYROLL_PAYMENT_REFERENCE_REQUIRED', 400);
+        throw new AppError(
+          error instanceof Error ? error.message : 'المرجع البنكي غير صحيح',
+          'HR_PAYROLL_PAYMENT_REFERENCE_REQUIRED',
+          400,
+        );
       }
     }
     await this.tx.runInTransaction(this.db, async (trx) => {
@@ -512,7 +570,7 @@ export class HrPayrollPostingService {
       const remainingItems = await trx
         .selectFrom('hr_payroll_run_items as i')
         .innerJoin('hr_employees as e', (join) =>
-          join.onRef('e.id', '=', 'i.employee_id').onRef('e.tenant_id', '=', 'i.tenant_id')
+          join.onRef('e.id', '=', 'i.employee_id').onRef('e.tenant_id', '=', 'i.tenant_id'),
         )
         .select(['i.id', 'i.employee_id', 'i.net_pay', 'e.display_name'])
         .where('i.run_id', '=', id)
@@ -547,7 +605,11 @@ export class HrPayrollPostingService {
           `.execute(trx);
         }
         if (!eligibleShift.rows.length) {
-          throw new AppError('لا توجد وردية كاشير مفتوحة للصرف منها؛ افتح وردية نقدية أولاً أو اختر الخزينة العامة', 'HR_CASHIER_SHIFT_REQUIRED', 400);
+          throw new AppError(
+            'لا توجد وردية كاشير مفتوحة للصرف منها؛ افتح وردية نقدية أولاً أو اختر الخزينة العامة',
+            'HR_CASHIER_SHIFT_REQUIRED',
+            400,
+          );
         }
         const shift = eligibleShift.rows[0];
         shiftId = Number(shift.id);
@@ -558,7 +620,7 @@ export class HrPayrollPostingService {
           throw new AppError(
             `نقدية درج الكاشير (${drawerCash.toLocaleString('en-US')} ج.م) غير كافية لصرف إجمالي المسير (${totalNetPay.toLocaleString('en-US')} ج.م)`,
             'HR_DRAWER_INSUFFICIENT_CASH',
-            400
+            400,
           );
         }
 
@@ -587,15 +649,24 @@ export class HrPayrollPostingService {
           )
         `.execute(trx);
       } else if (payload.paymentChannel === 'cash') {
-        await this.treasury.recordPayrollPayment(trx, {
-          runId: id,
-          amount: totalNetPay,
-          branchId: null,
-          locationId: null,
-        }, auth);
+        await this.treasury.recordPayrollPayment(
+          trx,
+          {
+            runId: id,
+            amount: totalNetPay,
+            branchId: null,
+            locationId: null,
+          },
+          auth,
+        );
       }
 
-      const { posted, journalEntryId } = await this.accountingPosting.postPayrollPayment(trx, id, payload.paymentChannel, auth);
+      const { posted, journalEntryId } = await this.accountingPosting.postPayrollPayment(
+        trx,
+        id,
+        payload.paymentChannel,
+        auth,
+      );
       if (!posted && !journalEntryId) {
         throw new AppError('Payroll payment journal entry could not be created', 'HR_PAYROLL_PAYMENT_FAILED', 400);
       }
@@ -641,17 +712,29 @@ export class HrPayrollPostingService {
         WHERE id = ${id} AND tenant_id = ${auth.tenantId}
       `.execute(trx);
     });
-    await this.audit.log('Pay HR payroll run', `Payroll run #${id} paid by ${auth.username} via ${payload.paymentChannel}`, auth);
+    await this.audit.log(
+      'Pay HR payroll run',
+      `Payroll run #${id} paid by ${auth.username} via ${payload.paymentChannel}`,
+      auth,
+    );
     return this.getPayrollRun(id, auth);
   }
 
-  async payPayrollRunItem(itemId: number, payload: PayPayrollItemDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async payPayrollRunItem(
+    itemId: number,
+    payload: PayPayrollItemDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     let paymentReference: string = '';
     if (payload.paymentChannel === 'bank') {
       try {
         paymentReference = requireBankPayrollPaymentReference(payload.paymentChannel, payload.paymentReference);
       } catch (error) {
-        throw new AppError(error instanceof Error ? error.message : 'المرجع البنكي غير صحيح', 'HR_PAYROLL_PAYMENT_REFERENCE_REQUIRED', 400);
+        throw new AppError(
+          error instanceof Error ? error.message : 'المرجع البنكي غير صحيح',
+          'HR_PAYROLL_PAYMENT_REFERENCE_REQUIRED',
+          400,
+        );
       }
     }
 
@@ -660,10 +743,10 @@ export class HrPayrollPostingService {
       const item = await trx
         .selectFrom('hr_payroll_run_items as i')
         .innerJoin('hr_employees as e', (join) =>
-          join.onRef('e.id', '=', 'i.employee_id').onRef('e.tenant_id', '=', 'i.tenant_id')
+          join.onRef('e.id', '=', 'i.employee_id').onRef('e.tenant_id', '=', 'i.tenant_id'),
         )
         .innerJoin('hr_payroll_runs as r', (join) =>
-          join.onRef('r.id', '=', 'i.run_id').onRef('r.tenant_id', '=', 'i.tenant_id')
+          join.onRef('r.id', '=', 'i.run_id').onRef('r.tenant_id', '=', 'i.tenant_id'),
         )
         .select([
           'i.id',
@@ -720,7 +803,11 @@ export class HrPayrollPostingService {
           `.execute(trx);
         }
         if (!eligibleShift.rows.length) {
-          throw new AppError('لا توجد وردية كاشير مفتوحة للصرف منها؛ افتح وردية نقدية أولاً أو اختر الخزينة العامة', 'HR_CASHIER_SHIFT_REQUIRED', 400);
+          throw new AppError(
+            'لا توجد وردية كاشير مفتوحة للصرف منها؛ افتح وردية نقدية أولاً أو اختر الخزينة العامة',
+            'HR_CASHIER_SHIFT_REQUIRED',
+            400,
+          );
         }
         const shift = eligibleShift.rows[0];
         shiftId = Number(shift.id);
@@ -733,7 +820,7 @@ export class HrPayrollPostingService {
           throw new AppError(
             `نقدية درج الكاشير (${drawerCash.toLocaleString('en-US')} ج.م) غير كافية لصرف صافي راتب الموظف (${netPay.toLocaleString('en-US')} ج.م)؛ يلزم إيداع نقدية بالدرج أو اختيار الخزينة العامة`,
             'HR_DRAWER_INSUFFICIENT_CASH',
-            400
+            400,
           );
         }
 
@@ -762,12 +849,16 @@ export class HrPayrollPostingService {
           )
         `.execute(trx);
       } else if (payload.paymentChannel === 'cash') {
-        await this.treasury.recordPayrollPayment(trx, {
-          runId: runId,
-          amount: netPay,
-          branchId: null,
-          locationId: null,
-        }, auth);
+        await this.treasury.recordPayrollPayment(
+          trx,
+          {
+            runId: runId,
+            amount: netPay,
+            branchId: null,
+            locationId: null,
+          },
+          auth,
+        );
       }
 
       // Post GL journal for this employee
@@ -776,7 +867,7 @@ export class HrPayrollPostingService {
         itemId,
         payload.paymentChannel,
         auth,
-        { employeeName: item.display_name, branchId, locationId }
+        { employeeName: item.display_name, branchId, locationId },
       );
 
       // Update item to paid
@@ -835,7 +926,11 @@ export class HrPayrollPostingService {
       }
     });
 
-    await this.audit.log('Pay HR payroll item', `Payroll item #${itemId} paid by ${auth.username} via ${payload.paymentChannel}`, auth);
+    await this.audit.log(
+      'Pay HR payroll item',
+      `Payroll item #${itemId} paid by ${auth.username} via ${payload.paymentChannel}`,
+      auth,
+    );
     return this.getPayrollRun(runId, auth);
   }
 }

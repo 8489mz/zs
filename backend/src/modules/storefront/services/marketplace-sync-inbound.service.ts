@@ -39,7 +39,12 @@ export interface MarketplaceSyncInboundDeps {
 export class MarketplaceSyncInboundService {
   private readonly db: Kysely<Database>;
   private readonly audit: AuditService;
-  private readonly getSettingJson: <T>(key: string, tenantId: string, defaultValue: T, executor?: Kysely<Database>) => Promise<T>;
+  private readonly getSettingJson: <T>(
+    key: string,
+    tenantId: string,
+    defaultValue: T,
+    executor?: Kysely<Database>,
+  ) => Promise<T>;
   private readonly setSettingJson: <T>(key: string, tenantId: string, value: T) => Promise<void>;
 
   constructor(deps: MarketplaceSyncInboundDeps) {
@@ -69,7 +74,13 @@ export class MarketplaceSyncInboundService {
 
     const existing = await this.getInboundShipments(auth);
     const prefix = input.marketplace === 'noon' ? 'FBN' : 'FBA';
-    const shipmentNumber = formatDailyDocumentNumber(prefix, existing.length + 1, new Date(), 4, await getTenantTimezone(this.db, scope.tenantId));
+    const shipmentNumber = formatDailyDocumentNumber(
+      prefix,
+      existing.length + 1,
+      new Date(),
+      4,
+      await getTenantTimezone(this.db, scope.tenantId),
+    );
 
     const totalUnits = input.items.reduce((sum, item) => sum + Number(item.quantityShipped || 0), 0);
     const totalBoxes = input.items.reduce((max, item) => Math.max(max, Number(item.boxNumber || 1)), 1);
@@ -212,10 +223,7 @@ export class MarketplaceSyncInboundService {
     return shipment;
   }
 
-  async getDiscrepancyClaimReport(
-    shipmentId: string,
-    auth: AuthContext,
-  ): Promise<FbaDiscrepancyClaimReport> {
+  async getDiscrepancyClaimReport(shipmentId: string, auth: AuthContext): Promise<FbaDiscrepancyClaimReport> {
     const scope = requireTenantScope(auth);
     // D6a: claim losses are money the tenant claims back, so each
     // item loss and the claim total round at the book digits.
@@ -241,7 +249,10 @@ export class MarketplaceSyncInboundService {
       }));
 
     const totalMissing = missingItems.reduce((s, it) => s + it.missingQuantity, 0);
-    const totalLoss = roundMoney(missingItems.reduce((s, it) => s + it.totalLoss, 0), bookDigits);
+    const totalLoss = roundMoney(
+      missingItems.reduce((s, it) => s + it.totalLoss, 0),
+      bookDigits,
+    );
 
     const claimTitle =
       shipment.marketplace === 'amazon'

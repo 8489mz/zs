@@ -5,20 +5,13 @@ import { Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { canManageShippingConfig, canOperateShipping } from '../../core/auth/utils/commerce-operation-guards';
-import {
-  BostaSettings,
-  BostaCreateDeliveryDto,
-  BostaDeliveryResponse,
-  BostaTrackingResponse,
-} from './bosta.types';
+import { BostaSettings, BostaCreateDeliveryDto, BostaDeliveryResponse, BostaTrackingResponse } from './bosta.types';
 
 @Injectable()
 export class BostaService {
   private readonly logger = new Logger(BostaService.name);
 
-  constructor(
-    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
-  ) {}
+  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   /**
    * استرجاع إعدادات الربط مع بوسطة
@@ -66,7 +59,8 @@ export class BostaService {
     if (payload.apiKey && payload.apiKey !== '••••••••') {
       updates.push({ key: 'bosta_api_key', val: payload.apiKey });
     }
-    if (payload.pickupBusinessName !== undefined) updates.push({ key: 'bosta_pickup_business_name', val: payload.pickupBusinessName });
+    if (payload.pickupBusinessName !== undefined)
+      updates.push({ key: 'bosta_pickup_business_name', val: payload.pickupBusinessName });
     if (payload.pickupPhone !== undefined) updates.push({ key: 'bosta_pickup_phone', val: payload.pickupPhone });
     if (payload.pickupCity !== undefined) updates.push({ key: 'bosta_pickup_city', val: payload.pickupCity });
     if (payload.pickupAddress !== undefined) updates.push({ key: 'bosta_pickup_address', val: payload.pickupAddress });
@@ -132,7 +126,7 @@ export class BostaService {
     // إذا كان الطلب مسدداً إلكترونياً فإن مبلغ التحصيل يكون 0، وإلا فإن المبلغ هو الإجمالي
     const totalOrderAmount = Number(order.total_amount || 0);
     const isPaidOnline = order.payment_status === 'paid';
-    const finalCod = dto.cod !== undefined ? Number(dto.cod) : (isPaidOnline ? 0 : totalOrderAmount);
+    const finalCod = dto.cod !== undefined ? Number(dto.cod) : isPaidOnline ? 0 : totalOrderAmount;
 
     // تجهيز بيانات المستلم
     const receiverPhone = order.customer_phone || '';
@@ -271,7 +265,11 @@ export class BostaService {
       trackingNumber,
       currentStatus: 'SANDBOX_CREATED',
       history: [
-        { state: 'SANDBOX_CREATED', timestamp: new Date().toISOString(), reason: 'هذه شحنة محاكاة ولم تُرسل إلى بوسطة.' },
+        {
+          state: 'SANDBOX_CREATED',
+          timestamp: new Date().toISOString(),
+          reason: 'هذه شحنة محاكاة ولم تُرسل إلى بوسطة.',
+        },
       ],
     };
   }
@@ -313,7 +311,10 @@ export class BostaService {
     };
   }
 
-  async getAwbUrl(deliveryId: string, actor: AuthContext): Promise<{ url: string; isSandbox: boolean; trackingNumber: string }> {
+  async getAwbUrl(
+    deliveryId: string,
+    actor: AuthContext,
+  ): Promise<{ url: string; isSandbox: boolean; trackingNumber: string }> {
     const { tenantId } = requireTenantScope(actor);
     const order = await this.db
       .selectFrom('online_orders')

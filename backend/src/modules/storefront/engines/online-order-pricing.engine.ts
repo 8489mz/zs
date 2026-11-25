@@ -79,11 +79,18 @@ export type OrderLinePriceResult =
  * else base + extraPrice. Unknown variant names are rejected rather than silently priced at base,
  * which is exactly how the old path under-billed.
  */
-export function resolveOrderLinePrice(basePrice: number, metadata: unknown, requestedVariant: string | null = null, digits: MoneyDigits): OrderLinePriceResult {
+export function resolveOrderLinePrice(
+  basePrice: number,
+  metadata: unknown,
+  requestedVariant: string | null = null,
+  digits: MoneyDigits,
+): OrderLinePriceResult {
   const base = Number(basePrice || 0);
   const wanted = String(requestedVariant ?? '').trim();
   if (!wanted) {
-    return base >= 0 ? { ok: true, unitPrice: roundBookMoney(base, digits), variantName: null } : { ok: false, reason: 'INVALID_PRICE' };
+    return base >= 0
+      ? { ok: true, unitPrice: roundBookMoney(base, digits), variantName: null }
+      : { ok: false, reason: 'INVALID_PRICE' };
   }
 
   const variant = readProductVariants(metadata).find((v) => v.name === wanted);

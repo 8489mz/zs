@@ -46,7 +46,12 @@ export class DeliveryRepsDriverAuthService {
     this.authCache = deps.authCache ?? new AuthCacheService();
   }
 
-  async driverLogin(payload: { phone: string; pinCode: string; companyCode?: string; tenantId?: string }): Promise<{ token: string; rep: Record<string, unknown>; mustChangePin: boolean }> {
+  async driverLogin(payload: {
+    phone: string;
+    pinCode: string;
+    companyCode?: string;
+    tenantId?: string;
+  }): Promise<{ token: string; rep: Record<string, unknown>; mustChangePin: boolean }> {
     const rawPhone = String(payload?.phone || '').trim();
     const pinCode = String(payload?.pinCode || '').trim();
     const companyScope = payload?.companyCode || payload?.tenantId;
@@ -99,10 +104,7 @@ export class DeliveryRepsDriverAuthService {
       }
     }
 
-    let repsQuery = this.db
-      .selectFrom('delivery_representatives')
-      .selectAll()
-      .where('is_active', '=', true);
+    let repsQuery = this.db.selectFrom('delivery_representatives').selectAll().where('is_active', '=', true);
 
     if (resolvedTenantId) {
       repsQuery = repsQuery.where('tenant_id', '=', resolvedTenantId);
@@ -132,9 +134,9 @@ export class DeliveryRepsDriverAuthService {
     }
 
     if (matchedReps.length > 1) {
-      const candidateTenantIds = Array.from(
-        new Set(matchedReps.map((r) => String(r.tenant_id).trim())),
-      ).filter(Boolean);
+      const candidateTenantIds = Array.from(new Set(matchedReps.map((r) => String(r.tenant_id).trim()))).filter(
+        Boolean,
+      );
 
       let tenantRows: any[] = [];
       try {
@@ -248,7 +250,22 @@ export class DeliveryRepsDriverAuthService {
 
     const rep = await this.db
       .selectFrom('delivery_representatives')
-      .select(['id', 'name', 'full_name', 'phone', 'vehicle_plate', 'is_active', 'tenant_id', 'account_id', 'pin_hash', 'pin_salt', 'is_van_rep', 'van_location_id', 'permissions', 'metadata'])
+      .select([
+        'id',
+        'name',
+        'full_name',
+        'phone',
+        'vehicle_plate',
+        'is_active',
+        'tenant_id',
+        'account_id',
+        'pin_hash',
+        'pin_salt',
+        'is_van_rep',
+        'van_location_id',
+        'permissions',
+        'metadata',
+      ])
       .where('id', '=', driver.repId)
       .where('tenant_id', '=', driver.tenantId)
       .executeTakeFirst();
@@ -256,10 +273,7 @@ export class DeliveryRepsDriverAuthService {
     if (!rep || rep.is_active === false) {
       throw new AppError('تم إيقاف حساب المندوب. يرجى مراجعة الإدارة', 'DRIVER_INACTIVE', 401);
     }
-    if (
-      !rep.pin_hash ||
-      !(await verifyPassword(currentPin, String(rep.pin_hash), String(rep.pin_salt || ''))).valid
-    ) {
+    if (!rep.pin_hash || !(await verifyPassword(currentPin, String(rep.pin_hash), String(rep.pin_salt || ''))).valid) {
       throw new AppError('رمز الدخول الحالي غير صحيح', 'INVALID_PIN', 401);
     }
 
@@ -275,7 +289,11 @@ export class DeliveryRepsDriverAuthService {
     const nextPinVersion = repPinVersion((rep as any).metadata) + 1;
     await this.db
       .updateTable('delivery_representatives')
-      .set({ pin_hash: record.hash, pin_salt: record.salt, metadata: withPinVersion((rep as any).metadata, nextPinVersion) as any })
+      .set({
+        pin_hash: record.hash,
+        pin_salt: record.salt,
+        metadata: withPinVersion((rep as any).metadata, nextPinVersion) as any,
+      })
       .where('id', '=', driver.repId)
       .where('tenant_id', '=', driver.tenantId)
       .execute();
@@ -341,10 +359,7 @@ export class DeliveryRepsDriverAuthService {
       .where('id', '=', driver.repId)
       .where('tenant_id', '=', driver.tenantId)
       .executeTakeFirst();
-    if (
-      rep?.pin_hash &&
-      (await verifyPassword('1234', String(rep.pin_hash), String(rep.pin_salt || ''))).valid
-    ) {
+    if (rep?.pin_hash && (await verifyPassword('1234', String(rep.pin_hash), String(rep.pin_salt || ''))).valid) {
       throw new AppError('يجب تغيير رمز الدخول الافتراضي قبل المتابعة', 'PIN_CHANGE_REQUIRED', 403);
     }
   }
@@ -370,7 +385,14 @@ export class DeliveryRepsDriverAuthService {
   private async verifyDriverTokenCore(
     token: string,
     settleOnly: boolean,
-  ): Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string; tenantSuspended: boolean }> {
+  ): Promise<{
+    repId: number;
+    tenantId: string;
+    accountId: string;
+    name: string;
+    phone: string;
+    tenantSuspended: boolean;
+  }> {
     const payload = verifyPortalToken<Record<string, any>>(token, DRIVER_TOKEN_ERRORS);
 
     const repId = Number(payload.repId || 0);
@@ -401,7 +423,11 @@ export class DeliveryRepsDriverAuthService {
 
     const decision = await checkPortalTenantStatus(this.db as any, this.authCache, tenantId);
     if (decision.blocked && !settleOnly) {
-      throw new AppError(decision.message || 'تم إيقاف أو انتهاء اشتراك هذه النسخة.', decision.code || 'TENANT_NOT_ALLOWED', 401);
+      throw new AppError(
+        decision.message || 'تم إيقاف أو انتهاء اشتراك هذه النسخة.',
+        decision.code || 'TENANT_NOT_ALLOWED',
+        401,
+      );
     }
     const tenantSuspended = decision.blocked;
 
@@ -415,12 +441,21 @@ export class DeliveryRepsDriverAuthService {
     };
   }
 
-  async verifyDriverToken(token: string): Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string }> {
+  async verifyDriverToken(
+    token: string,
+  ): Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string }> {
     const { tenantSuspended: _tenantSuspended, ...driver } = await this.verifyDriverTokenCore(token, false);
     return driver;
   }
 
-  async verifyDriverTokenForSettlement(token: string): Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string; tenantSuspended: boolean }> {
+  async verifyDriverTokenForSettlement(token: string): Promise<{
+    repId: number;
+    tenantId: string;
+    accountId: string;
+    name: string;
+    phone: string;
+    tenantSuspended: boolean;
+  }> {
     return this.verifyDriverTokenCore(token, true);
   }
 }

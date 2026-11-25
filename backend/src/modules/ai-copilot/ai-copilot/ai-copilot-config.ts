@@ -32,7 +32,11 @@ export class AiCopilotConfig {
 
       const map = new Map<string, any>();
       for (const r of rows) {
-        try { map.set(r.key, JSON.parse(r.value)); } catch { map.set(r.key, r.value); }
+        try {
+          map.set(r.key, JSON.parse(r.value));
+        } catch {
+          map.set(r.key, r.value);
+        }
       }
 
       customKey = map.get('ai_api_key') || map.get('gemini_api_key') || null;
@@ -111,7 +115,7 @@ export class AiCopilotConfig {
     }
 
     // Clean model: return actual technical model identifier (e.g. gemini-3.6-flash), sanitizing any legacy Arabic string
-    const cleanModel = (aiConfig.model && !/[^\x20-\x7E]/.test(aiConfig.model)) ? aiConfig.model : '';
+    const cleanModel = aiConfig.model && !/[^\x20-\x7E]/.test(aiConfig.model) ? aiConfig.model : '';
 
     return {
       hasApiKey: hasKey,
@@ -140,8 +144,12 @@ export class AiCopilotConfig {
     },
     actor: AuthContext,
   ): Promise<{ ok: boolean }> {
-    if (actor.role !== 'admin' && actor.role !== 'super_admin'
-      && !actor.permissions?.includes('settings') && !actor.permissions?.includes('canManageSettings')) {
+    if (
+      actor.role !== 'admin' &&
+      actor.role !== 'super_admin' &&
+      !actor.permissions?.includes('settings') &&
+      !actor.permissions?.includes('canManageSettings')
+    ) {
       throw new ForbiddenException('Missing settings management permission');
     }
     const { tenantId, accountId } = requireTenantScope(actor);
@@ -150,14 +158,18 @@ export class AiCopilotConfig {
     // Explicit delete when apiKey is explicitly passed as empty string or null
     const isExplicitDelete = payload.apiKey === '' || payload.apiKey === null;
     const isExplicitKeyPassed = typeof payload.apiKey === 'string' && payload.apiKey.trim().length > 0;
-    const keyVal = isExplicitDelete ? '' : isExplicitKeyPassed ? payload.apiKey!.trim() : (existingConfig.apiKey || '');
+    const keyVal = isExplicitDelete ? '' : isExplicitKeyPassed ? payload.apiKey!.trim() : existingConfig.apiKey || '';
 
     const provider = payload.provider || existingConfig.provider || (keyVal.startsWith('sk-') ? 'openai' : 'gemini');
-    let model = isExplicitDelete ? '' : (payload.model !== undefined ? payload.model.trim() : (existingConfig.model || ''));
+    let model = isExplicitDelete ? '' : payload.model !== undefined ? payload.model.trim() : existingConfig.model || '';
     if (/[^\x20-\x7E]/.test(model)) {
       model = '';
     }
-    const baseUrl = isExplicitDelete ? '' : (payload.baseUrl !== undefined ? payload.baseUrl.trim() : ((existingConfig as any).baseUrl || ''));
+    const baseUrl = isExplicitDelete
+      ? ''
+      : payload.baseUrl !== undefined
+        ? payload.baseUrl.trim()
+        : (existingConfig as any).baseUrl || '';
 
     if (keyVal) {
       await sql`

@@ -4,7 +4,7 @@ import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
-import {  getTenantTimezone,  todayTenantDate } from '../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { CreateOnlineOrderDto } from './dto/create-online-order.dto';
 import { CreateProductReviewDto } from './dto/create-product-review.dto';
 import { UpdateStorefrontSettingsDto } from './dto/update-storefront-settings.dto';
@@ -17,9 +17,7 @@ import { StorefrontMediaService } from './storefront-media.service';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 import { PlanFeatureService } from '../../core/auth/services/plan-feature.service';
 import { CustomerOrderRefDto } from './dto/customer-order-lookup.dto';
-import {
-  unwrapConvertedSale,
-} from './engines/online-order-access.engine';
+import { unwrapConvertedSale } from './engines/online-order-access.engine';
 import { releaseLocationStock } from '../../common/utils/location-stock-ledger';
 import { StorefrontCouponsService } from './services/storefront-coupons.service';
 import { StorefrontOrderQuoteService } from './services/storefront-order-quote.service';
@@ -30,10 +28,7 @@ import { StorefrontSettingsService } from './services/storefront-settings.servic
 import { StorefrontEngagementService } from './services/storefront-engagement.service';
 import { StorefrontMerchantOrdersService } from './services/storefront-merchant-orders.service';
 
-import {
-  storefrontMoneyDigits,
-  isOutOfStockOrderingAllowed,
-} from './storefront-helpers';
+import { storefrontMoneyDigits, isOutOfStockOrderingAllowed } from './storefront-helpers';
 import { StorefrontOrderCreateService } from './services/storefront-order-create.service';
 import { StorefrontOrderConvertService } from './services/storefront-order-convert.service';
 import { StorefrontTableBillService } from './services/storefront-table-bill.service';
@@ -100,7 +95,9 @@ export class StorefrontService {
       db: this.db,
       getTenantBySlug: this.getTenantBySlug.bind(this),
       getTenantSettingsMap: this.getTenantSettingsMap.bind(this),
-      resolveStorefrontStockScope: this.catalogDetailService.resolveStorefrontStockScope.bind(this.catalogDetailService),
+      resolveStorefrontStockScope: this.catalogDetailService.resolveStorefrontStockScope.bind(
+        this.catalogDetailService,
+      ),
       loadStorefrontAvailability: this.catalogDetailService.loadStorefrontAvailability.bind(this.catalogDetailService),
     });
     this.customerOrdersService = new StorefrontCustomerOrdersService({
@@ -110,7 +107,9 @@ export class StorefrontService {
       resolveOrderCharges: this.orderQuoteService.resolveOrderCharges.bind(this.orderQuoteService),
       normalizeOnlineOrderModifiers: this.orderQuoteService.normalizeOnlineOrderModifiers.bind(this.orderQuoteService),
       onlineOrderModifiersTotal: this.orderQuoteService.onlineOrderModifiersTotal.bind(this.orderQuoteService),
-      enforceOnlineOrderModifierContract: this.orderQuoteService.enforceOnlineOrderModifierContract.bind(this.orderQuoteService),
+      enforceOnlineOrderModifierContract: this.orderQuoteService.enforceOnlineOrderModifierContract.bind(
+        this.orderQuoteService,
+      ),
       claimCouponUse: this.couponsService.claimCouponUse.bind(this.couponsService),
       releaseCouponUse: this.couponsService.releaseCouponUse.bind(this.couponsService),
       logger: this.logger,
@@ -122,11 +121,15 @@ export class StorefrontService {
       getTenantBySlug: this.getTenantBySlug.bind(this),
       getTenantSettingsMap: this.getTenantSettingsMap.bind(this),
       claimCouponUse: this.couponsService.claimCouponUse.bind(this.couponsService),
-      resolveStorefrontStockScope: this.catalogDetailService.resolveStorefrontStockScope.bind(this.catalogDetailService),
+      resolveStorefrontStockScope: this.catalogDetailService.resolveStorefrontStockScope.bind(
+        this.catalogDetailService,
+      ),
       resolveOrderCharges: this.orderQuoteService.resolveOrderCharges.bind(this.orderQuoteService),
       normalizeOnlineOrderModifiers: this.orderQuoteService.normalizeOnlineOrderModifiers.bind(this.orderQuoteService),
       onlineOrderModifiersTotal: this.orderQuoteService.onlineOrderModifiersTotal.bind(this.orderQuoteService),
-      enforceOnlineOrderModifierContract: this.orderQuoteService.enforceOnlineOrderModifierContract.bind(this.orderQuoteService),
+      enforceOnlineOrderModifierContract: this.orderQuoteService.enforceOnlineOrderModifierContract.bind(
+        this.orderQuoteService,
+      ),
       reapExpiredReservations: this.customerOrdersService.reapExpiredReservations.bind(this.customerOrdersService),
     });
     this.settingsService = new StorefrontSettingsService({
@@ -158,14 +161,12 @@ export class StorefrontService {
   }
 
   private async getTenantBySlug(slug: string) {
-    const cleanSlug = String(slug || '').trim().toLowerCase();
+    const cleanSlug = String(slug || '')
+      .trim()
+      .toLowerCase();
     if (!cleanSlug || cleanSlug === 'admin') throw new NotFoundException('المتجر غير موجود');
 
-    let tenant = await this.db
-      .selectFrom('tenants')
-      .selectAll()
-      .where('slug', '=', cleanSlug)
-      .executeTakeFirst();
+    let tenant = await this.db.selectFrom('tenants').selectAll().where('slug', '=', cleanSlug).executeTakeFirst();
 
     if (!tenant && cleanSlug.includes('.')) {
       tenant = await this.db
@@ -192,26 +193,26 @@ export class StorefrontService {
       }
     }
 
-    if (!tenant && (cleanSlug === 'default' || cleanSlug === 'demo' || cleanSlug === 'almhnds' || cleanSlug === 'slmhnds' || cleanSlug === 'elmhnds' || cleanSlug === 'almohandes' || cleanSlug === 'elmohandes')) {
-      tenant = await this.db
-        .selectFrom('tenants')
-        .selectAll()
-        .where('id', '=', 'default')
-        .executeTakeFirst();
+    if (
+      !tenant &&
+      (cleanSlug === 'default' ||
+        cleanSlug === 'demo' ||
+        cleanSlug === 'almhnds' ||
+        cleanSlug === 'slmhnds' ||
+        cleanSlug === 'elmhnds' ||
+        cleanSlug === 'almohandes' ||
+        cleanSlug === 'elmohandes')
+    ) {
+      tenant = await this.db.selectFrom('tenants').selectAll().where('id', '=', 'default').executeTakeFirst();
 
       if (!tenant) {
-        tenant = await this.db
-          .selectFrom('tenants')
-          .selectAll()
-          .orderBy('created_at', 'asc')
-          .executeTakeFirst();
+        tenant = await this.db.selectFrom('tenants').selectAll().orderBy('created_at', 'asc').executeTakeFirst();
       }
     }
 
     if (!tenant) throw new NotFoundException('المتجر غير موجود');
     return tenant;
   }
-
 
   private async getTenantSettingsMap(tenantId: string): Promise<Map<string, string>> {
     const rows = await this.db
@@ -232,7 +233,6 @@ export class StorefrontService {
     }
     return map;
   }
-
 
   public static invalidateGlobalCatalogCache(slug?: string) {
     return StorefrontCatalogService.invalidateGlobalCatalogCache(slug);
@@ -271,15 +271,18 @@ export class StorefrontService {
     return this.catalogDetailService.getProductModifiers(slug, productId);
   }
 
-  async quoteOnlineOrder(slug: string, dto: {
-    items: Array<{ productId: number | string; quantity: number; variantName?: string | null }>;
-    couponCode?: string;
-    deliveryZoneId?: number;
-    deliveryZoneName?: string;
-    fulfillmentType?: 'delivery' | 'pickup';
-    orderType?: string;
-    tableNumber?: string;
-  }) {
+  async quoteOnlineOrder(
+    slug: string,
+    dto: {
+      items: Array<{ productId: number | string; quantity: number; variantName?: string | null }>;
+      couponCode?: string;
+      deliveryZoneId?: number;
+      deliveryZoneName?: string;
+      fulfillmentType?: 'delivery' | 'pickup';
+      orderType?: string;
+      tableNumber?: string;
+    },
+  ) {
     return this.orderQuoteService.quoteOnlineOrder(slug, dto);
   }
 
@@ -438,4 +441,3 @@ export class StorefrontService {
     return this.tableBillService.payActiveTableBill(slug, tableNumber, dto);
   }
 }
-

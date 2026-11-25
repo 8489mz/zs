@@ -1,22 +1,7 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Put,
-  Delete,
-  Body,
-  Param,
-  Query,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
-import {
-  ApprovalWorkflowService,
-  CreateApprovalRuleDto,
-  ApprovalRequestFilter,
-} from './approval-workflow.service';
+import { ApprovalWorkflowService, CreateApprovalRuleDto, ApprovalRequestFilter } from './approval-workflow.service';
 
 @Controller('api/approvals')
 @UseGuards(SessionAuthGuard)
@@ -37,7 +22,7 @@ export class ApprovalWorkflowController {
   updateRule(
     @Param('id') id: string,
     @Body() dto: Partial<CreateApprovalRuleDto> & { isActive?: boolean },
-    @Req() req: RequestWithAuth
+    @Req() req: RequestWithAuth,
   ) {
     return this.approvalService.updateRule(id, dto, req.authContext!);
   }
@@ -63,20 +48,12 @@ export class ApprovalWorkflowController {
   }
 
   @Post('requests/:id/approve')
-  approveRequest(
-    @Param('id') id: string,
-    @Body() body: { notes?: string },
-    @Req() req: RequestWithAuth
-  ) {
+  approveRequest(@Param('id') id: string, @Body() body: { notes?: string }, @Req() req: RequestWithAuth) {
     return this.approvalService.approveRequest(id, body?.notes || '', req.authContext!);
   }
 
   @Post('requests/:id/reject')
-  rejectRequest(
-    @Param('id') id: string,
-    @Body() body: { reason: string },
-    @Req() req: RequestWithAuth
-  ) {
+  rejectRequest(@Param('id') id: string, @Body() body: { reason: string }, @Req() req: RequestWithAuth) {
     return this.approvalService.rejectRequest(id, body?.reason || '', req.authContext!);
   }
 }

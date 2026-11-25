@@ -247,11 +247,42 @@ export class TrialTenantProvisioningService {
    */
   transliterateArabicToLatin(value: unknown): string {
     const ARABIC_TRANSLITERATION_MAP: Record<string, string> = {
-      'ا': 'a', 'أ': 'a', 'إ': 'i', 'آ': 'aa', 'ب': 'b', 'ت': 't', 'ث': 'th',
-      'ج': 'j', 'ح': 'h', 'خ': 'kh', 'د': 'd', 'ذ': 'th', 'ر': 'r', 'ز': 'z',
-      'س': 's', 'ش': 'sh', 'ص': 's', 'ض': 'd', 'ط': 't', 'ظ': 'z', 'ع': 'a',
-      'غ': 'gh', 'ف': 'f', 'ق': 'q', 'ك': 'k', 'ل': 'l', 'م': 'm', 'ن': 'n',
-      'ه': 'h', 'و': 'w', 'ي': 'y', 'ى': 'a', 'ة': 'a', 'ء': '', 'ؤ': 'o', 'ئ': 'e',
+      ا: 'a',
+      أ: 'a',
+      إ: 'i',
+      آ: 'aa',
+      ب: 'b',
+      ت: 't',
+      ث: 'th',
+      ج: 'j',
+      ح: 'h',
+      خ: 'kh',
+      د: 'd',
+      ذ: 'th',
+      ر: 'r',
+      ز: 'z',
+      س: 's',
+      ش: 'sh',
+      ص: 's',
+      ض: 'd',
+      ط: 't',
+      ظ: 'z',
+      ع: 'a',
+      غ: 'gh',
+      ف: 'f',
+      ق: 'q',
+      ك: 'k',
+      ل: 'l',
+      م: 'm',
+      ن: 'n',
+      ه: 'h',
+      و: 'w',
+      ي: 'y',
+      ى: 'a',
+      ة: 'a',
+      ء: '',
+      ؤ: 'o',
+      ئ: 'e',
     };
 
     const withoutDiacritics = String(value || '').replace(/[ً-ٰٟـ]/g, '');
@@ -381,7 +412,9 @@ export class TrialTenantProvisioningService {
     const ownerEmail = this.normalizeOptional(payload.ownerEmail);
     const activityType = normalizeIndustryProfileKey(payload.businessIndustry || payload.activityType);
     const businessIndustry = activityType;
-    const days = Number.isFinite(Number(payload.days)) ? Math.max(1, Math.min(365, Number(payload.days))) : DEFAULT_TRIAL_DAYS;
+    const days = Number.isFinite(Number(payload.days))
+      ? Math.max(1, Math.min(365, Number(payload.days)))
+      : DEFAULT_TRIAL_DAYS;
     const providedSlug = this.normalizeOptional(payload.slug);
     const providedUsername = this.normalizeOptional(payload.username);
     const providedPassword = this.normalizeOptional(payload.password);
@@ -422,7 +455,11 @@ export class TrialTenantProvisioningService {
       // Resolve feature plan id: if provided use it, otherwise default to 'plan_ultimate' (the comprehensive plan with all features)
       let featurePlanId = this.normalizeOptional(payload.featurePlanId);
       if (!featurePlanId) {
-        const ultimatePlan = await trx.selectFrom('plans').select('id').where('id', '=', 'plan_ultimate').executeTakeFirst();
+        const ultimatePlan = await trx
+          .selectFrom('plans')
+          .select('id')
+          .where('id', '=', 'plan_ultimate')
+          .executeTakeFirst();
         if (ultimatePlan) {
           featurePlanId = ultimatePlan.id;
         } else {
@@ -451,15 +488,24 @@ export class TrialTenantProvisioningService {
         .execute();
 
       // Create trial subscription record
-      let saasPlan = payload.saasPlanId 
+      let saasPlan = payload.saasPlanId
         ? await trx.selectFrom('saas_plans').selectAll().where('id', '=', payload.saasPlanId).executeTakeFirst()
         : null;
 
       if (!saasPlan && featurePlanId) {
-        saasPlan = await trx.selectFrom('saas_plans').selectAll().where('feature_plan_id', '=', featurePlanId).executeTakeFirst();
+        saasPlan = await trx
+          .selectFrom('saas_plans')
+          .selectAll()
+          .where('feature_plan_id', '=', featurePlanId)
+          .executeTakeFirst();
       }
       if (!saasPlan) {
-        saasPlan = await trx.selectFrom('saas_plans').selectAll().where('is_active', '=', true).orderBy('price', 'desc').executeTakeFirst();
+        saasPlan = await trx
+          .selectFrom('saas_plans')
+          .selectAll()
+          .where('is_active', '=', true)
+          .orderBy('price', 'desc')
+          .executeTakeFirst();
       }
 
       if (saasPlan) {
@@ -599,8 +645,10 @@ export class TrialTenantProvisioningService {
       ];
 
       const industryPatch = this.getIndustrySettingsPatch(businessIndustry);
-      const isOmni = featurePlanId === 'plan_omnichannel' || featurePlanId === 'omnichannel' || featurePlanId === 'OMNICHANNEL';
-      const isEnterprise = isOmni || featurePlanId === 'plan_ultimate' || featurePlanId === 'ultimate' || featurePlanId === 'ULTIMATE';
+      const isOmni =
+        featurePlanId === 'plan_omnichannel' || featurePlanId === 'omnichannel' || featurePlanId === 'OMNICHANNEL';
+      const isEnterprise =
+        isOmni || featurePlanId === 'plan_ultimate' || featurePlanId === 'ultimate' || featurePlanId === 'ULTIMATE';
       if (isOmni) {
         industryPatch.storefrontModuleEnabled = true;
       }
@@ -624,7 +672,17 @@ export class TrialTenantProvisioningService {
         `.execute(trx);
       }
 
-      const resolvedPlanName = saasPlan?.name || (featurePlanId === 'plan_omnichannel' ? 'التجارة الشاملة' : featurePlanId === 'plan_ultimate' ? 'المتكاملة' : featurePlanId === 'plan_pro' ? 'المتقدمة' : featurePlanId === 'plan_starter' ? 'الأساسية' : 'المتكاملة');
+      const resolvedPlanName =
+        saasPlan?.name ||
+        (featurePlanId === 'plan_omnichannel'
+          ? 'التجارة الشاملة'
+          : featurePlanId === 'plan_ultimate'
+            ? 'المتكاملة'
+            : featurePlanId === 'plan_pro'
+              ? 'المتقدمة'
+              : featurePlanId === 'plan_starter'
+                ? 'الأساسية'
+                : 'المتكاملة');
 
       return {
         tenantId,

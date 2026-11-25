@@ -82,10 +82,10 @@ Product Details:
       reason === 'unbranded'
         ? 'Unbranded / Generic item with no manufacturer-provided barcode'
         : reason === 'private_label'
-        ? 'Private Label product produced under proprietary custom manufacturing'
-        : reason === 'custom_manufacturing'
-        ? 'Handmade / Custom manufactured goods without standard GTIN'
-        : 'Replacement parts and specialized industrial accessories'
+          ? 'Private Label product produced under proprietary custom manufacturing'
+          : reason === 'custom_manufacturing'
+            ? 'Handmade / Custom manufactured goods without standard GTIN'
+            : 'Replacement parts and specialized industrial accessories'
     }
 
 Declaration of Conformity:
@@ -117,10 +117,10 @@ Catalog Operations Management
       reason === 'unbranded'
         ? 'منتج محلي عام (Generic) لا توفر له الشركة المصنعة باركوداً دولياً'
         : reason === 'private_label'
-        ? 'منتج علامة خاصة (Private Label) مصنع محلياً بمواصفاتنا الخاصة'
-        : reason === 'custom_manufacturing'
-        ? 'منتجات يدوية أو تفصيلية لا تخضع للترقيم الدولي'
-        : 'قطع غيار وإكسسوارات تكميلية غير معبأة بباركود تجزئة'
+          ? 'منتج علامة خاصة (Private Label) مصنع محلياً بمواصفاتنا الخاصة'
+          : reason === 'custom_manufacturing'
+            ? 'منتجات يدوية أو تفصيلية لا تخضع للترقيم الدولي'
+            : 'قطع غيار وإكسسوارات تكميلية غير معبأة بباركود تجزئة'
     }
 
 إقرار التاجر:

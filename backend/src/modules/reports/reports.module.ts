@@ -11,7 +11,13 @@ import { DailyCommercialRollupService } from './services/daily-commercial-rollup
 @Module({
   imports: [DatabaseModule, AuthFoundationModule],
   controllers: [ReportsController],
-  providers: [ReportsService, ReportsSummaryService, ReportsAdminService, DynamicPivotService, DailyCommercialRollupService],
+  providers: [
+    ReportsService,
+    ReportsSummaryService,
+    ReportsAdminService,
+    DynamicPivotService,
+    DailyCommercialRollupService,
+  ],
   exports: [DynamicPivotService, DailyCommercialRollupService],
 })
 export class ReportsModule {}

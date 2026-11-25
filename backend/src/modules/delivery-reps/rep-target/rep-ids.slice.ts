@@ -26,9 +26,7 @@ export interface CustomerRepBalanceBreakdown {
  * Extracts all assigned representative IDs from customer metadata,
  * supporting both legacy single `assigned_rep_id` and multi-rep `assigned_rep_ids`.
  */
-export function extractAssignedRepIds(
-  metadata: Record<string, any> | string | null | undefined,
-): number[] {
+export function extractAssignedRepIds(metadata: Record<string, any> | string | null | undefined): number[] {
   let metaObj: Record<string, any> | null = null;
   if (metadata) {
     if (typeof metadata === 'string') {

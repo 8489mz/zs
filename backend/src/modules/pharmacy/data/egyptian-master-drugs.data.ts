@@ -1,4 +1,3 @@
-
 export interface MasterDrugItem {
   id: string;
   trade_name: string;
@@ -2903,6 +2902,3 @@ export const EGYPTIAN_MASTER_DRUGS: MasterDrugItem[] = [
     indications: 'الوقاية من نوبات الذبحة الصدرية وتحسين تدفق الدم للقلب',
   },
 ];
-
-
-

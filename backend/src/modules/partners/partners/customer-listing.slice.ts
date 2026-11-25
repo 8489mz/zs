@@ -1,7 +1,12 @@
 import { Kysely, sql } from '../../../database/kysely';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { Database } from '../../../database/database.types';
-import { buildCustomerSearchPredicate, calculatePagination, mapCustomerRow, parsePartnersListQuery } from '../helpers/partners-listing.helper';
+import {
+  buildCustomerSearchPredicate,
+  calculatePagination,
+  mapCustomerRow,
+  parsePartnersListQuery,
+} from '../helpers/partners-listing.helper';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { getCustomerRepBalancesMap } from '../../delivery-reps/services/van-common.util';
@@ -18,20 +23,36 @@ export class CustomerListingSlice {
     private readonly bound: CustomerListingSliceBoundDeps,
   ) {}
 
-  private tenantPredicate(actor: AuthContext, alias?: string) { return this.bound.tenantPredicate(actor, alias); }
-  private tenantId(actor: AuthContext): string { return this.bound.tenantId(actor); }
+  private tenantPredicate(actor: AuthContext, alias?: string) {
+    return this.bound.tenantPredicate(actor, alias);
+  }
+  private tenantId(actor: AuthContext): string {
+    return this.bound.tenantId(actor);
+  }
 
   async listCustomers(query: Record<string, unknown>, actor: AuthContext): Promise<Record<string, unknown>> {
     const { page, pageSize, q, filter, isUnpagedDefault } = parsePartnersListQuery(query);
 
-    let listQuery = this.db.selectFrom('customers').selectAll().where('is_active', '=', true).where(this.tenantPredicate(actor));
-    let countQuery = this.db.selectFrom('customers').select((eb) => eb.fn.countAll<number>().as('count')).where('is_active', '=', true).where(this.tenantPredicate(actor));
-    let summaryQuery = this.db.selectFrom('customers').select((eb) => [
-      eb.fn.countAll<number>().as('total_customers'),
-      sql<number>`coalesce(sum(balance), 0)`.as('total_balance'),
-      sql<number>`coalesce(sum(credit_limit), 0)`.as('total_credit'),
-      sql<number>`coalesce(sum(case when customer_type = 'vip' then 1 else 0 end), 0)`.as('vip_count'),
-    ]).where('is_active', '=', true).where(this.tenantPredicate(actor));
+    let listQuery = this.db
+      .selectFrom('customers')
+      .selectAll()
+      .where('is_active', '=', true)
+      .where(this.tenantPredicate(actor));
+    let countQuery = this.db
+      .selectFrom('customers')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('is_active', '=', true)
+      .where(this.tenantPredicate(actor));
+    let summaryQuery = this.db
+      .selectFrom('customers')
+      .select((eb) => [
+        eb.fn.countAll<number>().as('total_customers'),
+        sql<number>`coalesce(sum(balance), 0)`.as('total_balance'),
+        sql<number>`coalesce(sum(credit_limit), 0)`.as('total_credit'),
+        sql<number>`coalesce(sum(case when customer_type = 'vip' then 1 else 0 end), 0)`.as('vip_count'),
+      ])
+      .where('is_active', '=', true)
+      .where(this.tenantPredicate(actor));
 
     const searchPredicate = buildCustomerSearchPredicate(q);
     if (searchPredicate) {
@@ -66,12 +87,22 @@ export class CustomerListingSlice {
         moneyDigits,
       });
       return {
-        customers: rows.map((row) => mapCustomerRow(row, repBalancesMap.get(Number(row.id))?.repBalances, repBalancesMap.get(Number(row.id))?.unassignedBalance)),
+        customers: rows.map((row) =>
+          mapCustomerRow(
+            row,
+            repBalancesMap.get(Number(row.id))?.repBalances,
+            repBalancesMap.get(Number(row.id))?.unassignedBalance,
+          ),
+        ),
       };
     }
 
     const [rows, countRow, summaryRow] = await Promise.all([
-      listQuery.orderBy('id', 'asc').limit(pageSize).offset((page - 1) * pageSize).execute(),
+      listQuery
+        .orderBy('id', 'asc')
+        .limit(pageSize)
+        .offset((page - 1) * pageSize)
+        .execute(),
       countQuery.executeTakeFirstOrThrow(),
       summaryQuery.executeTakeFirstOrThrow(),
     ]);
@@ -89,7 +120,13 @@ export class CustomerListingSlice {
     const totalItems = Number(countRow.count || 0);
 
     return {
-      customers: rows.map((row) => mapCustomerRow(row, repBalancesMap.get(Number(row.id))?.repBalances, repBalancesMap.get(Number(row.id))?.unassignedBalance)),
+      customers: rows.map((row) =>
+        mapCustomerRow(
+          row,
+          repBalancesMap.get(Number(row.id))?.repBalances,
+          repBalancesMap.get(Number(row.id))?.unassignedBalance,
+        ),
+      ),
       pagination: calculatePagination(page, pageSize, totalItems),
       summary: {
         totalCustomers: Number(summaryRow.total_customers || 0),

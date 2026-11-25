@@ -25,7 +25,10 @@ export class DailyDigestController {
 
   @Post('send-test')
   @RequirePermissions('canManageSettings')
-  sendTest(@Body('phone') phone: string, @Req() req: RequestWithAuth): Promise<{ success: boolean; message?: string; text?: string }> {
+  sendTest(
+    @Body('phone') phone: string,
+    @Req() req: RequestWithAuth,
+  ): Promise<{ success: boolean; message?: string; text?: string }> {
     const { tenantId } = requireTenantScope(req.authContext!);
     return this.dailyDigestService.generateAndSendDigest(tenantId, phone);
   }

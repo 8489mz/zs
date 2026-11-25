@@ -19,11 +19,7 @@ export function validateVanOfflineCreatedAt(value: unknown, now?: Date): Date | 
   const raw = String(value || '').trim();
   if (!raw) return null;
   if (!OFFSET_ISO_RE.test(raw)) {
-    throw new AppError(
-      'تاريخ الحركة الأوفلاين يجب أن يتضمن المنطقة الزمنية',
-      'OFFLINE_TIMESTAMP_INVALID',
-      400,
-    );
+    throw new AppError('تاريخ الحركة الأوفلاين يجب أن يتضمن المنطقة الزمنية', 'OFFLINE_TIMESTAMP_INVALID', 400);
   }
   return validateOfflineCreatedAt(value, now);
 }

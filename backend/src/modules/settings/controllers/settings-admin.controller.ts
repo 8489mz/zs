@@ -101,4 +101,3 @@ export class SettingsAdminController {
     return this.demoDataService.wipeCatalogAndStock(body?.password || '', req.authContext!);
   }
 }
-

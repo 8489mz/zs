@@ -207,12 +207,7 @@ function fetchZktecoTcpData(
     sock.on('data', (chunk: Buffer) => {
       rxBuffer = Buffer.concat([rxBuffer, chunk]);
       while (rxBuffer.length >= 8) {
-        if (
-          rxBuffer[0] !== 0x50 ||
-          rxBuffer[1] !== 0x50 ||
-          rxBuffer[2] !== 0x82 ||
-          rxBuffer[3] !== 0x7d
-        ) {
+        if (rxBuffer[0] !== 0x50 || rxBuffer[1] !== 0x50 || rxBuffer[2] !== 0x82 || rxBuffer[3] !== 0x7d) {
           const magicIdx = rxBuffer.indexOf(ZK_TCP_MAGIC, 1);
           if (magicIdx < 0) {
             rxBuffer = Buffer.alloc(0);
@@ -442,7 +437,9 @@ function fetchZktecoUdpOnlyData(
 
           const timer = setTimeout(() => {
             sock.removeListener('message', onChunkMsg);
-            rejChunk(new AppError('انقطع الاتصال أثناء سحب البيانات من جهاز البصمة', 'HR_BIOMETRIC_CHUNK_TIMEOUT', 504));
+            rejChunk(
+              new AppError('انقطع الاتصال أثناء سحب البيانات من جهاز البصمة', 'HR_BIOMETRIC_CHUNK_TIMEOUT', 504),
+            );
           }, 3000);
 
           const onChunkMsg = (msg: Buffer) => {

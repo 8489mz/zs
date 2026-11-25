@@ -45,17 +45,21 @@ export class SaasAdminPlans {
   async createPlan(body: CreateSaasPlanDto, auth: AuthContext): Promise<Record<string, unknown>> {
     this.assertPlatformAccess(auth);
     this.plansCache = null;
-    const result = await this.db.insertInto('saas_plans').values({
-      code: body.code,
-      name: body.name,
-      price: body.price,
-      currency: body.currency || 'EGP',
-      billing_period_months: body.billingPeriodMonths,
-      max_users: body.maxUsers ?? null,
-      max_branches: body.maxBranches ?? null,
-      feature_plan_id: body.featurePlanId || null,
-      is_active: true,
-    }).returningAll().executeTakeFirstOrThrow();
+    const result = await this.db
+      .insertInto('saas_plans')
+      .values({
+        code: body.code,
+        name: body.name,
+        price: body.price,
+        currency: body.currency || 'EGP',
+        billing_period_months: body.billingPeriodMonths,
+        max_users: body.maxUsers ?? null,
+        max_branches: body.maxBranches ?? null,
+        feature_plan_id: body.featurePlanId || null,
+        is_active: true,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
     await this.audit.log('إنشاء خطة اشتراك', `تم إنشاء خطة اشتراك: ${body.name}`, auth);
     return result;
@@ -80,7 +84,8 @@ export class SaasAdminPlans {
       return { ok: true };
     }
 
-    const result = await this.db.updateTable('saas_plans')
+    const result = await this.db
+      .updateTable('saas_plans')
       .set(updateData)
       .where('id', '=', id)
       .returningAll()

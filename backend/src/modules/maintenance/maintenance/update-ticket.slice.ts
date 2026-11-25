@@ -33,12 +33,20 @@ export class UpdateTicketSlice {
       // D-M2-1: delivered tickets stay FULLY frozen — any edit needs
       // the reversal flow, exactly as before.
       if (existing.status === 'delivered') {
-        throw new AppError('Posted maintenance ticket requires settlement document', 'MAINTENANCE_REVERSAL_REQUIRED', 409);
+        throw new AppError(
+          'Posted maintenance ticket requires settlement document',
+          'MAINTENANCE_REVERSAL_REQUIRED',
+          409,
+        );
       }
       // Financial fields still require the reversal flow when the
       // payload tries to CHANGE them versus the stored ticket.
       if (isFinancialTicketChange(payload, existing)) {
-        throw new AppError('Posted ticket amounts and status require an audited reversal flow', 'MAINTENANCE_REVERSAL_REQUIRED', 409);
+        throw new AppError(
+          'Posted ticket amounts and status require an audited reversal flow',
+          'MAINTENANCE_REVERSAL_REQUIRED',
+          409,
+        );
       }
       // Non-financial corrections (name/phone, brand/model, serial,
       // problem, condition, technician, branch/location, warrantyDays)

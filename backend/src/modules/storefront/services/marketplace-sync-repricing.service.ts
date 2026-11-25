@@ -54,7 +54,12 @@ export class MarketplaceSyncRepricingService {
   private repricingTimer?: NodeJS.Timeout;
   private readonly db: Kysely<Database>;
   private readonly audit: AuditService;
-  private readonly getSettingJson: <T>(key: string, tenantId: string, defaultValue: T, executor?: Kysely<Database>) => Promise<T>;
+  private readonly getSettingJson: <T>(
+    key: string,
+    tenantId: string,
+    defaultValue: T,
+    executor?: Kysely<Database>,
+  ) => Promise<T>;
   private readonly setSettingJson: <T>(key: string, tenantId: string, value: T) => Promise<void>;
 
   constructor(deps: MarketplaceSyncRepricingDeps) {
@@ -66,13 +71,16 @@ export class MarketplaceSyncRepricingService {
 
   onModuleInit() {
     // Run background scheduled repricer every 20 minutes safely
-    this.repricingTimer = setInterval(async () => {
-      try {
-        await this.runBackgroundScheduledRepricing();
-      } catch (err) {
-        this.logger.error('Background repricing scheduler error', err);
-      }
-    }, 20 * 60 * 1000);
+    this.repricingTimer = setInterval(
+      async () => {
+        try {
+          await this.runBackgroundScheduledRepricing();
+        } catch (err) {
+          this.logger.error('Background repricing scheduler error', err);
+        }
+      },
+      20 * 60 * 1000,
+    );
   }
 
   onModuleDestroy() {
@@ -148,10 +156,7 @@ export class MarketplaceSyncRepricingService {
     return mapping;
   }
 
-  async runRepricingBot(
-    marketplace?: SupportedMarketplace,
-    auth?: AuthContext,
-  ): Promise<RepricingBotResult> {
+  async runRepricingBot(marketplace?: SupportedMarketplace, auth?: AuthContext): Promise<RepricingBotResult> {
     const scope = auth ? requireTenantScope(auth) : { tenantId: 'default' };
     // D6a: repriced prices are persisted as the mapping's customPrice,
     // so the floor and the target round at the tenant's book digits
@@ -212,7 +217,12 @@ export class MarketplaceSyncRepricingService {
         m.repricingLog = reason;
 
         if (m.buyBoxPrice) {
-          m.buyBoxStatus = targetPrice <= m.buyBoxPrice ? 'winning' : (targetPrice - m.buyBoxPrice <= m.buyBoxPrice * 0.05 ? 'at_risk' : 'losing');
+          m.buyBoxStatus =
+            targetPrice <= m.buyBoxPrice
+              ? 'winning'
+              : targetPrice - m.buyBoxPrice <= m.buyBoxPrice * 0.05
+                ? 'at_risk'
+                : 'losing';
         }
 
         logs.push({

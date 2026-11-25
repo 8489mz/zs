@@ -47,11 +47,7 @@ export class TargetsService {
     return this.vanTargetsService.getCommissionConfig(tenantId);
   }
 
-  async saveCommissionConfig(
-    tenantId: string,
-    accountId: string,
-    payload: SaveCommissionConfigPayload,
-  ) {
+  async saveCommissionConfig(tenantId: string, accountId: string, payload: SaveCommissionConfigPayload) {
     return this.vanTargetsService.saveCommissionConfig(tenantId, accountId, payload);
   }
 

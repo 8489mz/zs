@@ -1,4 +1,17 @@
-import { Body, Controller, Get, Header, Headers, Param, ParseIntPipe, Post, Put, Query, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Headers,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { StorefrontService } from './storefront.service';
 import { StorefrontPaymentService } from './storefront-payment.service';
@@ -28,11 +41,7 @@ export class StorefrontPublicController {
    * content-addressed (id + sha256), so the response never changes and is cached for a year.
    */
   @Get('media/:id/:sha')
-  async getMedia(
-    @Param('id', ParseIntPipe) id: number,
-    @Param('sha') sha: string,
-    @Res() res: Response,
-  ) {
+  async getMedia(@Param('id', ParseIntPipe) id: number, @Param('sha') sha: string, @Res() res: Response) {
     const media = await this.mediaService.getMedia(id, String(sha || '').toLowerCase());
     res.setHeader('Content-Type', media.mime);
     res.setHeader('Content-Length', String(media.content.length));
@@ -67,12 +76,10 @@ export class StorefrontPublicController {
   @Get(':slug/catalog')
   @Header('Cache-Control', 'public, max-age=30, stale-while-revalidate=300')
   @Header('Content-Type', 'application/json; charset=utf-8')
-  async getCatalog(
-    @Param('slug') slug: string,
-    @Query() query: Record<string, unknown>,
-  ): Promise<string> {
-    const wantsPage = ['page', 'pageSize', 'limit', 'categoryId', 'q']
-      .some((key) => query?.[key] !== undefined && String(query[key]).trim() !== '');
+  async getCatalog(@Param('slug') slug: string, @Query() query: Record<string, unknown>): Promise<string> {
+    const wantsPage = ['page', 'pageSize', 'limit', 'categoryId', 'q'].some(
+      (key) => query?.[key] !== undefined && String(query[key]).trim() !== '',
+    );
     if (wantsPage) {
       return JSON.stringify(await this.service.getStorefrontCatalogPage(slug, query));
     }
@@ -105,32 +112,27 @@ export class StorefrontPublicController {
   private resolveOrigin(req: RequestWithAuth): string {
     const configured = String(process.env.APP_PUBLIC_URL || '').trim();
     if (configured) return configured.replace(/\/$/, '');
-    const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
-    const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+    const proto = String(req.headers['x-forwarded-proto'] || 'https')
+      .split(',')[0]
+      .trim();
+    const host = String(req.headers['x-forwarded-host'] || req.headers.host || '')
+      .split(',')[0]
+      .trim();
     return host ? `${proto}://${host}` : '';
   }
 
   @Get(':slug/search/suggest')
-  getSearchSuggestions(
-    @Param('slug') slug: string,
-    @Query('q') q: string,
-  ) {
+  getSearchSuggestions(@Param('slug') slug: string, @Query('q') q: string) {
     return this.service.getSearchSuggestions(slug, q);
   }
 
   @Get(':slug/products/:productId/modifiers')
-  getProductModifiers(
-    @Param('slug') slug: string,
-    @Param('productId') productId: string,
-  ) {
+  getProductModifiers(@Param('slug') slug: string, @Param('productId') productId: string) {
     return this.service.getProductModifiers(slug, Number(productId));
   }
 
   @Get(':slug/products/:productId')
-  getProductDetails(
-    @Param('slug') slug: string,
-    @Param('productId') productId: string,
-  ) {
+  getProductDetails(@Param('slug') slug: string, @Param('productId') productId: string) {
     return this.service.getProductDetails(slug, Number(productId));
   }
 
@@ -155,34 +157,22 @@ export class StorefrontPublicController {
   }
 
   @Get(':slug/products/:productId/reviews')
-  getProductReviews(
-    @Param('slug') slug: string,
-    @Param('productId') productId: string,
-  ) {
+  getProductReviews(@Param('slug') slug: string, @Param('productId') productId: string) {
     return this.service.getProductReviews(slug, Number(productId));
   }
 
   @Post(':slug/coupons/validate')
-  validateCoupon(
-    @Param('slug') slug: string,
-    @Body() body: { code: string; subtotal: number },
-  ) {
+  validateCoupon(@Param('slug') slug: string, @Body() body: { code: string; subtotal: number }) {
     return this.service.validateCoupon(slug, body.code, Number(body.subtotal || 0));
   }
 
   @Post(':slug/cart/quote')
-  quoteCart(
-    @Param('slug') slug: string,
-    @Body() body: any,
-  ) {
+  quoteCart(@Param('slug') slug: string, @Body() body: any) {
     return this.service.quoteOnlineOrder(slug, body);
   }
 
   @Post(':slug/quote')
-  quoteAlias(
-    @Param('slug') slug: string,
-    @Body() body: any,
-  ) {
+  quoteAlias(@Param('slug') slug: string, @Body() body: any) {
     return this.service.quoteOnlineOrder(slug, body);
   }
 
@@ -195,10 +185,7 @@ export class StorefrontPublicController {
   // SF-1: every route below that names a specific order requires that order's access token
   // (header `x-order-token`). The list is a POST so tokens never travel in a URL / access log.
   @Post(':slug/orders/lookup')
-  lookupCustomerOrders(
-    @Param('slug') slug: string,
-    @Body() body: CustomerOrderLookupDto,
-  ) {
+  lookupCustomerOrders(@Param('slug') slug: string, @Body() body: CustomerOrderLookupDto) {
     return this.service.lookupCustomerOrders(slug, body?.orders || []);
   }
 
@@ -222,10 +209,7 @@ export class StorefrontPublicController {
   }
 
   @Post(':slug/abandoned-cart')
-  recordAbandonedCart(
-    @Param('slug') slug: string,
-    @Body() body: RecordAbandonedCartDto,
-  ) {
+  recordAbandonedCart(@Param('slug') slug: string, @Body() body: RecordAbandonedCartDto) {
     return this.service.recordAbandonedCart(slug, body);
   }
 
@@ -238,7 +222,12 @@ export class StorefrontPublicController {
     @Headers(ORDER_ACCESS_TOKEN_HEADER) token?: string,
     @Req() req?: RequestWithAuth,
   ) {
-    return this.paymentService.initiatePaymentSession(slug, orderNumber, token, req ? this.resolveOrigin(req) : undefined);
+    return this.paymentService.initiatePaymentSession(
+      slug,
+      orderNumber,
+      token,
+      req ? this.resolveOrigin(req) : undefined,
+    );
   }
 
   @Get(':slug/orders/:orderNumber/payment-status')
@@ -261,59 +250,37 @@ export class StorefrontPublicController {
   }
 
   @Post('webhooks/paymob')
-  handlePaymobWebhook(
-    @Headers() headers: Record<string, any>,
-    @Body() body: any,
-    @Req() req: RequestWithAuth,
-  ) {
+  handlePaymobWebhook(@Headers() headers: Record<string, any>, @Body() body: any, @Req() req: RequestWithAuth) {
     return this.paymentService.processPaymobWebhook(headers, body, (req as any)?.rawBody);
   }
 
   @Get('webhooks/paymob')
-  handlePaymobCallback(
-    @Query() query: Record<string, any>,
-  ) {
+  handlePaymobCallback(@Query() query: Record<string, any>) {
     return { ok: true, message: 'Paymob callback processed', query };
   }
 
   @Post('webhooks/xpay')
-  handleXPayWebhook(
-    @Headers() headers: Record<string, any>,
-    @Body() body: any,
-    @Req() req: RequestWithAuth,
-  ) {
+  handleXPayWebhook(@Headers() headers: Record<string, any>, @Body() body: any, @Req() req: RequestWithAuth) {
     return this.paymentService.processXPayWebhook(headers, body, (req as any)?.rawBody);
   }
 
   @Get('webhooks/xpay')
-  handleXPayCallback(
-    @Query() query: Record<string, any>,
-  ) {
+  handleXPayCallback(@Query() query: Record<string, any>) {
     return { ok: true, message: 'XPay callback received', query };
   }
 
   @Post('webhooks/tap')
-  handleTapWebhook(
-    @Headers() headers: Record<string, any>,
-    @Body() body: any,
-    @Req() req: RequestWithAuth,
-  ) {
+  handleTapWebhook(@Headers() headers: Record<string, any>, @Body() body: any, @Req() req: RequestWithAuth) {
     return this.paymentService.processTapWebhook(headers, body, (req as any)?.rawBody);
   }
 
   @Get('webhooks/tap-callback')
-  handleTapCallback(
-    @Query() query: Record<string, any>,
-  ) {
+  handleTapCallback(@Query() query: Record<string, any>) {
     return { ok: true, message: 'Tap callback received', query };
   }
 
   @Post('webhooks/stripe')
-  handleStripeWebhook(
-    @Headers() headers: Record<string, any>,
-    @Body() body: any,
-    @Req() req: RequestWithAuth,
-  ) {
+  handleStripeWebhook(@Headers() headers: Record<string, any>, @Body() body: any, @Req() req: RequestWithAuth) {
     return this.paymentService.processStripeWebhook(headers, body, (req as any)?.rawBody);
   }
 
@@ -346,10 +313,7 @@ export class StorefrontPublicController {
    * Next-Gen F&B: Get active table check / bill for Pay-at-Table via QR code
    */
   @Get(':slug/table/:tableNumber/bill')
-  getTableBill(
-    @Param('slug') slug: string,
-    @Param('tableNumber') tableNumber: string,
-  ) {
+  getTableBill(@Param('slug') slug: string, @Param('tableNumber') tableNumber: string) {
     return this.service.getActiveTableBill(slug, tableNumber);
   }
 
@@ -365,4 +329,3 @@ export class StorefrontPublicController {
     return this.service.payActiveTableBill(slug, tableNumber, body);
   }
 }
-

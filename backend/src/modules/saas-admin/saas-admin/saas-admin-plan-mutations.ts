@@ -35,7 +35,11 @@ export class SaasAdminPlanMutations {
     return this.bound.assertNotPlatformTenantTarget(targetTenantId);
   }
 
-  private async syncTenantModuleSettingsForPlan(tenantId: string, planId?: string | null, extraFeatures?: string[]): Promise<void> {
+  private async syncTenantModuleSettingsForPlan(
+    tenantId: string,
+    planId?: string | null,
+    extraFeatures?: string[],
+  ): Promise<void> {
     return this.bound.syncTenantModuleSettingsForPlan(tenantId, planId, extraFeatures);
   }
 
@@ -75,11 +79,17 @@ export class SaasAdminPlanMutations {
       const next = entry.granted === null || entry.granted === undefined ? null : Boolean(entry.granted);
       if (previous === next) continue;
       if (next === null) {
-        await this.db.deleteFrom('tenant_feature_overrides').where('tenant_id', '=', tenantId).where('feature_code', '=', code).execute();
+        await this.db
+          .deleteFrom('tenant_feature_overrides')
+          .where('tenant_id', '=', tenantId)
+          .where('feature_code', '=', code)
+          .execute();
       } else {
         await sql`INSERT INTO tenant_feature_overrides (tenant_id, feature_code, granted, granted_by, granted_at, reason)
           VALUES (${tenantId}, ${code}, ${next}, ${auth.userId}, NOW(), ${entry.reason ?? null})
-          ON CONFLICT (tenant_id, feature_code) DO UPDATE SET granted = EXCLUDED.granted, granted_by = EXCLUDED.granted_by, granted_at = EXCLUDED.granted_at, reason = EXCLUDED.reason, updated_at = NOW()`.execute(this.db);
+          ON CONFLICT (tenant_id, feature_code) DO UPDATE SET granted = EXCLUDED.granted, granted_by = EXCLUDED.granted_by, granted_at = EXCLUDED.granted_at, reason = EXCLUDED.reason, updated_at = NOW()`.execute(
+          this.db,
+        );
       }
       changed += 1;
       await this.audit.log(
@@ -92,11 +102,24 @@ export class SaasAdminPlanMutations {
     return changed;
   }
 
-  async updateTenantPlan(id: string, dto: { planId?: string; extraFeatures?: string[]; activityType?: string; featureOverrides?: Array<{ featureCode: string; granted?: boolean | null; reason?: string }> }, auth: AuthContext) {
+  async updateTenantPlan(
+    id: string,
+    dto: {
+      planId?: string;
+      extraFeatures?: string[];
+      activityType?: string;
+      featureOverrides?: Array<{ featureCode: string; granted?: boolean | null; reason?: string }>;
+    },
+    auth: AuthContext,
+  ) {
     this.assertPlatformAccess(auth);
     this.assertNotPlatformTenantTarget(id);
 
-    const tenant = await this.db.selectFrom('tenants').select(['id', 'slug', 'plan_id', 'extra_features']).where('id', '=', id).executeTakeFirst();
+    const tenant = await this.db
+      .selectFrom('tenants')
+      .select(['id', 'slug', 'plan_id', 'extra_features'])
+      .where('id', '=', id)
+      .executeTakeFirst();
     if (!tenant) throw new NotFoundException('Tenant not found');
 
     // P10: overrides apply first, so the plan sync below (and the activity
@@ -112,8 +135,12 @@ export class SaasAdminPlanMutations {
       const patch = this.provisioning.getIndustrySettingsPatch(normalized);
       const targetPlan = dto.planId !== undefined ? dto.planId : (tenant as any).plan_id;
       const targetExtra = dto.extraFeatures !== undefined ? dto.extraFeatures : (tenant as any).extra_features;
-      const isOmni = isOmnichannelPlanId(targetPlan) || (Array.isArray(targetExtra) && targetExtra.includes('storefront'));
-      const isEnterprise = isOmni || isEnterpriseOrUltimatePlan(targetPlan) || (Array.isArray(targetExtra) && targetExtra.includes('accounting'));
+      const isOmni =
+        isOmnichannelPlanId(targetPlan) || (Array.isArray(targetExtra) && targetExtra.includes('storefront'));
+      const isEnterprise =
+        isOmni ||
+        isEnterpriseOrUltimatePlan(targetPlan) ||
+        (Array.isArray(targetExtra) && targetExtra.includes('accounting'));
       if (isOmni) {
         delete patch.storefrontModuleEnabled;
       }

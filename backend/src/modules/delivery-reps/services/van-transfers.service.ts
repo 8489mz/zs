@@ -5,7 +5,13 @@ import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { moveVanStock, sortItemsByProductId, generateDailySequenceNumber, getOrCreateVanLocation, resolveRepLinkedUserId } from './van-common.util';
+import {
+  moveVanStock,
+  sortItemsByProductId,
+  generateDailySequenceNumber,
+  getOrCreateVanLocation,
+  resolveRepLinkedUserId,
+} from './van-common.util';
 import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 
 @Injectable()
@@ -76,7 +82,12 @@ export class VanTransfersService {
 
       const avail = Number(currentStock?.qty || 0);
       if (avail < qty) {
-        const prod = await this.anyDb.selectFrom('products').select(['name']).where('id', '=', pid).where('tenant_id', '=', tenantId).executeTakeFirst();
+        const prod = await this.anyDb
+          .selectFrom('products')
+          .select(['name'])
+          .where('id', '=', pid)
+          .where('tenant_id', '=', tenantId)
+          .executeTakeFirst();
         throw new AppError(
           `رصيد السيارة غير كافٍ لتحويل الصنف "${prod?.name || pid}". المتوفر: ${avail}، المطلوب تحويله: ${qty}`,
           'INSUFFICIENT_STOCK_FOR_TRANSFER',
@@ -115,7 +126,14 @@ export class VanTransfersService {
         .executeTakeFirstOrThrow();
 
       const transferId = Number(inserted.id);
-      const transferNo = await generateDailySequenceNumber(trxAny, this.db, 'van_stock_transfers', 'transfer_no', 'XFR', tenantId);
+      const transferNo = await generateDailySequenceNumber(
+        trxAny,
+        this.db,
+        'van_stock_transfers',
+        'transfer_no',
+        'XFR',
+        tenantId,
+      );
 
       await trxAny
         .updateTable('van_stock_transfers')
@@ -159,7 +177,12 @@ export class VanTransfersService {
     for (const item of payload.items) {
       const pid = Number(item.productId);
       const qty = Number(item.qty || 0);
-      const prod = await this.anyDb.selectFrom('products').select(['cost_price', 'retail_price']).where('id', '=', pid).where('tenant_id', '=', tenantId).executeTakeFirst();
+      const prod = await this.anyDb
+        .selectFrom('products')
+        .select(['cost_price', 'retail_price'])
+        .where('id', '=', pid)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
 
       await this.anyDb
         .insertInto('van_stock_transfer_items')
@@ -382,10 +405,7 @@ export class VanTransfersService {
     return { ok: true, transferId, status: 'rejected' };
   }
 
-  async listInterVanTransfers(
-    tenantId: string,
-    filters?: { repId?: number; status?: string },
-  ) {
+  async listInterVanTransfers(tenantId: string, filters?: { repId?: number; status?: string }) {
     let query = this.anyDb
       .selectFrom('van_stock_transfers as vst')
       .innerJoin('delivery_representatives as from_rep', 'from_rep.id', 'vst.from_rep_id')
@@ -409,10 +429,7 @@ export class VanTransfersService {
 
     if (filters?.repId) {
       query = query.where((eb: any) =>
-        eb.or([
-          eb('vst.from_rep_id', '=', filters.repId),
-          eb('vst.to_rep_id', '=', filters.repId),
-        ]),
+        eb.or([eb('vst.from_rep_id', '=', filters.repId), eb('vst.to_rep_id', '=', filters.repId)]),
       );
     }
     if (filters?.status) {

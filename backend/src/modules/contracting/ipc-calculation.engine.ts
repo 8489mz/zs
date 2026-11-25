@@ -96,7 +96,7 @@ export function computeIpc(
   terms: IpcTerms,
   prior: IpcPriorCumulatives,
   period: IpcPeriodWork,
-  deductions: IpcDeductionInputs
+  deductions: IpcDeductionInputs,
 ): IpcComputationResult {
   const contractValue = Number(terms.contractValue || 0);
   const advanceTotal = Number(terms.advanceTotal || 0);
@@ -128,7 +128,8 @@ export function computeIpc(
   // =========================================================================
   // Layer 2: Contractual Holdbacks (استردادات الدفعة المقدمة وحجز الضمان)
   // =========================================================================
-  const useManualOverride = deductions.advanceRecoveryOverride === true && deductions.advanceRecoveryPercent !== undefined;
+  const useManualOverride =
+    deductions.advanceRecoveryOverride === true && deductions.advanceRecoveryPercent !== undefined;
   let advanceRecoveryAmount = 0;
 
   if (useManualOverride) {
@@ -188,7 +189,9 @@ export function computeIpc(
     for (const [type, detailSum] of itemizedSums.entries()) {
       if (type === 'backcharge') {
         if (backchargeAmount > 0 && Math.abs(backchargeAmount - detailSum) > 0.01) {
-          throw new BadRequestException(`تعارض في خصم المحملات (Backcharge): الرأس ${backchargeAmount} والتفصيل ${detailSum}`);
+          throw new BadRequestException(
+            `تعارض في خصم المحملات (Backcharge): الرأس ${backchargeAmount} والتفصيل ${detailSum}`,
+          );
         }
         backchargeAmount = detailSum;
       } else if (type === 'liquidated_damages') {
@@ -203,17 +206,23 @@ export function computeIpc(
         materialExcessAmount = detailSum;
       } else if (type === 'shared_resources') {
         if (sharedResourceAmount > 0 && Math.abs(sharedResourceAmount - detailSum) > 0.01) {
-          throw new BadRequestException(`تعارض في الموارد المشتركة: الرأس ${sharedResourceAmount} والتفصيل ${detailSum}`);
+          throw new BadRequestException(
+            `تعارض في الموارد المشتركة: الرأس ${sharedResourceAmount} والتفصيل ${detailSum}`,
+          );
         }
         sharedResourceAmount = detailSum;
       } else if (type === 'direct_labor_payment') {
         if (directPaymentAmount > 0 && Math.abs(directPaymentAmount - detailSum) > 0.01) {
-          throw new BadRequestException(`تعارض في سداد العمالة المباشر: الرأس ${directPaymentAmount} والتفصيل ${detailSum}`);
+          throw new BadRequestException(
+            `تعارض في سداد العمالة المباشر: الرأس ${directPaymentAmount} والتفصيل ${detailSum}`,
+          );
         }
         directPaymentAmount = detailSum;
       } else if (type === 'social_insurance') {
         if (socialInsuranceAmount > 0 && Math.abs(socialInsuranceAmount - detailSum) > 0.01) {
-          throw new BadRequestException(`تعارض في التأمينات الاجتماعية: الرأس ${socialInsuranceAmount} والتفصيل ${detailSum}`);
+          throw new BadRequestException(
+            `تعارض في التأمينات الاجتماعية: الرأس ${socialInsuranceAmount} والتفصيل ${detailSum}`,
+          );
         }
         socialInsuranceAmount = detailSum;
       } else if (type === 'withholding_tax') {
@@ -236,20 +245,23 @@ export function computeIpc(
     ldAmount = Math.min(ldAmount, ldCap);
   }
 
-  const totalSetOffs = Math.round((
-    backchargeAmount +
-    ldAmount +
-    materialExcessAmount +
-    sharedResourceAmount +
-    directPaymentAmount +
-    carriedForwardDebitIn +
-    otherDeductions
-  ) * 100) / 100;
+  const totalSetOffs =
+    Math.round(
+      (backchargeAmount +
+        ldAmount +
+        materialExcessAmount +
+        sharedResourceAmount +
+        directPaymentAmount +
+        carriedForwardDebitIn +
+        otherDeductions) *
+        100,
+    ) / 100;
 
   // =========================================================================
   // Layer 4: Taxes, Statutory Obligations & Net Final
   // =========================================================================
-  const netBeforeStatutory = Math.round((grossCertified - advanceRecoveryAmount - retentionHeldAmount - totalSetOffs) * 100) / 100;
+  const netBeforeStatutory =
+    Math.round((grossCertified - advanceRecoveryAmount - retentionHeldAmount - totalSetOffs) * 100) / 100;
   const rawNetPayable = Math.round((netBeforeStatutory + vatAmount - whtAmount - socialInsuranceAmount) * 100) / 100;
 
   let netPayable = 0;

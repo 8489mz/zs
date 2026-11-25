@@ -118,10 +118,7 @@ export function extractDriverQuantity(driverType: DriverType, metrics: BoqDriver
  * Computes allocation for a single cost pool across a set of BOQ items.
  * Handles zero-driver mobilization carry-forward, backcharges deduction, and penny rounding reconciliation.
  */
-export function computePoolAllocation(
-  pool: CostPoolInput,
-  items: BoqDriverMetricsInput[]
-): PoolAllocationResult {
+export function computePoolAllocation(pool: CostPoolInput, items: BoqDriverMetricsInput[]): PoolAllocationResult {
   const gross = Math.max(0, Number(pool.grossExpenseAmount || 0));
   const recovered = Math.max(0, Number(pool.recoveredBackchargeAmount || 0));
   const deferredIn = Math.max(0, Number(pool.deferredInAmount || 0));
@@ -224,10 +221,7 @@ export function computePoolAllocation(
  * Computes multi-pool batch allocation across all active pools and BOQ items.
  * Aggregates results per pool and per BOQ item, asserting invariants.
  */
-export function computeBatchAllocation(
-  pools: CostPoolInput[],
-  items: BoqDriverMetricsInput[]
-): BatchAllocationSummary {
+export function computeBatchAllocation(pools: CostPoolInput[], items: BoqDriverMetricsInput[]): BatchAllocationSummary {
   const poolSummaries: PoolAllocationResult[] = pools.map((p) => computePoolAllocation(p, items));
 
   let totalGrossExpense = 0;
@@ -300,7 +294,7 @@ export function reconcileAllocationInvariants(summary: BatchAllocationSummary): 
 
   if (delta > 0.001) {
     throw new Error(
-      `[FieldIndirectAllocationEngine Invariant Violation] Discrepancy detected: totalAllocated (${summary.totalAllocated}) + totalDeferredOut (${summary.totalDeferredOut}) = ${sumCheck}, expected netPoolCost ${netCheck} (Delta: ${delta})`
+      `[FieldIndirectAllocationEngine Invariant Violation] Discrepancy detected: totalAllocated (${summary.totalAllocated}) + totalDeferredOut (${summary.totalDeferredOut}) = ${sumCheck}, expected netPoolCost ${netCheck} (Delta: ${delta})`,
     );
   }
 
@@ -309,7 +303,7 @@ export function reconcileAllocationInvariants(summary: BatchAllocationSummary): 
     const poolDelta = Math.round(Math.abs(poolSum - pool.netPoolCost) * 1000) / 1000;
     if (poolDelta > 0.001) {
       throw new Error(
-        `[FieldIndirectAllocationEngine Invariant Violation] Pool ${pool.poolCode}: allocated (${pool.allocatedAmountTotal}) + deferredOut (${pool.deferredOutAmount}) = ${poolSum}, expected netPoolCost ${pool.netPoolCost} (Delta: ${poolDelta})`
+        `[FieldIndirectAllocationEngine Invariant Violation] Pool ${pool.poolCode}: allocated (${pool.allocatedAmountTotal}) + deferredOut (${pool.deferredOutAmount}) = ${poolSum}, expected netPoolCost ${pool.netPoolCost} (Delta: ${poolDelta})`,
       );
     }
   }

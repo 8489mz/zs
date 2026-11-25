@@ -346,7 +346,12 @@ export class BiometricStagingService {
           .where('tenant_id', '=', auth.tenantId!)
           .execute();
       }
-      const postRes = await this.postPendingPunchesForEmployee(cleanPin, Number(existing.id), existing.employee_no, auth);
+      const postRes = await this.postPendingPunchesForEmployee(
+        cleanPin,
+        Number(existing.id),
+        existing.employee_no,
+        auth,
+      );
       return {
         employeeId: Number(existing.id),
         employeeNo: existing.employee_no,
@@ -427,10 +432,7 @@ export class BiometricStagingService {
       if (!cleanPin || seen.has(cleanPin)) continue;
       seen.add(cleanPin);
 
-      const res = await this.createEmployeeFromBiometricPin(
-        { pin: cleanPin, displayName: item.displayName },
-        auth,
-      );
+      const res = await this.createEmployeeFromBiometricPin({ pin: cleanPin, displayName: item.displayName }, auth);
       if (res.alreadyExisted) existedCount++;
       else createdCount++;
       postedDays += res.postedDays;

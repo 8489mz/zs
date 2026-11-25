@@ -7,7 +7,12 @@ import { normalizeArabicSearch } from '../../../common/utils/arabic-search.util'
 import { AppError } from '../../../common/errors/app-error';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { UpsertBatchDto } from '../dto/upsert-batch.dto';
-import { pharmacyExpiryText, isValidPharmacyExpiry, isPastPharmacyExpiry, PHARMACY_BATCH_STATUSES } from './pharmacy-helpers.slice';
+import {
+  pharmacyExpiryText,
+  isValidPharmacyExpiry,
+  isPastPharmacyExpiry,
+  PHARMACY_BATCH_STATUSES,
+} from './pharmacy-helpers.slice';
 
 export class BatchesSlice {
   constructor(private readonly db: Kysely<Database>) {}
@@ -27,7 +32,9 @@ export class BatchesSlice {
     const scope = requireTenantScope(auth);
     let query = this.db
       .selectFrom('pharmacy_batches as pb')
-      .leftJoin('products as p', (join) => join.onRef('p.id', '=', 'pb.product_id').onRef('p.tenant_id', '=', 'pb.tenant_id'))
+      .leftJoin('products as p', (join) =>
+        join.onRef('p.id', '=', 'pb.product_id').onRef('p.tenant_id', '=', 'pb.tenant_id'),
+      )
       .where(sql<boolean>`pb.tenant_id = ${scope.tenantId}`);
 
     if (filters?.status && filters.status !== 'all') {
@@ -100,9 +107,13 @@ export class BatchesSlice {
         throw new AppError('Invalid pharmacy batch balance', 'PHARMACY_BATCH_BALANCE_INVALID', 422);
       }
       if (dto.id) {
-        const old = await trx.selectFrom('pharmacy_batches').selectAll()
-          .where('tenant_id', '=', scope.tenantId).where('id', '=', dto.id)
-          .forUpdate().executeTakeFirst();
+        const old = await trx
+          .selectFrom('pharmacy_batches')
+          .selectAll()
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', dto.id)
+          .forUpdate()
+          .executeTakeFirst();
         if (!old) throw new AppError('Batch not found', 'PHARMACY_BATCH_NOT_FOUND', 404);
         // INV-PHARMACY-BATCH-FROZEN: expiry is identity, frozen at
         // creation. Repeating the stored value (or omitting it) is a
@@ -112,7 +123,11 @@ export class BatchesSlice {
         if (dto.expiryDate !== undefined) {
           const newExpiry = pharmacyExpiryText(dto.expiryDate);
           if (newExpiry !== pharmacyExpiryText(old.expiry_date)) {
-            throw new AppError('Batch expiry date cannot be changed after creation', 'PHARMACY_BATCH_EXPIRY_FROZEN', 409);
+            throw new AppError(
+              'Batch expiry date cannot be changed after creation',
+              'PHARMACY_BATCH_EXPIRY_FROZEN',
+              409,
+            );
           }
         }
         // Status comes from a closed list, and 'expired' is terminal:
@@ -125,20 +140,33 @@ export class BatchesSlice {
             throw new AppError('Invalid pharmacy batch status', 'PHARMACY_BATCH_STATUS_INVALID', 422);
           }
           const oldExpiry = pharmacyExpiryText(old.expiry_date);
-          if (dto.status === 'active' && (old.status === 'expired' || (oldExpiry != null && isPastPharmacyExpiry(oldExpiry, todayKey)))) {
-            throw new AppError('An expired batch cannot be returned to active status', 'PHARMACY_BATCH_REACTIVATION_FORBIDDEN', 409);
+          if (
+            dto.status === 'active' &&
+            (old.status === 'expired' || (oldExpiry != null && isPastPharmacyExpiry(oldExpiry, todayKey)))
+          ) {
+            throw new AppError(
+              'An expired batch cannot be returned to active status',
+              'PHARMACY_BATCH_REACTIVATION_FORBIDDEN',
+              409,
+            );
           }
         }
-        if ((dto.quantity !== undefined && quantity !== Number(old.quantity)) ||
-            (dto.unitCost !== undefined && unitCost !== Number(old.unit_cost)) ||
-            (dto.productId !== undefined && dto.productId !== old.product_id) ||
-            (dto.drugId !== undefined && dto.drugId !== old.drug_id) ||
-            (dto.locationId !== undefined && dto.locationId !== old.location_id) ||
-            dto.batchNumber !== old.batch_number) {
-          throw new AppError('Stock and valuation may only change through purchase/GRN/return documents',
-            'PHARMACY_BATCH_FINANCIAL_EDIT_FORBIDDEN', 409);
+        if (
+          (dto.quantity !== undefined && quantity !== Number(old.quantity)) ||
+          (dto.unitCost !== undefined && unitCost !== Number(old.unit_cost)) ||
+          (dto.productId !== undefined && dto.productId !== old.product_id) ||
+          (dto.drugId !== undefined && dto.drugId !== old.drug_id) ||
+          (dto.locationId !== undefined && dto.locationId !== old.location_id) ||
+          dto.batchNumber !== old.batch_number
+        ) {
+          throw new AppError(
+            'Stock and valuation may only change through purchase/GRN/return documents',
+            'PHARMACY_BATCH_FINANCIAL_EDIT_FORBIDDEN',
+            409,
+          );
         }
-        return trx.updateTable('pharmacy_batches')
+        return trx
+          .updateTable('pharmacy_batches')
           .set({
             expiry_date: dto.expiryDate,
             supplier_name: dto.supplierName ?? old.supplier_name,
@@ -146,12 +174,17 @@ export class BatchesSlice {
             notes: dto.notes ?? old.notes,
             updated_at: sql`now()`,
           })
-          .where('tenant_id', '=', scope.tenantId).where('id', '=', dto.id)
-          .returningAll().executeTakeFirstOrThrow();
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', dto.id)
+          .returningAll()
+          .executeTakeFirstOrThrow();
       }
       if (quantity !== 0 || unitCost !== 0) {
-        throw new AppError('Create stock via a supplier purchase, not direct batch entry',
-          'PHARMACY_BATCH_PURCHASE_REQUIRED', 422);
+        throw new AppError(
+          'Create stock via a supplier purchase, not direct batch entry',
+          'PHARMACY_BATCH_PURCHASE_REQUIRED',
+          422,
+        );
       }
       // INV-PHARMACY-BATCH-FROZEN: a batch is born with a real expiry
       // and a listed status. An already-expired batch cannot be born
@@ -160,23 +193,42 @@ export class BatchesSlice {
       if (!PHARMACY_BATCH_STATUSES.includes(createStatus)) {
         throw new AppError('Invalid pharmacy batch status', 'PHARMACY_BATCH_STATUS_INVALID', 422);
       }
-      const createExpiry = (dto.expiryDate as unknown) instanceof Date
-        ? (dto.expiryDate as unknown as Date).toISOString().slice(0, 10)
-        : String(dto.expiryDate ?? '').trim();
+      const createExpiry =
+        (dto.expiryDate as unknown) instanceof Date
+          ? (dto.expiryDate as unknown as Date).toISOString().slice(0, 10)
+          : String(dto.expiryDate ?? '').trim();
       if (!isValidPharmacyExpiry(createExpiry)) {
-        throw new AppError('Batch expiry date must be a real calendar date (YYYY-MM-DD) or month (YYYY-MM)', 'PHARMACY_BATCH_EXPIRY_INVALID', 422);
+        throw new AppError(
+          'Batch expiry date must be a real calendar date (YYYY-MM-DD) or month (YYYY-MM)',
+          'PHARMACY_BATCH_EXPIRY_INVALID',
+          422,
+        );
       }
       if (createStatus === 'active' && isPastPharmacyExpiry(createExpiry, todayKey)) {
-        throw new AppError('An expired batch cannot be created with active status', 'PHARMACY_BATCH_EXPIRY_INVALID', 422);
+        throw new AppError(
+          'An expired batch cannot be created with active status',
+          'PHARMACY_BATCH_EXPIRY_INVALID',
+          422,
+        );
       }
-      return trx.insertInto('pharmacy_batches').values({
-        tenant_id: scope.tenantId, account_id: scope.accountId,
-        product_id: dto.productId ?? null, drug_id: dto.drugId ?? null,
-        batch_number: dto.batchNumber, expiry_date: dto.expiryDate,
-        quantity: 0, unit_cost: 0, location_id: dto.locationId ?? null,
-        supplier_name: dto.supplierName ?? null, status: createStatus,
-        notes: dto.notes ?? null,
-      }).returningAll().executeTakeFirstOrThrow();
+      return trx
+        .insertInto('pharmacy_batches')
+        .values({
+          tenant_id: scope.tenantId,
+          account_id: scope.accountId,
+          product_id: dto.productId ?? null,
+          drug_id: dto.drugId ?? null,
+          batch_number: dto.batchNumber,
+          expiry_date: dto.expiryDate,
+          quantity: 0,
+          unit_cost: 0,
+          location_id: dto.locationId ?? null,
+          supplier_name: dto.supplierName ?? null,
+          status: createStatus,
+          notes: dto.notes ?? null,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
     });
   }
 
@@ -217,10 +269,6 @@ export class BatchesSlice {
       query = query.where('expiry_date', '>=', todayYm);
     }
 
-    return await query
-      .selectAll()
-      .orderBy('expiry_date', 'asc')
-      .orderBy('id', 'asc')
-      .execute();
+    return await query.selectAll().orderBy('expiry_date', 'asc').orderBy('id', 'asc').execute();
   }
 }

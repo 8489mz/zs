@@ -31,7 +31,12 @@ export const FMCG_STANDARD_NO_SALE_REASONS: NoSaleReasonDefinition[] = [
   { code: 'owner_absent', nameAr: 'صاحب القرار أو التاجر غير متواجد', category: 'operational' },
   { code: 'price_dispute', nameAr: 'خلاف في الأسعار أو عروض المنافسين', category: 'commercial', requiresNotes: true },
   { code: 'credit_limit_exceeded', nameAr: 'تجاوز سقف الائتمان أو مديونية متأخرة', category: 'credit' },
-  { code: 'expired_goods_pending', nameAr: 'بضاعة منتهية الصلاحية لم تُستبدل بعد', category: 'logistics', requiresNotes: true },
+  {
+    code: 'expired_goods_pending',
+    nameAr: 'بضاعة منتهية الصلاحية لم تُستبدل بعد',
+    category: 'logistics',
+    requiresNotes: true,
+  },
   { code: 'liquidity_shortage', nameAr: 'نقص سيولة نقدية لدى التاجر اليوم', category: 'commercial' },
   { code: 'other', nameAr: 'أسباب أخرى', category: 'operational', requiresNotes: true },
 ];
@@ -40,12 +45,7 @@ export class FmcgVisitExecutionEngine {
   /**
    * Calculates geodesic distance in meters between two lat/lng pairs using Haversine formula
    */
-  static calculateDistanceMeters(
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number,
-  ): number {
+  static calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
     if (lat1 === lat2 && lon1 === lon2) return 0;
     const R = 6371000; // Earth radius in meters
     const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -53,8 +53,7 @@ export class FmcgVisitExecutionEngine {
     const dLon = toRad(lon2 - lon1);
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return Math.round(R * c);
   }
@@ -104,10 +103,7 @@ export class FmcgVisitExecutionEngine {
   /**
    * Calculates dwell time in seconds between check-in and check-out
    */
-  static calculateDwellTimeSeconds(
-    checkInAt: Date | string,
-    checkOutAt: Date | string = new Date(),
-  ): number {
+  static calculateDwellTimeSeconds(checkInAt: Date | string, checkOutAt: Date | string = new Date()): number {
     const start = new Date(checkInAt).getTime();
     const end = new Date(checkOutAt).getTime();
     if (isNaN(start) || isNaN(end) || end <= start) return 0;
@@ -120,14 +116,17 @@ export class FmcgVisitExecutionEngine {
    * pure-engine callers); the live caller (VanFieldExecutionService
    * .getVisitsHistory) passes the tenant's book digits.
    */
-  static calculateStrikeRateMetrics(visits: Array<{
-    has_sale?: boolean;
-    has_collection?: boolean;
-    sale_amount?: number | string;
-    collection_amount?: number | string;
-    dwell_time_seconds?: number;
-    no_sale_reason?: string | null;
-  }>, moneyDigits: MoneyDigits = 2) {
+  static calculateStrikeRateMetrics(
+    visits: Array<{
+      has_sale?: boolean;
+      has_collection?: boolean;
+      sale_amount?: number | string;
+      collection_amount?: number | string;
+      dwell_time_seconds?: number;
+      no_sale_reason?: string | null;
+    }>,
+    moneyDigits: MoneyDigits = 2,
+  ) {
     const totalVisits = visits.length;
     let productiveVisits = 0;
     let totalSales = 0;
@@ -148,7 +147,7 @@ export class FmcgVisitExecutionEngine {
     }
 
     const strikeRatePercentage = totalVisits > 0 ? Number(((productiveVisits / totalVisits) * 100).toFixed(1)) : 0;
-    const avgDwellTimeMinutes = totalVisits > 0 ? Number(((totalDwellSeconds / totalVisits) / 60).toFixed(1)) : 0;
+    const avgDwellTimeMinutes = totalVisits > 0 ? Number((totalDwellSeconds / totalVisits / 60).toFixed(1)) : 0;
 
     return {
       totalVisits,

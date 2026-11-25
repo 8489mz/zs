@@ -1,7 +1,12 @@
 import { Controller, Get, Post, Param, Query, Body } from '@nestjs/common';
 import { MaritimeFreightService } from './maritime-freight.service';
 
-@Controller(['public/freight-tracking', 'api/public/freight-tracking', 'api/public/carrier-quote', 'public/carrier-quote'])
+@Controller([
+  'public/freight-tracking',
+  'api/public/freight-tracking',
+  'api/public/carrier-quote',
+  'public/carrier-quote',
+])
 export class MaritimePublicTrackingController {
   constructor(private readonly freightService: MaritimeFreightService) {}
 
@@ -25,10 +30,7 @@ export class MaritimePublicTrackingController {
   }
 
   @Post('rfq/:id/bid')
-  async submitPublicCarrierBid(
-    @Param('id') id: string,
-    @Body() dto: any,
-  ) {
+  async submitPublicCarrierBid(@Param('id') id: string, @Body() dto: any) {
     return this.freightService.submitPublicCarrierBid(id, dto);
   }
 }

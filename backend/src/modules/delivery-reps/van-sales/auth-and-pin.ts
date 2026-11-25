@@ -87,7 +87,13 @@ export class AuthAndPinService {
     };
   }
 
-  async verifySupervisorPin(tenantId: string, pinInput?: string | null, repId?: number | null, queryable?: any, accountId?: string | null): Promise<VerifySupervisorPinResult> {
+  async verifySupervisorPin(
+    tenantId: string,
+    pinInput?: string | null,
+    repId?: number | null,
+    queryable?: any,
+    accountId?: string | null,
+  ): Promise<VerifySupervisorPinResult> {
     return this.getTripLifecycle().verifySupervisorPin(tenantId, pinInput, repId, queryable, accountId);
   }
 

@@ -55,4 +55,3 @@ import { BiometricStagingService } from './services/biometric-staging.service';
   ],
 })
 export class HrModule {}
-

@@ -5,16 +5,9 @@ import { extractAssignedRepIds } from '../../rep-target.engine';
 import { TradeSurveyPayload } from './van-field-execution.types';
 
 export class VanFieldExecutionSurveysSlice {
-  constructor(
-    private readonly db: Kysely<Database>,
-  ) {
-  }
+  constructor(private readonly db: Kysely<Database>) {}
 
-  async assertTripOwnedByRep(
-    tenantId: string,
-    tripId: number,
-    repId: number,
-  ) {
+  async assertTripOwnedByRep(tenantId: string, tripId: number, repId: number) {
     const trip = await this.db
       .selectFrom('van_sales_trips')
       .select(['id', 'rep_id'])
@@ -25,11 +18,7 @@ export class VanFieldExecutionSurveysSlice {
       throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
     }
     if (Number((trip as any).rep_id) !== Number(repId)) {
-      throw new AppError(
-        'هذه الرحلة تخص مندوباً آخر، لا يمكنك تسجيل زيارة عليها',
-        'REP_TRIP_NOT_OWNED',
-        403,
-      );
+      throw new AppError('هذه الرحلة تخص مندوباً آخر، لا يمكنك تسجيل زيارة عليها', 'REP_TRIP_NOT_OWNED', 403);
     }
   }
 
@@ -41,11 +30,7 @@ export class VanFieldExecutionSurveysSlice {
    * was already gated by H7, so it cannot manufacture access to
    * another rep's customer.
    */
-  private async assertSurveyCustomer(
-    tenantId: string,
-    repId: number,
-    customerId: number,
-  ): Promise<void> {
+  private async assertSurveyCustomer(tenantId: string, repId: number, customerId: number): Promise<void> {
     const customer = await this.db
       .selectFrom('customers')
       .select(['id', 'metadata'])
@@ -57,9 +42,8 @@ export class VanFieldExecutionSurveysSlice {
       throw new AppError('العميل غير مسجل في النظام', 'CUSTOMER_NOT_FOUND', 404);
     }
 
-    const meta = typeof customer.metadata === 'string'
-      ? JSON.parse(customer.metadata || '{}')
-      : (customer.metadata || {});
+    const meta =
+      typeof customer.metadata === 'string' ? JSON.parse(customer.metadata || '{}') : customer.metadata || {};
     if (extractAssignedRepIds(meta).includes(Number(repId))) return;
 
     const [fieldVisit, order, sale, storeVisit] = await Promise.all([
@@ -106,12 +90,7 @@ export class VanFieldExecutionSurveysSlice {
   /**
    * 5. Trade Marketing Survey: Records cooler inspection or competitor survey
    */
-  async recordTradeSurvey(
-    tenantId: string,
-    accountId: number,
-    repId: number,
-    payload: TradeSurveyPayload,
-  ) {
+  async recordTradeSurvey(tenantId: string, accountId: number, repId: number, payload: TradeSurveyPayload) {
     // INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D7): every anchor the
     // caller names must be his own — the visit, the trip, and the
     // customer (assigned, served before, or checked in by him) — or
@@ -127,11 +106,7 @@ export class VanFieldExecutionSurveysSlice {
         throw new AppError('سجل الزيارة غير موجود', 'VISIT_NOT_FOUND', 404);
       }
       if (Number((visit as any).rep_id) !== Number(repId)) {
-        throw new AppError(
-          'هذه الزيارة تخص مندوباً آخر، لا يمكنك تسجيل استبيان عليها',
-          'REP_VISIT_NOT_OWNED',
-          403,
-        );
+        throw new AppError('هذه الزيارة تخص مندوباً آخر، لا يمكنك تسجيل استبيان عليها', 'REP_VISIT_NOT_OWNED', 403);
       }
     }
     if (payload.tripId != null) {
@@ -181,10 +156,7 @@ export class VanFieldExecutionSurveysSlice {
       surveyType?: string;
     },
   ) {
-    let q = this.db
-      .selectFrom('van_trade_marketing_surveys')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let q = this.db.selectFrom('van_trade_marketing_surveys').selectAll().where('tenant_id', '=', tenantId);
 
     if (filters?.tripId) q = q.where('trip_id', '=', filters.tripId);
     if (filters?.customerId) q = q.where('customer_id', '=', filters.customerId);

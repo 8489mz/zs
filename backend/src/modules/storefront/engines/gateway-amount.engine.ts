@@ -26,12 +26,28 @@ import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.
 
 /** ISO 4217 zero-decimal currencies: Stripe amounts are whole units. */
 const zeroDecimalCurrencies = new Set([
-  'BIF', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW',
-  'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF',
+  'BIF',
+  'CLP',
+  'DJF',
+  'GNF',
+  'ISK',
+  'JPY',
+  'KMF',
+  'KRW',
+  'PYG',
+  'RWF',
+  'UGX',
+  'VND',
+  'VUV',
+  'XAF',
+  'XOF',
+  'XPF',
 ]);
 
 export function gatewayMinorUnitExponent(currency: string): 0 | 2 | 3 {
-  const code = String(currency || '').trim().toUpperCase();
+  const code = String(currency || '')
+    .trim()
+    .toUpperCase();
   if (zeroDecimalCurrencies.has(code)) return 0;
   try {
     return currencyMoneyDigits(code);
@@ -53,9 +69,13 @@ export function toGatewayMajorAmount(amount: number, currency: string): number {
 
 /** The currency a gateway charge/webhook check must use for this provider and tenant base currency. */
 export function resolveGatewayCurrency(provider: string, baseCurrency: string): string {
-  const normalizedProvider = String(provider || '').trim().toLowerCase();
+  const normalizedProvider = String(provider || '')
+    .trim()
+    .toLowerCase();
   if (normalizedProvider === 'paymob' || normalizedProvider === 'xpay') return 'EGP';
-  const code = String(baseCurrency || '').trim().toUpperCase();
+  const code = String(baseCurrency || '')
+    .trim()
+    .toUpperCase();
   if (code) return code;
   return normalizedProvider === 'tap' ? 'SAR' : 'USD';
 }

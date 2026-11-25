@@ -4,8 +4,17 @@ import { type Kysely } from '../../../database/kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import type { Database } from '../../../database/database.types';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
-export { generateReleasePasscode, assertTrustedOfflineUpdatePackage } from './offline-releases/offline-releases-passcode';
-export { OFFLINE_UPDATE_REPO_DEFAULT, offlineUpdateRepo, offlineUpdateManifestUrl, offlineUpdateReleasesApiUrl, offlineUpdateReleaseDownloadUrl } from './offline-releases/offline-releases-channel';
+export {
+  generateReleasePasscode,
+  assertTrustedOfflineUpdatePackage,
+} from './offline-releases/offline-releases-passcode';
+export {
+  OFFLINE_UPDATE_REPO_DEFAULT,
+  offlineUpdateRepo,
+  offlineUpdateManifestUrl,
+  offlineUpdateReleasesApiUrl,
+  offlineUpdateReleaseDownloadUrl,
+} from './offline-releases/offline-releases-channel';
 export { compareSemver } from './offline-releases/offline-releases-semver';
 import { OfflineReleasesInitSync } from './offline-releases/offline-releases-init-sync';
 import { OfflineReleasesGitHub } from './offline-releases/offline-releases-github';
@@ -42,7 +51,12 @@ export class OfflineReleasesService implements OnModuleInit {
     return this.s1.onModuleInit();
   }
 
-  async fetchGitHubLatestRelease(): Promise<{ version: string; changelog: string; patchUrl: string; passcode?: string; } | null> {
+  async fetchGitHubLatestRelease(): Promise<{
+    version: string;
+    changelog: string;
+    patchUrl: string;
+    passcode?: string;
+  } | null> {
     return this.s2.fetchGitHubLatestRelease();
   }
 
@@ -69,7 +83,10 @@ export class OfflineReleasesService implements OnModuleInit {
   async getReleasePasscodeByVersion(_auth: AuthContext, version: string) {
     return this.s5.getReleasePasscodeByVersion(_auth, version);
   }
-  async createRelease(_auth: AuthContext, body: { version: string; changelog: string; patchUrl: string; passcode?: string; requiresPasscode?: boolean }) {
+  async createRelease(
+    _auth: AuthContext,
+    body: { version: string; changelog: string; patchUrl: string; passcode?: string; requiresPasscode?: boolean },
+  ) {
     return this.s5.createRelease(_auth, body);
   }
   async promoteRelease(auth: AuthContext, id: number) {

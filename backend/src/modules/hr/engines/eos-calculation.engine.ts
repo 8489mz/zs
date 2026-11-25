@@ -90,7 +90,7 @@ export function calculateGratuity(params: GratuityCalculationParams): GratuityCa
     // Half month wage for each of the first 5 years, and a full month wage for each following year.
     const first5Years = Math.min(serviceYears, 5);
     const subsequentYears = Math.max(0, serviceYears - 5);
-    baseGratuity = (first5Years * 0.5 * totalSalary) + (subsequentYears * 1.0 * totalSalary);
+    baseGratuity = first5Years * 0.5 * totalSalary + subsequentYears * 1.0 * totalSalary;
 
     // Saudi Labor Law: Art. 85 (Resignation scale)
     if (reason === 'resignation') {
@@ -115,7 +115,7 @@ export function calculateGratuity(params: GratuityCalculationParams): GratuityCa
     // Half month wage for each of the first 5 years, and a full month wage for each following year.
     const first5Years = Math.min(serviceYears, 5);
     const subsequentYears = Math.max(0, serviceYears - 5);
-    baseGratuity = (first5Years * 0.5 * totalSalary) + (subsequentYears * 1.0 * totalSalary);
+    baseGratuity = first5Years * 0.5 * totalSalary + subsequentYears * 1.0 * totalSalary;
     gratuityPercentage = 100;
   } else if (lawType === 'custom') {
     const daysPerYear = Number(params.customGratuityDaysPerYear);
@@ -157,7 +157,11 @@ export function calculateGratuity(params: GratuityCalculationParams): GratuityCa
 /**
  * Calculates leave encashment compensation for remaining unused annual leave days.
  */
-export function calculateLeaveEncashment(remainingLeaveDays: number, dailyWage: number, minorUnits: MoneyDigits): number {
+export function calculateLeaveEncashment(
+  remainingLeaveDays: number,
+  dailyWage: number,
+  minorUnits: MoneyDigits,
+): number {
   const days = Math.max(0, Number(remainingLeaveDays || 0));
   const rate = Math.max(0, Number(dailyWage || 0));
   return toMoney(days * rate, minorUnits);

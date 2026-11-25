@@ -374,12 +374,7 @@ export type MarketplaceWebhookHandler = (
 ) => Promise<{ handled: boolean; actionTaken: string }>;
 
 export type MarketplaceWebhookRelayOutcome =
-  | 'processed'
-  | 'rejected'
-  | 'skipped-no-handler'
-  | 'unverifiable'
-  | 'failed'
-  | 'skipped';
+  'processed' | 'rejected' | 'skipped-no-handler' | 'unverifiable' | 'failed' | 'skipped';
 
 export interface MarketplaceWebhookRelayResult {
   claimed: number;

@@ -35,16 +35,20 @@ export class OfflineReleasesZipVersion {
       for (const entry of entries) {
         const name = entry.entryName.replace(/\\/g, '/');
         // Apply a strict path policy before downstream PowerShell extracts the archive.
-        if (!name || name.startsWith('/') || /^[a-zA-Z]:/.test(name) ||
-            name.split('/').some((part) => part === '..' || part === '.') ||
-            name.includes('\0') || name.includes('//')) {
+        if (
+          !name ||
+          name.startsWith('/') ||
+          /^[a-zA-Z]:/.test(name) ||
+          name.split('/').some((part) => part === '..' || part === '.') ||
+          name.includes('\0') ||
+          name.includes('//')
+        ) {
           throw new Error('مسار غير آمن في الملف (Path Traversal)');
         }
         const size = Number(entry.header?.size || 0);
         if (!Number.isFinite(size) || size < 0) throw new Error('Invalid ZIP entry size');
         totalExpanded += size;
         if (totalExpanded > 512 * 1024 * 1024) throw new Error('ZIP exceeds maximum expanded size');
-
 
         if (name === 'update-manifest.json') manifestEntry = entry;
       }
@@ -67,7 +71,9 @@ export class OfflineReleasesZipVersion {
           const normalizedProvided = (passcode || '').replace(/[\s-]+/g, '').toUpperCase();
           const normalizedExpected = expected.replace(/[\s-]+/g, '').toUpperCase();
           if (normalizedProvided !== normalizedExpected) {
-            throw new BadRequestException('كود تفعيل التحديث غير صحيح. يرجى التواصل مع إدارة النظام للحصول على كود التفعيل المعتمد.');
+            throw new BadRequestException(
+              'كود تفعيل التحديث غير صحيح. يرجى التواصل مع إدارة النظام للحصول على كود التفعيل المعتمد.',
+            );
           }
         }
 
@@ -78,7 +84,7 @@ export class OfflineReleasesZipVersion {
 
           const hash = crypto.createHash('sha256').update(fileEntry.getData()).digest('hex');
           if (hash !== f.sha256) {
-             throw new Error(`الملف ${f.path} تالف أو تم التلاعب به (Checksum Mismatch)`);
+            throw new Error(`الملف ${f.path} تالف أو تم التلاعب به (Checksum Mismatch)`);
           }
         }
 
@@ -86,8 +92,11 @@ export class OfflineReleasesZipVersion {
         for (const folder of manifest.expectedFolders || []) {
           let found = false;
           for (const entry of entries) {
-             const name = entry.entryName.replace(/\\/g, '/');
-             if (name.startsWith(folder + '/') || name === folder) { found = true; break; }
+            const name = entry.entryName.replace(/\\/g, '/');
+            if (name.startsWith(folder + '/') || name === folder) {
+              found = true;
+              break;
+            }
           }
           if (!found) throw new Error(`المجلد المطلوب ${folder} غير موجود في ملف التحديث`);
         }
@@ -107,10 +116,14 @@ export class OfflineReleasesZipVersion {
       throw new BadRequestException(e.message || 'ملف التحديث غير صالح.');
     }
 
-    const portableRoot  = getPortableRoot();
+    const portableRoot = getPortableRoot();
     const stagingDir = path.join(portableRoot, 'runtime', 'run', 'update-staging');
 
-    try { fs.mkdirSync(stagingDir, { recursive: true }); } catch { /* ignore */ }
+    try {
+      fs.mkdirSync(stagingDir, { recursive: true });
+    } catch {
+      /* ignore */
+    }
 
     const patchPath = path.join(stagingDir, 'manual-patch.zip');
     fs.writeFileSync(patchPath, file.buffer);
@@ -119,16 +132,16 @@ export class OfflineReleasesZipVersion {
     const pendingFile = path.join(runtimeRunDir, '.update_pending');
 
     const payload = {
-      version:         version,
-      patchUrl:        '',
-      localPatchPath:  patchPath,
-      changelog:       'اختبار تحديث محلي من 1.1.9 إلى 1.1.9.1',
-      triggeredBy:     'Local User',
-      triggeredAt:     new Date().toISOString(),
-      nodeExe:         process.execPath,
-      backendCwd:      process.cwd(),
-      backendEntry:    process.argv[1] ?? 'dist/main.js',
-      backendPort:     process.env.APP_PORT ?? process.env.BACKEND_PORT ?? '3001',
+      version: version,
+      patchUrl: '',
+      localPatchPath: patchPath,
+      changelog: 'اختبار تحديث محلي من 1.1.9 إلى 1.1.9.1',
+      triggeredBy: 'Local User',
+      triggeredAt: new Date().toISOString(),
+      nodeExe: process.execPath,
+      backendCwd: process.cwd(),
+      backendEntry: process.argv[1] ?? 'dist/main.js',
+      backendPort: process.env.APP_PORT ?? process.env.BACKEND_PORT ?? '3001',
       electronExePath: process.env.ELECTRON_EXE_PATH || '',
       electronMainPid: Number(process.env.ELECTRON_MAIN_PID || '0'),
       expectedSha256: process.env.ZS_TRUSTED_OFFLINE_UPDATE_SHA256 || '',
@@ -159,24 +172,39 @@ export class OfflineReleasesZipVersion {
     // due to quoting of Windows paths and is not a reliable handoff for production.
     const psCommand = 'powershell.exe';
     const psArgs = [
-      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-      '-WindowStyle', 'Hidden', '-File', applyScript,
-      '-PortableRoot', portableRoot,
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-WindowStyle',
+      'Hidden',
+      '-File',
+      applyScript,
+      '-PortableRoot',
+      portableRoot,
     ];
 
-    fs.writeFileSync(spawnLog, JSON.stringify({
-      scriptPath: applyScript,
-      pendingFilePath: pendingFile,
-      localPatchPath: patchPath,
-      cwd: process.cwd(),
-      command: psCommand + ' ' + psArgs.join(' ')
-    }, null, 2), 'utf8');
+    fs.writeFileSync(
+      spawnLog,
+      JSON.stringify(
+        {
+          scriptPath: applyScript,
+          pendingFilePath: pendingFile,
+          localPatchPath: patchPath,
+          cwd: process.cwd(),
+          command: psCommand + ' ' + psArgs.join(' '),
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    );
 
     const ps = spawn(psCommand, psArgs, {
       detached: true,
       stdio: 'ignore',
       windowsHide: true,
-      cwd: portableRoot
+      cwd: portableRoot,
     });
     if (!ps.pid) {
       throw new BadRequestException('Could not launch the offline updater process');
@@ -216,7 +244,9 @@ export class OfflineReleasesZipVersion {
         const ver = fs.readFileSync(versionFile, 'utf8').trim();
         if (ver) return { version: ver };
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // 2. Read the backend's own package.json (baked in at build time, always accurate)
     try {
@@ -225,7 +255,9 @@ export class OfflineReleasesZipVersion {
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as { version?: string };
         if (pkg?.version) return { version: pkg.version };
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // Fallback for local development if not in portable structure
     try {
@@ -234,7 +266,9 @@ export class OfflineReleasesZipVersion {
         const pkg = JSON.parse(fs.readFileSync(devPkgPath, 'utf8')) as { version?: string };
         if (pkg?.version) return { version: pkg.version };
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // 3. Absolute fallback
     return { version: '0.0.0' };

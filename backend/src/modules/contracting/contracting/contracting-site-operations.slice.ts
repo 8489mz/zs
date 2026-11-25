@@ -52,7 +52,6 @@ export class ContractingSiteOperationsSlice {
   // 9. Schedule Tasks & Gantt / CPM
   // ==========================================================================
 
-
   async getScheduleTasks(auth: AuthContext, projectId: string) {
     return this.siteOperationsService.getScheduleTasks(auth, projectId);
   }

@@ -24,22 +24,12 @@ import { currencyMoneyDigits, toMinorUnits } from '../accounting/engines/money-m
  * and must be a posted sale. A draft or cancelled sale settles
  * nothing, so it cannot absorb a trade-in credit.
  */
-export function assertExchangeSaleLink(
-  sale: { status: string } | null | undefined,
-): void {
+export function assertExchangeSaleLink(sale: { status: string } | null | undefined): void {
   if (!sale) {
-    throw new AppError(
-      'Linked sale for the exchange does not exist',
-      'TRADEIN_EXCHANGE_SALE_NOT_FOUND',
-      404,
-    );
+    throw new AppError('Linked sale for the exchange does not exist', 'TRADEIN_EXCHANGE_SALE_NOT_FOUND', 404);
   }
   if (sale.status !== 'posted') {
-    throw new AppError(
-      'Linked sale for the exchange is not a posted sale',
-      'TRADEIN_EXCHANGE_SALE_NOT_POSTED',
-      422,
-    );
+    throw new AppError('Linked sale for the exchange is not a posted sale', 'TRADEIN_EXCHANGE_SALE_NOT_POSTED', 422);
   }
 }
 
@@ -61,9 +51,7 @@ export class TradeInService {
     },
   ) {
     const scope = requireTenantScope(auth);
-    let baseQuery = this.db
-      .selectFrom('trade_in_transactions')
-      .where('tenant_id', '=', scope.tenantId);
+    let baseQuery = this.db.selectFrom('trade_in_transactions').where('tenant_id', '=', scope.tenantId);
 
     if (filters?.q && filters.q.trim()) {
       const term = `%${normalizeArabicSearch(filters.q)}%`;
@@ -77,21 +65,14 @@ export class TradeInService {
       )`);
     }
 
-    const totalRes = await baseQuery
-      .select((eb) => eb.fn.count('id').as('count'))
-      .executeTakeFirst();
+    const totalRes = await baseQuery.select((eb) => eb.fn.count('id').as('count')).executeTakeFirst();
     const total = Number(totalRes?.count || 0);
 
     const page = Math.max(1, Number(filters?.page || 1));
     const pageSize = Math.min(100, Math.max(1, Number(filters?.pageSize || 25)));
     const offset = (page - 1) * pageSize;
 
-    const items = await baseQuery
-      .selectAll()
-      .orderBy('id', 'desc')
-      .limit(pageSize)
-      .offset(offset)
-      .execute();
+    const items = await baseQuery.selectAll().orderBy('id', 'desc').limit(pageSize).offset(offset).execute();
 
     return {
       transactions: items.map((t) => ({
@@ -172,25 +153,36 @@ export class TradeInService {
       // connections before creating stock, serial and treasury rows.
       const serial = payload.serialNumber.trim();
       await sql`SELECT pg_advisory_xact_lock(hashtext(${scope.tenantId}), hashtext(${serial}))`.execute(trx);
-      const existingIntake = await trx.selectFrom('trade_in_transactions')
+      const existingIntake = await trx
+        .selectFrom('trade_in_transactions')
         .select(['id', 'doc_no'])
-        .where('tenant_id', '=', scope.tenantId).where('serial_number', '=', serial)
+        .where('tenant_id', '=', scope.tenantId)
+        .where('serial_number', '=', serial)
         .orderBy('id', 'desc')
         .executeTakeFirst();
       if (existingIntake) {
         // If an intake exists, verify if the serial is still active in stock.
         // A serial currently in stock cannot be purchased again.
         // If the serial was sold or retired, a new trade-in cycle is permitted.
-        const serialRow = await trx.selectFrom('product_serials')
+        const serialRow = await trx
+          .selectFrom('product_serials')
           .select(['id', 'status'])
           .where('tenant_id', '=', scope.tenantId)
           .where('serial_number', '=', serial)
           .orderBy('id', 'desc')
           .executeTakeFirst();
         if (serialRow && serialRow.status === 'in_stock') {
-          throw new AppError(`Device serial already has trade-in document ${existingIntake.doc_no}; reconcile the original before retrying`, 'TRADEIN_DUPLICATE_SERIAL', 409);
+          throw new AppError(
+            `Device serial already has trade-in document ${existingIntake.doc_no}; reconcile the original before retrying`,
+            'TRADEIN_DUPLICATE_SERIAL',
+            409,
+          );
         } else if (!serialRow) {
-          throw new AppError(`Device serial already has trade-in document ${existingIntake.doc_no}; reconcile the original before retrying`, 'TRADEIN_DUPLICATE_SERIAL', 409);
+          throw new AppError(
+            `Device serial already has trade-in document ${existingIntake.doc_no}; reconcile the original before retrying`,
+            'TRADEIN_DUPLICATE_SERIAL',
+            409,
+          );
         }
       }
       const agreed = Number(payload.agreedPurchasePrice);
@@ -200,7 +192,11 @@ export class TradeInService {
       try {
         toMinorUnits(agreed, currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)));
       } catch {
-        throw new AppError('Trade-in cost exceeds tenant currency minor-unit precision', 'TRADEIN_CURRENCY_PRECISION_INVALID', 422);
+        throw new AppError(
+          'Trade-in cost exceeds tenant currency minor-unit precision',
+          'TRADEIN_CURRENCY_PRECISION_INVALID',
+          422,
+        );
       }
       const transactionType = payload.transactionType ?? 'cash_purchase';
       if (transactionType !== 'cash_purchase' && transactionType !== 'exchange_trade_in') {
@@ -212,9 +208,14 @@ export class TradeInService {
         // sale it links: the sale must exist, belong to this tenant
         // and be posted, or the link is meaningless.
         if (!payload.saleId || !Number.isSafeInteger(payload.saleId) || payload.saleId <= 0) {
-          throw new AppError('An exchange trade-in must link the new-device sale', 'TRADEIN_EXCHANGE_SALE_REQUIRED', 422);
+          throw new AppError(
+            'An exchange trade-in must link the new-device sale',
+            'TRADEIN_EXCHANGE_SALE_REQUIRED',
+            422,
+          );
         }
-        const linkedSale = await trx.selectFrom('sales')
+        const linkedSale = await trx
+          .selectFrom('sales')
           .select(['id', 'status'])
           .where('tenant_id', '=', scope.tenantId)
           .where('id', '=', payload.saleId)
@@ -222,11 +223,22 @@ export class TradeInService {
           .executeTakeFirst();
         assertExchangeSaleLink(linkedSale);
         if (agreed > 0 && !payload.createdProductId && !payload.autoAddToInventory) {
-          throw new AppError('A valued exchange must stock the used device (link a product or auto-add it to inventory)', 'TRADEIN_EXCHANGE_PRODUCT_REQUIRED', 422);
+          throw new AppError(
+            'A valued exchange must stock the used device (link a product or auto-add it to inventory)',
+            'TRADEIN_EXCHANGE_PRODUCT_REQUIRED',
+            422,
+          );
         }
-      } else if (agreed > 0 && (!['cash', 'bank'].includes(payload.paymentMethod ?? 'cash') ||
-          (!payload.createdProductId && !payload.autoAddToInventory))) {
-        throw new AppError('Paid trade-in requires a physical receipt and immediate cash or default-bank payout', 'TRADEIN_POSTING_UNSUPPORTED', 422);
+      } else if (
+        agreed > 0 &&
+        (!['cash', 'bank'].includes(payload.paymentMethod ?? 'cash') ||
+          (!payload.createdProductId && !payload.autoAddToInventory))
+      ) {
+        throw new AppError(
+          'Paid trade-in requires a physical receipt and immediate cash or default-bank payout',
+          'TRADEIN_POSTING_UNSUPPORTED',
+          422,
+        );
       }
       const conditionState = payload.deviceConditionState || 'used';
       const stateSuffixMap: Record<string, string> = {
@@ -282,7 +294,13 @@ export class TradeInService {
       }
 
       const txnId = Number(insertedTxn.id);
-      const docNo = formatDailyDocumentNumber('TRD', txnId, new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
+      const docNo = formatDailyDocumentNumber(
+        'TRD',
+        txnId,
+        new Date(),
+        4,
+        await getTenantTimezone(trx, scope.tenantId),
+      );
 
       await trx
         .updateTable('trade_in_transactions')
@@ -293,69 +311,120 @@ export class TradeInService {
 
       let targetProductId = payload.createdProductId ?? null;
       if (targetProductId != null) {
-        const target = await trx.selectFrom('products').select('id')
-          .where('tenant_id', '=', scope.tenantId).where('id', '=', Number(targetProductId)).executeTakeFirst();
+        const target = await trx
+          .selectFrom('products')
+          .select('id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', Number(targetProductId))
+          .executeTakeFirst();
         if (!target || !Number.isSafeInteger(Number(targetProductId))) {
-          throw new AppError('Trade-in linked product does not belong to this tenant', 'TRADEIN_PRODUCT_SCOPE_INVALID', 404);
+          throw new AppError(
+            'Trade-in linked product does not belong to this tenant',
+            'TRADEIN_PRODUCT_SCOPE_INVALID',
+            404,
+          );
         }
       }
       if (payload.autoAddToInventory && !targetProductId) {
         const brandPrefix = payload.deviceBrand?.trim() ? `${payload.deviceBrand.trim()} ` : '';
         const stateSuffix = stateSuffixMap[conditionState] || '(مستعمل)';
         const productName = `${brandPrefix}${payload.deviceModel.trim()} ${stateSuffix}`;
-        const existingProd = await trx.selectFrom('products')
-          .select('id').where('tenant_id', '=', scope.tenantId).where('name', '=', productName).executeTakeFirst();
+        const existingProd = await trx
+          .selectFrom('products')
+          .select('id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('name', '=', productName)
+          .executeTakeFirst();
         if (existingProd) {
           targetProductId = Number(existingProd.id);
         } else {
           const resalePrice = payload.resalePrice && payload.resalePrice > 0 ? payload.resalePrice : agreed;
-          const insertedProd = await trx.insertInto('products').values({
-            tenant_id: scope.tenantId, account_id: scope.accountId, name: productName,
-            barcode: `DEV-${payload.serialNumber.trim().slice(-8)}-${txnId}`,
-            cost_price: agreed, retail_price: resalePrice, wholesale_price: agreed,
-            stock_qty: 0, min_stock_qty: 0, is_active: true, track_serials: true,
-            notes: `تم شراؤه وتنازل العميل عبر إيصال ${docNo} [${conditionTag}]`,
-          }).returning('id').executeTakeFirst();
-          if (!insertedProd?.id) throw new AppError('Could not create used inventory product', 'TRADEIN_PRODUCT_CREATE_FAILED', 500);
+          const insertedProd = await trx
+            .insertInto('products')
+            .values({
+              tenant_id: scope.tenantId,
+              account_id: scope.accountId,
+              name: productName,
+              barcode: `DEV-${payload.serialNumber.trim().slice(-8)}-${txnId}`,
+              cost_price: agreed,
+              retail_price: resalePrice,
+              wholesale_price: agreed,
+              stock_qty: 0,
+              min_stock_qty: 0,
+              is_active: true,
+              track_serials: true,
+              notes: `تم شراؤه وتنازل العميل عبر إيصال ${docNo} [${conditionTag}]`,
+            })
+            .returning('id')
+            .executeTakeFirst();
+          if (!insertedProd?.id)
+            throw new AppError('Could not create used inventory product', 'TRADEIN_PRODUCT_CREATE_FAILED', 500);
           targetProductId = Number(insertedProd.id);
         }
       }
       if (targetProductId) {
         // A serial currently active in inventory cannot be acquired again while in stock.
         // If it was previously sold, re-purchasing the used device is permitted.
-        const occupiedSerial = await trx.selectFrom('product_serials')
+        const occupiedSerial = await trx
+          .selectFrom('product_serials')
           .select(['id', 'product_id', 'status'])
           .where('tenant_id', '=', scope.tenantId)
           .where('serial_number', '=', payload.serialNumber.trim())
           .where('status', '=', 'in_stock')
           .executeTakeFirst();
         if (occupiedSerial) {
-          throw new AppError('الجهاز مسجل بالفعل وموجود بالمخزن حالياً؛ لا يمكن إعادة شرائه قبل خروجه من المخزن أو بيعه', 'TRADEIN_SERIAL_ALREADY_REGISTERED', 409);
+          throw new AppError(
+            'الجهاز مسجل بالفعل وموجود بالمخزن حالياً؛ لا يمكن إعادة شرائه قبل خروجه من المخزن أو بيعه',
+            'TRADEIN_SERIAL_ALREADY_REGISTERED',
+            409,
+          );
         }
-
 
         // Also receive explicit existing product links: a recorded IMEI without
         // an actual stock movement previously created invisible inventory.
-        await trx.updateTable('products').set({track_serials:true})
-          .where('tenant_id', '=', scope.tenantId).where('id', '=', Number(targetProductId)).execute();
+        await trx
+          .updateTable('products')
+          .set({ track_serials: true })
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', Number(targetProductId))
+          .execute();
         const stockChange = await applyStockDelta(trx, {
-          productId: Number(targetProductId), delta: 1,
-          branchId: payload.branchId ?? null, locationId: payload.locationId ?? null,
-          tenantId: scope.tenantId, accountId: scope.accountId, allowNegative: false,
+          productId: Number(targetProductId),
+          delta: 1,
+          branchId: payload.branchId ?? null,
+          locationId: payload.locationId ?? null,
+          tenantId: scope.tenantId,
+          accountId: scope.accountId,
+          allowNegative: false,
         });
-        await trx.insertInto('stock_movements').values({
-          product_id: Number(targetProductId), movement_type: 'tradein_in',
-          qty: 1, before_qty: stockChange.scopeBefore, after_qty: stockChange.scopeAfter,
-          unit_cost: agreed, total_cost: agreed,
-          reason: 'شراء جهاز مستعمل', note: `شراء مستعمل إيصال ${docNo}`,
-          reference_type: 'trade_in', reference_id: txnId,
-          branch_id: payload.branchId ?? null, location_id: payload.locationId ?? null,
-          created_by: auth.userId ? Number(auth.userId) : null,
-          tenant_id: scope.tenantId, account_id: scope.accountId,
-        } as any).execute();
+        await trx
+          .insertInto('stock_movements')
+          .values({
+            product_id: Number(targetProductId),
+            movement_type: 'tradein_in',
+            qty: 1,
+            before_qty: stockChange.scopeBefore,
+            after_qty: stockChange.scopeAfter,
+            unit_cost: agreed,
+            total_cost: agreed,
+            reason: 'شراء جهاز مستعمل',
+            note: `شراء مستعمل إيصال ${docNo}`,
+            reference_type: 'trade_in',
+            reference_id: txnId,
+            branch_id: payload.branchId ?? null,
+            location_id: payload.locationId ?? null,
+            created_by: auth.userId ? Number(auth.userId) : null,
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+          } as any)
+          .execute();
         await valueStockReceipt(trx, scope.tenantId, Number(targetProductId), stockChange.globalAfter, 1, agreed);
-        await trx.updateTable('trade_in_transactions').set({ created_product_id: Number(targetProductId) })
-          .where('tenant_id', '=', scope.tenantId).where('id', '=', txnId).execute();
+        await trx
+          .updateTable('trade_in_transactions')
+          .set({ created_product_id: Number(targetProductId) })
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', txnId)
+          .execute();
       }
 
       // If a product ID was linked or auto-created, automatically register the IMEI in product_serials
@@ -434,26 +503,51 @@ export class TradeInService {
   async deleteTransaction(id: number, auth: AuthContext) {
     const scope = requireTenantScope(auth);
     await this.tx.runInTransaction(this.db, async (trx) => {
-      const document = await trx.selectFrom('trade_in_transactions')
+      const document = await trx
+        .selectFrom('trade_in_transactions')
         .select(['id', 'agreed_purchase_price', 'created_product_id', 'sale_id', 'transaction_type'])
-        .where('tenant_id', '=', scope.tenantId).where('id', '=', id)
-        .forUpdate().executeTakeFirst();
+        .where('tenant_id', '=', scope.tenantId)
+        .where('id', '=', id)
+        .forUpdate()
+        .executeTakeFirst();
       if (!document) throw new AppError('Trade-in document not found', 'TRADEIN_NOT_FOUND', 404);
       const [stock, cash] = await Promise.all([
-        trx.selectFrom('stock_movements').select('id')
-          .where('tenant_id', '=', scope.tenantId).where('reference_type', '=', 'trade_in').where('reference_id', '=', id)
+        trx
+          .selectFrom('stock_movements')
+          .select('id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('reference_type', '=', 'trade_in')
+          .where('reference_id', '=', id)
           .executeTakeFirst(),
-        trx.selectFrom('treasury_transactions').select('id')
-          .where('tenant_id', '=', scope.tenantId).where('reference_type', '=', 'trade_in').where('reference_id', '=', id)
+        trx
+          .selectFrom('treasury_transactions')
+          .select('id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('reference_type', '=', 'trade_in')
+          .where('reference_id', '=', id)
           .executeTakeFirst(),
       ]);
       // Never delete a purchase/trade-in source after it has affected inventory,
       // cash or an associated sale. A real reversal must preserve source history.
-      if (Number(document.agreed_purchase_price) > 0 || document.created_product_id ||
-          document.sale_id || document.transaction_type !== 'cash_purchase' || stock || cash) {
-        throw new AppError('Posted trade-in cannot be deleted; record an audited inventory/finance reversal instead', 'TRADEIN_REVERSAL_REQUIRED', 409);
+      if (
+        Number(document.agreed_purchase_price) > 0 ||
+        document.created_product_id ||
+        document.sale_id ||
+        document.transaction_type !== 'cash_purchase' ||
+        stock ||
+        cash
+      ) {
+        throw new AppError(
+          'Posted trade-in cannot be deleted; record an audited inventory/finance reversal instead',
+          'TRADEIN_REVERSAL_REQUIRED',
+          409,
+        );
       }
-      await trx.deleteFrom('trade_in_transactions').where('tenant_id', '=', scope.tenantId).where('id', '=', id).execute();
+      await trx
+        .deleteFrom('trade_in_transactions')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('id', '=', id)
+        .execute();
     });
     await this.audit.log('Delete Trade-In Transaction', `Deleted zero-impact trade-in draft #${id}`, auth);
     return { ok: true };

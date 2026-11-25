@@ -3,7 +3,11 @@ import { getPagination, parseRange, resolveTenantDayRange } from './reports-rang
 import { discountedReturnInvoiceSql, discountedSaleSql } from '../../sales/helpers/sales-discount-filter.helper';
 import { sql } from '../../../database/kysely';
 
-export function applyReportScopeFilter<T extends object>(queryBuilder: T, query: ReportRangeQueryDto, tableAlias?: string): T {
+export function applyReportScopeFilter<T extends object>(
+  queryBuilder: T,
+  query: ReportRangeQueryDto,
+  tableAlias?: string,
+): T {
   let qb: any = queryBuilder;
   const branchCol = tableAlias ? `${tableAlias}.branch_id` : 'branch_id';
   const locCol = tableAlias ? `${tableAlias}.location_id` : 'location_id';
@@ -35,7 +39,11 @@ export function applyReportScopeFilter<T extends object>(queryBuilder: T, query:
 // one delivery rep. Only call on queries whose table (or join) carries
 // delivery_rep_id — never inside applyReportScopeFilter, which also
 // wraps purchases / expenses / services tables that have no such column.
-export function applyDeliveryRepSalesFilter<T extends object>(queryBuilder: T, query: ReportRangeQueryDto, tableAlias?: string): T {
+export function applyDeliveryRepSalesFilter<T extends object>(
+  queryBuilder: T,
+  query: ReportRangeQueryDto,
+  tableAlias?: string,
+): T {
   const repId = query.deliveryRepId;
   if (repId == null) return queryBuilder;
   const repIdNum = Number(repId);
@@ -49,7 +57,11 @@ export function applyDeliveryRepSalesFilter<T extends object>(queryBuilder: T, q
 // on, the returns side counts ONLY sale returns whose invoice belongs
 // to the rep (purchase returns drop out: they are not rep sales).
 // Only call on return_documents(-aliased) queries.
-export function applyDeliveryRepReturnsFilter<T extends object>(queryBuilder: T, query: ReportRangeQueryDto, tableAlias?: string): T {
+export function applyDeliveryRepReturnsFilter<T extends object>(
+  queryBuilder: T,
+  query: ReportRangeQueryDto,
+  tableAlias?: string,
+): T {
   const repId = query.deliveryRepId;
   if (repId == null) return queryBuilder;
   const repIdNum = Number(repId);
@@ -57,20 +69,30 @@ export function applyDeliveryRepReturnsFilter<T extends object>(queryBuilder: T,
   const alias = tableAlias ?? 'return_documents';
   return (queryBuilder as any)
     .where(sql.ref(`${alias}.return_type`), '=', 'sale')
-    .where(sql<boolean>`exists (select 1 from sales s2 where s2.id = ${sql.ref(`${alias}.invoice_id`)} and s2.tenant_id = ${sql.ref(`${alias}.tenant_id`)} and s2.delivery_rep_id = ${repIdNum})`);
+    .where(
+      sql<boolean>`exists (select 1 from sales s2 where s2.id = ${sql.ref(`${alias}.invoice_id`)} and s2.tenant_id = ${sql.ref(`${alias}.tenant_id`)} and s2.delivery_rep_id = ${repIdNum})`,
+    );
 }
 
 // F13 (trial problem 18): discounted-invoices-only on the sales side.
 // Only call on queries whose table (or join) carries the sales columns
 // the shared predicate reads — the same call discipline as the rep filter.
-export function applyDiscountedOnlySalesFilter<T extends object>(queryBuilder: T, query: ReportRangeQueryDto, tableAlias?: string): T {
+export function applyDiscountedOnlySalesFilter<T extends object>(
+  queryBuilder: T,
+  query: ReportRangeQueryDto,
+  tableAlias?: string,
+): T {
   if (!query.discountedOnly) return queryBuilder;
   return (queryBuilder as any).where(discountedSaleSql(tableAlias ?? 'sales'));
 }
 
 // F13 (trial problem 18): sale returns of discounted invoices only.
 // Only call on return_documents(-aliased) queries.
-export function applyDiscountedOnlyReturnsFilter<T extends object>(queryBuilder: T, query: ReportRangeQueryDto, tableAlias?: string): T {
+export function applyDiscountedOnlyReturnsFilter<T extends object>(
+  queryBuilder: T,
+  query: ReportRangeQueryDto,
+  tableAlias?: string,
+): T {
   if (!query.discountedOnly) return queryBuilder;
   return (queryBuilder as any).where(discountedReturnInvoiceSql(tableAlias ?? 'return_documents'));
 }
@@ -81,9 +103,7 @@ export function applyDiscountedOnlyReturnsFilter<T extends object>(queryBuilder:
 // scoping rule is defined once and shared by the service and the
 // helper instead of being duplicated in two places).
 export function buildTenantPredicate(tenantId: string, alias?: string) {
-  return alias
-    ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}`
-    : sql<boolean>`tenant_id = ${tenantId}`;
+  return alias ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}` : sql<boolean>`tenant_id = ${tenantId}`;
 }
 
 export type ReportListState = {
@@ -114,7 +134,9 @@ export function buildReportListState(
   const defaultFilter = String(options?.defaultFilter || 'all').toLowerCase();
   const { page, pageSize } = getPagination(query, defaultPageSize);
   const state: ReportListState = {
-    search: String(query.search || '').trim().toLowerCase(),
+    search: String(query.search || '')
+      .trim()
+      .toLowerCase(),
     filter: String(query.filter || defaultFilter).toLowerCase(),
     page,
     pageSize,

@@ -13,9 +13,18 @@ export interface CustomerCrudSliceBoundDeps {
   tenantId: (actor: AuthContext) => string;
   tenantFields: (actor: AuthContext) => { tenant_id: string; account_id: string };
   customerNameExists: (name: string, actor: AuthContext, excludeId?: number) => Promise<boolean>;
-  findCustomerByPhone: (phone: string, actor: AuthContext, excludeId?: number) => Promise<{ id: number; name: string; phone: string } | null>;
+  findCustomerByPhone: (
+    phone: string,
+    actor: AuthContext,
+    excludeId?: number,
+  ) => Promise<{ id: number; name: string; phone: string } | null>;
   buildDuplicatePhoneWarning: (existing: { id: number; name: string; phone: string }) => Record<string, unknown>;
-  addCustomerOpeningBalance: (customerId: number, amount: number, actor: AuthContext, db: Kysely<Database>) => Promise<void>;
+  addCustomerOpeningBalance: (
+    customerId: number,
+    amount: number,
+    actor: AuthContext,
+    db: Kysely<Database>,
+  ) => Promise<void>;
   listCustomers: (query: Record<string, unknown>, actor: AuthContext) => Promise<Record<string, unknown>>;
 }
 
@@ -42,7 +51,11 @@ export class CustomerCrudSlice {
     return this.bound.customerNameExists(name, actor, excludeId);
   }
 
-  private async findCustomerByPhone(phone: string, actor: AuthContext, excludeId?: number): Promise<{ id: number; name: string; phone: string } | null> {
+  private async findCustomerByPhone(
+    phone: string,
+    actor: AuthContext,
+    excludeId?: number,
+  ): Promise<{ id: number; name: string; phone: string } | null> {
     return this.bound.findCustomerByPhone(phone, actor, excludeId);
   }
 
@@ -50,7 +63,12 @@ export class CustomerCrudSlice {
     return this.bound.buildDuplicatePhoneWarning(existing);
   }
 
-  private async addCustomerOpeningBalance(customerId: number, amount: number, actor: AuthContext, db: Kysely<Database>): Promise<void> {
+  private async addCustomerOpeningBalance(
+    customerId: number,
+    amount: number,
+    actor: AuthContext,
+    db: Kysely<Database>,
+  ): Promise<void> {
     return this.bound.addCustomerOpeningBalance(customerId, amount, actor, db);
   }
 
@@ -86,7 +104,11 @@ export class CustomerCrudSlice {
     const digits = result.nationalNumber.replace(/\D/g, '');
     const subscriber = digits.slice(3);
     if (subscriber.length >= 4 && [...subscriber].every((d) => d === subscriber[0])) {
-      throw new AppError('Customer phone looks like a placeholder number, enter a real mobile number', 'CUSTOMER_PHONE_PLACEHOLDER', 400);
+      throw new AppError(
+        'Customer phone looks like a placeholder number, enter a real mobile number',
+        'CUSTOMER_PHONE_PLACEHOLDER',
+        400,
+      );
     }
     return result.nationalNumber;
   }
@@ -122,7 +144,8 @@ export class CustomerCrudSlice {
   async createCustomer(payload: UpsertCustomerDto, actor: AuthContext): Promise<Record<string, unknown>> {
     const name = String(payload.name || '').trim();
     if (!name) throw new AppError('Customer name is required', 'CUSTOMER_NAME_REQUIRED', 400);
-    if (await this.customerNameExists(name, actor)) throw new AppError('Customer already exists', 'CUSTOMER_EXISTS', 400);
+    if (await this.customerNameExists(name, actor))
+      throw new AppError('Customer already exists', 'CUSTOMER_EXISTS', 400);
     const phone = this.validateCustomerPhone(payload.phone);
     // INV-VAN-PRICE-LIST-WIRING: an unknown or foreign list id is
     // refused before anything is written; an inactive list id is
@@ -137,7 +160,9 @@ export class CustomerCrudSlice {
           phone,
           address: String(payload.address || '').trim(),
           balance: 0,
-          customer_type: ['vip', 'credit', 'wholesale', 'half_wholesale'].includes(payload.type as string) ? (payload.type as any) : 'cash',
+          customer_type: ['vip', 'credit', 'wholesale', 'half_wholesale'].includes(payload.type as string)
+            ? (payload.type as any)
+            : 'cash',
           price_list_id: priceListId,
           credit_limit: Number(payload.creditLimit || 0),
           store_credit_balance: Number(payload.storeCreditBalance || 0),
@@ -178,7 +203,12 @@ export class CustomerCrudSlice {
 
     const listing = await this.listCustomers({}, actor);
     const duplicate = await this.findCustomerByPhone(phone, actor, Number(inserted.id));
-    return { ok: true, id: String(inserted.id), customers: listing.customers, ...(duplicate ? { phoneWarning: this.buildDuplicatePhoneWarning(duplicate) } : {}) };
+    return {
+      ok: true,
+      id: String(inserted.id),
+      customers: listing.customers,
+      ...(duplicate ? { phoneWarning: this.buildDuplicatePhoneWarning(duplicate) } : {}),
+    };
   }
 
   async updateCustomer(id: number, payload: UpsertCustomerDto, actor: AuthContext): Promise<Record<string, unknown>> {
@@ -194,12 +224,17 @@ export class CustomerCrudSlice {
 
     const name = String(payload.name || '').trim();
     if (!name) throw new AppError('Customer name is required', 'CUSTOMER_NAME_REQUIRED', 400);
-    if (await this.customerNameExists(name, actor, id)) throw new AppError('Customer already exists', 'CUSTOMER_EXISTS', 400);
+    if (await this.customerNameExists(name, actor, id))
+      throw new AppError('Customer already exists', 'CUSTOMER_EXISTS', 400);
     const phone = this.validateCustomerPhone(payload.phone);
 
     const requestedBalance = Number(payload.balance ?? existing.balance ?? 0);
     if (Math.abs(Number(existing.balance || 0) - requestedBalance) > 0.0001) {
-      throw new AppError('Balance cannot be edited from customer form; use opening balance/import/reconcile flow', 'CUSTOMER_BALANCE_EDIT_FORBIDDEN', 400);
+      throw new AppError(
+        'Balance cannot be edited from customer form; use opening balance/import/reconcile flow',
+        'CUSTOMER_BALANCE_EDIT_FORBIDDEN',
+        400,
+      );
     }
 
     const requestedStoreCredit = Number(payload.storeCreditBalance ?? existing.store_credit_balance ?? 0);
@@ -211,9 +246,10 @@ export class CustomerCrudSlice {
     // when the payload carries the key (absent = unchanged, so
     // callers that do not manage lists never detach one); null
     // clears it. Unknown/foreign ids are refused.
-    const priceListId = payload.priceListId !== undefined
-      ? await this.resolveAssignablePriceListId(payload.priceListId, actor)
-      : undefined;
+    const priceListId =
+      payload.priceListId !== undefined
+        ? await this.resolveAssignablePriceListId(payload.priceListId, actor)
+        : undefined;
 
     const metaToSave: any = payload.metadata ? { ...payload.metadata } : null;
     if (metaToSave && typeof metaToSave === 'object') {
@@ -230,7 +266,9 @@ export class CustomerCrudSlice {
         name,
         phone,
         address: String(payload.address || '').trim(),
-        customer_type: ['vip', 'credit', 'wholesale', 'half_wholesale'].includes(payload.type as string) ? (payload.type as any) : 'cash',
+        customer_type: ['vip', 'credit', 'wholesale', 'half_wholesale'].includes(payload.type as string)
+          ? (payload.type as any)
+          : 'cash',
         ...(priceListId !== undefined ? { price_list_id: priceListId } : {}),
         credit_limit: Number(payload.creditLimit || 0),
         company_name: String(payload.companyName || '').trim(),
@@ -245,7 +283,11 @@ export class CustomerCrudSlice {
     await this.audit.log('تعديل عميل', `تم تحديث العميل #${id} بواسطة ${actor.username}`, actor);
     const listing = await this.listCustomers({}, actor);
     const duplicate = await this.findCustomerByPhone(phone, actor, id);
-    return { ok: true, customers: listing.customers, ...(duplicate ? { phoneWarning: this.buildDuplicatePhoneWarning(duplicate) } : {}) };
+    return {
+      ok: true,
+      customers: listing.customers,
+      ...(duplicate ? { phoneWarning: this.buildDuplicatePhoneWarning(duplicate) } : {}),
+    };
   }
 
   async deleteCustomer(id: number, actor: AuthContext): Promise<Record<string, unknown>> {
@@ -258,21 +300,47 @@ export class CustomerCrudSlice {
       .executeTakeFirst();
 
     if (!customer) throw new AppError('Customer not found', 'CUSTOMER_NOT_FOUND', 404);
-    if (Math.abs(Number(customer.balance || 0)) > 0.0001) throw new AppError('Customer has outstanding balance', 'CUSTOMER_HAS_BALANCE', 400);
-    if (Math.abs(Number(customer.store_credit_balance || 0)) > 0.0001) throw new AppError('Customer has store credit balance', 'CUSTOMER_HAS_CREDIT', 400);
+    if (Math.abs(Number(customer.balance || 0)) > 0.0001)
+      throw new AppError('Customer has outstanding balance', 'CUSTOMER_HAS_BALANCE', 400);
+    if (Math.abs(Number(customer.store_credit_balance || 0)) > 0.0001)
+      throw new AppError('Customer has store credit balance', 'CUSTOMER_HAS_CREDIT', 400);
 
     const [salesCount, paymentCount, ledgerCount] = await Promise.all([
-      this.db.selectFrom('sales').select((eb) => eb.fn.countAll<number>().as('count')).where('customer_id', '=', id).where(this.tenantPredicate(actor)).executeTakeFirstOrThrow(),
-      this.db.selectFrom('customer_payments').select((eb) => eb.fn.countAll<number>().as('count')).where('customer_id', '=', id).where(this.tenantPredicate(actor)).executeTakeFirstOrThrow(),
-      this.db.selectFrom('customer_ledger').select((eb) => eb.fn.countAll<number>().as('count')).where('customer_id', '=', id).where(this.tenantPredicate(actor)).executeTakeFirstOrThrow(),
+      this.db
+        .selectFrom('sales')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('customer_id', '=', id)
+        .where(this.tenantPredicate(actor))
+        .executeTakeFirstOrThrow(),
+      this.db
+        .selectFrom('customer_payments')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('customer_id', '=', id)
+        .where(this.tenantPredicate(actor))
+        .executeTakeFirstOrThrow(),
+      this.db
+        .selectFrom('customer_ledger')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('customer_id', '=', id)
+        .where(this.tenantPredicate(actor))
+        .executeTakeFirstOrThrow(),
     ]);
 
     if (Number(salesCount.count || 0) || Number(paymentCount.count || 0) || Number(ledgerCount.count || 0)) {
       throw new AppError('Customer has financial history and cannot be deleted', 'CUSTOMER_HAS_HISTORY', 400);
     }
 
-    await this.db.deleteFrom('product_customer_prices').where('customer_id', '=', id).where(this.tenantPredicate(actor)).execute();
-    await this.db.updateTable('customers').set({ is_active: false, updated_at: sql`NOW()` }).where('id', '=', id).where(this.tenantPredicate(actor)).execute();
+    await this.db
+      .deleteFrom('product_customer_prices')
+      .where('customer_id', '=', id)
+      .where(this.tenantPredicate(actor))
+      .execute();
+    await this.db
+      .updateTable('customers')
+      .set({ is_active: false, updated_at: sql`NOW()` })
+      .where('id', '=', id)
+      .where(this.tenantPredicate(actor))
+      .execute();
     await this.audit.log('حذف عميل', `تم تعطيل العميل #${id} بواسطة ${actor.username}`, actor);
 
     const listing = await this.listCustomers({}, actor);

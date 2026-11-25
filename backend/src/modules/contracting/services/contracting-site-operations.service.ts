@@ -193,8 +193,18 @@ export class ContractingSiteOperationsService {
     // them as local-midnight Dates, so their day key comes from local
     // calendar parts, never a UTC slice (a UTC slice renders the
     // previous day on any host east of UTC).
-    const startDate = r.start_date instanceof Date ? formatLocalCalendarDay(r.start_date) : (r.start_date ? String(r.start_date).slice(0, 10) : '');
-    const endDate = r.end_date instanceof Date ? formatLocalCalendarDay(r.end_date) : (r.end_date ? String(r.end_date).slice(0, 10) : '');
+    const startDate =
+      r.start_date instanceof Date
+        ? formatLocalCalendarDay(r.start_date)
+        : r.start_date
+          ? String(r.start_date).slice(0, 10)
+          : '';
+    const endDate =
+      r.end_date instanceof Date
+        ? formatLocalCalendarDay(r.end_date)
+        : r.end_date
+          ? String(r.end_date).slice(0, 10)
+          : '';
     return {
       id: String(r.id),
       projectId: String(r.project_id),
@@ -293,7 +303,11 @@ export class ContractingSiteOperationsService {
       taskCode = candidate;
     }
 
-    const startStr = (dto.startDate || (dto as any).start_date || (await resolveBusinessDateKey(this.db, tenantId, new Date()))).trim();
+    const startStr = (
+      dto.startDate ||
+      (dto as any).start_date ||
+      (await resolveBusinessDateKey(this.db, tenantId, new Date()))
+    ).trim();
     let endStr = (dto.endDate || (dto as any).end_date || '').trim();
 
     let durationDays = Number(dto.durationDays || (dto as any).duration_days || 0);
@@ -390,7 +404,8 @@ export class ContractingSiteOperationsService {
     if (assignedTeam !== undefined) updatePayload.assigned_team = assignedTeam || null;
 
     if (dto.plannedManpowerCount !== undefined) updatePayload.planned_manpower_count = Number(dto.plannedManpowerCount);
-    if (dto.plannedEquipmentCount !== undefined) updatePayload.planned_equipment_count = Number(dto.plannedEquipmentCount);
+    if (dto.plannedEquipmentCount !== undefined)
+      updatePayload.planned_equipment_count = Number(dto.plannedEquipmentCount);
     if (dto.resourceTrade !== undefined) updatePayload.resource_trade = dto.resourceTrade || null;
 
     if (dto.notes !== undefined) updatePayload.notes = dto.notes || null;
@@ -434,7 +449,9 @@ export class ContractingSiteOperationsService {
       .orderBy('start_date', 'asc')
       .execute();
 
-    const activeTasks = tasks.filter((t) => Number(t.planned_manpower_count || 0) > 0 || Number(t.planned_equipment_count || 0) > 0);
+    const activeTasks = tasks.filter(
+      (t) => Number(t.planned_manpower_count || 0) > 0 || Number(t.planned_equipment_count || 0) > 0,
+    );
 
     if (activeTasks.length === 0) {
       return { projectId, weeks: [], tradeBreakdown: [], peakManpowerWeek: null, peakEquipmentWeek: null };
@@ -449,7 +466,13 @@ export class ContractingSiteOperationsService {
     const weekStart = new Date(scheduleStart);
     weekStart.setUTCHours(0, 0, 0, 0);
 
-    const weeks: { weekStart: string; weekEnd: string; totalManpower: number; totalEquipment: number; taskCount: number }[] = [];
+    const weeks: {
+      weekStart: string;
+      weekEnd: string;
+      totalManpower: number;
+      totalEquipment: number;
+      taskCount: number;
+    }[] = [];
     const cursor = new Date(weekStart);
     const maxWeeks = 260; // 5-year safety cap so a bad date range can't loop forever
     let guard = 0;
@@ -493,8 +516,14 @@ export class ContractingSiteOperationsService {
     }
     const tradeBreakdown = Array.from(tradeMap.entries()).map(([trade, v]) => ({ trade, ...v }));
 
-    const peakManpowerWeek = weeks.reduce((peak, w) => (!peak || w.totalManpower > peak.totalManpower ? w : peak), null as (typeof weeks)[number] | null);
-    const peakEquipmentWeek = weeks.reduce((peak, w) => (!peak || w.totalEquipment > peak.totalEquipment ? w : peak), null as (typeof weeks)[number] | null);
+    const peakManpowerWeek = weeks.reduce(
+      (peak, w) => (!peak || w.totalManpower > peak.totalManpower ? w : peak),
+      null as (typeof weeks)[number] | null,
+    );
+    const peakEquipmentWeek = weeks.reduce(
+      (peak, w) => (!peak || w.totalEquipment > peak.totalEquipment ? w : peak),
+      null as (typeof weeks)[number] | null,
+    );
 
     return { projectId, weeks, tradeBreakdown, peakManpowerWeek, peakEquipmentWeek };
   }

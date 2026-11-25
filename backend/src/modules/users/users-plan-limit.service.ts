@@ -42,7 +42,11 @@ export class UsersPlanLimitService {
     this.db = deps.db;
   }
 
-  async getPlanLimitForTenant(tenantId: string, actor: AuthContext, activeUsersCount: number): Promise<{
+  async getPlanLimitForTenant(
+    tenantId: string,
+    actor: AuthContext,
+    activeUsersCount: number,
+  ): Promise<{
     maxUsers: number | null;
     isUnlimited: boolean;
     isLimitReached: boolean;
@@ -94,7 +98,8 @@ export class UsersPlanLimitService {
     }
 
     // 2. قراءة الباقة من saas_plans بالربط: tenants.plan_id ⇄ saas_plans.code أو feature_plan_id
-    let planFromDb: { id: number; max_users: number | null; code: string; name: string; feature_plan_id: string | null } | undefined;
+    let planFromDb:
+      { id: number; max_users: number | null; code: string; name: string; feature_plan_id: string | null } | undefined;
     if (tenant?.plan_id) {
       const cleanPlan = tenant.plan_id.trim();
       const codeUpper = cleanPlan.replace(/^plan_/, '').toUpperCase();
@@ -151,7 +156,8 @@ export class UsersPlanLimitService {
 
     const isUnlimited = limit === null;
     const isLimitReached = !isUnlimited && activeUsersCount >= limit;
-    const planName = planFromDb?.name || activeSub?.plan_name || (tenant?.status === 'trial' ? 'فترة تجريبية' : 'الافتراضية');
+    const planName =
+      planFromDb?.name || activeSub?.plan_name || (tenant?.status === 'trial' ? 'فترة تجريبية' : 'الافتراضية');
     const planCode = planFromDb?.code || activeSub?.plan_code || null;
 
     return {

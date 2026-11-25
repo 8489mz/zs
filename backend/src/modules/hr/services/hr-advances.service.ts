@@ -11,10 +11,22 @@ import { TransactionHelper } from '../../../database/helpers/transaction.helper'
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { roundMoney } from '../../accounting/engines/money-minor-units.engine';
-import { calculateEmployeeWithdrawalBalance, resolveDirectAdvanceCashCap, type EmployeeWithdrawalBalanceResult } from '../engines/employee-withdrawal-balance.engine';
+import {
+  calculateEmployeeWithdrawalBalance,
+  resolveDirectAdvanceCashCap,
+  type EmployeeWithdrawalBalanceResult,
+} from '../engines/employee-withdrawal-balance.engine';
 import { verifyPassword } from '../../../core/auth/utils/password-hasher';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
-import { clean, toId, normalizeDateOnly, tenantBookDigits, normalizePayrollMonth, monthRange, tenantCurrencyCode } from '../hr-helpers';
+import {
+  clean,
+  toId,
+  normalizeDateOnly,
+  tenantBookDigits,
+  normalizePayrollMonth,
+  monthRange,
+  tenantCurrencyCode,
+} from '../hr-helpers';
 
 /**
  * HrAdvancesService — slice H5 of the hr split.
@@ -116,29 +128,25 @@ export class HrAdvancesService {
     if (requestedMonth && !normalizePayrollMonth(requestedMonth)) {
       throw new AppError('الشهر المطلوب غير صحيح', 'HR_WITHDRAWALS_MONTH_INVALID', 400);
     }
-    if (period === 'custom' && (
-      (query.from && !customFrom) || (query.to && !customTo)
-      || (customFrom && customTo && customFrom > customTo)
-    )) {
+    if (
+      period === 'custom' &&
+      ((query.from && !customFrom) || (query.to && !customTo) || (customFrom && customTo && customFrom > customTo))
+    ) {
       throw new AppError('نطاق تواريخ المسحوبات غير صحيح', 'HR_WITHDRAWALS_RANGE_INVALID', 400);
     }
     const monthValue = normalizePayrollMonth(requestedMonth) || currentMonth;
     const { from: monthFrom, to: monthTo } = monthRange(monthValue);
     const hireDate = clean(employee.hire_date_text) || '1900-01-01';
-    const fromDate = period === 'custom'
-      ? customFrom || monthFrom
-      : period === 'since_hire'
-        ? hireDate
-        : period === 'all'
-          ? ''
-          : monthFrom;
-    const toDate = period === 'custom'
-      ? customTo || monthTo
-      : period === 'since_hire'
-        ? today
-        : period === 'all'
-          ? ''
-          : monthTo;
+    const fromDate =
+      period === 'custom'
+        ? customFrom || monthFrom
+        : period === 'since_hire'
+          ? hireDate
+          : period === 'all'
+            ? ''
+            : monthFrom;
+    const toDate =
+      period === 'custom' ? customTo || monthTo : period === 'since_hire' ? today : period === 'all' ? '' : monthTo;
 
     // INV-HR-WITHDRAWALS-SQL-PAGINATION: the two unbounded queries are
     // merged in SQL (UNION ALL). The movement-date rule, the loan status
@@ -208,7 +216,13 @@ export class HrAdvancesService {
         AND le.entry_type = 'loan_repayment'
     `;
     const periodFilter = sql<boolean>`movement_at <> '' AND (${fromDate} = '' OR substr(movement_at, 1, 10) >= ${fromDate}) AND (${toDate} = '' OR substr(movement_at, 1, 10) <= ${toDate})`;
-    const totals = await sql<{ total_items: string; total_withdrawals: string; total_repayments: string; total_manual_cash: string; total_salary_deduction: string }>`
+    const totals = await sql<{
+      total_items: string;
+      total_withdrawals: string;
+      total_repayments: string;
+      total_manual_cash: string;
+      total_salary_deduction: string;
+    }>`
       SELECT COUNT(*)::text AS total_items,
         COALESCE(SUM(amount) FILTER (WHERE row_type <> 'repayment'), 0)::text AS total_withdrawals,
         COALESCE(SUM(amount) FILTER (WHERE row_type = 'repayment'), 0)::text AS total_repayments,
@@ -244,9 +258,15 @@ export class HrAdvancesService {
       const status = clean(row.status);
       const issueDate = clean(row.issue_date_text) || (row.issue_date ? String(row.issue_date).slice(0, 10) : '');
       const issueDateTime = issueDate ? `${issueDate} 00:00` : '';
-      const createdAt = clean(row.created_at_text) || (row.created_at ? String(row.created_at).replace('T', ' ').slice(0, 16) : '');
-      const disbursedAt = clean(row.disbursed_at_text) || (row.disbursed_at ? String(row.disbursed_at).replace('T', ' ').slice(0, 16) : '');
-      const paidAt = clean(row.paid_at_text) || (row.paid_at ? String(row.paid_at).replace('T', ' ').slice(0, 16) : '') || (row.latest_paid_at ? String(row.latest_paid_at).replace('T', ' ').slice(0, 16) : '');
+      const createdAt =
+        clean(row.created_at_text) || (row.created_at ? String(row.created_at).replace('T', ' ').slice(0, 16) : '');
+      const disbursedAt =
+        clean(row.disbursed_at_text) ||
+        (row.disbursed_at ? String(row.disbursed_at).replace('T', ' ').slice(0, 16) : '');
+      const paidAt =
+        clean(row.paid_at_text) ||
+        (row.paid_at ? String(row.paid_at).replace('T', ' ').slice(0, 16) : '') ||
+        (row.latest_paid_at ? String(row.latest_paid_at).replace('T', ' ').slice(0, 16) : '');
 
       if (['paid', 'disbursed', 'partially_repaid', 'repaid'].includes(status)) {
         // Repayment dates must NOT replace the original disbursement date.
@@ -279,7 +299,8 @@ export class HrAdvancesService {
     };
 
     const toRepaymentRow = (row: Record<string, unknown>) => {
-      const movementAt = clean(row.movement_at_text) || (row.created_at ? String(row.created_at).replace('T', ' ').slice(0, 16) : '');
+      const movementAt =
+        clean(row.movement_at_text) || (row.created_at ? String(row.created_at).replace('T', ' ').slice(0, 16) : '');
       const repaymentMethod = clean(row.repayment_method) || 'manual_cash';
       return {
         id: `ledger-${String(row.id)}`,
@@ -447,23 +468,27 @@ export class HrAdvancesService {
         hireDate: emp.hire_date || undefined,
         status: emp.status || 'active',
       },
-      contract: contract ? {
-        baseSalary: Number(contract.base_salary || 0),
-        currency: contract.currency,
-      } : undefined,
-      activePayrollItem: activeItem ? {
-        id: Number(activeItem.id),
-        runId: Number(activeItem.run_id),
-        periodMonth: activeItem.period_month,
-        runStatus: activeItem.run_status,
-        itemStatus: activeItem.status,
-        baseSalary: Number(activeItem.base_salary || 0),
-        allowanceAmount: Number(activeItem.allowance_amount || 0),
-        grossPay: Number(activeItem.gross_pay || 0),
-        deductionAmount: Number(activeItem.deduction_amount || 0),
-        loanDeductionAmount: Number(activeItem.loan_deduction_amount || 0),
-        netPay: Number(activeItem.net_pay || 0),
-      } : undefined,
+      contract: contract
+        ? {
+            baseSalary: Number(contract.base_salary || 0),
+            currency: contract.currency,
+          }
+        : undefined,
+      activePayrollItem: activeItem
+        ? {
+            id: Number(activeItem.id),
+            runId: Number(activeItem.run_id),
+            periodMonth: activeItem.period_month,
+            runStatus: activeItem.run_status,
+            itemStatus: activeItem.status,
+            baseSalary: Number(activeItem.base_salary || 0),
+            allowanceAmount: Number(activeItem.allowance_amount || 0),
+            grossPay: Number(activeItem.gross_pay || 0),
+            deductionAmount: Number(activeItem.deduction_amount || 0),
+            loanDeductionAmount: Number(activeItem.loan_deduction_amount || 0),
+            netPay: Number(activeItem.net_pay || 0),
+          }
+        : undefined,
       currentCycle: {
         cycleStart,
         cycleEnd,
@@ -490,7 +515,12 @@ export class HrAdvancesService {
     // tenant and must not be rejected here.
     const bookDigits = await tenantBookDigits(this.db, tenantId);
     if (!employeeId || employeeId <= 0) throw new AppError('Employee ID is required', 'HR_EMPLOYEE_ID_REQUIRED', 400);
-    if (!Number.isFinite(amount) || amount <= 0 || amount > 100000000 || Math.abs(roundMoney(amount, bookDigits) - amount) > 0.000001) {
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      amount > 100000000 ||
+      Math.abs(roundMoney(amount, bookDigits) - amount) > 0.000001
+    ) {
       throw new AppError('مبلغ السلفة يجب أن يكون موجبًا وبدقة عملة المنشأة', 'HR_AMOUNT_INVALID', 400);
     }
 
@@ -512,8 +542,8 @@ export class HrAdvancesService {
     // Tab 1 (Advance): allowed only if amount <= maxDirectAdvance (50% max of accrued net, capped at 2,000 EGP)
     // Tab 2 (Wage Payout): allowed only if period payout is due and amount <= netAvailableBalance
     const isDirectAllowed = isWagePayout
-      ? (isPayoutDue && withdrawalBalance.netAvailableBalance > 0 && amount <= withdrawalBalance.netAvailableBalance)
-      : (withdrawalBalance.maxDirectAdvance > 0 && amount <= withdrawalBalance.maxDirectAdvance);
+      ? isPayoutDue && withdrawalBalance.netAvailableBalance > 0 && amount <= withdrawalBalance.netAvailableBalance
+      : withdrawalBalance.maxDirectAdvance > 0 && amount <= withdrawalBalance.maxDirectAdvance;
     const isDirectDisbursement = isDirectAllowed;
 
     let managerApprovalTag = '';
@@ -565,14 +595,24 @@ export class HrAdvancesService {
         if (pin && enteredPassword === pin) {
           authorizedByName = 'رمز المدير (PIN)';
         } else {
-          const adminUsers = await sql<{ id: number; username: string; display_name: string; password_hash: string; password_salt: string }>`
+          const adminUsers = await sql<{
+            id: number;
+            username: string;
+            display_name: string;
+            password_hash: string;
+            password_salt: string;
+          }>`
             SELECT id, username, display_name, password_hash, password_salt
             FROM users
             WHERE tenant_id = ${tenantId} AND is_active = true AND role IN ('admin', 'super_admin')
           `.execute(this.db);
 
           for (const admin of adminUsers.rows) {
-            const check = await verifyPassword(enteredPassword, String(admin.password_hash || ''), String(admin.password_salt || ''));
+            const check = await verifyPassword(
+              enteredPassword,
+              String(admin.password_hash || ''),
+              String(admin.password_salt || ''),
+            );
             if (check.valid) {
               authorizedByName = clean(admin.display_name) || clean(admin.username) || 'المدير';
               break;
@@ -598,18 +638,20 @@ export class HrAdvancesService {
     let createdLoanId = 0;
     let paidRunItemId = 0;
     let wageJournalEntryId: number | null = null;
-    
+
     await this.tx.runInTransaction(this.db, async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + tenantId}))`.execute(trx);
       // 1. Validate employee is active in this tenant
-      const employee = await trx.selectFrom('hr_employees')
+      const employee = await trx
+        .selectFrom('hr_employees')
         .select(['id', 'display_name', 'status', 'compensation_type', 'hourly_rate', 'expected_daily_hours'])
         .where('id', '=', employeeId)
         .where('tenant_id', '=', tenantId)
         .forUpdate()
         .executeTakeFirst();
       if (!employee) throw new AppError('الموظف غير موجود أو لا يتبع المنشأة الحالية', 'HR_EMPLOYEE_NOT_FOUND', 404);
-      if (employee.status !== 'active') throw new AppError('لا يمكن صرف سلفة لموظف غير نشط', 'HR_EMPLOYEE_INACTIVE', 400);
+      if (employee.status !== 'active')
+        throw new AppError('لا يمكن صرف سلفة لموظف غير نشط', 'HR_EMPLOYEE_INACTIVE', 400);
 
       // Wage payout only (INV-WAGE-PAYOUT-PAYROLL-JOURNAL): resolve
       // the latest approved run item BEFORE any cash moves. A wage
@@ -638,7 +680,11 @@ export class HrAdvancesService {
           throw new AppError('صافي أجر الموظف صفر أو سالب', 'HR_PAYROLL_AMOUNT_ZERO', 400);
         }
         if (Math.abs(roundMoney(amount, bookDigits) - itemNetPay) > 0.000001) {
-          throw new AppError('مبلغ صرف الأجر يجب أن يساوي صافي الأجر المعتمد بالكامل', 'HR_WAGE_PAYOUT_AMOUNT_MISMATCH', 400);
+          throw new AppError(
+            'مبلغ صرف الأجر يجب أن يساوي صافي الأجر المعتمد بالكامل',
+            'HR_WAGE_PAYOUT_AMOUNT_MISMATCH',
+            400,
+          );
         }
       }
 
@@ -657,13 +703,14 @@ export class HrAdvancesService {
         const estMonthly = Number(employee.hourly_rate || 0) * Number(employee.expected_daily_hours || 8) * 26;
         baseSalary = Math.max(5000, estMonthly);
       } else {
-        const contract = await trx.selectFrom('hr_employment_contracts')
+        const contract = await trx
+          .selectFrom('hr_employment_contracts')
           .select('base_salary')
           .where('employee_id', '=', employeeId)
           .where('tenant_id', '=', tenantId)
           .where('status', '=', 'active')
           .where('start_date', '<=', localLoanDate)
-          .where(eb => eb.or([eb('end_date', 'is', null), eb('end_date', '>=', localLoanDate)]))
+          .where((eb) => eb.or([eb('end_date', 'is', null), eb('end_date', '>=', localLoanDate)]))
           .orderBy('start_date', 'desc')
           .executeTakeFirst();
         baseSalary = Number(contract?.base_salary || 0);
@@ -674,7 +721,7 @@ export class HrAdvancesService {
         throw new AppError(
           `قيمة السلفة السريعة تتجاوز سقف الراتب الشهري المسموح (${quickCap} - القائم: ${activeDebt})`,
           'HR_QUICK_ADVANCE_EXCEEDS_CAP',
-          400
+          400,
         );
       }
 
@@ -697,11 +744,19 @@ export class HrAdvancesService {
         loanId = Number(loanRes.rows[0]?.id || 0);
         createdLoanId = loanId;
 
-        const canonicalNo = formatDailyDocumentNumber('LOAN', loanId, new Date(), 4, await getTenantTimezone(trx, tenantId));
-        await sql`UPDATE hr_employee_loans SET loan_no = ${canonicalNo} WHERE id = ${loanId} AND tenant_id = ${tenantId}`.execute(trx);
-      
+        const canonicalNo = formatDailyDocumentNumber(
+          'LOAN',
+          loanId,
+          new Date(),
+          4,
+          await getTenantTimezone(trx, tenantId),
+        );
+        await sql`UPDATE hr_employee_loans SET loan_no = ${canonicalNo} WHERE id = ${loanId} AND tenant_id = ${tenantId}`.execute(
+          trx,
+        );
+
         const dueStr = localLoanDate;
-      
+
         await sql`
           INSERT INTO hr_employee_loan_installments (
             tenant_id, account_id, loan_id, installment_no, due_date, 
@@ -736,13 +791,20 @@ export class HrAdvancesService {
       let payoutLocationId: number | null = null;
       if (payload.shiftId) {
         const shiftId = Number(payload.shiftId);
-        const eligibleShift = await sql<{ id: number; branch_id: number | null; location_id: number | null; opened_by: number; expected_cash: string | number }>`
+        const eligibleShift = await sql<{
+          id: number;
+          branch_id: number | null;
+          location_id: number | null;
+          opened_by: number;
+          expected_cash: string | number;
+        }>`
           SELECT id, branch_id, location_id, opened_by, COALESCE(expected_cash, 0) AS expected_cash FROM cashier_shifts
           WHERE id = ${shiftId} AND tenant_id = ${tenantId} AND status = 'open'
             AND (opened_by = ${auth.userId} OR ${['admin', 'super_admin', 'owner', 'manager'].includes(auth.role)} OR ${Boolean(auth.permissions?.includes('hr') || auth.permissions?.includes('hrLoans') || auth.permissions?.includes('hrPayrollManage'))})
           FOR UPDATE
         `.execute(trx);
-        if (!eligibleShift.rows.length) throw new AppError('وردية الكاشير غير مفتوحة أو لا تخص المستخدم الحالي', 'HR_CASHIER_SHIFT_INVALID', 400);
+        if (!eligibleShift.rows.length)
+          throw new AppError('وردية الكاشير غير مفتوحة أو لا تخص المستخدم الحالي', 'HR_CASHIER_SHIFT_INVALID', 400);
         const shift = eligibleShift.rows[0];
         payoutShiftId = shiftId;
         payoutBranchId = shift.branch_id;
@@ -755,7 +817,7 @@ export class HrAdvancesService {
           throw new AppError(
             `النقدية المتاحة في درج الوردية (${drawerCash.toLocaleString('en-US')} ج.م) غير كافية لصرف هذا المبلغ (${amount.toLocaleString('en-US')} ج.م)؛ يلزم إيداع نقدية أو اعتماد المدير للصرف الاستثنائي`,
             'HR_DRAWER_INSUFFICIENT_CASH',
-            400
+            400,
           );
         }
 
@@ -864,6 +926,12 @@ export class HrAdvancesService {
         : `Cash advance #${createdLoanId} of ${amount} for employee #${employeeId} by ${auth.username}`,
       auth,
     );
-    return { success: true, loanId: createdLoanId || null, isDirectDisbursement, payrollRunItemId: paidRunItemId || null, journalEntryId: wageJournalEntryId };
+    return {
+      success: true,
+      loanId: createdLoanId || null,
+      isDirectDisbursement,
+      payrollRunItemId: paidRunItemId || null,
+      journalEntryId: wageJournalEntryId,
+    };
   }
 }

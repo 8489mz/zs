@@ -1,10 +1,5 @@
 import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
-import {
-  NotFoundException,
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { NotFoundException, BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { sql, type Kysely } from '../../database/kysely';
 import { type Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
@@ -59,7 +54,11 @@ export interface MaritimeFreightJobsMilestonesDeps {
   // an explicit return type the slice must match, except
   // postStoredMoneyAtClose whose object return flows through unchanged).
   assertJobCanClose: (tenantId: string, jobId: string) => Promise<any>;
-  assertRoadProofOfDelivery: (tenantId: string, jobId: string, bookingNumber: string | null | undefined) => Promise<any>;
+  assertRoadProofOfDelivery: (
+    tenantId: string,
+    jobId: string,
+    bookingNumber: string | null | undefined,
+  ) => Promise<any>;
   getJobById: (auth: AuthContext, id: string) => Promise<any>;
   postStoredMoneyAtClose: (queryable: any, tenantId: string, jobId: string | number, auth: AuthContext) => Promise<any>;
 }
@@ -69,9 +68,18 @@ export class MaritimeFreightJobsMilestonesService {
   private readonly db: Kysely<Database>;
   private readonly whatsAppGatewayService: WhatsAppGatewayService;
   private readonly assertJobCanClose: (tenantId: string, jobId: string) => Promise<any>;
-  private readonly assertRoadProofOfDelivery: (tenantId: string, jobId: string, bookingNumber: string | null | undefined) => Promise<any>;
+  private readonly assertRoadProofOfDelivery: (
+    tenantId: string,
+    jobId: string,
+    bookingNumber: string | null | undefined,
+  ) => Promise<any>;
   private readonly getJobById: (auth: AuthContext, id: string) => Promise<any>;
-  private readonly postStoredMoneyAtClose: (queryable: any, tenantId: string, jobId: string | number, auth: AuthContext) => Promise<any>;
+  private readonly postStoredMoneyAtClose: (
+    queryable: any,
+    tenantId: string,
+    jobId: string | number,
+    auth: AuthContext,
+  ) => Promise<any>;
   private readonly logger = new Logger(MaritimeFreightJobsMilestonesService.name);
 
   constructor(deps: MaritimeFreightJobsMilestonesDeps) {
@@ -83,10 +91,20 @@ export class MaritimeFreightJobsMilestonesService {
     this.postStoredMoneyAtClose = deps.postStoredMoneyAtClose;
   }
 
-  async addJobMilestone(auth: AuthContext, jobId: string, milestoneKey: ShipmentMilestoneKey, notes?: string, location?: string) {
+  async addJobMilestone(
+    auth: AuthContext,
+    jobId: string,
+    milestoneKey: ShipmentMilestoneKey,
+    notes?: string,
+    location?: string,
+  ) {
     const { tenantId } = requireTenantScope(auth);
-    const job = await this.db.selectFrom('maritime_jobs').select(['transport_mode', 'milestone_status'])
-      .where('tenant_id', '=', tenantId).where('id', '=', jobId as any).executeTakeFirst();
+    const job = await this.db
+      .selectFrom('maritime_jobs')
+      .select(['transport_mode', 'milestone_status'])
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', jobId as any)
+      .executeTakeFirst();
     if (!job) throw new NotFoundException('Shipment Job not found');
     if (job.transport_mode === 'air') {
       const currentIndex = IATA_CARGO_IQ_MILESTONES.findIndex((m) => m.key === job.milestone_status);
@@ -97,21 +115,33 @@ export class MaritimeFreightJobsMilestonesService {
     }
     if (milestoneKey === 'RETN') await this.assertJobCanClose(tenantId, jobId);
     if (milestoneKey === 'RETN') {
-      const containers = await this.db.selectFrom('maritime_containers').select(['discharged_at'])
-        .where('tenant_id', '=', tenantId).where('job_id', '=', jobId as any).execute();
-      if (containers.some((container) => !container.discharged_at ||
-        new Date(container.discharged_at).getTime() > Date.now())) {
+      const containers = await this.db
+        .selectFrom('maritime_containers')
+        .select(['discharged_at'])
+        .where('tenant_id', '=', tenantId)
+        .where('job_id', '=', jobId as any)
+        .execute();
+      if (
+        containers.some(
+          (container) => !container.discharged_at || new Date(container.discharged_at).getTime() > Date.now(),
+        )
+      ) {
         throw new BadRequestException('لا يمكن إرجاع الحاويات قبل تسجيل تفريغها');
       }
     }
     if (job.transport_mode === 'road' && milestoneKey === 'TRK_POD') {
-      const roadJob = await this.db.selectFrom('maritime_jobs').select('booking_number')
-        .where('tenant_id', '=', tenantId).where('id', '=', jobId as any).executeTakeFirst();
+      const roadJob = await this.db
+        .selectFrom('maritime_jobs')
+        .select('booking_number')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', jobId as any)
+        .executeTakeFirst();
       await this.assertRoadProofOfDelivery(tenantId, jobId, roadJob?.booking_number);
     }
-    const milestoneDef = DCSA_STANDARD_MILESTONES.find((m) => m.key === milestoneKey)
-      || IATA_CARGO_IQ_MILESTONES.find((m) => m.key === milestoneKey)
-      || ROAD_FREIGHT_MILESTONES.find((m) => m.key === milestoneKey);
+    const milestoneDef =
+      DCSA_STANDARD_MILESTONES.find((m) => m.key === milestoneKey) ||
+      IATA_CARGO_IQ_MILESTONES.find((m) => m.key === milestoneKey) ||
+      ROAD_FREIGHT_MILESTONES.find((m) => m.key === milestoneKey);
     const milestoneTitle = milestoneDef ? `${milestoneDef.title_ar} (${milestoneDef.title_en})` : milestoneKey;
 
     await this.db
@@ -176,20 +206,33 @@ export class MaritimeFreightJobsMilestonesService {
       updatePayload.delivered_to_client_at = sql`NOW()`;
     } else if (milestoneKey === 'RETN') {
       // 4. Empty Container Returned: close container & job
-      const containers = await this.db.selectFrom('maritime_containers').selectAll()
-        .where('tenant_id', '=', tenantId).where('job_id', '=', jobId as any).execute();
+      const containers = await this.db
+        .selectFrom('maritime_containers')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('job_id', '=', jobId as any)
+        .execute();
       updatePayload.status = 'completed';
       for (const container of containers.filter((row) => !row.empty_returned_at)) {
         const deadline = container.return_deadline ? Date.parse(container.return_deadline) : Date.now();
         const overdueDays = Math.max(0, Math.floor((Date.now() - deadline) / 86_400_000));
-        await this.db.updateTable('maritime_containers').set({
-          empty_returned_at: sql`NOW()`,
-          deposit_status: ['refunded_to_treasury', 'forfeited'].includes(container.deposit_status)
-            ? container.deposit_status : Number(container.deposit_amount || 0) > 0 ? 'pending_return_proof' : 'not_required',
-          is_overdue: false, overdue_days: overdueDays,
-          demurrage_amount: overdueDays * Number(container.demurrage_rate_per_day || 0),
-          updated_at: sql`NOW()`,
-        }).where('tenant_id', '=', tenantId).where('id', '=', container.id as any).execute();
+        await this.db
+          .updateTable('maritime_containers')
+          .set({
+            empty_returned_at: sql`NOW()`,
+            deposit_status: ['refunded_to_treasury', 'forfeited'].includes(container.deposit_status)
+              ? container.deposit_status
+              : Number(container.deposit_amount || 0) > 0
+                ? 'pending_return_proof'
+                : 'not_required',
+            is_overdue: false,
+            overdue_days: overdueDays,
+            demurrage_amount: overdueDays * Number(container.demurrage_rate_per_day || 0),
+            updated_at: sql`NOW()`,
+          })
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', container.id as any)
+          .execute();
       }
     }
 
@@ -290,19 +333,19 @@ export class MaritimeFreightJobsMilestonesService {
     const milestoneTitle = isAir
       ? 'تم اعتماد وإصدار إذن التسليم الجوي وبوليصة الشحن (Air Cargo Delivery Order) للعميل'
       : isRoad
-      ? 'توقيع بوليصة الشحن البري وتأكيد استلام وتسليم البضاعة (Signed Waybill / POD)'
-      : 'تم اعتماد وإصدار إذن التسليم الملاحي الرسمي (Delivery Order D/O) للعميل';
+        ? 'توقيع بوليصة الشحن البري وتأكيد استلام وتسليم البضاعة (Signed Waybill / POD)'
+        : 'تم اعتماد وإصدار إذن التسليم الملاحي الرسمي (Delivery Order D/O) للعميل';
     const notes = documentsWarning ? `${milestoneTitle}\nتنبيه مستندات: ${documentsWarning}` : milestoneTitle;
-    const released = await this.addJobMilestone(
-      auth,
-      jobId,
-      milestoneKey,
-      notes,
-    );
+    const released = await this.addJobMilestone(auth, jobId, milestoneKey, notes);
     return { ...released, paymentVerified: true, documentsWarning };
   }
 
-  async sendMilestoneWhatsApp(auth: AuthContext, jobId: string, milestoneKey: ShipmentMilestoneKey, targetPhone?: string) {
+  async sendMilestoneWhatsApp(
+    auth: AuthContext,
+    jobId: string,
+    milestoneKey: ShipmentMilestoneKey,
+    targetPhone?: string,
+  ) {
     const { tenantId } = requireTenantScope(auth);
     const msgData = await this.getMilestoneWhatsAppMessage(auth, jobId, milestoneKey);
     let phone = targetPhone || msgData.customerPhone;
@@ -334,9 +377,10 @@ export class MaritimeFreightJobsMilestonesService {
       ? `${process.env.APP_PUBLIC_URL || 'https://app.zsystemai.com'}/public/track/${job.tracking_token}`
       : '';
 
-    const milestoneDef = DCSA_STANDARD_MILESTONES.find((m) => m.key === milestoneKey)
-      || IATA_CARGO_IQ_MILESTONES.find((m) => m.key === milestoneKey)
-      || ROAD_FREIGHT_MILESTONES.find((m) => m.key === milestoneKey);
+    const milestoneDef =
+      DCSA_STANDARD_MILESTONES.find((m) => m.key === milestoneKey) ||
+      IATA_CARGO_IQ_MILESTONES.find((m) => m.key === milestoneKey) ||
+      ROAD_FREIGHT_MILESTONES.find((m) => m.key === milestoneKey);
     const title = milestoneDef ? milestoneDef.title_ar : milestoneKey;
 
     let actionContext = '';
@@ -344,9 +388,10 @@ export class MaritimeFreightJobsMilestonesService {
       case 'BOOK':
       case 'BKD':
       case 'TRK_ASSIGN':
-        actionContext = job.transport_mode === 'road'
-          ? `تم تأكيد حجز النقل البري وتعيين الشاحنة والسائق بنجاح برقم: ${job.booking_number || job.job_number}`
-          : `تم تأكيد حجز الشحنة بنجاح برقم الحجز: ${job.booking_number || job.mawb_number || job.job_number}`;
+        actionContext =
+          job.transport_mode === 'road'
+            ? `تم تأكيد حجز النقل البري وتعيين الشاحنة والسائق بنجاح برقم: ${job.booking_number || job.job_number}`
+            : `تم تأكيد حجز الشحنة بنجاح برقم الحجز: ${job.booking_number || job.mawb_number || job.job_number}`;
         break;
       case 'GTI':
         actionContext = `وصلت الحاوية ودخلت ساحة ميناء الشحن (${job.pol_name}) بانتظار التحميل على السفينة.`;
@@ -369,20 +414,22 @@ export class MaritimeFreightJobsMilestonesService {
       case 'DEPT':
       case 'DEP':
       case 'TRK_DISPATCH':
-        actionContext = job.transport_mode === 'air'
-          ? `أقلعت رحلة الشحن الجوي (${job.flight_number || 'الرحلة المجدولة'}) من مطار ${job.pol_name} متجهة إلى ${job.pod_name}. موعد الوصول المتوقع (ETA): ${job.eta || 'قيد المتابعة'}.`
-          : job.transport_mode === 'road'
-          ? `انطلقت الشاحنة رسمياً على مسار الرحلة متجهة إلى ${job.pod_name}. موعد الوصول المتوقع (ETA): ${job.eta || 'قيد المتابعة'}.`
-          : `أبحرت السفينة رسمياً من ${job.pol_name} متجهة إلى ${job.pod_name}. موعد الوصول المتوقع (ETA): ${job.eta || 'قيد المتابعة'}.`;
+        actionContext =
+          job.transport_mode === 'air'
+            ? `أقلعت رحلة الشحن الجوي (${job.flight_number || 'الرحلة المجدولة'}) من مطار ${job.pol_name} متجهة إلى ${job.pod_name}. موعد الوصول المتوقع (ETA): ${job.eta || 'قيد المتابعة'}.`
+            : job.transport_mode === 'road'
+              ? `انطلقت الشاحنة رسمياً على مسار الرحلة متجهة إلى ${job.pod_name}. موعد الوصول المتوقع (ETA): ${job.eta || 'قيد المتابعة'}.`
+              : `أبحرت السفينة رسمياً من ${job.pol_name} متجهة إلى ${job.pod_name}. موعد الوصول المتوقع (ETA): ${job.eta || 'قيد المتابعة'}.`;
         break;
       case 'ARRI':
       case 'ARR':
       case 'TRK_ARRIVED':
-        actionContext = job.transport_mode === 'air'
-          ? `هبطت طائرة الشحن الجوي بحمد الله في مطار المقصد (${job.pod_name}) وجاري تفريغ الشحنة إلى قرية البضائع.`
-          : job.transport_mode === 'road'
-          ? `وصلت الشاحنة بحمد الله إلى موقع المقصد (${job.pod_name}) بانتظار بدء إجراءات التفريغ.`
-          : `وصلت السفينة بحمد الله إلى ميناء المقصد (${job.pod_name}) وجاري ربط السفينة وبدء عمليات التفريغ.`;
+        actionContext =
+          job.transport_mode === 'air'
+            ? `هبطت طائرة الشحن الجوي بحمد الله في مطار المقصد (${job.pod_name}) وجاري تفريغ الشحنة إلى قرية البضائع.`
+            : job.transport_mode === 'road'
+              ? `وصلت الشاحنة بحمد الله إلى موقع المقصد (${job.pod_name}) بانتظار بدء إجراءات التفريغ.`
+              : `وصلت السفينة بحمد الله إلى ميناء المقصد (${job.pod_name}) وجاري ربط السفينة وبدء عمليات التفريغ.`;
         break;
       case 'DISC':
         actionContext = `تم تفريغ الحاوية على رصيف ميناء ${job.pod_name} وبدأ سريان فترة السماح (Free Days). جاري بدء إجراءات التخليص الجمركي.`;
@@ -401,9 +448,10 @@ export class MaritimeFreightJobsMilestonesService {
         break;
       case 'GTO':
       case 'AWD':
-        actionContext = job.transport_mode === 'air'
-          ? `تم إصدار إذن التسليم الجوي وبوليصة الشحن (Delivery Order D/O) وتجهيز الشحنة للاستلام.`
-          : `تم إصدار إذن التسليم الملاحي (Delivery Order D/O) وخروج الحاوية من بوابة الميناء في طريقها للعنوان المحدد.`;
+        actionContext =
+          job.transport_mode === 'air'
+            ? `تم إصدار إذن التسليم الجوي وبوليصة الشحن (Delivery Order D/O) وتجهيز الشحنة للاستلام.`
+            : `تم إصدار إذن التسليم الملاحي (Delivery Order D/O) وخروج الحاوية من بوابة الميناء في طريقها للعنوان المحدد.`;
         break;
       case 'TRK_UNLOADED':
         actionContext = `تم تفريغ البضاعة ومطابقة الطرود والكميات بمستودع المستلم.`;
@@ -419,7 +467,8 @@ export class MaritimeFreightJobsMilestonesService {
     }
 
     const modeName = job.transport_mode === 'air' ? 'الجوية' : job.transport_mode === 'road' ? 'البرية' : 'الملاحية';
-    const message = `عزيزنا العميل ${job.customer_name}،\n` +
+    const message =
+      `عزيزنا العميل ${job.customer_name}،\n` +
       `تحديث جديد بخصوص شحنتكم ${modeName} [${job.job_number}]:\n` +
       `المرحلة الحالية: ${title}\n` +
       `${actionContext}\n\n` +

@@ -273,7 +273,9 @@ function formatUnixSecondsInTimezone(epochSeconds: number, timezone: string): st
 }
 
 function mapHikvisionAttendanceStatus(status: unknown): string {
-  const s = String(status || '').trim().toLowerCase();
+  const s = String(status || '')
+    .trim()
+    .toLowerCase();
   if (s === 'checkout' || s === 'check_out' || s === 'breakout' || s === 'overtimeout') return '1';
   return '0';
 }

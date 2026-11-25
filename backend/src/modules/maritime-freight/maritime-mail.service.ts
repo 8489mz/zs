@@ -40,9 +40,7 @@ export class MaritimeMailService {
   private readonly logger = new Logger(MaritimeMailService.name);
   private readonly SETTINGS_KEY = 'maritime_mail_config';
 
-  constructor(
-    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
-  ) {}
+  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   private async getTenantCompanyProfile(tenantId: string): Promise<{
     companyName: string;
@@ -63,12 +61,17 @@ export class MaritimeMailService {
       .execute();
 
     const settingsMap = companySettingsRows.reduce<Record<string, string>>((acc, r) => {
-      try { acc[r.key] = JSON.parse(r.value); } catch { acc[r.key] = r.value; }
+      try {
+        acc[r.key] = JSON.parse(r.value);
+      } catch {
+        acc[r.key] = r.value;
+      }
       return acc;
     }, {});
 
     return {
-      companyName: settingsMap.companyName || settingsMap.storeName || tenantRow?.business_name || 'إدارة الشحن واللوجستيات',
+      companyName:
+        settingsMap.companyName || settingsMap.storeName || tenantRow?.business_name || 'إدارة الشحن واللوجستيات',
       companyEmail: settingsMap.email || tenantRow?.owner_email || '',
       companyPhone: settingsMap.phone || tenantRow?.owner_phone || '',
     };
@@ -86,8 +89,10 @@ export class MaritimeMailService {
       .executeTakeFirst();
 
     const standardTemplates = {
-      subject: '[{{rfq_number}}] Ocean Freight Rate Inquiry: {{pol_name}} to {{pod_name}} ({{container_count}}x {{container_type}})',
-      intro: 'Dear {{carrier_name}} Pricing Desk,\n\nPlease provide your most competitive ocean freight spot rate for the following containerized shipment:',
+      subject:
+        '[{{rfq_number}}] Ocean Freight Rate Inquiry: {{pol_name}} to {{pod_name}} ({{container_count}}x {{container_type}})',
+      intro:
+        'Dear {{carrier_name}} Pricing Desk,\n\nPlease provide your most competitive ocean freight spot rate for the following containerized shipment:',
       signature: 'Best regards,\n{{company_name}} Operations & Maritime Procurement Desk\n{{company_email}}',
     };
 
@@ -170,9 +175,12 @@ export class MaritimeMailService {
     const isMasked = (str?: string) => !str || str.includes('•') || str === '••••••••••••';
 
     const resolvedUser = dto.smtpUser !== undefined ? dto.smtpUser.trim() : (currentConfig.smtpUser || '').trim();
-    const resolvedFromEmail = (dto.fromEmail && dto.fromEmail.includes('@'))
-      ? dto.fromEmail.trim()
-      : (resolvedUser && resolvedUser.includes('@') ? resolvedUser : (currentConfig.fromEmail || resolvedUser || companyProfile.companyEmail));
+    const resolvedFromEmail =
+      dto.fromEmail && dto.fromEmail.includes('@')
+        ? dto.fromEmail.trim()
+        : resolvedUser && resolvedUser.includes('@')
+          ? resolvedUser
+          : currentConfig.fromEmail || resolvedUser || companyProfile.companyEmail;
 
     const mergedConfig: MaritimeMailConfig = {
       outgoingProvider: dto.outgoingProvider || currentConfig.outgoingProvider || 'custom',
@@ -188,7 +196,7 @@ export class MaritimeMailService {
       imapHost: dto.imapHost || currentConfig.imapHost || 'mail.yourcompany.com',
       imapPort: Number(dto.imapPort || currentConfig.imapPort || 993),
       imapSecure: Boolean(dto.imapSecure ?? currentConfig.imapSecure ?? true),
-      imapUser: dto.imapUser !== undefined ? dto.imapUser.trim() : (currentConfig.imapUser || resolvedUser || ''),
+      imapUser: dto.imapUser !== undefined ? dto.imapUser.trim() : currentConfig.imapUser || resolvedUser || '',
       imapPassword: isMasked(dto.imapPassword) ? currentConfig.imapPassword || '' : dto.imapPassword,
 
       autoReadInboundBids: Boolean(dto.autoReadInboundBids ?? currentConfig.autoReadInboundBids ?? true),
@@ -196,12 +204,16 @@ export class MaritimeMailService {
       lastSyncStatus: currentConfig.lastSyncStatus || null,
       lastSyncDetails: currentConfig.lastSyncDetails || null,
 
-      emailSubjectTemplate: dto.emailSubjectTemplate !== undefined ? dto.emailSubjectTemplate : currentConfig.emailSubjectTemplate,
-      emailIntroTemplate: dto.emailIntroTemplate !== undefined ? dto.emailIntroTemplate : currentConfig.emailIntroTemplate,
-      emailSignatureTemplate: dto.emailSignatureTemplate !== undefined ? dto.emailSignatureTemplate : currentConfig.emailSignatureTemplate,
-      companyOfficialEmail: (dto as any)?.companyOfficialEmail !== undefined
-        ? String((dto as any).companyOfficialEmail).trim()
-        : ((currentConfig as any)?.companyOfficialEmail || ''),
+      emailSubjectTemplate:
+        dto.emailSubjectTemplate !== undefined ? dto.emailSubjectTemplate : currentConfig.emailSubjectTemplate,
+      emailIntroTemplate:
+        dto.emailIntroTemplate !== undefined ? dto.emailIntroTemplate : currentConfig.emailIntroTemplate,
+      emailSignatureTemplate:
+        dto.emailSignatureTemplate !== undefined ? dto.emailSignatureTemplate : currentConfig.emailSignatureTemplate,
+      companyOfficialEmail:
+        (dto as any)?.companyOfficialEmail !== undefined
+          ? String((dto as any).companyOfficialEmail).trim()
+          : (currentConfig as any)?.companyOfficialEmail || '',
     } as any;
 
     // Save to settings table
@@ -332,7 +344,12 @@ export class MaritimeMailService {
     return results;
   }
 
-  private async rawTestImap(host: string, port: number, user: string, pass: string): Promise<{ ok: boolean; message: string }> {
+  private async rawTestImap(
+    host: string,
+    port: number,
+    user: string,
+    pass: string,
+  ): Promise<{ ok: boolean; message: string }> {
     return new Promise((resolve) => {
       let resolved = false;
       const socket = tls.connect({
@@ -372,7 +389,11 @@ export class MaritimeMailService {
               resolved = true;
               clearTimeout(timeout);
               socket.destroy();
-              resolve({ ok: false, message: 'فشل تسجيل الدخول بخادم IMAP: يرجى التأكد من البريد وكلمة المرور (أو App Password للأوتلوك/جيميل)' });
+              resolve({
+                ok: false,
+                message:
+                  'فشل تسجيل الدخول بخادم IMAP: يرجى التأكد من البريد وكلمة المرور (أو App Password للأوتلوك/جيميل)',
+              });
             }
           }
         }
@@ -396,7 +417,7 @@ export class MaritimeMailService {
       throw new BadRequestException('إعدادات البريد الإلكتروني غير مكتملة. يرجى حفظ السيرفر وبيانات الدخول أولاً.');
     }
 
-    const senderEmail = (config.fromEmail && config.fromEmail.includes('@')) ? config.fromEmail : config.smtpUser;
+    const senderEmail = config.fromEmail && config.fromEmail.includes('@') ? config.fromEmail : config.smtpUser;
 
     const transporter = nodemailer.createTransport({
       host: config.smtpHost,
@@ -514,7 +535,9 @@ export class MaritimeMailService {
       const timeout = setTimeout(() => {
         if (!resolved) {
           resolved = true;
-          try { socket.destroy(); } catch {}
+          try {
+            socket.destroy();
+          } catch {}
           resolve(false);
         }
       }, 15000);
@@ -766,10 +789,7 @@ export class MaritimeMailService {
           .selectFrom('shipping_lines')
           .select(['id', 'code', 'name_en', 'name_ar'])
           .where('tenant_id', '=', tenantId)
-          .where((eb) => eb.or([
-            eb('email', 'ilike', senderEmail),
-            eb('rfq_email', 'ilike', senderEmail),
-          ]))
+          .where((eb) => eb.or([eb('email', 'ilike', senderEmail), eb('rfq_email', 'ilike', senderEmail)]))
           .executeTakeFirst();
 
         if (carrierRow) {
@@ -781,7 +801,8 @@ export class MaritimeMailService {
       // Parse rate parameters
       const parsed = parseCarrierEmailTextFn(chunk);
       if (parsed.oceanFreight > 0) {
-        const totalCost = parsed.totalEstimated || (parsed.oceanFreight + (parsed.thcOrigin || 0) + (parsed.thcDestination || 0));
+        const totalCost =
+          parsed.totalEstimated || parsed.oceanFreight + (parsed.thcOrigin || 0) + (parsed.thcDestination || 0);
 
         // Avoid exact duplicates
         const existingBid = await this.db

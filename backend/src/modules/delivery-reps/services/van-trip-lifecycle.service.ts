@@ -8,16 +8,9 @@ import { SettleTripService } from './van-trip-lifecycle/settle-trip.service';
 import { SettlementHelpersService } from './van-trip-lifecycle/settlement-helpers.service';
 import { TripAdminReadsService } from './van-trip-lifecycle/trip-admin-reads.service';
 import { type RepTargetCalculationResult } from '../rep-target.engine';
-import {
-  type DayBucket,
-  type PerDayCashInput,
-} from '../van-settlement-split.engine';
+import { type DayBucket, type PerDayCashInput } from '../van-settlement-split.engine';
 import { type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
-import type {
-  VanStockItem,
-  VanTripSummary,
-  VanTripLifecycleDeps,
-} from './van-trip-lifecycle/van-trip-types';
+import type { VanStockItem, VanTripSummary, VanTripLifecycleDeps } from './van-trip-lifecycle/van-trip-types';
 export type { VanStockItem, VanTripSummary };
 
 @Injectable()
@@ -51,7 +44,12 @@ export class VanTripLifecycleService {
       deps.moveVanInventoryBatches,
       deps.resolveSystemAuthContext,
     );
-    this.submitSettlement = new SubmitSettlementService(deps.db, deps.audit, deps.recordSuspicionEvent, deps.resolveRepLinkedUserId);
+    this.submitSettlement = new SubmitSettlementService(
+      deps.db,
+      deps.audit,
+      deps.recordSuspicionEvent,
+      deps.resolveRepLinkedUserId,
+    );
     this.settleTripService = new SettleTripService(
       deps.db,
       deps.audit,
@@ -66,7 +64,10 @@ export class VanTripLifecycleService {
       this.settlementHelpersService.computeTripDayBuckets.bind(this.settlementHelpersService),
       this.settlementHelpersService.insertRepCashRemittanceRow.bind(this.settlementHelpersService),
     );
-    this.tripAdminReads = new TripAdminReadsService(deps.db, this.settlementHelpersService.computeTripDayBuckets.bind(this.settlementHelpersService));
+    this.tripAdminReads = new TripAdminReadsService(
+      deps.db,
+      this.settlementHelpersService.computeTripDayBuckets.bind(this.settlementHelpersService),
+    );
   }
 
   async verifySupervisorPin(
@@ -93,7 +94,11 @@ export class VanTripLifecycleService {
     return this.pinGates.isBlindSettlementEnabled(tenantId);
   }
 
-  async getActiveTrip(repId: number, tenantId: string, accountId: string): Promise<{
+  async getActiveTrip(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+  ): Promise<{
     hasActiveTrip: boolean;
     trip?: VanTripSummary;
     assignedVehicle?: {

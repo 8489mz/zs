@@ -26,8 +26,8 @@ export function formatVanSettlementSummaryText(params: {
   const statusText = isMatched
     ? 'مطابق 100% بدون أي عجز'
     : isShortage
-    ? `يوجد عجز نقدي بقيمة ${Math.abs(params.variance).toFixed(2)} ${currency}`
-    : `يوجد فائض نقدي بقيمة +${Number(params.variance).toFixed(2)} ${currency}`;
+      ? `يوجد عجز نقدي بقيمة ${Math.abs(params.variance).toFixed(2)} ${currency}`
+      : `يوجد فائض نقدي بقيمة +${Number(params.variance).toFixed(2)} ${currency}`;
 
   return [
     '*سند توريد نقدية الخزينة وإخلاء طرف عهدة*',

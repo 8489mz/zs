@@ -23,7 +23,10 @@ export function toNumber(value: unknown): number {
 }
 
 export function normalizeImportKey(value: string): string {
-  return String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
 }
 
 export function normalizeArabicDigits(value: unknown): string {

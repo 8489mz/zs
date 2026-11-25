@@ -1,9 +1,6 @@
 import type { VanRequisitionDispatchService } from '../services/van-requisition-dispatch.service';
 import type { VanRequisitionsService } from '../services/van-requisitions.service';
-import type {
-  CreateLoadRequisitionByAdminPayload,
-  SubmitLoadRequisitionPayload,
-} from './van-sales-types';
+import type { CreateLoadRequisitionByAdminPayload, SubmitLoadRequisitionPayload } from './van-sales-types';
 
 export class RequisitionsService {
   constructor(
@@ -24,7 +21,12 @@ export class RequisitionsService {
     return this.vanRequisitionsService.submitLoadRequisition(repId, tenantId, accountId, payload);
   }
 
-  async createLoadRequisitionByAdmin(tenantId: string, accountId: string, userId: number, payload: CreateLoadRequisitionByAdminPayload) {
+  async createLoadRequisitionByAdmin(
+    tenantId: string,
+    accountId: string,
+    userId: number,
+    payload: CreateLoadRequisitionByAdminPayload,
+  ) {
     return this.getRequisitionDispatch().createLoadRequisitionByAdmin(tenantId, accountId, userId, payload);
   }
 
@@ -39,15 +41,41 @@ export class RequisitionsService {
     notes?: string,
     sourceWarehouseId?: number,
   ) {
-    return this.vanRequisitionsService.reviewLoadRequisition(tenantId, requisitionId, approvedItems, notes, sourceWarehouseId);
+    return this.vanRequisitionsService.reviewLoadRequisition(
+      tenantId,
+      requisitionId,
+      approvedItems,
+      notes,
+      sourceWarehouseId,
+    );
   }
 
-  async approveAndDispatchRequisition(tenantId: string, accountId: string, requisitionId: number, reviewedByUserId: number) {
-    return this.getRequisitionDispatch().approveAndDispatchRequisition(tenantId, accountId, requisitionId, reviewedByUserId);
+  async approveAndDispatchRequisition(
+    tenantId: string,
+    accountId: string,
+    requisitionId: number,
+    reviewedByUserId: number,
+  ) {
+    return this.getRequisitionDispatch().approveAndDispatchRequisition(
+      tenantId,
+      accountId,
+      requisitionId,
+      reviewedByUserId,
+    );
   }
 
-  async rejectLoadRequisition(tenantId: string, requisitionId: number, rejectionReason: string, reviewedByUserId: number) {
-    return this.vanRequisitionsService.rejectLoadRequisition(tenantId, requisitionId, rejectionReason, reviewedByUserId);
+  async rejectLoadRequisition(
+    tenantId: string,
+    requisitionId: number,
+    rejectionReason: string,
+    reviewedByUserId: number,
+  ) {
+    return this.vanRequisitionsService.rejectLoadRequisition(
+      tenantId,
+      requisitionId,
+      rejectionReason,
+      reviewedByUserId,
+    );
   }
 
   async deleteLoadRequisition(tenantId: string, requisitionId: number) {

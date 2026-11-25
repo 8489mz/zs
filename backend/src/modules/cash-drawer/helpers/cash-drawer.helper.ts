@@ -62,7 +62,14 @@ type CashDrawerShiftSource = {
   branch_name?: string | null;
   location_name?: string | null;
   opened_by_name?: string | null;
-  movement_items?: Array<{ id: string; kind: 'cash_in' | 'cash_out' | 'delivery' | 'expense' | 'supplier_payment' | 'return'; kindLabel: string; amount: number; note: string; createdAt: string }>;
+  movement_items?: Array<{
+    id: string;
+    kind: 'cash_in' | 'cash_out' | 'delivery' | 'expense' | 'supplier_payment' | 'return';
+    kindLabel: string;
+    amount: number;
+    note: string;
+    createdAt: string;
+  }>;
 };
 
 const BLIND_CLOSE_PREFIX = 'BLIND_CLOSE::';
@@ -144,7 +151,10 @@ type ParsedCloseNote = {
   blindClose: BlindClosePayload | null;
 };
 
-export function paginateCashDrawerRows<T>(rows: T[], query: CashDrawerQuery): { rows: T[]; pagination: Record<string, number> } {
+export function paginateCashDrawerRows<T>(
+  rows: T[],
+  query: CashDrawerQuery,
+): { rows: T[]; pagination: Record<string, number> } {
   const rawPage = Number(query.page || 1);
   const rawPageSize = Number(query.pageSize || 20);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
@@ -175,9 +185,18 @@ function cashDrawerDateKey(value: unknown, timeZone?: string): string {
   return String(value || '').slice(0, 10);
 }
 
-export function filterCashDrawerRows(rows: CashDrawerMappedRow[], query: CashDrawerQuery, todayKey?: string, timeZone?: string): CashDrawerMappedRow[] {
-  const search = String(query.search || '').trim().toLowerCase();
-  const filter = String(query.filter || (query as any).status || 'all').trim().toLowerCase();
+export function filterCashDrawerRows(
+  rows: CashDrawerMappedRow[],
+  query: CashDrawerQuery,
+  todayKey?: string,
+  timeZone?: string,
+): CashDrawerMappedRow[] {
+  const search = String(query.search || '')
+    .trim()
+    .toLowerCase();
+  const filter = String(query.filter || (query as any).status || 'all')
+    .trim()
+    .toLowerCase();
   const today = todayKey ?? (timeZone ? todayTenantDate(timeZone) : new Date().toISOString().slice(0, 10));
   return rows.filter((row) => {
     const status = String(row.status || '');
@@ -195,7 +214,19 @@ export function filterCashDrawerRows(rows: CashDrawerMappedRow[], query: CashDra
     if (filter === 'variance' && !(Math.abs(variance) > 0 || row.hasVariance === true)) return false;
     if (filter === 'today' && cashDrawerDateKey(row.openedAt || row.createdAt, timeZone) !== today) return false;
     if (!search) return true;
-    return [row.docNo, row.status, row.branchName, row.locationName, row.openedByName, row.openingNote, row.closeNote].some((value) => String(value || '').toLowerCase().includes(search));
+    return [
+      row.docNo,
+      row.status,
+      row.branchName,
+      row.locationName,
+      row.openedByName,
+      row.openingNote,
+      row.closeNote,
+    ].some((value) =>
+      String(value || '')
+        .toLowerCase()
+        .includes(search),
+    );
   });
 }
 
@@ -243,7 +274,10 @@ function normalizeBlindOperationList(value: unknown): BlindCloseOperationDetail[
   });
 }
 
-export function summarizeCashDrawerRows(rows: CashDrawerMappedRow[], moneyDigits: MoneyDigits = 2): Record<string, unknown> {
+export function summarizeCashDrawerRows(
+  rows: CashDrawerMappedRow[],
+  moneyDigits: MoneyDigits = 2,
+): Record<string, unknown> {
   const openRows = rows.filter((row) => String(row.status || '') === 'open');
   const pendingReviewRows = rows.filter((row) => String(row.status || '') === 'pending_review');
   return {
@@ -251,7 +285,10 @@ export function summarizeCashDrawerRows(rows: CashDrawerMappedRow[], moneyDigits
     openShiftCount: openRows.length,
     pendingReviewCount: pendingReviewRows.length,
     openShiftDocNo: openRows[0] ? String(openRows[0].docNo || openRows[0].id || '') : '',
-    totalVariance: roundMoney(rows.reduce((sum, row) => sum + Number(row.variance || 0), 0), moneyDigits),
+    totalVariance: roundMoney(
+      rows.reduce((sum, row) => sum + Number(row.variance || 0), 0),
+      moneyDigits,
+    ),
     // F5: how many shifts differ, by flag rather than by amount — for
     // a cashier viewer the amounts are blinded to 0 (totalVariance
     // reads 0), but the count still says a shift differs.
@@ -265,7 +302,11 @@ export function mapCashDrawerShiftRow(row: CashDrawerShiftSource): CashDrawerMap
   const blindDetailTotals = parsedClose.blindClose?.detailTotals || {};
   const blindDetails = parsedClose.blindClose?.details || {};
   const managerReview = parsedClose.blindClose?.managerReview || {};
-  const blindCloseMetadataStatus = parsedClose.isBlindMetadataValid ? 'valid' : (parsedClose.hasBlindPrefix ? 'invalid' : 'missing');
+  const blindCloseMetadataStatus = parsedClose.isBlindMetadataValid
+    ? 'valid'
+    : parsedClose.hasBlindPrefix
+      ? 'invalid'
+      : 'missing';
 
   return {
     id: String(row.id || ''),
@@ -367,15 +408,43 @@ export function buildCashDrawerShiftDocNo(shiftId: number, date: Date = new Date
   return formatDailyDocumentNumber('SHIFT', shiftId, date, 4, timeZone);
 }
 
-export function normalizeShiftOpenPayload(payload: { openingCash?: number; note?: string; branchId?: number | string | null; locationId?: number | string | null; password?: string; managerPin?: string; terminalCode?: string }): { openingCash: number; note: string; branchId: number | null; locationId: number | null; password?: string; terminalCode: string | null } {
+export function normalizeShiftOpenPayload(payload: {
+  openingCash?: number;
+  note?: string;
+  branchId?: number | string | null;
+  locationId?: number | string | null;
+  password?: string;
+  managerPin?: string;
+  terminalCode?: string;
+}): {
+  openingCash: number;
+  note: string;
+  branchId: number | null;
+  locationId: number | null;
+  password?: string;
+  terminalCode: string | null;
+} {
   const rawPassword = payload.password || payload.managerPin;
-  const terminalCode = String(payload.terminalCode || '').trim().toUpperCase();
+  const terminalCode = String(payload.terminalCode || '')
+    .trim()
+    .toUpperCase();
   if (terminalCode.length > 32) throw new AppError('رمز المحطة غير صالح', 'SHIFT_TERMINAL_CODE_INVALID', 400);
-  return { openingCash: Number(payload.openingCash || 0), note: String(payload.note || '').trim(), branchId: payload.branchId ? Number(payload.branchId) : null, locationId: payload.locationId ? Number(payload.locationId) : null, password: rawPassword ? String(rawPassword).trim() : undefined, terminalCode: terminalCode || null };
+  return {
+    openingCash: Number(payload.openingCash || 0),
+    note: String(payload.note || '').trim(),
+    branchId: payload.branchId ? Number(payload.branchId) : null,
+    locationId: payload.locationId ? Number(payload.locationId) : null,
+    password: rawPassword ? String(rawPassword).trim() : undefined,
+    terminalCode: terminalCode || null,
+  };
 }
 
-export function assertCashDrawerAmount(amount: number): void { if (!(amount > 0)) throw new AppError('المبلغ يجب أن يكون أكبر من صفر', 'AMOUNT_INVALID', 400); }
-export function assertCashDrawerCountedCash(countedCash: number): void { if (!(countedCash >= 0)) throw new AppError('المبلغ المعدود لا يمكن أن يكون سالبًا', 'COUNTED_CASH_INVALID', 400); }
+export function assertCashDrawerAmount(amount: number): void {
+  if (!(amount > 0)) throw new AppError('المبلغ يجب أن يكون أكبر من صفر', 'AMOUNT_INVALID', 400);
+}
+export function assertCashDrawerCountedCash(countedCash: number): void {
+  if (!(countedCash >= 0)) throw new AppError('المبلغ المعدود لا يمكن أن يكون سالبًا', 'COUNTED_CASH_INVALID', 400);
+}
 export function assertCashDrawerNote(note: string, code = 'NOTE_REQUIRED', minLength = 1): void {
   if (String(note || '').trim().length < minLength) {
     throw new AppError('اكتب سبب العملية', code, 400);
@@ -388,8 +457,12 @@ export function normalizeCashDrawerMovementType(type?: string): CashDrawerMoveme
   if (raw === 'cash_in' || raw === 'cash_out' || raw === 'safe_drop' || raw === 'safe_replenishment') return raw;
   throw new AppError('نوع حركة الدرج غير معروف', 'DRAWER_MOVEMENT_TYPE_UNKNOWN', 400);
 }
-export function isCashDrawerTransferType(type: CashDrawerMovementType): boolean { return type === 'safe_drop' || type === 'safe_replenishment'; }
-export function toSignedCashDrawerAmount(type: CashDrawerMovementType, amount: number): number { return type === 'cash_out' || type === 'safe_drop' ? -Math.abs(amount) : Math.abs(amount); }
+export function isCashDrawerTransferType(type: CashDrawerMovementType): boolean {
+  return type === 'safe_drop' || type === 'safe_replenishment';
+}
+export function toSignedCashDrawerAmount(type: CashDrawerMovementType, amount: number): number {
+  return type === 'cash_out' || type === 'safe_drop' ? -Math.abs(amount) : Math.abs(amount);
+}
 // INV-DRAWER-MONEY-IN-NO-PASSWORD: only money-OUT movements need a
 // password — cash leaves the drawer, so the approval secret (the
 // cashier's own password, manager PIN fallback) proves who moved it
@@ -397,21 +470,30 @@ export function toSignedCashDrawerAmount(type: CashDrawerMovementType, amount: n
 // there is no loss to guard and no secret is required. The caller
 // (recordCashMovement) gates on this; the close confirmation and the
 // shift-open confirmation are separate gates and stay unchanged.
-export function isCashDrawerOutboundType(type: CashDrawerMovementType): boolean { return type === 'cash_out' || type === 'safe_drop'; }
+export function isCashDrawerOutboundType(type: CashDrawerMovementType): boolean {
+  return type === 'cash_out' || type === 'safe_drop';
+}
 /**
  * Shift variance at the tenant's minor unit. digits is required: the old
  * toFixed(2) turned a KWD 0.005 variance into 0.01 (overstating the GL
  * charge) or 0.00 (dropping it entirely), and the stored variance then
  * disagreed with both the GL gate and the note gate.
  */
-export function computeCashDrawerVariance(countedCash: number, expectedCash: number, digits: MoneyDigits): number { return roundMoney(countedCash - expectedCash, digits); }
-
+export function computeCashDrawerVariance(countedCash: number, expectedCash: number, digits: MoneyDigits): number {
+  return roundMoney(countedCash - expectedCash, digits);
+}
 
 /** Cash drawer movement amount is the posted cash tender leg, never the gross return. */
-export function buildShiftCashReturnItem(row: {
-  id: number; doc_no?: string | null; cash_refund?: number | string | null;
-  note?: string | null; created_at?: string | Date | null;
-}, moneyDigits: MoneyDigits = 2): { id: string; kind: 'return'; kindLabel: string; amount: number; note: string; createdAt: string } | null {
+export function buildShiftCashReturnItem(
+  row: {
+    id: number;
+    doc_no?: string | null;
+    cash_refund?: number | string | null;
+    note?: string | null;
+    created_at?: string | Date | null;
+  },
+  moneyDigits: MoneyDigits = 2,
+): { id: string; kind: 'return'; kindLabel: string; amount: number; note: string; createdAt: string } | null {
   const amount = Number(row.cash_refund || 0);
   if (!Number.isFinite(amount) || amount <= 0) return null;
   return {
@@ -423,7 +505,6 @@ export function buildShiftCashReturnItem(row: {
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
   };
 }
-
 
 /** Mirror shift cash total's coalesced tender rule for itemized supplier payouts. */
 export function isDrawerCashTender(channel: string | null | undefined): boolean {
@@ -484,7 +565,13 @@ export function buildExpectedCashBreakdown(
     row('supplierPayments', 'دفعات موردين', -Number(input.supplierPaymentsTotal || 0)),
     row('expenses', 'مصروفات مسجلة', -Number(input.expensesTotal || 0)),
   ];
-  return { rows, total: roundMoney(rows.reduce((sum, entry) => sum + entry.amount, 0), digits) };
+  return {
+    rows,
+    total: roundMoney(
+      rows.reduce((sum, entry) => sum + entry.amount, 0),
+      digits,
+    ),
+  };
 }
 
 export function sumExpectedCashRows(rows: ExpectedCashBreakdownRow[]): number {

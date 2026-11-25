@@ -1,5 +1,18 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min, IsNumber, IsNotEmpty, IsBoolean, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsEmail,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  IsNumber,
+  IsNotEmpty,
+  IsBoolean,
+  ValidateNested,
+} from 'class-validator';
 
 export class ListSaasTenantsQueryDto {
   @IsOptional()

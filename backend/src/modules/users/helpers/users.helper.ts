@@ -58,7 +58,9 @@ function safeJsonArray(value: unknown): string[] {
 
 export function normalizeUserListQuery(query: UserQueryInput): UserListQuery {
   return {
-    search: String(query.search || '').trim().toLowerCase(),
+    search: String(query.search || '')
+      .trim()
+      .toLowerCase(),
     role: String(query.role || '').trim(),
     includeInactive: String(query.includeInactive || 'true') !== 'false',
   };
@@ -98,7 +100,11 @@ export function filterUsers(users: UserViewModel[], normalizedQuery: UserListQue
       const username = String(row.username || '').toLowerCase();
       const name = String(row.name || '').toLowerCase();
       const phone = String(row.phone || '').toLowerCase();
-      return username.includes(normalizedQuery.search) || name.includes(normalizedQuery.search) || phone.includes(normalizedQuery.search);
+      return (
+        username.includes(normalizedQuery.search) ||
+        name.includes(normalizedQuery.search) ||
+        phone.includes(normalizedQuery.search)
+      );
     });
   }
 
@@ -165,11 +171,7 @@ export function summarizeUsers(users: UserViewModel[]): UserSummaryDto {
 
 export function normalizeBranchIds(branchIds: string[] | undefined): number[] {
   return Array.from(
-    new Set(
-      (branchIds ?? [])
-        .map((value) => Number(value))
-        .filter((value) => Number.isInteger(value) && value > 0),
-    ),
+    new Set((branchIds ?? []).map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0)),
   );
 }
 

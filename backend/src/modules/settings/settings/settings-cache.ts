@@ -52,7 +52,9 @@ export class SettingsCache {
     }
   }
 
-  public scope(actor: AuthContext) { return requireTenantScope(actor); }
+  public scope(actor: AuthContext) {
+    return requireTenantScope(actor);
+  }
   public tenantPredicate(actor: AuthContext, alias?: string) {
     const { tenantId, accountId } = this.scope(actor);
     return alias

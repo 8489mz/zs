@@ -46,15 +46,12 @@ function absoluteUrl(origin: string, maybePath: string): string {
 export class StorefrontSocialPreviewService {
   constructor(private readonly storefront: StorefrontService) {}
 
-  async buildPreview(
-    slug: string,
-    origin: string,
-    productId?: string,
-  ): Promise<string> {
+  async buildPreview(slug: string, origin: string, productId?: string): Promise<string> {
     const info: any = await this.storefront.getStorefrontInfo(slug);
     const siteName = String(info?.businessName || info?.title || 'المتجر الإلكتروني').trim();
     const currency = String(info?.currency || 'ج.م');
-    const storeUrl = buildStorePublicBase(origin, slug) || `${origin.replace(/\/$/, '')}/st/${encodeURIComponent(slug)}`;
+    const storeUrl =
+      buildStorePublicBase(origin, slug) || `${origin.replace(/\/$/, '')}/st/${encodeURIComponent(slug)}`;
 
     let payload: PreviewPayload = {
       title: String(info?.title || siteName),
@@ -110,8 +107,12 @@ export class StorefrontSocialPreviewService {
   <meta property="og:title" content="${escapeHtml(p.title)}" />
   <meta property="og:description" content="${escapeHtml(p.description)}" />
   <meta property="og:url" content="${escapeHtml(p.url)}" />${productTags}
-  ${p.image ? `<meta property="og:image" content="${escapeHtml(p.image)}" />
-  <meta property="og:image:alt" content="${escapeHtml(p.title)}" />` : ''}
+  ${
+    p.image
+      ? `<meta property="og:image" content="${escapeHtml(p.image)}" />
+  <meta property="og:image:alt" content="${escapeHtml(p.title)}" />`
+      : ''
+  }
   <meta name="twitter:card" content="${p.image ? 'summary_large_image' : 'summary'}" />
   <meta name="twitter:title" content="${escapeHtml(p.title)}" />
   <meta name="twitter:description" content="${escapeHtml(p.description)}" />

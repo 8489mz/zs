@@ -36,11 +36,7 @@ const GROSS_MARGIN_EGP_DIGITS = currencyMoneyDigits('EGP');
  * remainder at or below it counts as covered, not as a shortfall.
  */
 export type ImportLotAllocationReason =
-  | 'fully_covered'
-  | 'missing_location'
-  | 'no_active_lots'
-  | 'lots_exhausted'
-  | 'invalid_quantity';
+  'fully_covered' | 'missing_location' | 'no_active_lots' | 'lots_exhausted' | 'invalid_quantity';
 
 export interface ImportLotAllocationCoverage {
   productId: number;
@@ -105,10 +101,13 @@ export function calculateImportSaleCost(params: {
   const allocCostEgp = Number(params.allocCostEgp);
   const fallbackUnitCostEgp = Number(params.fallbackUnitCostEgp);
   if (!Number.isFinite(qty) || qty < 0) throw new Error('Import sale cost requires a finite non-negative quantity.');
-  if (!Number.isFinite(allocatedQty) || allocatedQty < 0) throw new Error('Import sale allocated quantity must be finite and non-negative.');
+  if (!Number.isFinite(allocatedQty) || allocatedQty < 0)
+    throw new Error('Import sale allocated quantity must be finite and non-negative.');
   if (allocatedQty > qty + 0.0001) throw new Error('Import sale lot allocation exceeds the sale quantity.');
-  if (!Number.isFinite(allocCostEgp) || allocCostEgp < 0) throw new Error('Import sale allocation cost must be finite and non-negative.');
-  if (!Number.isFinite(fallbackUnitCostEgp) || fallbackUnitCostEgp < 0) throw new Error('Import sale fallback unit cost must be finite and non-negative.');
+  if (!Number.isFinite(allocCostEgp) || allocCostEgp < 0)
+    throw new Error('Import sale allocation cost must be finite and non-negative.');
+  if (!Number.isFinite(fallbackUnitCostEgp) || fallbackUnitCostEgp < 0)
+    throw new Error('Import sale fallback unit cost must be finite and non-negative.');
   const shortfallQty = Number(Math.max(0, qty - allocatedQty).toFixed(4));
   const shortfallCostEgp = shortfallQty * fallbackUnitCostEgp;
   const totalCostEgp = roundMoney(allocCostEgp + shortfallCostEgp, params.moneyDigits ?? currencyMoneyDigits('EGP'));
@@ -129,7 +128,7 @@ export async function allocateSaleFromImportLots(
       netUnitPrice: number;
       locationId?: number | null;
     }>;
-  }
+  },
 ): Promise<ImportLotAllocationResult> {
   const moneyDigits = GROSS_MARGIN_EGP_DIGITS;
   const coverage: ImportLotAllocationCoverage[] = [];
@@ -138,9 +137,12 @@ export async function allocateSaleFromImportLots(
     const requestedQty = Number(item.qty);
     if (!Number.isFinite(requestedQty) || requestedQty <= 0) {
       coverage.push({
-        productId: pId, requestedQty, allocatedQty: 0,
+        productId: pId,
+        requestedQty,
+        allocatedQty: 0,
         shortfallQty: requestedQty > 0 ? requestedQty : 0,
-        fullyCovered: false, reason: 'invalid_quantity',
+        fullyCovered: false,
+        reason: 'invalid_quantity',
       });
       continue;
     }
@@ -159,23 +161,27 @@ export async function allocateSaleFromImportLots(
     // Unlocated legacy lots cannot be assigned to a sale from an arbitrary store.
     if (!Number.isSafeInteger(targetLocId) || Number(targetLocId) <= 0) {
       coverage.push({
-        productId: pId, requestedQty, allocatedQty: 0, shortfallQty: requestedQty,
-        fullyCovered: false, reason: 'missing_location',
+        productId: pId,
+        requestedQty,
+        allocatedQty: 0,
+        shortfallQty: requestedQty,
+        fullyCovered: false,
+        reason: 'missing_location',
       });
       continue;
     }
     lotQuery = lotQuery.where('location_id', '=', Number(targetLocId));
 
-    const lots = await lotQuery
-      .orderBy('receipt_date', 'asc')
-      .orderBy('created_at', 'asc')
-      .forUpdate()
-      .execute();
+    const lots = await lotQuery.orderBy('receipt_date', 'asc').orderBy('created_at', 'asc').forUpdate().execute();
 
     if (!lots || lots.length === 0) {
       coverage.push({
-        productId: pId, requestedQty, allocatedQty: 0, shortfallQty: requestedQty,
-        fullyCovered: false, reason: 'no_active_lots',
+        productId: pId,
+        requestedQty,
+        allocatedQty: 0,
+        shortfallQty: requestedQty,
+        fullyCovered: false,
+        reason: 'no_active_lots',
       });
       continue;
     }
@@ -229,7 +235,10 @@ export async function allocateSaleFromImportLots(
 
     const shortfallQty = Number(Math.max(0, requestedQty - allocatedQty).toFixed(4));
     coverage.push({
-      productId: pId, requestedQty, allocatedQty, shortfallQty,
+      productId: pId,
+      requestedQty,
+      allocatedQty,
+      shortfallQty,
       fullyCovered: shortfallQty <= 0.0001,
       reason: shortfallQty <= 0.0001 ? 'fully_covered' : 'lots_exhausted',
     });
@@ -243,7 +252,7 @@ export async function restoreImportLotsFromCancelledSale(
   params: {
     tenantId: string;
     saleId: number;
-  }
+  },
 ): Promise<void> {
   const moneyDigits = GROSS_MARGIN_EGP_DIGITS;
   const allocations = await trx
@@ -312,7 +321,7 @@ export async function restoreImportLotsFromSalesReturn(
     saleItemId?: number | null;
     productId: number;
     returnQty: number;
-  }
+  },
 ): Promise<void> {
   const moneyDigits = GROSS_MARGIN_EGP_DIGITS;
   let remainingReturnQty = Number(params.returnQty);
@@ -394,7 +403,7 @@ export async function adjustImportLotQuantity(
     lotId: string;
     adjustmentQty: number;
     reason?: string;
-  }
+  },
 ): Promise<void> {
   const lot = await trx
     .selectFrom('import_inventory_lots')
@@ -432,7 +441,7 @@ export async function transferImportLotLocation(
     lotId: string;
     toLocationId: number;
     qty?: number;
-  }
+  },
 ): Promise<void> {
   const lot = await trx
     .selectFrom('import_inventory_lots')
@@ -444,13 +453,22 @@ export async function transferImportLotLocation(
 
   const current = Number(lot.remaining_quantity);
   const transferQty = params.qty === undefined ? current : Number(params.qty);
-  if (!Number.isSafeInteger(params.toLocationId) || params.toLocationId <= 0 ||
-      !Number.isFinite(transferQty) || transferQty <= 0 || transferQty > current + 0.0001 ||
-      lot.location_id === params.toLocationId) {
+  if (
+    !Number.isSafeInteger(params.toLocationId) ||
+    params.toLocationId <= 0 ||
+    !Number.isFinite(transferQty) ||
+    transferQty <= 0 ||
+    transferQty > current + 0.0001 ||
+    lot.location_id === params.toLocationId
+  ) {
     throw new Error('Invalid destination or transfer quantity for import lot.');
   }
-  const destination = await trx.selectFrom('stock_locations').select('id')
-    .where('tenant_id', '=', params.tenantId).where('id', '=', params.toLocationId).executeTakeFirst();
+  const destination = await trx
+    .selectFrom('stock_locations')
+    .select('id')
+    .where('tenant_id', '=', params.tenantId)
+    .where('id', '=', params.toLocationId)
+    .executeTakeFirst();
   if (!destination) throw new Error('Target warehouse does not belong to this tenant.');
 
   if (transferQty >= current - 0.0001) {
@@ -505,7 +523,7 @@ export async function syncImportLotsOnLocationTransfer(
     fromLocationId?: number | null;
     toLocationId?: number | null;
     qty: number;
-  }
+  },
 ): Promise<void> {
   const fromLoc = Number(params.fromLocationId);
   const toLoc = Number(params.toLocationId);
@@ -558,7 +576,7 @@ export async function syncImportLotsOnStockDeduction(
     locationId?: number | null;
     qty: number;
     reason?: string;
-  }
+  },
 ): Promise<void> {
   const locId = Number(params.locationId);
   let remaining = Math.abs(Number(params.qty));
@@ -576,11 +594,7 @@ export async function syncImportLotsOnStockDeduction(
     query = query.where('location_id', '=', locId);
   }
 
-  const lots = await query
-    .orderBy('receipt_date', 'asc')
-    .orderBy('created_at', 'asc')
-    .forUpdate()
-    .execute();
+  const lots = await query.orderBy('receipt_date', 'asc').orderBy('created_at', 'asc').forUpdate().execute();
 
   for (const lot of lots || []) {
     if (remaining <= 0.0001) break;
@@ -596,4 +610,3 @@ export async function syncImportLotsOnStockDeduction(
     remaining = Number((remaining - deductQty).toFixed(4));
   }
 }
-

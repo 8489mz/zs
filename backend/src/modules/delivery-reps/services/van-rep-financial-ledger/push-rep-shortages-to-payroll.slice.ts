@@ -56,7 +56,8 @@ export class PushRepShortagesToPayrollSlice {
       repName: String(r.repName || r.rep_name || r.repname || ''),
       repPhone: r.repPhone || r.rep_phone || r.repphone || null,
       repNationalId: r.repNationalId || r.rep_national_id || r.repnationalid || null,
-      employeeId: (r.employeeId || r.employee_id || r.employeeid) ? Number(r.employeeId || r.employee_id || r.employeeid) : null,
+      employeeId:
+        r.employeeId || r.employee_id || r.employeeid ? Number(r.employeeId || r.employee_id || r.employeeid) : null,
       employeeName: r.employeeName || r.employee_name || r.employeename || null,
       entryType: String(r.entryType || r.entry_type || r.entrytype || ''),
       amount: Number(r.amount || 0),
@@ -73,7 +74,8 @@ export class PushRepShortagesToPayrollSlice {
     // (INV-BUSINESS-DATE-TENANT-LOCAL): on the 1st of a month around
     // local midnight the UTC month is still the previous month, so the
     // shortage would be pushed to the wrong payroll run.
-    const targetMonth = payload.targetMonth || (await resolveBusinessDateKey(this.deps.db, tenantId, new Date())).slice(0, 7);
+    const targetMonth =
+      payload.targetMonth || (await resolveBusinessDateKey(this.deps.db, tenantId, new Date())).slice(0, 7);
     const results: Array<{ id: number; repName: string; amount: number; success: boolean; message: string }> = [];
     // INV-REP-PAYROLL-TARGET-MONTH (M2, PD2): resolved inside the
     // transaction below — the run the deduction is targeted at.
@@ -120,11 +122,7 @@ export class PushRepShortagesToPayrollSlice {
         } else {
           const followingRunRow = await trxAny
             .selectFrom('hr_payroll_runs')
-            .select([
-              'id',
-              'period_month',
-              sql<string>`to_char(start_date, 'YYYY-MM-DD')`.as('startDate'),
-            ])
+            .select(['id', 'period_month', sql<string>`to_char(start_date, 'YYYY-MM-DD')`.as('startDate')])
             .where('tenant_id', '=', tenantId)
             .where('period_month', '>', targetMonth)
             .orderBy('period_month', 'asc')
@@ -132,7 +130,9 @@ export class PushRepShortagesToPayrollSlice {
             .executeTakeFirst();
           if (followingRunRow) {
             effectiveRunId = Number((followingRunRow as any).id);
-            effectiveMonth = String((followingRunRow as any).period_month || (followingRunRow as any).periodMonth || targetMonth);
+            effectiveMonth = String(
+              (followingRunRow as any).period_month || (followingRunRow as any).periodMonth || targetMonth,
+            );
             effectiveDate = String((followingRunRow as any).startDate || `${effectiveMonth}-01`);
             rolledForward = true;
           } else {

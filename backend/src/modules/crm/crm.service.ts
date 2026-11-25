@@ -115,7 +115,7 @@ export class CrmService {
           eb(sql`lower(coalesce(d.contact_name, ''))`, 'like', term),
           eb(sql`lower(coalesce(d.contact_phone, ''))`, 'like', term),
           eb(sql`lower(coalesce(d.company_name, ''))`, 'like', term),
-        ])
+        ]),
       );
     }
 
@@ -142,10 +142,7 @@ export class CrmService {
       .leftJoin('users as u', 'd.assigned_user_id', 'u.id')
       .leftJoin('customers as c', 'd.customer_id', 'c.id')
       .selectAll('d')
-      .select([
-        'u.username as assignedUserName',
-        'c.name as customerName',
-      ])
+      .select(['u.username as assignedUserName', 'c.name as customerName'])
       .where('d.id', '=', id)
       .where('d.tenant_id', '=', scope.tenantId)
       .executeTakeFirst();
@@ -281,14 +278,20 @@ export class CrmService {
     if (input.expectedAmount !== undefined) updates.expected_amount = Number(input.expectedAmount);
     if (input.currency !== undefined) updates.currency = String(input.currency).trim();
     if (input.probability !== undefined) updates.probability = Number(input.probability);
-    if (input.expectedCloseDate !== undefined) updates.expected_close_date = input.expectedCloseDate ? (input.expectedCloseDate as any) : null;
-    if (input.contactName !== undefined) updates.contact_name = input.contactName ? String(input.contactName).trim() : null;
-    if (input.contactPhone !== undefined) updates.contact_phone = input.contactPhone ? String(input.contactPhone).trim() : null;
-    if (input.contactEmail !== undefined) updates.contact_email = input.contactEmail ? String(input.contactEmail).trim() : null;
-    if (input.companyName !== undefined) updates.company_name = input.companyName ? String(input.companyName).trim() : null;
+    if (input.expectedCloseDate !== undefined)
+      updates.expected_close_date = input.expectedCloseDate ? (input.expectedCloseDate as any) : null;
+    if (input.contactName !== undefined)
+      updates.contact_name = input.contactName ? String(input.contactName).trim() : null;
+    if (input.contactPhone !== undefined)
+      updates.contact_phone = input.contactPhone ? String(input.contactPhone).trim() : null;
+    if (input.contactEmail !== undefined)
+      updates.contact_email = input.contactEmail ? String(input.contactEmail).trim() : null;
+    if (input.companyName !== undefined)
+      updates.company_name = input.companyName ? String(input.companyName).trim() : null;
     if (input.source !== undefined) updates.source = String(input.source).trim();
     if (input.priority !== undefined) updates.priority = String(input.priority).trim();
-    if (input.assignedUserId !== undefined) updates.assigned_user_id = input.assignedUserId ? Number(input.assignedUserId) : null;
+    if (input.assignedUserId !== undefined)
+      updates.assigned_user_id = input.assignedUserId ? Number(input.assignedUserId) : null;
     if (input.customerId !== undefined) updates.customer_id = input.customerId ? Number(input.customerId) : null;
     if (input.lostReason !== undefined) updates.lost_reason = input.lostReason ? String(input.lostReason).trim() : null;
     if (input.notes !== undefined) updates.notes = input.notes ? String(input.notes).trim() : null;
@@ -356,7 +359,6 @@ export class CrmService {
       return { ok: true, message: 'تم حذف الفرصة البيعية وسجلاتها بنجاح.' };
     });
   }
-
 
   async addActivity(dealId: number, input: CreateActivityInput, auth: AuthContext) {
     const scope = requireTenantScope(auth);
@@ -476,7 +478,7 @@ export class CrmService {
       } else {
         totalActiveCount += 1;
         totalActiveAmount += amount;
-        weightedAmount += (amount * (prob / 100));
+        weightedAmount += amount * (prob / 100);
       }
     }
 
@@ -592,4 +594,3 @@ export class CrmService {
     });
   }
 }
-

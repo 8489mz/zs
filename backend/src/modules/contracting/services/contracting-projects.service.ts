@@ -1,21 +1,11 @@
-import {
-  Logger,
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Logger, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { getDailyDocumentPrefix } from '../../../common/utils/document-number.util';
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
-import {
-  CreateProjectDto,
-  UpdateProjectDto,
-  MarkTenderLostDto,
-  AwardTenderDto,
-} from '../dto/contracting.dto';
+import { CreateProjectDto, UpdateProjectDto, MarkTenderLostDto, AwardTenderDto } from '../dto/contracting.dto';
 import { ContractingProjectSummary } from '../contracting.types';
 
 /**
@@ -55,10 +45,7 @@ export class ContractingProjectsService {
 
   async getProjects(auth: AuthContext, query?: { status?: string; search?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = this.db
-      .selectFrom('contracting_projects')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let q = this.db.selectFrom('contracting_projects').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.status && query.status !== 'all') {
       q = q.where('status', '=', query.status as any);
@@ -66,13 +53,7 @@ export class ContractingProjectsService {
 
     if (query?.search) {
       const s = `%${query.search.trim()}%`;
-      q = q.where((eb) =>
-        eb.or([
-          eb('name', 'ilike', s),
-          eb('code', 'ilike', s),
-          eb('client_name', 'ilike', s),
-        ])
-      );
+      q = q.where((eb) => eb.or([eb('name', 'ilike', s), eb('code', 'ilike', s), eb('client_name', 'ilike', s)]));
     }
 
     const projects = await q.orderBy('created_at', 'desc').execute();
@@ -81,7 +62,7 @@ export class ContractingProjectsService {
     return Promise.all(
       projects.map(async (p) => {
         return this.enrichProjectMetrics(tenantId, p);
-      })
+      }),
     );
   }
 
@@ -189,8 +170,8 @@ export class ContractingProjectsService {
       competitor_price: dto.competitorPrice !== undefined ? Number(dto.competitorPrice) : null,
       revision_number: dto.revisionNumber !== undefined ? Number(dto.revisionNumber) : 0,
       original_tender_id: dto.originalTenderId ? Number(dto.originalTenderId) : null,
-      submitted_at: dto.submittedAt ? new Date(dto.submittedAt) : (dto.status === 'submitted' ? new Date() : null),
-      awarded_at: dto.awardedAt ? new Date(dto.awardedAt) : (dto.status === 'active' ? new Date() : null),
+      submitted_at: dto.submittedAt ? new Date(dto.submittedAt) : dto.status === 'submitted' ? new Date() : null,
+      awarded_at: dto.awardedAt ? new Date(dto.awardedAt) : dto.status === 'active' ? new Date() : null,
       notes: dto.notes || null,
     };
 
@@ -198,11 +179,7 @@ export class ContractingProjectsService {
     if (suppliedCode) {
       values.code = suppliedCode;
       values.cost_center_id = await resolveCostCenter(suppliedCode);
-      const [created] = await this.db
-        .insertInto('contracting_projects')
-        .values(values)
-        .returningAll()
-        .execute();
+      const [created] = await this.db.insertInto('contracting_projects').values(values).returningAll().execute();
       return this.enrichProjectMetrics(tenantId, created);
     }
 
@@ -315,9 +292,11 @@ export class ContractingProjectsService {
     }
     if (dto.lossReason !== undefined) updatePayload.loss_reason = dto.lossReason;
     if (dto.lossNotes !== undefined) updatePayload.loss_notes = dto.lossNotes;
-    if (dto.competitorPrice !== undefined) updatePayload.competitor_price = dto.competitorPrice !== null ? Number(dto.competitorPrice) : null;
+    if (dto.competitorPrice !== undefined)
+      updatePayload.competitor_price = dto.competitorPrice !== null ? Number(dto.competitorPrice) : null;
     if (dto.revisionNumber !== undefined) updatePayload.revision_number = Number(dto.revisionNumber);
-    if (dto.originalTenderId !== undefined) updatePayload.original_tender_id = dto.originalTenderId ? Number(dto.originalTenderId) : null;
+    if (dto.originalTenderId !== undefined)
+      updatePayload.original_tender_id = dto.originalTenderId ? Number(dto.originalTenderId) : null;
     if (dto.submittedAt !== undefined) updatePayload.submitted_at = dto.submittedAt ? new Date(dto.submittedAt) : null;
     if (dto.awardedAt !== undefined) updatePayload.awarded_at = dto.awardedAt ? new Date(dto.awardedAt) : null;
     if (dto.status === 'active' && !(existing as any).awarded_at && dto.awardedAt === undefined) {
@@ -557,9 +536,8 @@ export class ContractingProjectsService {
     const totalCostCommitted = Number(subcontractsRes?.sum || 0);
 
     const revisedContractValue = Number(p.revised_contract_value || p.contract_value || 0);
-    const completionRatePercent = revisedContractValue > 0
-      ? Math.min(100, Math.round((totalBilledClient / revisedContractValue) * 100))
-      : 0;
+    const completionRatePercent =
+      revisedContractValue > 0 ? Math.min(100, Math.round((totalBilledClient / revisedContractValue) * 100)) : 0;
 
     const actualCostIncurred = totalBilledSubcontractors;
     const grossMarginForecast = revisedContractValue - Math.max(totalCostCommitted, actualCostIncurred);

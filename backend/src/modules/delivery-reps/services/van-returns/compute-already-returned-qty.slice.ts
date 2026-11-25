@@ -26,7 +26,7 @@ export class ComputeAlreadyReturnedQtyBySaleItemSlice {
       .execute();
 
     for (const ret of existingReturns) {
-      const parsedItems = typeof ret.items_json === 'string' ? JSON.parse(ret.items_json) : (ret.items_json || []);
+      const parsedItems = typeof ret.items_json === 'string' ? JSON.parse(ret.items_json) : ret.items_json || [];
       for (const it of parsedItems) {
         if (it.saleItemId) {
           const sid = Number(it.saleItemId);

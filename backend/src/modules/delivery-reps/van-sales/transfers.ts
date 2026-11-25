@@ -25,10 +25,7 @@ export class TransfersService {
     return this.vanTransfersService.rejectInterVanTransfer(tenantId, toRepId, transferId, reason);
   }
 
-  async listInterVanTransfers(
-    tenantId: string,
-    filters?: { repId?: number; status?: string },
-  ) {
+  async listInterVanTransfers(tenantId: string, filters?: { repId?: number; status?: string }) {
     return this.vanTransfersService.listInterVanTransfers(tenantId, filters);
   }
 

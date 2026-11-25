@@ -32,14 +32,24 @@ export class OfflineReleasesInitSync {
       'D:/zn/backend/runtime/releases',
     ];
 
-    const foundManifests: Array<{ version: string; changelog: string; passcode?: string; requiresPasscode?: boolean; generatedAt?: string; patchUrl?: string }> = [];
+    const foundManifests: Array<{
+      version: string;
+      changelog: string;
+      passcode?: string;
+      requiresPasscode?: boolean;
+      generatedAt?: string;
+      patchUrl?: string;
+    }> = [];
 
     for (const dir of searchDirs) {
       if (fs.existsSync(dir)) {
-        const files = fs.readdirSync(dir).filter(f => f.startsWith('manifest-') && f.endsWith('.json'));
+        const files = fs.readdirSync(dir).filter((f) => f.startsWith('manifest-') && f.endsWith('.json'));
         for (const file of files) {
           try {
-            const raw = fs.readFileSync(path.join(dir, file), 'utf8').trim().replace(/^\uFEFF/, '');
+            const raw = fs
+              .readFileSync(path.join(dir, file), 'utf8')
+              .trim()
+              .replace(/^\uFEFF/, '');
             const content = JSON.parse(raw);
             if (content.version) {
               foundManifests.push(content);
@@ -54,7 +64,7 @@ export class OfflineReleasesInitSync {
     if (foundManifests.length === 0) return;
 
     // Deduplicate by version
-    const uniqueByVersion = new Map<string, typeof foundManifests[0]>();
+    const uniqueByVersion = new Map<string, (typeof foundManifests)[0]>();
     for (const m of foundManifests) {
       uniqueByVersion.set(m.version, m);
     }
@@ -108,11 +118,7 @@ export class OfflineReleasesInitSync {
 
           const activationValues: { is_active: boolean; passcode?: string | null } = { is_active: true };
           if (m.passcode) activationValues.passcode = m.passcode;
-          await this.db
-            .updateTable('offline_releases')
-            .set(activationValues)
-            .where('id', '=', existing.id)
-            .execute();
+          await this.db.updateTable('offline_releases').set(activationValues).where('id', '=', existing.id).execute();
         }
       }
     }

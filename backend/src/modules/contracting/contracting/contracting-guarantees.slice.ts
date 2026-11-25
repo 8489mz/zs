@@ -52,7 +52,7 @@ export class ContractingGuaranteesSlice {
 
   async getGuaranteesRaw(
     tenantId: string,
-    filters: { projectId?: string; subcontractId?: string; status?: string } = {}
+    filters: { projectId?: string; subcontractId?: string; status?: string } = {},
   ): Promise<BankGuarantee[]> {
     return this.guaranteesService.getGuaranteesRaw(tenantId, filters);
   }
@@ -65,7 +65,7 @@ export class ContractingGuaranteesSlice {
       subcontractorId?: number;
       status?: string;
       guaranteeType?: string;
-    } = {}
+    } = {},
   ) {
     return this.guaranteesService.getGuarantees(auth, query);
   }
@@ -126,7 +126,11 @@ export class ContractingGuaranteesSlice {
     return this.guaranteesService.getAllocationBatches(auth, projectId);
   }
 
-  async previewBatchAllocation(auth: AuthContext, projectId: string, dto: CreateAllocationBatchDto): Promise<BatchAllocationSummary> {
+  async previewBatchAllocation(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateAllocationBatchDto,
+  ): Promise<BatchAllocationSummary> {
     return this.guaranteesService.previewBatchAllocation(auth, projectId, dto);
   }
 

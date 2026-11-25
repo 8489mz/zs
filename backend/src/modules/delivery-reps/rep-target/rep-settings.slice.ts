@@ -63,18 +63,13 @@ export const VAN_REP_DISCOUNT_CAP_SETTING_KEYS = ['vanRepDiscountCapPercent', 'v
  * handle) — the sale path calls it on the pool handle before its
  * transaction opens.
  */
-export async function getVanRepDiscountCapPercent(
-  queryable: any,
-  tenantId: string,
-): Promise<number> {
+export async function getVanRepDiscountCapPercent(queryable: any, tenantId: string): Promise<number> {
   try {
     const row = await queryable
       .selectFrom('settings')
       .select(['value'])
       .where('tenant_id', '=', tenantId)
-      .where((eb: any) =>
-        eb.or(VAN_REP_DISCOUNT_CAP_SETTING_KEYS.map((key) => eb('key', '=', key))),
-      )
+      .where((eb: any) => eb.or(VAN_REP_DISCOUNT_CAP_SETTING_KEYS.map((key) => eb('key', '=', key))))
       .executeTakeFirst();
     if (row?.value == null || String(row.value).trim() === '') return VAN_REP_DISCOUNT_CAP_DEFAULT_PERCENT;
     let parsed: unknown = row.value;
@@ -109,18 +104,13 @@ export const VAN_CASH_DISCOUNT_SETTING_KEYS = ['cashDiscountPercent', 'cash_disc
  * discount poured into that field would be refused over 5% and
  * would consume the rep's cap.
  */
-export async function getCashDiscountPercent(
-  queryable: any,
-  tenantId: string,
-): Promise<number> {
+export async function getCashDiscountPercent(queryable: any, tenantId: string): Promise<number> {
   try {
     const row = await queryable
       .selectFrom('settings')
       .select(['value'])
       .where('tenant_id', '=', tenantId)
-      .where((eb: any) =>
-        eb.or(VAN_CASH_DISCOUNT_SETTING_KEYS.map((key) => eb('key', '=', key))),
-      )
+      .where((eb: any) => eb.or(VAN_CASH_DISCOUNT_SETTING_KEYS.map((key) => eb('key', '=', key))))
       .executeTakeFirst();
     if (row?.value == null || String(row.value).trim() === '') return VAN_CASH_DISCOUNT_DEFAULT_PERCENT;
     let parsed: unknown = row.value;
@@ -205,11 +195,7 @@ export function parseRepPermissions(raw: unknown): RepPermissionFlags {
  * parseRepPermissions), never to a throw: the gate must not fail an
  * operation over a missing flags object.
  */
-export async function loadRepPermissions(
-  queryable: any,
-  tenantId: string,
-  repId: number,
-): Promise<RepPermissionFlags> {
+export async function loadRepPermissions(queryable: any, tenantId: string, repId: number): Promise<RepPermissionFlags> {
   try {
     const row = await queryable
       .selectFrom('delivery_representatives')

@@ -27,11 +27,7 @@
  *   Paymob always sends them; a flag-less payload is treated as
  *   unproven and routed to human review, never marked paid outright.
  */
-export type PaymobTransactionKind =
-  | 'capture'
-  | 'authorization_only'
-  | 'void_or_refund'
-  | 'unclassified';
+export type PaymobTransactionKind = 'capture' | 'authorization_only' | 'void_or_refund' | 'unclassified';
 
 export type PaymobTransactionFlags = {
   is_auth?: unknown;

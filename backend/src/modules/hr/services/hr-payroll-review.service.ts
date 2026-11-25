@@ -168,7 +168,7 @@ export class HrPayrollReviewService {
       GROUP BY lr.employee_id
     `.execute(db);
 
-    const attendanceByEmployee = new Map<number, { absent_days: number, records: any[] }>();
+    const attendanceByEmployee = new Map<number, { absent_days: number; records: any[] }>();
     for (const employeeId of employeeIds) {
       attendanceByEmployee.set(employeeId, { absent_days: 0, records: [] });
     }
@@ -197,7 +197,7 @@ export class HrPayrollReviewService {
     let hrCommissionTarget = 0;
 
     let hrWeekendDays = ['friday', 'saturday'];
-    
+
     if (tenantId) {
       const globalPolicies = await this.getPayrollPolicies(db, tenantId);
       hrDelayPolicyEnabled = globalPolicies.hrDelayPolicyEnabled === true;
@@ -212,7 +212,9 @@ export class HrPayrollReviewService {
       }
       hrCommissionValue = Number(globalPolicies.hrCommissionValue || 0);
       hrCommissionTarget = Number(globalPolicies.hrCommissionTarget || 0);
-      hrWeekendDays = (globalPolicies.hrWeekendDays || 'friday,saturday').split(',').map((d: string) => d.trim().toLowerCase());
+      hrWeekendDays = (globalPolicies.hrWeekendDays || 'friday,saturday')
+        .split(',')
+        .map((d: string) => d.trim().toLowerCase());
     }
 
     const holidaysRes = await sql<Record<string, unknown>>`
@@ -223,15 +225,14 @@ export class HrPayrollReviewService {
         AND start_date <= ${range.to}::date
         AND end_date >= ${range.from}::date
     `.execute(db);
-    
+
     // DATE columns are tenant calendar dates, not instants. Never convert them
     // through the server's timezone when deciding paid holidays.
-    const isHoliday = (dateStr: string) => holidaysRes.rows.some(h =>
-      dateStr >= String(h.start_date_text) && dateStr <= String(h.end_date_text),
-    );
+    const isHoliday = (dateStr: string) =>
+      holidaysRes.rows.some((h) => dateStr >= String(h.start_date_text) && dateStr <= String(h.end_date_text));
 
     // Fetch sales grouped by user_id for the period
-    const userIds = empResult.rows.map(r => Number(r.user_id)).filter(id => !isNaN(id) && id > 0);
+    const userIds = empResult.rows.map((r) => Number(r.user_id)).filter((id) => !isNaN(id) && id > 0);
     const salesByUser = new Map<number, number>();
     if (userIds.length > 0) {
       const salesResult = await sql<Record<string, unknown>>`
@@ -256,7 +257,7 @@ export class HrPayrollReviewService {
       const exceptions = exceptionsByEmployee.get(employeeId) || {};
       const leave = leaveByEmployee.get(employeeId) || {};
       const emp = empDetails.get(employeeId) || {};
-      
+
       let attendanceAbsentDays = 0;
       const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
       for (const rec of attendance.records) {
@@ -273,25 +274,29 @@ export class HrPayrollReviewService {
       const lateIncidents = Number(exceptions.late_incidents_count || 0);
       const earlyLeaveIncidents = Number(exceptions.early_leave_incidents_count || 0);
       const totalIncidents = lateIncidents + earlyLeaveIncidents;
-      
+
       const overtimeMinutes = Number(exceptions.overtime_minutes || 0);
       const unresolvedExceptionsCount = Number(exceptions.unresolved_exceptions_count || 0);
 
       const approvedLeaveDays = Number(leave.approved_leave_days || 0);
       const unpaidLeaveDays = Number(leave.unpaid_leave_days || 0);
-      
+
       const isHourly = (emp.compensation_type || '') === 'hourly';
       const hourlyRate = Number(emp.hourly_rate || 0);
       const expectedHours = Number(emp.expected_daily_hours || 8) || 8;
-      
+
       const baseSalary = Number(baseSalaryByEmployeeId.get(employeeId) || 0);
       const contractedBase = Number(contractualMonthlySalary?.get(employeeId) ?? baseSalary);
       // D4: the daily rate is the monthly wage over the days of the review
       // period's calendar month — never a fixed 30. Delay/leave deductions
       // use this period rate (their incidents carry no per-day dates);
       // absence itself is priced per absent day below, at ITS month's rate.
-      const dailyRate = isHourly ? (hourlyRate * expectedHours) : (contractedBase > 0 ? roundMoney(contractedBase / daysInCalendarMonth(range.from), reviewDigits) : 0);
-      const calculatedHourlyRate = isHourly ? hourlyRate : (dailyRate / expectedHours);
+      const dailyRate = isHourly
+        ? hourlyRate * expectedHours
+        : contractedBase > 0
+          ? roundMoney(contractedBase / daysInCalendarMonth(range.from), reviewDigits)
+          : 0;
+      const calculatedHourlyRate = isHourly ? hourlyRate : dailyRate / expectedHours;
 
       // Delay deduction runs through the canonical engine
       // (payroll-calculation.engine): the same tier loop and minute
@@ -313,9 +318,8 @@ export class HrPayrollReviewService {
           calculatedHourlyRate,
           totalIncidents,
           totalLateMinutes: lateMinutes + earlyLeaveMinutes,
-          policyMode: delayPolicyMode === 'progressive' || delayPolicyMode === 'standard'
-            ? delayPolicyMode
-            : 'disabled',
+          policyMode:
+            delayPolicyMode === 'progressive' || delayPolicyMode === 'standard' ? delayPolicyMode : 'disabled',
           tiers: {
             firstTimeDeductionDays: hrDelayPolicyFirstTime,
             secondTimeDeductionDays: hrDelayPolicySecondTime,
@@ -337,28 +341,34 @@ export class HrPayrollReviewService {
         if (hrWeekendDays.includes(dayName) || isHoliday(String(rec.work_date_text))) continue;
         absentDeduction += isHourly
           ? hourlyRate * expectedHours
-          : (contractedBase > 0 ? contractedBase / daysInCalendarMonth(String(rec.work_date_text)) : 0);
+          : contractedBase > 0
+            ? contractedBase / daysInCalendarMonth(String(rec.work_date_text))
+            : 0;
       }
       const suggestedAttendanceDeductionAmount = roundMoney(absentDeduction + delayDeduction, reviewDigits);
       const suggestedLeaveDeductionAmount = roundMoney(dailyRate * unpaidLeaveDays, reviewDigits);
       let suggestedOvertimeAllowanceAmount: number;
       try {
-        suggestedOvertimeAllowanceAmount = !isHourly && effectiveContracts
-          ? calculateHistoricalOvertimePay(
-              datedOvertimeByEmployee.get(employeeId) || [],
-              effectiveContracts.get(employeeId) || [],
-              expectedHours,
-              overtimeMultiplier,
-              reviewDigits,
-            )
-          : calculateOvertime({
-              minorUnits: reviewDigits,
-              calculatedHourlyRate, overtimeMinutes, overtimeMultiplier,
-            });
+        suggestedOvertimeAllowanceAmount =
+          !isHourly && effectiveContracts
+            ? calculateHistoricalOvertimePay(
+                datedOvertimeByEmployee.get(employeeId) || [],
+                effectiveContracts.get(employeeId) || [],
+                expectedHours,
+                overtimeMultiplier,
+                reviewDigits,
+              )
+            : calculateOvertime({
+                minorUnits: reviewDigits,
+                calculatedHourlyRate,
+                overtimeMinutes,
+                overtimeMultiplier,
+              });
       } catch (error) {
         throw new AppError(
           `تعذر احتساب إضافي الموظف #${employeeId}: ${error instanceof Error ? error.message : 'راجع العقود'}`,
-          'HR_OVERTIME_EFFECTIVE_CONTRACT_INVALID', 409,
+          'HR_OVERTIME_EFFECTIVE_CONTRACT_INVALID',
+          409,
         );
       }
 
@@ -384,7 +394,7 @@ export class HrPayrollReviewService {
       } else if (cType === 'fixed') {
         commissionValue = cVal;
       }
-      
+
       // Tax/insurance is deliberately NOT computed at attendance review stage:
       // this view does not include compensation packages and manual adjustments.
       // The canonical payroll line recalculates withholding after all earnings.
@@ -393,11 +403,14 @@ export class HrPayrollReviewService {
       const suggestedIncomeTaxDeductionAmount = 0;
 
       let notesStr = `مراجعة: غياب ${attendanceAbsentDays} يوم.`;
-      if (totalIncidents > 0) notesStr += ` (${totalIncidents}) مرات تأخير/انصراف مبكر باجمالي ${Math.floor((lateMinutes+earlyLeaveMinutes)/60)}س و${(lateMinutes+earlyLeaveMinutes)%60}د. سياسة: ${delayPolicyMode}.`;
+      if (totalIncidents > 0)
+        notesStr += ` (${totalIncidents}) مرات تأخير/انصراف مبكر باجمالي ${Math.floor((lateMinutes + earlyLeaveMinutes) / 60)}س و${(lateMinutes + earlyLeaveMinutes) % 60}د. سياسة: ${delayPolicyMode}.`;
       if (unpaidLeaveDays > 0) notesStr += ` إجازة بدون مرتب ${unpaidLeaveDays} يوم.`;
-      if (overtimeMinutes > 0) notesStr += ` إضافي معتمد ${Math.floor(overtimeMinutes/60)}س و${overtimeMinutes%60}د.`;
+      if (overtimeMinutes > 0)
+        notesStr += ` إضافي معتمد ${Math.floor(overtimeMinutes / 60)}س و${overtimeMinutes % 60}د.`;
       if (commissionValue > 0) notesStr += ` عمولة مبيعات: ${commissionValue}.`;
-      if (suggestedSocialInsuranceDeductionAmount > 0) notesStr += ` تأمينات موظف: ${suggestedSocialInsuranceDeductionAmount} (منشأة: ${suggestedEmployerInsuranceAmount}).`;
+      if (suggestedSocialInsuranceDeductionAmount > 0)
+        notesStr += ` تأمينات موظف: ${suggestedSocialInsuranceDeductionAmount} (منشأة: ${suggestedEmployerInsuranceAmount}).`;
       if (suggestedIncomeTaxDeductionAmount > 0) notesStr += ` ضريبة كسب عمل: ${suggestedIncomeTaxDeductionAmount}.`;
 
       reviewByEmployeeId.set(employeeId, {

@@ -7,18 +7,22 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
-import {
-  CreatePayrollAdjustmentDto,
-  CreatePayrollRunDto,
-  UpsertPayrollItemDto,
-  GenerateWpsDto,
-} from '../dto/hr.dto';
+import { CreatePayrollAdjustmentDto, CreatePayrollRunDto, UpsertPayrollItemDto, GenerateWpsDto } from '../dto/hr.dto';
 import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { requireLoanMoney } from '../payroll-loan-allocation.engine';
 import { type MoneyDigits, currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { MANUAL_PAYROLL_EXCLUSION_NOTE } from '../engines/hr-payroll-run.engine';
 import { type EffectiveSalaryContract } from '../engines/hourly-attendance-pay.engine';
-import { clean, normalizeDateOnly, tenantBookDigits, normalizePayrollMonth, monthRange, hasHrPermission, money, combineNotes } from '../hr-helpers';
+import {
+  clean,
+  normalizeDateOnly,
+  tenantBookDigits,
+  normalizePayrollMonth,
+  monthRange,
+  hasHrPermission,
+  money,
+  combineNotes,
+} from '../hr-helpers';
 
 /**
  * HrPayrollRunsService — slice H7 of the hr split.
@@ -197,13 +201,21 @@ export class HrPayrollRunsService {
   }
 
   async getPayrollRunStatusForUpdate(db: Kysely<Database>, runId: number, tenantId: string): Promise<string> {
-    const result = await sql<{ status: string }>`SELECT status FROM hr_payroll_runs WHERE id = ${runId} AND tenant_id = ${tenantId} LIMIT 1 FOR UPDATE`.execute(db);
+    const result = await sql<{
+      status: string;
+    }>`SELECT status FROM hr_payroll_runs WHERE id = ${runId} AND tenant_id = ${tenantId} LIMIT 1 FOR UPDATE`.execute(
+      db,
+    );
     const status = clean(result.rows[0]?.status);
     if (!status) throw new AppError('Payroll run not found', 'HR_PAYROLL_RUN_NOT_FOUND', 404);
     return status;
   }
 
-  private async getPayrollItemRun(db: Kysely<Database>, itemId: number, tenantId: string): Promise<{ runId: number; runStatus: string; itemStatus: string }> {
+  private async getPayrollItemRun(
+    db: Kysely<Database>,
+    itemId: number,
+    tenantId: string,
+  ): Promise<{ runId: number; runStatus: string; itemStatus: string }> {
     const result = await sql<{ run_id: number; run_status: string; item_status: string }>`
       SELECT i.run_id, r.status AS run_status, i.status AS item_status
       FROM hr_payroll_run_items i
@@ -287,7 +299,13 @@ export class HrPayrollRunsService {
     `.execute(this.db);
     const runs = result.rows.map((row) => this.mapPayrollRun(row));
     // P8 (RC-7): the payroll page's month default comes from the server clock.
-    return { runs, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary: { totalItems }, serverTime: new Date().toISOString(), serverTimezone: tenantTimezone };
+    return {
+      runs,
+      pagination: { page: safePage, pageSize, totalItems, totalPages },
+      summary: { totalItems },
+      serverTime: new Date().toISOString(),
+      serverTimezone: tenantTimezone,
+    };
   }
 
   async getPayrollRun(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
@@ -346,7 +364,12 @@ export class HrPayrollRunsService {
       baseSalaryByEmployeeId.set(employeeId, Number(row.base_salary || 0));
     }
     const fromDate = String(run.start_date_text || `${periodMonth}-01`);
-    const toDate = String(run.end_date_text || new Date(Date.UTC(Number(periodMonth.split('-')[0]), Number(periodMonth.split('-')[1]), 0)).toISOString().slice(0, 10));
+    const toDate = String(
+      run.end_date_text ||
+        new Date(Date.UTC(Number(periodMonth.split('-')[0]), Number(periodMonth.split('-')[1]), 0))
+          .toISOString()
+          .slice(0, 10),
+    );
     const range = { from: fromDate, to: toDate };
     // An approved/paid payslip is an immutable financial snapshot. Its presentation
     // must not be recomputed using current (possibly newer) tax, leave or attendance
@@ -400,10 +423,17 @@ export class HrPayrollRunsService {
     const month = monthRange(periodMonth);
     const startDate = payload.startDate ? normalizeDateOnly(payload.startDate) : month.from;
     const endDate = payload.endDate ? normalizeDateOnly(payload.endDate) : month.to;
-    const periodLengthDays = startDate && endDate
-      ? Math.floor((Date.parse(endDate + 'T00:00:00Z') - Date.parse(startDate + 'T00:00:00Z')) / 86400000)
-      : NaN;
-    if (!startDate || !endDate || !Number.isFinite(periodLengthDays) || periodLengthDays < 0 || periodLengthDays > 366) {
+    const periodLengthDays =
+      startDate && endDate
+        ? Math.floor((Date.parse(endDate + 'T00:00:00Z') - Date.parse(startDate + 'T00:00:00Z')) / 86400000)
+        : NaN;
+    if (
+      !startDate ||
+      !endDate ||
+      !Number.isFinite(periodLengthDays) ||
+      periodLengthDays < 0 ||
+      periodLengthDays > 366
+    ) {
       throw new AppError('اختر تاريخ بداية ونهاية صحيحين لفترة القبض', 'HR_PAYROLL_PERIOD_INVALID', 400);
     }
 
@@ -413,8 +443,12 @@ export class HrPayrollRunsService {
       // subsequent week. Serialize overlapping period checks within tenant/frequency.
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + tenantId}))`.execute(trx);
       const overlapping = await sql<{
-        id: number; status: string; period_month: string; pay_frequency: string;
-        start_date_text: string; end_date_text: string;
+        id: number;
+        status: string;
+        period_month: string;
+        pay_frequency: string;
+        start_date_text: string;
+        end_date_text: string;
       }>`
         SELECT id, status, period_month, pay_frequency,
           to_char(start_date, 'YYYY-MM-DD') AS start_date_text,
@@ -442,14 +476,19 @@ export class HrPayrollRunsService {
         FOR UPDATE
       `.execute(trx);
 
-      if (overlapping.rows.some(row => row.pay_frequency !== payFreq)) {
+      if (overlapping.rows.some((row) => row.pay_frequency !== payFreq)) {
         throw new AppError(
           'لا يمكن إنشاء مسير بدورية مختلفة يغطي أيام موظفين موجودين في مسير آخر؛ راجع المسير المتداخل',
-          'HR_PAYROLL_CROSS_FREQUENCY_OVERLAP', 409,
+          'HR_PAYROLL_CROSS_FREQUENCY_OVERLAP',
+          409,
         );
       }
-      if (overlapping.rows.some(row => row.start_date_text !== startDate || row.end_date_text !== endDate)) {
-        throw new AppError('يوجد كشف مرتبات آخر يتداخل مع هذه الفترة. اختر فترة غير متداخلة لمنع تكرار الصرف.', 'HR_PAYROLL_PERIOD_OVERLAP', 409);
+      if (overlapping.rows.some((row) => row.start_date_text !== startDate || row.end_date_text !== endDate)) {
+        throw new AppError(
+          'يوجد كشف مرتبات آخر يتداخل مع هذه الفترة. اختر فترة غير متداخلة لمنع تكرار الصرف.',
+          'HR_PAYROLL_PERIOD_OVERLAP',
+          409,
+        );
       }
       const existing = overlapping.rows[0];
       if (existing) {
@@ -473,7 +512,11 @@ export class HrPayrollRunsService {
         await this.rebuildPayrollRunItems(trx, runId, 'draft', auth.tenantId || '');
       }
     });
-    await this.audit.log('Create HR payroll run', `Payroll ${periodMonth} [${startDate}..${endDate}] prepared by ${auth.username}`, auth);
+    await this.audit.log(
+      'Create HR payroll run',
+      `Payroll ${periodMonth} [${startDate}..${endDate}] prepared by ${auth.username}`,
+      auth,
+    );
     return this.getPayrollRun(runId, auth);
   }
 
@@ -482,7 +525,10 @@ export class HrPayrollRunsService {
    * against the tenant payroll advisory lock BEFORE calling this helper.
    */
   async invalidateReviewedPayrollForNewHire(
-    db: Kysely<Database>, tenantId: string, hireDate: string, payFrequency: string,
+    db: Kysely<Database>,
+    tenantId: string,
+    hireDate: string,
+    payFrequency: string,
   ): Promise<void> {
     const reviewed = await sql<{ id: number }>`
       SELECT id FROM hr_payroll_runs
@@ -515,7 +561,12 @@ export class HrPayrollRunsService {
     await this.tx.runInTransaction(this.db, async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
       const status = await this.getPayrollRunStatusForUpdate(trx, id, auth.tenantId || '');
-      if (status !== 'draft' && status !== 'reviewed') throw new AppError('Only draft or reviewed payroll runs can be recalculated', 'HR_PAYROLL_RECALCULATE_LOCKED', 400);
+      if (status !== 'draft' && status !== 'reviewed')
+        throw new AppError(
+          'Only draft or reviewed payroll runs can be recalculated',
+          'HR_PAYROLL_RECALCULATE_LOCKED',
+          400,
+        );
       await this.rebuildPayrollRunItems(trx, id, 'draft', auth.tenantId || '');
       if (status === 'reviewed') {
         await this.invalidatePayrollRunReview(trx, id, auth.tenantId || '');
@@ -536,8 +587,12 @@ export class HrPayrollRunsService {
       // correction; all items are recalculated against current approved inputs.
       await this.rebuildPayrollRunItems(trx, id, status, auth.tenantId || '');
 
-      await sql`UPDATE hr_payroll_run_items SET status = 'reviewed', updated_at = NOW() WHERE run_id = ${id} AND status = 'draft' AND tenant_id = ${auth.tenantId}`.execute(trx);
-      await sql`UPDATE hr_payroll_runs SET status = 'reviewed', reviewed_by = ${auth.userId}, reviewed_at = NOW(), updated_at = NOW() WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(trx);
+      await sql`UPDATE hr_payroll_run_items SET status = 'reviewed', updated_at = NOW() WHERE run_id = ${id} AND status = 'draft' AND tenant_id = ${auth.tenantId}`.execute(
+        trx,
+      );
+      await sql`UPDATE hr_payroll_runs SET status = 'reviewed', reviewed_by = ${auth.userId}, reviewed_at = NOW(), updated_at = NOW() WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(
+        trx,
+      );
     });
     await this.audit.log('Review HR payroll run', `Payroll run #${id} reviewed by ${auth.username}`, auth);
     return this.getPayrollRun(id, auth);
@@ -606,9 +661,17 @@ export class HrPayrollRunsService {
     if (!hasActiveAccrual) {
       const wasReversed = accrualJournals.rows.some((row) => !!row.reversed_by_entry_id);
       if (wasReversed) {
-        throw new AppError('قيد استحقاق الرواتب لهذا المسير تم عكسه، لا يمكن تصدير ملف بنكي', 'HR_PAYROLL_EXPORT_ACCRUAL_REVERSED', 409);
+        throw new AppError(
+          'قيد استحقاق الرواتب لهذا المسير تم عكسه، لا يمكن تصدير ملف بنكي',
+          'HR_PAYROLL_EXPORT_ACCRUAL_REVERSED',
+          409,
+        );
       }
-      throw new AppError('لا يوجد قيد استحقاق مرحل لهذا المسير، لا يمكن تصدير ملف بنكي', 'HR_PAYROLL_EXPORT_ACCRUAL_MISSING', 409);
+      throw new AppError(
+        'لا يوجد قيد استحقاق مرحل لهذا المسير، لا يمكن تصدير ملف بنكي',
+        'HR_PAYROLL_EXPORT_ACCRUAL_MISSING',
+        409,
+      );
     }
 
     // D5: the review CSV may export paid runs too — the run-status gate
@@ -630,15 +693,22 @@ export class HrPayrollRunsService {
       ORDER BY e.employee_no ASC, e.display_name ASC
     `.execute(this.db);
 
-    if (!itemsResult.rows.length) throw new AppError('لا توجد مرتبات معتمدة أو مدفوعة للتصدير', 'HR_PAYROLL_EXPORT_EMPTY', 400);
+    if (!itemsResult.rows.length)
+      throw new AppError('لا توجد مرتبات معتمدة أو مدفوعة للتصدير', 'HR_PAYROLL_EXPORT_EMPTY', 400);
     const badRow = itemsResult.rows.find((row) => {
-      return !clean(row.employee_no) || !clean(row.display_name) || !clean(row.national_id)
-        || !clean(row.bank_name) || (!clean(row.iban) && !clean(row.bank_account_number));
+      return (
+        !clean(row.employee_no) ||
+        !clean(row.display_name) ||
+        !clean(row.national_id) ||
+        !clean(row.bank_name) ||
+        (!clean(row.iban) && !clean(row.bank_account_number))
+      );
     });
     if (badRow) {
       throw new AppError(
         `استكمل رقم الموظف والهوية والبنك ورقم الحساب/الآيبان للموظف ${clean(badRow.display_name) || String(badRow.employee_id)} قبل تصدير الملف`,
-        'HR_PAYROLL_EXPORT_BANK_DETAILS_MISSING', 400,
+        'HR_PAYROLL_EXPORT_BANK_DETAILS_MISSING',
+        400,
       );
     }
     const createDate = todayTenantDate(await getTenantTimezone(this.db, auth.tenantId || ''));
@@ -653,13 +723,21 @@ export class HrPayrollRunsService {
       .execute();
     const tenantSettings: Record<string, any> = {};
     for (const row of settingsRows) {
-      try { tenantSettings[row.key] = JSON.parse(row.value); } catch { tenantSettings[row.key] = row.value; }
+      try {
+        tenantSettings[row.key] = JSON.parse(row.value);
+      } catch {
+        tenantSettings[row.key] = row.value;
+      }
     }
 
     const configuredCurrency = clean(tenantSettings.currency).toUpperCase();
     const currency = clean(payload.currency || configuredCurrency).toUpperCase();
     if (!/^[A-Z]{3}$/.test(configuredCurrency) || configuredCurrency !== currency) {
-      throw new AppError('عملة كشف التحويل غير مدعومة أو لا تطابق عملة المنشأة', 'HR_PAYROLL_EXPORT_CURRENCY_MISMATCH', 409);
+      throw new AppError(
+        'عملة كشف التحويل غير مدعومة أو لا تطابق عملة المنشأة',
+        'HR_PAYROLL_EXPORT_CURRENCY_MISMATCH',
+        409,
+      );
     }
     // INV-HR-PAYROLL-BOOK-PRECISION: the review CSV formats stored run
     // amounts at book precision; KWD/OMR runs are no longer blocked here.
@@ -675,7 +753,10 @@ export class HrPayrollRunsService {
       const netPay = Number(row.net_pay || 0);
       const baseSalary = Number(row.base_salary || 0);
       const allowances = Number(row.allowance_amount || 0);
-      const deductions = Number(row.deduction_amount || 0) + Number(row.loan_deduction_amount || 0) + Number(row.asset_recovery_deduction_amount || 0);
+      const deductions =
+        Number(row.deduction_amount || 0) +
+        Number(row.loan_deduction_amount || 0) +
+        Number(row.asset_recovery_deduction_amount || 0);
 
       totalNetPay += netPay;
       totalBaseSalary += baseSalary;
@@ -707,29 +788,48 @@ export class HrPayrollRunsService {
     const sifContent = '';
 
     // Standard CSV export
-    const csvHeaders = ['رقم الموظف', 'اسم الموظف', 'الهوية / الإقامة', 'البنك', 'الآيبان / الحساب', 'السويفت', 'الراتب الأساسي', 'البدلات', 'الخصومات', 'صافي الراتب'];
+    const csvHeaders = [
+      'رقم الموظف',
+      'اسم الموظف',
+      'الهوية / الإقامة',
+      'البنك',
+      'الآيبان / الحساب',
+      'السويفت',
+      'الراتب الأساسي',
+      'البدلات',
+      'الخصومات',
+      'صافي الراتب',
+    ];
     // Spreadsheet cells can execute formulas even inside quoted CSV fields.
     // Preserve bank identifiers as literal text and escape all quotes and line breaks.
     const csvCell = (value: unknown): string => {
-      let s = String(value ?? '').replace(/[\r\n\t]/g, ' ').trim();
+      let s = String(value ?? '')
+        .replace(/[\r\n\t]/g, ' ')
+        .trim();
       if (/^[=+@-]/.test(s)) s = "'" + s;
       return '"' + s.replace(/"/g, '""') + '"';
     };
-    const csvLines = mappedRecords.map((r) => [
-      csvCell(r.employeeNo),
-      csvCell(r.displayName),
-      csvCell(r.nationalId),
-      csvCell(r.bankName),
-      csvCell(r.iban || r.bankAccountNumber),
-      csvCell(r.bankSwiftCode),
-      r.baseSalary.toFixed(exportDigits),
-      r.allowances.toFixed(exportDigits),
-      r.deductions.toFixed(exportDigits),
-      r.netPay.toFixed(exportDigits),
-    ].join(','));
+    const csvLines = mappedRecords.map((r) =>
+      [
+        csvCell(r.employeeNo),
+        csvCell(r.displayName),
+        csvCell(r.nationalId),
+        csvCell(r.bankName),
+        csvCell(r.iban || r.bankAccountNumber),
+        csvCell(r.bankSwiftCode),
+        r.baseSalary.toFixed(exportDigits),
+        r.allowances.toFixed(exportDigits),
+        r.deductions.toFixed(exportDigits),
+        r.netPay.toFixed(exportDigits),
+      ].join(','),
+    );
     const csvContent = [csvHeaders.join(','), ...csvLines].join('\r\n');
 
-    await this.audit.log('Export HR payroll bank review CSV', `Payroll run #${id} exported as REVIEW CSV (not certified WPS) by ${auth.username} (${totalEmployees} employees, total: ${totalNetPay})`, auth);
+    await this.audit.log(
+      'Export HR payroll bank review CSV',
+      `Payroll run #${id} exported as REVIEW CSV (not certified WPS) by ${auth.username} (${totalEmployees} employees, total: ${totalNetPay})`,
+      auth,
+    );
 
     return {
       ok: true,
@@ -753,7 +853,11 @@ export class HrPayrollRunsService {
     };
   }
 
-  async updatePayrollRunItem(id: number, payload: UpsertPayrollItemDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async updatePayrollRunItem(
+    id: number,
+    payload: UpsertPayrollItemDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const { tenantId } = requireTenantScope(auth);
     let runId = 0;
     await this.tx.runInTransaction(this.db, async (trx) => {
@@ -769,16 +873,24 @@ export class HrPayrollRunsService {
       `.execute(trx);
       const item = locked.rows[0];
       if (!item) throw new AppError('Payroll item not found', 'HR_PAYROLL_ITEM_NOT_FOUND', 404);
-      if (item.run_status !== 'draft') throw new AppError('Payroll items can only be edited while the run is draft', 'HR_PAYROLL_ITEM_EDIT_LOCKED', 400);
+      if (item.run_status !== 'draft')
+        throw new AppError(
+          'Payroll items can only be edited while the run is draft',
+          'HR_PAYROLL_ITEM_EDIT_LOCKED',
+          400,
+        );
       const status = clean(payload.status);
-      if (status && !['draft', 'excluded'].includes(status)) throw new AppError('Payroll item status is invalid', 'HR_PAYROLL_ITEM_STATUS_INVALID', 400);
+      if (status && !['draft', 'excluded'].includes(status))
+        throw new AppError('Payroll item status is invalid', 'HR_PAYROLL_ITEM_STATUS_INVALID', 400);
       runId = Number(item.run_id);
       await sql`
         UPDATE hr_payroll_run_items
         SET status = ${status || item.item_status || 'draft'},
-            notes = ${status === 'excluded'
-              ? combineNotes(clean(payload.notes), MANUAL_PAYROLL_EXCLUSION_NOTE)
-              : clean(payload.notes)},
+            notes = ${
+              status === 'excluded'
+                ? combineNotes(clean(payload.notes), MANUAL_PAYROLL_EXCLUSION_NOTE)
+                : clean(payload.notes)
+            },
             updated_at = NOW()
         WHERE id = ${id} AND run_id = ${runId} AND tenant_id = ${tenantId}
       `.execute(trx);
@@ -787,14 +899,27 @@ export class HrPayrollRunsService {
     return this.getPayrollRun(runId, auth);
   }
 
-  async createPayrollAdjustment(id: number, payload: CreatePayrollAdjustmentDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async createPayrollAdjustment(
+    id: number,
+    payload: CreatePayrollAdjustmentDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const item = await this.getPayrollItemRun(this.db, id, auth.tenantId || '');
-    if (item.runStatus !== 'draft') throw new AppError('Payroll adjustments can only be edited while the run is draft', 'HR_PAYROLL_ADJUSTMENT_LOCKED', 400);
+    if (item.runStatus !== 'draft')
+      throw new AppError(
+        'Payroll adjustments can only be edited while the run is draft',
+        'HR_PAYROLL_ADJUSTMENT_LOCKED',
+        400,
+      );
     const adjustmentBookDigits = await tenantBookDigits(this.db, auth.tenantId || '');
     try {
       requireLoanMoney(Number(payload.amount), adjustmentBookDigits);
     } catch {
-      throw new AppError('مبلغ تعديل المرتب يجب أن يكون موجبًا وبدقة دفاتر المنشأة دون تقريب', 'HR_PAYROLL_ADJUSTMENT_AMOUNT_INVALID', 400);
+      throw new AppError(
+        'مبلغ تعديل المرتب يجب أن يكون موجبًا وبدقة دفاتر المنشأة دون تقريب',
+        'HR_PAYROLL_ADJUSTMENT_AMOUNT_INVALID',
+        400,
+      );
     }
     await this.tx.runInTransaction(this.db, async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
@@ -806,16 +931,26 @@ export class HrPayrollRunsService {
         FOR UPDATE OF r
       `.execute(trx);
       if (locked.rows[0]?.status !== 'draft') {
-        throw new AppError('Payroll adjustments can only be edited while the run is draft', 'HR_PAYROLL_ADJUSTMENT_LOCKED', 400);
+        throw new AppError(
+          'Payroll adjustments can only be edited while the run is draft',
+          'HR_PAYROLL_ADJUSTMENT_LOCKED',
+          400,
+        );
       }
       await sql`
         INSERT INTO hr_payroll_item_adjustments (tenant_id, account_id, payroll_item_id, adjustment_type, label, amount, notes)
         VALUES (${auth.tenantId}, ${auth.accountId}, ${id}, ${clean(payload.adjustmentType)}, ${clean(payload.label)}, ${money(payload.amount, adjustmentBookDigits)}, ${clean(payload.notes)})
       `.execute(trx);
       await this.recalculatePayrollItemTotals(trx, id, requireTenantScope(auth).tenantId);
-      await sql`UPDATE hr_payroll_runs SET updated_at = NOW() WHERE id = ${item.runId} AND tenant_id = ${auth.tenantId}`.execute(trx);
+      await sql`UPDATE hr_payroll_runs SET updated_at = NOW() WHERE id = ${item.runId} AND tenant_id = ${auth.tenantId}`.execute(
+        trx,
+      );
     });
-    await this.audit.log('Create HR payroll adjustment', `Payroll item #${id} adjustment added by ${auth.username}`, auth);
+    await this.audit.log(
+      'Create HR payroll adjustment',
+      `Payroll item #${id} adjustment added by ${auth.username}`,
+      auth,
+    );
     return this.getPayrollRun(item.runId, auth);
   }
 
@@ -834,12 +969,19 @@ export class HrPayrollRunsService {
       `.execute(trx);
       const row = result.rows[0];
       if (!row) throw new AppError('Payroll adjustment not found', 'HR_PAYROLL_ADJUSTMENT_NOT_FOUND', 404);
-      if (clean(row.run_status) !== 'draft') throw new AppError('Payroll adjustments can only be edited while the run is draft', 'HR_PAYROLL_ADJUSTMENT_LOCKED', 400);
+      if (clean(row.run_status) !== 'draft')
+        throw new AppError(
+          'Payroll adjustments can only be edited while the run is draft',
+          'HR_PAYROLL_ADJUSTMENT_LOCKED',
+          400,
+        );
       runId = Number(row.run_id || 0);
       itemId = Number(row.payroll_item_id || 0);
       await sql`DELETE FROM hr_payroll_item_adjustments WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(trx);
       await this.recalculatePayrollItemTotals(trx, itemId, requireTenantScope(auth).tenantId);
-      await sql`UPDATE hr_payroll_runs SET updated_at = NOW() WHERE id = ${runId} AND tenant_id = ${auth.tenantId}`.execute(trx);
+      await sql`UPDATE hr_payroll_runs SET updated_at = NOW() WHERE id = ${runId} AND tenant_id = ${auth.tenantId}`.execute(
+        trx,
+      );
     });
     await this.audit.log('Delete HR payroll adjustment', `Payroll adjustment #${id} deleted by ${auth.username}`, auth);
     return this.getPayrollRun(runId, auth);

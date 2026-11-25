@@ -38,11 +38,14 @@ export class DiagnosticsSchedulerService implements OnApplicationBootstrap, OnMo
     }, 15000);
 
     // Then check every 30 minutes
-    this.timer = setInterval(() => {
-      this.checkAndProcessDiagnostics().catch((err) => {
-        this.logger.warn(`Routine diagnostics check failed: ${err?.message}`);
-      });
-    }, 30 * 60 * 1000);
+    this.timer = setInterval(
+      () => {
+        this.checkAndProcessDiagnostics().catch((err) => {
+          this.logger.warn(`Routine diagnostics check failed: ${err?.message}`);
+        });
+      },
+      30 * 60 * 1000,
+    );
   }
 
   onModuleDestroy() {
@@ -104,7 +107,9 @@ export class DiagnosticsSchedulerService implements OnApplicationBootstrap, OnMo
 
       // ─── Step 1: Generate monthly bundle if scheduled day reached and not yet generated ───
       if (currentDay >= scheduledDay && meta.lastGeneratedPeriod !== currentPeriod) {
-        this.logger.log(`[DiagnosticsScheduler] Day ${currentDay} reached. Creating monthly diagnostic bundle for period ${currentPeriod}...`);
+        this.logger.log(
+          `[DiagnosticsScheduler] Day ${currentDay} reached. Creating monthly diagnostic bundle for period ${currentPeriod}...`,
+        );
 
         try {
           const zipBuffer = await this.supportService.generateSupportBundleInternal();
@@ -118,7 +123,9 @@ export class DiagnosticsSchedulerService implements OnApplicationBootstrap, OnMo
           };
           await this.saveMeta(meta);
 
-          this.logger.log(`[DiagnosticsScheduler] Diagnostic bundle for ${currentPeriod} generated and stored locally in ${zipFilePath}.`);
+          this.logger.log(
+            `[DiagnosticsScheduler] Diagnostic bundle for ${currentPeriod} generated and stored locally in ${zipFilePath}.`,
+          );
         } catch (err: any) {
           this.logger.error(`[DiagnosticsScheduler] Failed to generate local diagnostic bundle: ${err?.message}`);
         }
@@ -132,7 +139,9 @@ export class DiagnosticsSchedulerService implements OnApplicationBootstrap, OnMo
           // Check internet connectivity
           const isOnline = await this.checkConnectivity();
           if (isOnline) {
-            this.logger.log(`[DiagnosticsScheduler] Internet connection detected! Uploading pending diagnostics for period ${meta.lastGeneratedPeriod} to SaaS...`);
+            this.logger.log(
+              `[DiagnosticsScheduler] Internet connection detected! Uploading pending diagnostics for period ${meta.lastGeneratedPeriod} to SaaS...`,
+            );
 
             try {
               const fileBuffer = await fs.readFile(pendingZipPath);
@@ -145,7 +154,9 @@ export class DiagnosticsSchedulerService implements OnApplicationBootstrap, OnMo
               meta.uploadedAt = new Date().toISOString();
               await this.saveMeta(meta);
 
-              this.logger.log(`[DiagnosticsScheduler] Successfully uploaded diagnostics for ${meta.lastGeneratedPeriod} to central SaaS server.`);
+              this.logger.log(
+                `[DiagnosticsScheduler] Successfully uploaded diagnostics for ${meta.lastGeneratedPeriod} to central SaaS server.`,
+              );
             } catch (err: any) {
               meta.lastAttemptAt = new Date().toISOString();
               await this.saveMeta(meta);
@@ -168,8 +179,7 @@ export class DiagnosticsSchedulerService implements OnApplicationBootstrap, OnMo
    */
   private async checkConnectivity(): Promise<boolean> {
     const centralUrl =
-      process.env.CENTRAL_DIAGNOSTICS_URL ||
-      'https://app.zsystemai.com/api/v1/saas-admin/diagnostics/upload';
+      process.env.CENTRAL_DIAGNOSTICS_URL || 'https://app.zsystemai.com/api/v1/saas-admin/diagnostics/upload';
 
     try {
       // 1. First probe central endpoint or ping with HEAD

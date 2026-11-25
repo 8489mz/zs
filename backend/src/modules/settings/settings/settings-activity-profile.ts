@@ -7,7 +7,18 @@ import type { TenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { getIndustryProfile, normalizeIndustryProfileKey } from '../../../core/tenant/industry-profiles';
 
 export class SettingsActivityProfile {
-  constructor(private readonly db: Kysely<Database>, private readonly audit: AuditService, private readonly authCache: AuthCacheService, private readonly bound: { getSettings: (actor: AuthContext) => Promise<Record<string, unknown>>; invalidatePlanFeaturesCache: (tenantId: string | undefined) => void; invalidateSettingsCache: (tenantId: string | undefined) => void; loadFeatureOverride: (tenantId: string, featureCode: string) => Promise<boolean | null>; scope: (actor: AuthContext) => TenantScope }) {}
+  constructor(
+    private readonly db: Kysely<Database>,
+    private readonly audit: AuditService,
+    private readonly authCache: AuthCacheService,
+    private readonly bound: {
+      getSettings: (actor: AuthContext) => Promise<Record<string, unknown>>;
+      invalidatePlanFeaturesCache: (tenantId: string | undefined) => void;
+      invalidateSettingsCache: (tenantId: string | undefined) => void;
+      loadFeatureOverride: (tenantId: string, featureCode: string) => Promise<boolean | null>;
+      scope: (actor: AuthContext) => TenantScope;
+    },
+  ) {}
 
   private async getSettings(actor: AuthContext): Promise<Record<string, unknown>> {
     return this.bound.getSettings(actor);
@@ -122,13 +133,25 @@ export class SettingsActivityProfile {
       modulePatch.taxDeclarationModuleEnabled = true;
       modulePatch.enablePharmacyModule = normalizedKey === 'pharmacy';
       modulePatch.restaurantModuleEnabled = normalizedKey === 'restaurant';
-      modulePatch.phoneOrdersModuleEnabled = ['restaurant', 'pharmacy', 'supermarket', 'grocery', 'food_beverage'].includes(normalizedKey);
+      modulePatch.phoneOrdersModuleEnabled = [
+        'restaurant',
+        'pharmacy',
+        'supermarket',
+        'grocery',
+        'food_beverage',
+      ].includes(normalizedKey);
       modulePatch.enableMobileStoreFeatures = normalizedKey === 'maintenance';
       modulePatch.importModuleEnabled = normalizedKey === 'import_export';
       modulePatch.autoPartsModuleEnabled = normalizedKey === 'auto_parts';
       modulePatch.clothingModuleEnabled = normalizedKey === 'clothing' || normalizedKey === 'perfumes';
-      modulePatch.comboModuleEnabled = normalizedKey === 'clothing' || normalizedKey === 'perfumes' || normalizedKey === 'restaurant' || normalizedKey === 'retail_general';
-      modulePatch.deliveryRepsModuleEnabled = !['services', 'warehousing', 'wholesale_van', 'import_export'].includes(normalizedKey);
+      modulePatch.comboModuleEnabled =
+        normalizedKey === 'clothing' ||
+        normalizedKey === 'perfumes' ||
+        normalizedKey === 'restaurant' ||
+        normalizedKey === 'retail_general';
+      modulePatch.deliveryRepsModuleEnabled = !['services', 'warehousing', 'wholesale_van', 'import_export'].includes(
+        normalizedKey,
+      );
 
       if (normalizedKey === 'perfumes') {
         modulePatch.posModuleEnabled = true;
@@ -191,7 +214,9 @@ export class SettingsActivityProfile {
       ...Object.entries(modulePatch),
     ];
     for (const [key, value] of settingsEntries) {
-      await sql`insert into settings (key, value, tenant_id, account_id) values (${key}, ${JSON.stringify(value)}, ${scope.tenantId}, ${scope.accountId}) on conflict (tenant_id, key) do update set value = excluded.value, account_id = excluded.account_id`.execute(this.db);
+      await sql`insert into settings (key, value, tenant_id, account_id) values (${key}, ${JSON.stringify(value)}, ${scope.tenantId}, ${scope.accountId}) on conflict (tenant_id, key) do update set value = excluded.value, account_id = excluded.account_id`.execute(
+        this.db,
+      );
     }
 
     // 3. Invalidate caches

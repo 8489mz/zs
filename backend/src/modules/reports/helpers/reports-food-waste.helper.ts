@@ -25,14 +25,8 @@ export async function buildFoodCostVarianceReport(
   // 1. Fetch sales items during the range
   const saleItems = await db
     .selectFrom('sale_items as si')
-    .innerJoin('sales as s', (j) =>
-      j.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id')
-    )
-    .select([
-      'si.product_id',
-      'si.qty',
-      'si.modifiers',
-    ])
+    .innerJoin('sales as s', (j) => j.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'))
+    .select(['si.product_id', 'si.qty', 'si.modifiers'])
     .where('si.tenant_id', '=', scope.tenantId)
     .where('s.status', '=', 'posted')
     .where('s.created_at', '>=', fromDate)
@@ -94,7 +88,7 @@ export async function buildFoodCostVarianceReport(
     if (components && components.length > 0) {
       for (const comp of components) {
         const prev = theoreticalMap.get(comp.componentProductId) || 0;
-        theoreticalMap.set(comp.componentProductId, prev + (soldQty * comp.qty));
+        theoreticalMap.set(comp.componentProductId, prev + soldQty * comp.qty);
       }
     } else {
       const prev = theoreticalMap.get(pId) || 0;
@@ -103,18 +97,24 @@ export async function buildFoodCostVarianceReport(
 
     let mods: any[] = [];
     if (typeof item.modifiers === 'string') {
-      try { mods = JSON.parse(item.modifiers); } catch { mods = []; }
+      try {
+        mods = JSON.parse(item.modifiers);
+      } catch {
+        mods = [];
+      }
     } else if (Array.isArray(item.modifiers)) {
       mods = item.modifiers;
     }
 
     for (const m of mods) {
-      const modName = String(m.name || '').trim().toLowerCase();
+      const modName = String(m.name || '')
+        .trim()
+        .toLowerCase();
       const modQty = Number(m.qty || 1) * soldQty;
       const matched = modOptionMap.get(modName);
       if (matched) {
         const prev = theoreticalMap.get(matched.componentProductId) || 0;
-        theoreticalMap.set(matched.componentProductId, prev + (modQty * matched.consumptionQty));
+        theoreticalMap.set(matched.componentProductId, prev + modQty * matched.consumptionQty);
       }
     }
   }
@@ -157,11 +157,13 @@ export async function buildFoodCostVarianceReport(
   }
 
   // 7. Get products info for all involved products
-  const allProductIds = Array.from(new Set([
-    ...Array.from(theoreticalMap.keys()),
-    ...Array.from(wasteMap.keys()),
-    ...Array.from(actualStockMap.keys()),
-  ]));
+  const allProductIds = Array.from(
+    new Set([
+      ...Array.from(theoreticalMap.keys()),
+      ...Array.from(wasteMap.keys()),
+      ...Array.from(actualStockMap.keys()),
+    ]),
+  );
 
   if (allProductIds.length === 0) {
     return {
@@ -205,16 +207,14 @@ export async function buildFoodCostVarianceReport(
     const wasteCost = roundMoney(waste.cost, digits);
 
     const recordedActual = actualStockMap.get(pId);
-    const actualQty = recordedActual !== undefined
-      ? Number(recordedActual.toFixed(3))
-      : Number((theoreticalQty + wasteQty).toFixed(3));
+    const actualQty =
+      recordedActual !== undefined ? Number(recordedActual.toFixed(3)) : Number((theoreticalQty + wasteQty).toFixed(3));
     const actualCost = roundMoney(actualQty * costPrice, digits);
 
     const varianceQty = Number((actualQty - (theoreticalQty + wasteQty)).toFixed(3));
     const varianceCost = roundMoney(varianceQty * costPrice, digits);
-    const variancePct = theoreticalQty > 0
-      ? Number(((varianceQty / theoreticalQty) * 100).toFixed(1))
-      : (varianceQty > 0 ? 100 : 0);
+    const variancePct =
+      theoreticalQty > 0 ? Number(((varianceQty / theoreticalQty) * 100).toFixed(1)) : varianceQty > 0 ? 100 : 0;
 
     sumTheoreticalCost += theoreticalCost;
     sumActualCost += actualCost;
@@ -249,9 +249,8 @@ export async function buildFoodCostVarianceReport(
 
   rows.sort((a, b) => Math.abs(b.varianceCost) - Math.abs(a.varianceCost));
 
-  const overallVariancePct = sumTheoreticalCost > 0
-    ? Number(((sumVarianceCost / sumTheoreticalCost) * 100).toFixed(1))
-    : 0;
+  const overallVariancePct =
+    sumTheoreticalCost > 0 ? Number(((sumVarianceCost / sumTheoreticalCost) * 100).toFixed(1)) : 0;
 
   return {
     range,

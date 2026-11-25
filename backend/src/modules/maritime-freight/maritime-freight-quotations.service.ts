@@ -44,13 +44,21 @@ export interface MaritimeFreightQuotationsDeps {
   // Bound kernel helper (same name as the facade member, so the moved
   // bodies are byte-identical). resolveFreightExchangeRate stays in the
   // facade forever (kernel).
-  resolveFreightExchangeRate: (tenantId: string, currency: string | undefined, suppliedRate?: number) => Promise<number>;
+  resolveFreightExchangeRate: (
+    tenantId: string,
+    currency: string | undefined,
+    suppliedRate?: number,
+  ) => Promise<number>;
 }
 
 @Injectable()
 export class MaritimeFreightQuotationsService {
   private readonly db: Kysely<Database>;
-  private readonly resolveFreightExchangeRate: (tenantId: string, currency: string | undefined, suppliedRate?: number) => Promise<number>;
+  private readonly resolveFreightExchangeRate: (
+    tenantId: string,
+    currency: string | undefined,
+    suppliedRate?: number,
+  ) => Promise<number>;
 
   constructor(deps: MaritimeFreightQuotationsDeps) {
     this.db = deps.db;
@@ -68,10 +76,7 @@ export class MaritimeFreightQuotationsService {
    * treats an absent / unparseable configured rate as 0, so only
    * an exempt (0) charge passes until the tenant configures a rate.
    */
-  async resolveTenantConfiguredTaxRate(
-    queryable: Kysely<Database>,
-    tenantId: string,
-  ): Promise<unknown> {
+  async resolveTenantConfiguredTaxRate(queryable: Kysely<Database>, tenantId: string): Promise<unknown> {
     const rows = await queryable
       .selectFrom('settings')
       .select(['key', 'value'])
@@ -200,7 +205,13 @@ export class MaritimeFreightQuotationsService {
         .returningAll()
         .execute();
 
-      const finalNumber = formatDailyDocumentNumber('QUO', Number(quote.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
+      const finalNumber = formatDailyDocumentNumber(
+        'QUO',
+        Number(quote.id),
+        new Date(),
+        4,
+        await getTenantTimezone(trx, tenantId),
+      );
       const [updatedQuote] = await trx
         .updateTable('maritime_quotations')
         .set({ quotation_number: finalNumber })
@@ -218,9 +229,9 @@ export class MaritimeFreightQuotationsService {
         for (const chg of dto.charges) {
           const qty = Number(chg.quantity || 1);
           const rate = Number(chg.unitRate || 0);
-          const tot = Number(chg.totalAmount || (qty * rate));
+          const tot = Number(chg.totalAmount || qty * rate);
           const taxPct = resolveSaleTaxRate(chg.taxRatePercent, configuredTaxRate);
-          const taxAmt = Number(chg.taxAmount ?? (tot * taxPct / 100));
+          const taxAmt = Number(chg.taxAmount ?? (tot * taxPct) / 100);
           await trx
             .insertInto('maritime_quotation_charges')
             .values({
@@ -260,10 +271,7 @@ export class MaritimeFreightQuotationsService {
 
   async getQuotations(auth: AuthContext, filters?: { status?: string; search?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let query = this.db
-      .selectFrom('maritime_quotations')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('maritime_quotations').selectAll().where('tenant_id', '=', tenantId);
 
     if (filters?.status && filters.status !== 'all') {
       query = query.where('status', '=', filters.status as any);
@@ -271,11 +279,13 @@ export class MaritimeFreightQuotationsService {
 
     if (filters?.search) {
       const term = `%${filters.search}%`;
-      query = query.where((eb) => eb.or([
-        eb('quotation_number', 'ilike', term),
-        eb('customer_name', 'ilike', term),
-        eb('customer_phone', 'ilike', term)
-      ]));
+      query = query.where((eb) =>
+        eb.or([
+          eb('quotation_number', 'ilike', term),
+          eb('customer_name', 'ilike', term),
+          eb('customer_phone', 'ilike', term),
+        ]),
+      );
     }
 
     return await query.orderBy('id', 'desc').execute();

@@ -6,9 +6,7 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { AuditService } from '../../../core/audit/audit.service';
 import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
-import {
-  MARKETPLACE_WEBHOOK_SIGNATURE_HEADER,
-} from '../engines/marketplace-webhook-event.engine';
+import { MARKETPLACE_WEBHOOK_SIGNATURE_HEADER } from '../engines/marketplace-webhook-event.engine';
 import { PlanFeatureService } from '../../../core/auth/services/plan-feature.service';
 import { MarketplaceSyncGtinService } from './marketplace-sync-gtin.service';
 import { MarketplaceSyncOnboardingService } from './marketplace-sync-onboarding.service';
@@ -188,7 +186,12 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     return this.repricingService.onModuleDestroy();
   }
 
-  private async getSettingJson<T>(key: string, tenantId: string, defaultValue: T, executor: Kysely<Database> = this.db): Promise<T> {
+  private async getSettingJson<T>(
+    key: string,
+    tenantId: string,
+    defaultValue: T,
+    executor: Kysely<Database> = this.db,
+  ): Promise<T> {
     const row = await executor
       .selectFrom('settings')
       .select(['value'])
@@ -246,7 +249,10 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     return this.mappingsService.getMappings(auth);
   }
 
-  async saveMapping(payload: Omit<MarketplaceSkuMapping, 'id'> & { id?: string }, auth: AuthContext): Promise<MarketplaceSkuMapping> {
+  async saveMapping(
+    payload: Omit<MarketplaceSkuMapping, 'id'> & { id?: string },
+    auth: AuthContext,
+  ): Promise<MarketplaceSkuMapping> {
     return this.mappingsService.saveMapping(payload, auth);
   }
 
@@ -264,7 +270,13 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
   async simulateIncomingOrder(
     marketplace: 'amazon' | 'noon',
     auth: AuthContext,
-  ): Promise<{ success: boolean; orderId: number; orderNumber: string; totalAmount: number; reservedProductName: string }> {
+  ): Promise<{
+    success: boolean;
+    orderId: number;
+    orderNumber: string;
+    totalAmount: number;
+    reservedProductName: string;
+  }> {
     return this.simulationService.simulateIncomingOrder(marketplace, auth);
   }
 
@@ -336,10 +348,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     return this.repricingService.saveRepricingSettings(mappingId, settings, auth);
   }
 
-  async runRepricingBot(
-    marketplace?: SupportedMarketplace,
-    auth?: AuthContext,
-  ): Promise<RepricingBotResult> {
+  async runRepricingBot(marketplace?: SupportedMarketplace, auth?: AuthContext): Promise<RepricingBotResult> {
     return this.repricingService.runRepricingBot(marketplace, auth);
   }
 
@@ -369,17 +378,11 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     return this.inboundService.recordShipmentReceiving(shipmentId, receivedItems, auth);
   }
 
-  async getDiscrepancyClaimReport(
-    shipmentId: string,
-    auth: AuthContext,
-  ): Promise<FbaDiscrepancyClaimReport> {
+  async getDiscrepancyClaimReport(shipmentId: string, auth: AuthContext): Promise<FbaDiscrepancyClaimReport> {
     return this.inboundService.getDiscrepancyClaimReport(shipmentId, auth);
   }
 
-  async getMarketplaceAnalytics(
-    period: 'all' | '30d' | '7d',
-    auth: AuthContext,
-  ): Promise<MarketplaceAnalyticsSummary> {
+  async getMarketplaceAnalytics(period: 'all' | '30d' | '7d', auth: AuthContext): Promise<MarketplaceAnalyticsSummary> {
     return this.analyticsService.getMarketplaceAnalytics(period, auth);
   }
 
@@ -404,16 +407,18 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
   async listMarketplaceWebhookEvents(
     auth: AuthContext,
     filters: { marketplace?: SupportedMarketplace; status?: string; limit?: number },
-  ): Promise<Array<{
-    id: number;
-    marketplace: string;
-    eventType: string;
-    eventKey: string;
-    status: string;
-    receivedAt: Date;
-    processedAt: Date | null;
-    payload: unknown;
-  }>> {
+  ): Promise<
+    Array<{
+      id: number;
+      marketplace: string;
+      eventType: string;
+      eventKey: string;
+      status: string;
+      receivedAt: Date;
+      processedAt: Date | null;
+      payload: unknown;
+    }>
+  > {
     return this.webhooksReceiveService.listMarketplaceWebhookEvents(auth, filters);
   }
 
@@ -456,6 +461,3 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     return this.gtinService.generateGtinExemption(data, auth);
   }
 }
-
-
-

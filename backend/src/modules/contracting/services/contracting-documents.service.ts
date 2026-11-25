@@ -193,7 +193,14 @@ export class ContractingDocumentsService {
         .execute();
 
       return {
-        document: this.mapDocumentRow({ ...(await trx.selectFrom('contracting_documents').selectAll().where('id', '=', documentId).where('tenant_id', '=', tenantId).executeTakeFirstOrThrow()) }),
+        document: this.mapDocumentRow({
+          ...(await trx
+            .selectFrom('contracting_documents')
+            .selectAll()
+            .where('id', '=', documentId)
+            .where('tenant_id', '=', tenantId)
+            .executeTakeFirstOrThrow()),
+        }),
         revision: this.mapRevisionRow(revisionRow),
       };
     });
@@ -250,7 +257,11 @@ export class ContractingDocumentsService {
     });
   }
 
-  async updateDocumentRevisionStatus(auth: AuthContext, revisionId: string, dto: UpdateContractingDocumentRevisionStatusDto) {
+  async updateDocumentRevisionStatus(
+    auth: AuthContext,
+    revisionId: string,
+    dto: UpdateContractingDocumentRevisionStatusDto,
+  ) {
     const { tenantId } = requireTenantScope(auth);
     const businessTz = await getTenantTimezone(this.db, tenantId);
 
@@ -338,7 +349,7 @@ export class ContractingDocumentsService {
   private mapMeetingMinuteRow(row: any) {
     let attendees: any[] = [];
     try {
-      attendees = typeof row.attendees === 'string' ? JSON.parse(row.attendees) : (row.attendees || []);
+      attendees = typeof row.attendees === 'string' ? JSON.parse(row.attendees) : row.attendees || [];
     } catch {
       attendees = [];
     }
@@ -545,13 +556,17 @@ export class ContractingDocumentsService {
     }));
   }
 
-  async createEquipmentFuelLog(auth: AuthContext, projectId: string, dto: CreateEquipmentFuelLogDto): Promise<ContractingEquipmentFuelLog> {
+  async createEquipmentFuelLog(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateEquipmentFuelLogDto,
+  ): Promise<ContractingEquipmentFuelLog> {
     const { tenantId } = requireTenantScope(auth);
     const startMeter = Number(dto.startMeterHours || 0);
     const endMeter = Number(dto.endMeterHours || startMeter);
     const operatingHours = Math.max(0, endMeter - startMeter);
     const fuelLiters = Number(dto.fuelLitersAdded || 0);
-    const fuelCost = Number(dto.fuelCostTotal || (fuelLiters * 14.5)); // 14.5 EGP average diesel price 2026
+    const fuelCost = Number(dto.fuelCostTotal || fuelLiters * 14.5); // 14.5 EGP average diesel price 2026
 
     const [row] = await (this.db as any)
       .insertInto('contracting_equipment_fuel_logs')

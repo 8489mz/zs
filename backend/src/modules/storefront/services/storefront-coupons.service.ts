@@ -1,10 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import {
-  Kysely,
-  sql,
-  type Transaction,
-  type Selectable,
-} from 'kysely';
+import { Kysely, sql, type Transaction, type Selectable } from 'kysely';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -85,7 +80,9 @@ export class StorefrontCouponsService {
 
   async validateCoupon(slug: string, code: string, subtotal: number) {
     const tenant = await this.getTenantBySlug(slug);
-    const codeUpper = String(code || '').trim().toUpperCase();
+    const codeUpper = String(code || '')
+      .trim()
+      .toUpperCase();
     if (!codeUpper) {
       throw new BadRequestException('يرجى إدخال كود الكوبون');
     }

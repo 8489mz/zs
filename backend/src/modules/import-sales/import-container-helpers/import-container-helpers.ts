@@ -9,8 +9,7 @@ export class ImportContainerHelpersSlice {
   // driver or 'yyyy-mm-dd' string) normalises to its calendar key.
   isUniqueViolation(err: any): boolean {
     return (
-      err?.code === '23505' ||
-      String(err?.message || '').includes('duplicate key value violates unique constraint')
+      err?.code === '23505' || String(err?.message || '').includes('duplicate key value violates unique constraint')
     );
   }
 

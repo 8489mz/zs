@@ -20,7 +20,10 @@ export class DiagnosticsUploadRateLimitGuard implements CanActivate {
     const result = await this.rateLimit.hit(`diagnostics-upload:${ip}`, DIAGNOSTICS_UPLOADS_PER_HOUR, 3600);
     if (!result.allowed) {
       context.switchToHttp().getResponse().setHeader?.('Retry-After', String(result.retryAfterSeconds));
-      throw new HttpException('تم تجاوز عدد مرات رفع ملفات التشخيص، يرجى المحاولة لاحقاً.', HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        'تم تجاوز عدد مرات رفع ملفات التشخيص، يرجى المحاولة لاحقاً.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
     return true;
   }

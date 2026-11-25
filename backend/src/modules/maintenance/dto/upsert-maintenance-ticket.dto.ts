@@ -54,8 +54,19 @@ export class UpsertMaintenanceTicketDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['received', 'inspecting', 'in_progress', 'waiting_parts', 'repaired', 'delivered', 'unrepairable', 'cancelled'], { message: 'حالة التذكرة غير صالحة' })
-  status?: 'received' | 'inspecting' | 'in_progress' | 'waiting_parts' | 'repaired' | 'delivered' | 'unrepairable' | 'cancelled';
+  @IsIn(
+    ['received', 'inspecting', 'in_progress', 'waiting_parts', 'repaired', 'delivered', 'unrepairable', 'cancelled'],
+    { message: 'حالة التذكرة غير صالحة' },
+  )
+  status?:
+    | 'received'
+    | 'inspecting'
+    | 'in_progress'
+    | 'waiting_parts'
+    | 'repaired'
+    | 'delivered'
+    | 'unrepairable'
+    | 'cancelled';
 
   @IsOptional()
   @IsNumber()

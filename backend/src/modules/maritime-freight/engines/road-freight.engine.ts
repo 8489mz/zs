@@ -10,13 +10,13 @@
  */
 
 export type TruckTypeCode =
-  | 'flatbed'      // تريلا فرش / مسطحة (28T, 33 pallets)
+  | 'flatbed' // تريلا فرش / مسطحة (28T, 33 pallets)
   | 'curtainsider' // تريلا ستارة / طربال (26T, 86 CBM, 34 pallets)
-  | 'box'          // شاحنة مقفلة / صندوق مغلق (25T, 82 CBM, 33 pallets)
-  | 'reefer'       // شاحنة مبردة / ثلاجة (22T, 76 CBM, 32 pallets)
-  | 'lowbed'       // سطحة منخفضة / لوبد للحمولات الشاذة والثقيلة (50T)
-  | 'jumbo'        // سيارة جامبو شاسيه طويل (6.5T, 38 CBM, 12 pallets)
-  | 'pickup';      // سيارة بيك أب / ربع نقل (1.8T, 10 CBM, 4 pallets)
+  | 'box' // شاحنة مقفلة / صندوق مغلق (25T, 82 CBM, 33 pallets)
+  | 'reefer' // شاحنة مبردة / ثلاجة (22T, 76 CBM, 32 pallets)
+  | 'lowbed' // سطحة منخفضة / لوبد للحمولات الشاذة والثقيلة (50T)
+  | 'jumbo' // سيارة جامبو شاسيه طويل (6.5T, 38 CBM, 12 pallets)
+  | 'pickup'; // سيارة بيك أب / ربع نقل (1.8T, 10 CBM, 4 pallets)
 
 export interface TruckSpecification {
   code: TruckTypeCode;
@@ -122,9 +122,10 @@ export interface TruckRequirementResult {
  * weight, volume, and pallet footprint constraints simultaneously.
  */
 export function calculateTrucksRequired(input: TruckRequirementInput): TruckRequirementResult {
-  const typeCode = input.preferredTruckType && STANDARD_TRUCK_SPECIFICATIONS[input.preferredTruckType]
-    ? input.preferredTruckType
-    : 'flatbed';
+  const typeCode =
+    input.preferredTruckType && STANDARD_TRUCK_SPECIFICATIONS[input.preferredTruckType]
+      ? input.preferredTruckType
+      : 'flatbed';
   const spec = STANDARD_TRUCK_SPECIFICATIONS[typeCode];
 
   const grossWeightKg = Number(input.grossWeightKg ?? 0);
@@ -135,9 +136,13 @@ export function calculateTrucksRequired(input: TruckRequirementInput): TruckRequ
   }
   if (input.axleLoadsKg) {
     const axleLimit = Number(input.maxAxleLoadKg);
-    if (!Number.isFinite(axleLimit) || axleLimit <= 0 || input.axleLoadsKg.length === 0 ||
+    if (
+      !Number.isFinite(axleLimit) ||
+      axleLimit <= 0 ||
+      input.axleLoadsKg.length === 0 ||
       input.axleLoadsKg.some((load) => !Number.isFinite(load) || load < 0 || load > axleLimit) ||
-      input.axleLoadsKg.reduce((sum, load) => sum + load, 0) < grossWeightKg) {
+      input.axleLoadsKg.reduce((sum, load) => sum + load, 0) < grossWeightKg
+    ) {
       throw new Error('Truck axle load exceeds the permitted limit or lacks a valid limit');
     }
   }
@@ -162,7 +167,10 @@ export function calculateTrucksRequired(input: TruckRequirementInput): TruckRequ
   const trucksByPallets = palletCount > 0 ? Math.ceil(palletCount / spec.maxStandardPallets) : 0;
 
   const requiredTrucks = Math.max(1, trucksByWeight, trucksByVolume, trucksByPallets);
-  if (input.assignedTrucks !== undefined && (!Number.isInteger(input.assignedTrucks) || input.assignedTrucks < requiredTrucks)) {
+  if (
+    input.assignedTrucks !== undefined &&
+    (!Number.isInteger(input.assignedTrucks) || input.assignedTrucks < requiredTrucks)
+  ) {
     throw new Error(`Shipment requires at least ${requiredTrucks} trucks for its weight and volume`);
   }
 
@@ -179,17 +187,14 @@ export function calculateTrucksRequired(input: TruckRequirementInput): TruckRequ
   const totalCapacityCbm = requiredTrucks * spec.maxCbm;
   const totalCapacityPallets = requiredTrucks * spec.maxStandardPallets;
 
-  const weightUtilizationPercent = totalCapacityKg > 0
-    ? Math.round((grossWeightKg / totalCapacityKg) * 10000) / 100
-    : 0;
+  const weightUtilizationPercent =
+    totalCapacityKg > 0 ? Math.round((grossWeightKg / totalCapacityKg) * 10000) / 100 : 0;
 
-  const volumeUtilizationPercent = totalCapacityCbm > 0 && totalCbm > 0
-    ? Math.round((totalCbm / totalCapacityCbm) * 10000) / 100
-    : 0;
+  const volumeUtilizationPercent =
+    totalCapacityCbm > 0 && totalCbm > 0 ? Math.round((totalCbm / totalCapacityCbm) * 10000) / 100 : 0;
 
-  const palletUtilizationPercent = totalCapacityPallets > 0 && palletCount > 0
-    ? Math.round((palletCount / totalCapacityPallets) * 10000) / 100
-    : 0;
+  const palletUtilizationPercent =
+    totalCapacityPallets > 0 && palletCount > 0 ? Math.round((palletCount / totalCapacityPallets) * 10000) / 100 : 0;
 
   return {
     truckType: typeCode,
@@ -267,18 +272,23 @@ export function calculateRoadFreightCost(input: RoadFreightCostInput): RoadFreig
 
   const detentionDays = Number(input.detentionDays ?? 0);
   const detentionRate = Number(input.detentionDailyRate ?? 0);
-  const waits = [input.loadingWaitHours, input.unloadingWaitHours, input.borderWaitHours]
-    .map((value) => Number(value ?? 0));
+  const waits = [input.loadingWaitHours, input.unloadingWaitHours, input.borderWaitHours].map((value) =>
+    Number(value ?? 0),
+  );
   const waitingHours = waits.reduce((sum, value) => sum + value, 0);
   const freeHours = Number(input.freeWaitingHours ?? 0);
   const overnightDays = Number(input.overnightDays ?? detentionDays);
   const hourlyRate = Number(input.detentionHourlyRate ?? 0);
-  if (![...waits, freeHours, overnightDays, hourlyRate, detentionDays, detentionRate]
-    .every((n) => Number.isFinite(n) && n >= 0)) {
+  if (
+    ![...waits, freeHours, overnightDays, hourlyRate, detentionDays, detentionRate].every(
+      (n) => Number.isFinite(n) && n >= 0,
+    )
+  ) {
     throw new Error('Invalid truck detention duration or rate');
   }
-  const detentionCost = Math.round(((Math.max(0, waitingHours - freeHours) * hourlyRate) +
-    (overnightDays * detentionRate)) * trucks * 100) / 100;
+  const detentionCost =
+    Math.round((Math.max(0, waitingHours - freeHours) * hourlyRate + overnightDays * detentionRate) * trucks * 100) /
+    100;
 
   const emptyReturnFee = Math.round(Math.max(0, Number(input.emptyReturnFee || 0)) * 100) / 100;
   const roadTollsFee = Math.round(Math.max(0, Number(input.roadTollsFee || 0)) * 100) / 100;
@@ -287,17 +297,18 @@ export function calculateRoadFreightCost(input: RoadFreightCostInput): RoadFreig
   const escortOverweightFee = Math.round(Math.max(0, Number(input.escortOverweightFee || 0)) * 100) / 100;
   const otherCharges = Math.round(Math.max(0, Number(input.otherCharges || 0)) * 100) / 100;
 
-  const totalCost = Math.round(
-    (baseFreightCost +
-      detentionCost +
-      emptyReturnFee +
-      roadTollsFee +
-      fuelSurcharge +
-      customsBorderFee +
-      escortOverweightFee +
-      otherCharges) *
-      100
-  ) / 100;
+  const totalCost =
+    Math.round(
+      (baseFreightCost +
+        detentionCost +
+        emptyReturnFee +
+        roadTollsFee +
+        fuelSurcharge +
+        customsBorderFee +
+        escortOverweightFee +
+        otherCharges) *
+        100,
+    ) / 100;
 
   return {
     pricingMode: mode,
@@ -366,11 +377,46 @@ export function validateCmrWaybillNumber(waybillNo: string): WaybillValidationRe
 
 export const ROAD_FREIGHT_MILESTONES = [
   { key: 'TRK_ASSIGN', title_ar: 'تعيين الشاحنة والسائق', title_en: 'Truck & Driver Assigned', category: 'origin' },
-  { key: 'TRK_GATE_IN', title_ar: 'وصول الشاحنة لموقع التحميل', title_en: 'Arrived at Origin / Gate In', category: 'origin' },
-  { key: 'TRK_LOADED', title_ar: 'إتمام التحميل وتربيط البضاعة', title_en: 'Cargo Loaded & Lashed', category: 'origin' },
-  { key: 'TRK_DISPATCH', title_ar: 'انطلاق الشاحنة على الطريق (En Route)', title_en: 'Truck Dispatched / En Route', category: 'transit' },
-  { key: 'TRK_BORDER', title_ar: 'الوصول للمنفذ الجمركي / معبر الحدود', title_en: 'Border Clearance / Waypoint', category: 'transit' },
-  { key: 'TRK_ARRIVED', title_ar: 'وصول الشاحنة لموقع العميل المستلم', title_en: 'Arrived at Destination', category: 'destination' },
-  { key: 'TRK_UNLOADED', title_ar: 'إتمام تفريغ البضاعة ومطابقة الطرود', title_en: 'Cargo Unloaded', category: 'destination' },
-  { key: 'TRK_POD', title_ar: 'توقيع بوليصة الشحن وإثبات التسليم (POD)', title_en: 'Proof of Delivery / Signed CMR', category: 'destination' },
+  {
+    key: 'TRK_GATE_IN',
+    title_ar: 'وصول الشاحنة لموقع التحميل',
+    title_en: 'Arrived at Origin / Gate In',
+    category: 'origin',
+  },
+  {
+    key: 'TRK_LOADED',
+    title_ar: 'إتمام التحميل وتربيط البضاعة',
+    title_en: 'Cargo Loaded & Lashed',
+    category: 'origin',
+  },
+  {
+    key: 'TRK_DISPATCH',
+    title_ar: 'انطلاق الشاحنة على الطريق (En Route)',
+    title_en: 'Truck Dispatched / En Route',
+    category: 'transit',
+  },
+  {
+    key: 'TRK_BORDER',
+    title_ar: 'الوصول للمنفذ الجمركي / معبر الحدود',
+    title_en: 'Border Clearance / Waypoint',
+    category: 'transit',
+  },
+  {
+    key: 'TRK_ARRIVED',
+    title_ar: 'وصول الشاحنة لموقع العميل المستلم',
+    title_en: 'Arrived at Destination',
+    category: 'destination',
+  },
+  {
+    key: 'TRK_UNLOADED',
+    title_ar: 'إتمام تفريغ البضاعة ومطابقة الطرود',
+    title_en: 'Cargo Unloaded',
+    category: 'destination',
+  },
+  {
+    key: 'TRK_POD',
+    title_ar: 'توقيع بوليصة الشحن وإثبات التسليم (POD)',
+    title_en: 'Proof of Delivery / Signed CMR',
+    category: 'destination',
+  },
 ] as const;

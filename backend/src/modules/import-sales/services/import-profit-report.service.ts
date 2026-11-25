@@ -115,9 +115,7 @@ export class ImportProfitReportService {
     // source_id. Non-numeric ids (a UUID-shaped harness table
     // that predates 0230) can never reference a journal entry,
     // so they are skipped rather than sent to a BIGINT column.
-    const receiptIds = receipts
-      .map((r) => Number(r.id))
-      .filter((n) => Number.isFinite(n));
+    const receiptIds = receipts.map((r) => Number(r.id)).filter((n) => Number.isFinite(n));
     const receiptEntries = await postedEntries('import_inventory_receipt', receiptIds);
     let reversalIds: number[] = [];
     if (receiptEntries.length > 0) {
@@ -204,9 +202,7 @@ export class ImportProfitReportService {
           .where('shipment_id', 'in', shipmentIds)
           .execute()
       : [];
-    const depositIds = [
-      ...new Set([...depositsByProject, ...depositsByShipment].map((d) => String(d.id))),
-    ];
+    const depositIds = [...new Set([...depositsByProject, ...depositsByShipment].map((d) => String(d.id)))];
     const refundEvents: any[] = depositIds.length
       ? await qb
           .selectFrom('import_container_refund_events')
@@ -229,7 +225,7 @@ export class ImportProfitReportService {
     startDate: string | Date,
     endDate: string | Date,
     projectId?: string,
-    executor?: any
+    executor?: any,
   ) {
     const qb = (executor || this.db) as Kysely<Database>;
     const start = new Date(startDate);
@@ -323,18 +319,26 @@ export class ImportProfitReportService {
         totalCost = grossCost - cancelledCost;
         // A partial set of lot allocations is not proof that every sale has provenance.
         const candidateLines = projectProductIds.length
-          ? await qb.selectFrom('sale_items as si').innerJoin('sales as sa', 'sa.id', 'si.sale_id')
-              .select(['si.id', 'si.qty']).where('sa.tenant_id', '=', tenantId)
+          ? await qb
+              .selectFrom('sale_items as si')
+              .innerJoin('sales as sa', 'sa.id', 'si.sale_id')
+              .select(['si.id', 'si.qty'])
+              .where('sa.tenant_id', '=', tenantId)
               .where('sa.status', '!=', 'cancelled')
-              .where('sa.created_at', '>=', start).where('sa.created_at', '<=', end)
-              .where('si.product_id', 'in', projectProductIds).execute()
+              .where('sa.created_at', '>=', start)
+              .where('sa.created_at', '<=', end)
+              .where('si.product_id', 'in', projectProductIds)
+              .execute()
           : [];
         const saleItemIds = candidateLines.map((l) => Number(l.id));
         const allSaleAllocations = saleItemIds.length
-          ? await qb.selectFrom('import_sale_allocations')
+          ? await qb
+              .selectFrom('import_sale_allocations')
               .select(['sale_item_id', 'quantity'])
-              .where('tenant_id', '=', tenantId).where('allocation_type', '=', 'sale')
-              .where('sale_item_id', 'in', saleItemIds).execute()
+              .where('tenant_id', '=', tenantId)
+              .where('allocation_type', '=', 'sale')
+              .where('sale_item_id', 'in', saleItemIds)
+              .execute()
           : [];
         const allocated = new Map<number, number>();
         for (const al of allSaleAllocations) {
@@ -347,11 +351,16 @@ export class ImportProfitReportService {
       } else if (hasLots) {
         // Zero allocation records are not proof of zero POS sales.
         const possibleSale = projectProductIds.length
-          ? await qb.selectFrom('sale_items as si').innerJoin('sales as sa', 'sa.id', 'si.sale_id')
-              .select('si.sale_id').where('sa.tenant_id', '=', tenantId)
+          ? await qb
+              .selectFrom('sale_items as si')
+              .innerJoin('sales as sa', 'sa.id', 'si.sale_id')
+              .select('si.sale_id')
+              .where('sa.tenant_id', '=', tenantId)
               .where('sa.status', '!=', 'cancelled')
-              .where('sa.created_at', '>=', start).where('sa.created_at', '<=', end)
-              .where('si.product_id', 'in', projectProductIds).executeTakeFirst()
+              .where('sa.created_at', '>=', start)
+              .where('sa.created_at', '<=', end)
+              .where('si.product_id', 'in', projectProductIds)
+              .executeTakeFirst()
           : null;
         totalRevenue = 0;
         totalCost = 0;
@@ -361,14 +370,15 @@ export class ImportProfitReportService {
         attributionStatus = possibleSale ? 'UNVERIFIED_SOURCE' : 'NO_SALES_RECORDED';
       } else {
         // Fallback: Check if project items have any provisional sales (legacy non-lotted projects only)
-        const projectItems = projectShipmentIds.length > 0
-          ? await qb
-              .selectFrom('import_shipment_items')
-              .select(['product_id', 'received_quantity', 'quantity', 'landed_cost_egp'])
-              .where('tenant_id', '=', tenantId)
-              .where('shipment_id', 'in', projectShipmentIds)
-              .execute()
-          : [];
+        const projectItems =
+          projectShipmentIds.length > 0
+            ? await qb
+                .selectFrom('import_shipment_items')
+                .select(['product_id', 'received_quantity', 'quantity', 'landed_cost_egp'])
+                .where('tenant_id', '=', tenantId)
+                .where('shipment_id', 'in', projectShipmentIds)
+                .execute()
+            : [];
 
         const productSources = new Map<number, { receivedQty: number; unitCost: number }>();
         for (const item of projectItems) {
@@ -424,11 +434,7 @@ export class ImportProfitReportService {
           const returnRows = await qb
             .selectFrom('return_documents')
             .innerJoin('return_items', 'return_items.return_document_id', 'return_documents.id')
-            .select([
-              'return_items.product_id',
-              'return_items.qty',
-              'return_items.line_total',
-            ])
+            .select(['return_items.product_id', 'return_items.qty', 'return_items.line_total'])
             .where('return_documents.tenant_id', '=', tenantId)
             .where('return_documents.return_type', '=', 'sale')
             .where('return_documents.created_at', '>=', start)
@@ -527,11 +533,13 @@ export class ImportProfitReportService {
         .executeTakeFirst();
 
       const lateCogsExp = projectShipmentIds.length
-        ? await qb.selectFrom('import_late_expense_events')
+        ? await qb
+            .selectFrom('import_late_expense_events')
             .select([sql<number>`coalesce(sum(cogs_amount_egp), 0)`.as('total_late_cogs')])
             .where('tenant_id', '=', tenantId)
             .where('shipment_id', 'in', projectShipmentIds)
-            .where('created_at', '>=', start).where('created_at', '<=', end)
+            .where('created_at', '>=', start)
+            .where('created_at', '<=', end)
             .executeTakeFirst()
         : null;
 
@@ -575,12 +583,14 @@ export class ImportProfitReportService {
         .where('start_date', '<=', endKey)
         .executeTakeFirst();
       const unpostedLate = projectShipmentIds.length
-        ? await qb.selectFrom('import_late_expense_events')
+        ? await qb
+            .selectFrom('import_late_expense_events')
             .select([sql<number>`coalesce(sum(total_amount_egp), 0)`.as('total_unposted')])
             .where('tenant_id', '=', tenantId)
             .where('shipment_id', 'in', projectShipmentIds)
             .where('journal_entry_id', 'is', null)
-            .where('created_at', '>=', start).where('created_at', '<=', end)
+            .where('created_at', '>=', start)
+            .where('created_at', '<=', end)
             .executeTakeFirst()
         : null;
       const unpostedTripEstimatesEgp = Number(unpostedTrips?.total_unposted || 0);
@@ -611,10 +621,7 @@ export class ImportProfitReportService {
         .where('expense_date', '>=', start)
         .where('expense_date', '<=', end)
         .where((eb) =>
-          eb.and([
-            eb('title', 'not like', 'حوالة خارجية%'),
-            eb('title', 'not like', 'صرف أرباح الشريك%'),
-          ])
+          eb.and([eb('title', 'not like', 'حوالة خارجية%'), eb('title', 'not like', 'صرف أرباح الشريك%')]),
         );
 
       if (excludedExpenseIds.size > 0) {
@@ -645,24 +652,23 @@ export class ImportProfitReportService {
     }
 
     if (!projectId && partners.length === 0) {
-      partners = await qb
-        .selectFrom('import_partners')
-        .selectAll()
-        .where('tenant_id', '=', tenantId)
-        .execute();
+      partners = await qb.selectFrom('import_partners').selectAll().where('tenant_id', '=', tenantId).execute();
     }
 
     const paidForProject = projectId
-      ? await qb.selectFrom('import_partner_project_payouts')
+      ? await qb
+          .selectFrom('import_partner_project_payouts')
           .select(['partner_id', sql<number>`coalesce(sum(amount_egp), 0)`.as('paid')])
-          .where('tenant_id', '=', tenantId).where('project_id', '=', projectId)
-          .groupBy('partner_id').execute()
+          .where('tenant_id', '=', tenantId)
+          .where('project_id', '=', projectId)
+          .groupBy('partner_id')
+          .execute()
       : [];
     const payoutMap = new Map(paidForProject.map((v) => [String(v.partner_id), Number(v.paid)]));
     const partnerShares = partners.map((p) => {
       const percentage = Number(p.profit_share_percentage) || 0;
       const shareAmount = netProfitPool > 0 ? (netProfitPool * percentage) / 100 : 0;
-      const withdrawn = projectId ? (payoutMap.get(String(p.id)) || 0) : (Number(p.withdrawn_profit) || 0);
+      const withdrawn = projectId ? payoutMap.get(String(p.id)) || 0 : Number(p.withdrawn_profit) || 0;
       return {
         partnerId: p.id,
         name: p.name,
@@ -713,7 +719,7 @@ export class ImportProfitReportService {
 
     const netPaidInCapital = Math.max(
       0,
-      Number(partnerCapital?.total_deposits || 0) - Number(partnerCapital?.total_withdrawals || 0)
+      Number(partnerCapital?.total_deposits || 0) - Number(partnerCapital?.total_withdrawals || 0),
     );
 
     const shipmentExpenses = await this.db
@@ -724,8 +730,8 @@ export class ImportProfitReportService {
             eb('expenses.id', '=', eb.ref('import_shipments.shipping_expense_id')),
             eb('expenses.id', '=', eb.ref('import_shipments.customs_expense_id')),
             eb('expenses.id', '=', eb.ref('import_shipments.transport_expense_id')),
-          ])
-        )
+          ]),
+        ),
       )
       .select([sql<number>`coalesce(sum(expenses.amount), 0)`.as('total_shipment_costs')])
       .where('import_shipments.tenant_id', '=', tenantId)
@@ -783,12 +789,7 @@ export class ImportProfitReportService {
     const foreignDebts = await this.db
       .selectFrom('suppliers')
       .leftJoin('import_suppliers_meta', 'import_suppliers_meta.supplier_id', 'suppliers.id')
-      .select([
-        'suppliers.id',
-        'suppliers.name',
-        'suppliers.balance',
-        'import_suppliers_meta.audit_status',
-      ])
+      .select(['suppliers.id', 'suppliers.name', 'suppliers.balance', 'import_suppliers_meta.audit_status'])
       .where('suppliers.tenant_id', '=', tenantId)
       .where('suppliers.balance', '>', 0)
       .execute();
@@ -836,7 +837,7 @@ export class ImportProfitReportService {
         freeDays: s.free_demurrage_days,
         ratePerDayUsd: s.demurrage_rate_per_day,
         exchangeRate: s.exchange_rate_at_arrival,
-        status: s.container_status === 'empty_returned' ? 'empty_returned' : (s.status || 'Pending'),
+        status: s.container_status === 'empty_returned' ? 'empty_returned' : s.status || 'Pending',
         moneyDigits: digits,
       });
       if (risk.isOverdue || (risk.daysRemaining !== null && risk.daysRemaining <= 3)) {

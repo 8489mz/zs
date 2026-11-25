@@ -33,31 +33,22 @@ export class PharmacyService {
 
   private masterRegistrySliceInstance?: MasterRegistrySlice;
   private get masterRegistrySlice(): MasterRegistrySlice {
-    return (this.masterRegistrySliceInstance ??= new MasterRegistrySlice(
-      this.db,
-    ));
+    return (this.masterRegistrySliceInstance ??= new MasterRegistrySlice(this.db));
   }
 
   private distributorInvoiceSliceInstance?: DistributorInvoiceSlice;
   private get distributorInvoiceSlice(): DistributorInvoiceSlice {
-    return (this.distributorInvoiceSliceInstance ??= new DistributorInvoiceSlice(
-      this.db,
-      this.purchases,
-    ));
+    return (this.distributorInvoiceSliceInstance ??= new DistributorInvoiceSlice(this.db, this.purchases));
   }
 
   private drugsSliceInstance?: DrugsSlice;
   private get drugsSlice(): DrugsSlice {
-    return (this.drugsSliceInstance ??= new DrugsSlice(
-      this.db,
-    ));
+    return (this.drugsSliceInstance ??= new DrugsSlice(this.db));
   }
 
   private batchesSliceInstance?: BatchesSlice;
   private get batchesSlice(): BatchesSlice {
-    return (this.batchesSliceInstance ??= new BatchesSlice(
-      this.db,
-    ));
+    return (this.batchesSliceInstance ??= new BatchesSlice(this.db));
   }
 
   private prescriptionsSliceInstance?: PrescriptionsSlice;
@@ -71,9 +62,7 @@ export class PharmacyService {
 
   private shortagesSliceInstance?: ShortagesSlice;
   private get shortagesSlice(): ShortagesSlice {
-    return (this.shortagesSliceInstance ??= new ShortagesSlice(
-      this.db,
-    ));
+    return (this.shortagesSliceInstance ??= new ShortagesSlice(this.db));
   }
 
   private clinicalSliceInstance?: ClinicalSlice;
@@ -87,11 +76,8 @@ export class PharmacyService {
 
   private dashboardSliceInstance?: DashboardSlice;
   private get dashboardSlice(): DashboardSlice {
-    return (this.dashboardSliceInstance ??= new DashboardSlice(
-      this.db,
-    ));
+    return (this.dashboardSliceInstance ??= new DashboardSlice(this.db));
   }
-
 
   getMasterCatalog(filters?: { q?: string; drugClass?: string; page?: number; pageSize?: number }) {
     return this.masterRegistrySlice.getMasterCatalog(filters);
@@ -112,14 +98,21 @@ export class PharmacyService {
   async importDistributorInvoice(
     auth: AuthContext,
     dto: {
-      distributor: string; supplierId?: number; locationId?: number;
-      invoiceNumber?: string; invoiceDate?: string;
+      distributor: string;
+      supplierId?: number;
+      locationId?: number;
+      invoiceNumber?: string;
+      invoiceDate?: string;
       paymentType?: 'credit' | 'cash';
       lines: Array<{
-        productName: string; barcode?: string;
-        quantity: number; bonusQuantity?: number;
-        publicPrice: number; costPrice: number;
-        expiryDate: string; batchNumber?: string;
+        productName: string;
+        barcode?: string;
+        quantity: number;
+        bonusQuantity?: number;
+        publicPrice: number;
+        costPrice: number;
+        expiryDate: string;
+        batchNumber?: string;
       }>;
     },
   ) {

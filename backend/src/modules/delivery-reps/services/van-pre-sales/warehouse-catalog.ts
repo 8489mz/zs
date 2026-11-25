@@ -128,9 +128,7 @@ export class WarehouseCatalogSlice {
         'p.barcode',
         'p.stock_qty',
         'p.reserved_qty',
-        ...(repId != null
-          ? []
-          : ['p.cost_price', 'p.wholesale_price', 'p.credit_price', 'p.consumer_price']),
+        ...(repId != null ? [] : ['p.cost_price', 'p.wholesale_price', 'p.credit_price', 'p.consumer_price']),
         'p.retail_price',
         'p.category_id',
         'p.supplier_id',
@@ -142,12 +140,7 @@ export class WarehouseCatalogSlice {
 
     if (query?.search?.trim()) {
       const search = `%${query.search.trim().toLowerCase()}%`;
-      qb = qb.where((eb: any) =>
-        eb.or([
-          eb('p.name', 'ilike', search),
-          eb('p.barcode', 'ilike', search),
-        ]),
-      );
+      qb = qb.where((eb: any) => eb.or([eb('p.name', 'ilike', search), eb('p.barcode', 'ilike', search)]));
     }
 
     if (query?.categoryId) {
@@ -294,7 +287,9 @@ export class WarehouseCatalogSlice {
       const credit = p.credit_price != null && Number(p.credit_price) > 0 ? Number(p.credit_price) : retail;
       const consumer = p.consumer_price != null && Number(p.consumer_price) > 0 ? Number(p.consumer_price) : retail;
 
-      const productUnits = (unitsByProduct.get(pid) || [{ id: 0, name: 'قطعة', multiplier: 1, isBaseUnit: true, isSaleUnitDefault: true }]).map((u) => ({
+      const productUnits = (
+        unitsByProduct.get(pid) || [{ id: 0, name: 'قطعة', multiplier: 1, isBaseUnit: true, isSaleUnitDefault: true }]
+      ).map((u) => ({
         ...u,
         isBase: u.isBaseUnit,
         isSaleDefault: u.isSaleUnitDefault,

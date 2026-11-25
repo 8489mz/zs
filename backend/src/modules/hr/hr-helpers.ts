@@ -54,19 +54,21 @@ export function normalizeEmployeeNo(value: unknown): string {
 export function isUniqueViolation(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const candidate = error as { code?: unknown; constraint?: unknown; detail?: unknown; message?: unknown };
-  return String(candidate.code || '') === '23505'
-    && (
-      String(candidate.constraint || '').includes('hr_employees_employee_no')
-    || String(candidate.detail || '').includes('employee_no')
-    || String(candidate.message || '').includes('idx_hr_employees_employee_no_unique')
-    );
+  return (
+    String(candidate.code || '') === '23505' &&
+    (String(candidate.constraint || '').includes('hr_employees_employee_no') ||
+      String(candidate.detail || '').includes('employee_no') ||
+      String(candidate.message || '').includes('idx_hr_employees_employee_no_unique'))
+  );
 }
 
 export function normalizeDateOnly(value: unknown): string | null {
   const text = clean(value);
-  // Accept a strict date or a genuine ISO timestamp only. The old /T.*/ 
+  // Accept a strict date or a genuine ISO timestamp only. The old /T.*/
   // pattern silently accepted malformed strings like 2026-02-01Tgarbage.
-  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/);
+  const isoMatch = text.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/,
+  );
   if (isoMatch) {
     const result = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
     const dt = new Date(result + 'T00:00:00Z');
@@ -89,7 +91,10 @@ export function nextMonthDate(value?: string | null): string {
   const normalized = normalizeDateOnly(value);
   if (normalized) return addMonths(normalized, 1);
   const now = new Date();
-  return addMonths(`${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`, 1);
+  return addMonths(
+    `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`,
+    1,
+  );
 }
 
 export function addMonths(value: string, months: number): string {
@@ -151,7 +156,12 @@ export function combineNotes(...notes: Array<string | null | undefined>): string
 }
 
 export function canViewSalary(auth: AuthContext): boolean {
-  return auth.role === 'super_admin' || auth.permissions.includes('*') || auth.permissions.includes('hrSalaryView') || auth.permissions.includes('hrSalaryManage');
+  return (
+    auth.role === 'super_admin' ||
+    auth.permissions.includes('*') ||
+    auth.permissions.includes('hrSalaryView') ||
+    auth.permissions.includes('hrSalaryManage')
+  );
 }
 
 export function hasHrPermission(auth: AuthContext, permission: string): boolean {
@@ -174,7 +184,16 @@ export type PayrollOperationalReview = {
   pendingOvertimeMinutes: number;
 };
 export type AttendanceExceptionStatus = 'pending' | 'approved' | 'skipped' | 'auto_calculated' | 'needs_review';
-export type AttendanceExceptionType = 'early_check_in' | 'late_check_in' | 'early_check_out' | 'late_check_out' | 'missing_check_in' | 'missing_check_out' | 'short_hours' | 'extra_hours' | 'unscheduled_time';
+export type AttendanceExceptionType =
+  | 'early_check_in'
+  | 'late_check_in'
+  | 'early_check_out'
+  | 'late_check_out'
+  | 'missing_check_in'
+  | 'missing_check_out'
+  | 'short_hours'
+  | 'extra_hours'
+  | 'unscheduled_time';
 export type CompensationType = 'monthly' | 'hourly';
 export type OvertimePolicy = 'review_only' | 'disabled' | 'auto_approved';
 
@@ -199,7 +218,14 @@ export function normalizeAttendanceSource(value: unknown): 'manual' | 'import' |
 export function buildAttendanceDayAuditKey(
   tenantId: string,
   workDate: string,
-  rows: Array<{ employeeId?: unknown; status?: unknown; checkInAt?: unknown; checkOutAt?: unknown; source?: unknown; notes?: unknown }>,
+  rows: Array<{
+    employeeId?: unknown;
+    status?: unknown;
+    checkInAt?: unknown;
+    checkOutAt?: unknown;
+    source?: unknown;
+    notes?: unknown;
+  }>,
 ): string {
   const canonical = [...rows]
     .map((row) => ({
@@ -230,7 +256,7 @@ export function normalizeTimeOnly(value: unknown): string | null {
 
 export function timeToMinutes(value: string): number {
   const [hh, mm] = value.split(':').map(Number);
-  return (hh * 60) + mm;
+  return hh * 60 + mm;
 }
 
 export function inclusiveDaysBetween(from: string, to: string): number {

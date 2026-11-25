@@ -13,10 +13,7 @@ export class PreSalesOrderReadsSlice {
   /**
    * Lists Pre-Sales orders booked by reps with comprehensive filters.
    */
-  public async listPreSalesOrders(
-    tenantId: string,
-    filters?: ListPreSalesOrdersFilters,
-  ) {
+  public async listPreSalesOrders(tenantId: string, filters?: ListPreSalesOrdersFilters) {
     let qb = this.anyDb
       .selectFrom('sales_orders as so')
       .leftJoin('delivery_representatives as dr', 'dr.id', 'so.rep_id')
@@ -176,9 +173,7 @@ export class PreSalesOrderReadsSlice {
     // so return it alongside `total` (additive, no FE type break);
     // and fall back to `مندوب #<repId>` when dr.full_name is NULL,
     // the same fallback the list row already renders.
-    const repName =
-      (order as any).repName ||
-      ((order as any).repId ? `مندوب #${(order as any).repId}` : '');
+    const repName = (order as any).repName || ((order as any).repId ? `مندوب #${(order as any).repId}` : '');
     return {
       ...order,
       repName,

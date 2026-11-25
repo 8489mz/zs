@@ -17,7 +17,11 @@ import {
   hashPasswordResetToken,
   passwordResetTokenTtlMs,
 } from '../../core/auth/utils/password-reset-token';
-import { RequestPasswordResetDto, ConfirmPasswordResetDto, ValidatePasswordResetTokenDto } from './dto/password-reset.dto';
+import {
+  RequestPasswordResetDto,
+  ConfirmPasswordResetDto,
+  ValidatePasswordResetTokenDto,
+} from './dto/password-reset.dto';
 import { PasswordResetMailService, PasswordResetMailTarget } from './password-reset-mail.service';
 
 /** أكثر عدد منشآت يُصدَر لها رمز في طلب واحد — نفس البريد قد يملك أكثر من منشأة. */
@@ -42,7 +46,14 @@ export function buildPasswordResetUrl(
   if (!candidate) return null;
   try {
     const parsed = new URL(candidate);
-    if (parsed.username || parsed.password || parsed.search || parsed.hash || (parsed.pathname !== '/' && parsed.pathname !== '')) return null;
+    if (
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash ||
+      (parsed.pathname !== '/' && parsed.pathname !== '')
+    )
+      return null;
     const isLoopback = ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname.toLowerCase());
     if (parsed.protocol !== 'https:' && !(standalone && isLoopback && parsed.protocol === 'http:')) return null;
     // A standalone fallback is restricted to loopback, never an untrusted forwarded public host.
@@ -77,14 +88,20 @@ export class PasswordResetService {
   ) {}
 
   private maskEmail(value: string): string {
-    const [localRaw, domainRaw] = String(value || '').trim().toLowerCase().split('@');
+    const [localRaw, domainRaw] = String(value || '')
+      .trim()
+      .toLowerCase()
+      .split('@');
     const local = localRaw || '';
     const domain = domainRaw || '';
     if (!local || !domain) return '***';
     return `${local.slice(0, 2)}***@${domain}`;
   }
 
-  private tenantContextOf(row: { tenant_id?: string | null; account_id?: string | null }): { tenantId: string; accountId: string } {
+  private tenantContextOf(row: { tenant_id?: string | null; account_id?: string | null }): {
+    tenantId: string;
+    accountId: string;
+  } {
     return resolveTenantContext(this.configService, {
       tenantId: String(row.tenant_id || '').trim(),
       accountId: String(row.account_id || '').trim(),
@@ -92,7 +109,10 @@ export class PasswordResetService {
   }
 
   private tooManyRequests(): never {
-    throw new HttpException('عدد كبير من المحاولات خلال وقت قصير، يرجى المحاولة بعد قليل.', HttpStatus.TOO_MANY_REQUESTS);
+    throw new HttpException(
+      'عدد كبير من المحاولات خلال وقت قصير، يرجى المحاولة بعد قليل.',
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
 
   private invalidTokenError(): AppError {
@@ -192,7 +212,9 @@ export class PasswordResetService {
    * هذا المسار إلى أداة لمعرفة أي البُرُد مسجَّلة لدينا.
    */
   async requestReset(dto: RequestPasswordResetDto, meta: { ip: string; origin?: string }): Promise<{ ok: true }> {
-    const email = String(dto.email || '').trim().toLowerCase();
+    const email = String(dto.email || '')
+      .trim()
+      .toLowerCase();
     const ip = String(meta.ip || 'unknown').trim() || 'unknown';
 
     const limits = await Promise.all([
@@ -215,7 +237,9 @@ export class PasswordResetService {
       const resetUrl = buildPasswordResetUrl(meta.origin, token);
       if (!resetUrl) {
         // بلا عنوان عام لا يمكن بناء رابط يعمل — نفشل بصوت في السجل لا بصمت في بريد المستخدم.
-        this.logger.error('PASSWORD_RESET_PUBLIC_URL_MISSING: APP_PUBLIC_URL is not set and the request origin is not usable.');
+        this.logger.error(
+          'PASSWORD_RESET_PUBLIC_URL_MISSING: APP_PUBLIC_URL is not set and the request origin is not usable.',
+        );
         return { ok: true };
       }
       targets.push({ businessName: candidate.businessName, username: candidate.username, resetUrl });
@@ -246,14 +270,19 @@ export class PasswordResetService {
   }
 
   /** يتحقق أن الرابط ما زال صالحاً قبل أن تعرض الواجهة نموذج كلمة المرور الجديدة. */
-  async validateToken(dto: ValidatePasswordResetTokenDto, meta: { ip: string }): Promise<{ ok: true; username: string; businessName: string; expiresAt: string }> {
+  async validateToken(
+    dto: ValidatePasswordResetTokenDto,
+    meta: { ip: string },
+  ): Promise<{ ok: true; username: string; businessName: string; expiresAt: string }> {
     const ip = String(meta.ip || 'unknown').trim() || 'unknown';
     const limit = await this.rateLimit.hit(`password-reset:validate:ip:${ip}`, 30, 3600);
     if (!limit.allowed) this.tooManyRequests();
 
     const row = await this.db
       .selectFrom('password_reset_tokens as prt')
-      .innerJoin('users as u', (join) => join.onRef('u.id', '=', 'prt.user_id').onRef('u.tenant_id', '=', 'prt.tenant_id'))
+      .innerJoin('users as u', (join) =>
+        join.onRef('u.id', '=', 'prt.user_id').onRef('u.tenant_id', '=', 'prt.tenant_id'),
+      )
       .innerJoin('tenants as t', 't.id', 'prt.tenant_id')
       .select([
         'prt.user_id as user_id',

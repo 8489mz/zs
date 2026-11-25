@@ -26,7 +26,14 @@ export class FieldCollectionService {
       tenantId: string,
       accountId: string,
       payload: RecordFieldCollectionInternalPayload,
-    ) => Promise<{ ok: boolean; receiptNo: string; amount: number; customerName: string; previousBalance: number; newBalance: number }>,
+    ) => Promise<{
+      ok: boolean;
+      receiptNo: string;
+      amount: number;
+      customerName: string;
+      previousBalance: number;
+      newBalance: number;
+    }>,
   ) {}
 
   private get anyDb(): any {
@@ -41,7 +48,14 @@ export class FieldCollectionService {
     tenantId: string,
     accountId: string,
     payload: RecordFieldCollectionPayload,
-  ): Promise<{ ok: boolean; receiptNo: string; amount: number; customerName: string; previousBalance: number; newBalance: number }> {
+  ): Promise<{
+    ok: boolean;
+    receiptNo: string;
+    amount: number;
+    customerName: string;
+    previousBalance: number;
+    newBalance: number;
+  }> {
     const amount = Number(payload.amount || 0);
     if (amount <= 0) throw new AppError('المبلغ المحصل يجب أن يكون أكبر من صفر', 'INVALID_AMOUNT', 400);
 
@@ -119,14 +133,16 @@ export class FieldCollectionService {
           .where('van_trip_id', '=', payload.tripId)
           .where('client_tx_id', '=', payload.clientTxId)
           .executeTakeFirst();
-        const existingPayment = existingByColumn ?? await this.anyDb
-          .selectFrom('customer_payments')
-          .select(['id', 'amount', 'note'])
-          .where('tenant_id', '=', tenantId)
-          .where('customer_id', '=', payload.customerId)
-          .where('van_trip_id', '=', payload.tripId)
-          .where('note', 'like', `%[tx:${payload.clientTxId}]%`)
-          .executeTakeFirst();
+        const existingPayment =
+          existingByColumn ??
+          (await this.anyDb
+            .selectFrom('customer_payments')
+            .select(['id', 'amount', 'note'])
+            .where('tenant_id', '=', tenantId)
+            .where('customer_id', '=', payload.customerId)
+            .where('van_trip_id', '=', payload.tripId)
+            .where('note', 'like', `%[tx:${payload.clientTxId}]%`)
+            .executeTakeFirst());
 
         if (existingPayment) {
           // INV-REP-FIELD-COLLECTION-DEDUP-KEYS (B7): a dedup replay
@@ -138,7 +154,12 @@ export class FieldCollectionService {
           // screen derives as newBalance + amount. Exact when no
           // later collection intervened; always a real current
           // balance, never 0/0.
-          const cust = await this.anyDb.selectFrom('customers').select(['name', 'balance']).where('id', '=', payload.customerId).where('tenant_id', '=', tenantId).executeTakeFirst();
+          const cust = await this.anyDb
+            .selectFrom('customers')
+            .select(['name', 'balance'])
+            .where('id', '=', payload.customerId)
+            .where('tenant_id', '=', tenantId)
+            .executeTakeFirst();
           const currentBalance = Number(cust?.balance || 0);
           const paidAmount = Number(existingPayment.amount);
           return {
@@ -181,7 +202,12 @@ export class FieldCollectionService {
         // INV-REP-FIELD-COLLECTION-DEDUP-KEYS (B7): same real-balance
         // replay as the clientTxId branch above — the stored twin's
         // amount plus the customer's current balance.
-        const cust = await this.anyDb.selectFrom('customers').select(['name', 'balance']).where('id', '=', payload.customerId).where('tenant_id', '=', tenantId).executeTakeFirst();
+        const cust = await this.anyDb
+          .selectFrom('customers')
+          .select(['name', 'balance'])
+          .where('id', '=', payload.customerId)
+          .where('tenant_id', '=', tenantId)
+          .executeTakeFirst();
         const currentBalance = Number(cust?.balance || 0);
         const paidAmount = Number(recentDbPayment.amount);
         return {
@@ -221,11 +247,21 @@ export class FieldCollectionService {
     }
   }
 
-  async recordFieldCollectionInternal(repId: number, tenantId: string, accountId: string, payload: RecordFieldCollectionInternalPayload) {
+  async recordFieldCollectionInternal(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+    payload: RecordFieldCollectionInternalPayload,
+  ) {
     return this.getCollectionsAndSwaps().recordFieldCollectionInternal(repId, tenantId, accountId, payload);
   }
 
-  async executeDamagedSwap(repId: number, tenantId: string, accountId: string, payload: ExecuteDamagedSwapPayload): Promise<ExecuteDamagedSwapResult> {
+  async executeDamagedSwap(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+    payload: ExecuteDamagedSwapPayload,
+  ): Promise<ExecuteDamagedSwapResult> {
     return this.getCollectionsAndSwaps().executeDamagedSwap(repId, tenantId, accountId, payload);
   }
 

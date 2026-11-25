@@ -10,9 +10,11 @@ import { SettingsSupportController } from './controllers/settings-support.contro
 import { SettingsImportController } from './controllers/settings-import.controller';
 import { SettingsImportService } from './services/settings-import.service';
 import { SettingsDemoDataService } from './services/settings-demo-data.service';
-import { OfflineReleasesAdminController,
-    OfflineUpdatesPublicController,
-    OfflineUpdatesProtectedController } from './controllers/offline-releases.controller';
+import {
+  OfflineReleasesAdminController,
+  OfflineUpdatesPublicController,
+  OfflineUpdatesProtectedController,
+} from './controllers/offline-releases.controller';
 import { OfflineReleasesService } from './services/offline-releases.service';
 
 import { WhatsAppGatewayController, WhatsAppPublicWebhookController } from './controllers/whatsapp-gateway.controller';
@@ -56,8 +58,13 @@ import { AccountingModule } from '../accounting/accounting.module';
     WhatsAppGatewayService,
     DailyDigestService,
   ],
-  exports: [SettingsService, WhatsAppGatewayService, DailyDigestService, CloudBackupService, SettingsSupportService, SettingsDemoDataService],
+  exports: [
+    SettingsService,
+    WhatsAppGatewayService,
+    DailyDigestService,
+    CloudBackupService,
+    SettingsSupportService,
+    SettingsDemoDataService,
+  ],
 })
 export class SettingsModule {}
-
-

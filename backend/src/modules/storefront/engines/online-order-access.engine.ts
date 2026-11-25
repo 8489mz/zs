@@ -25,7 +25,8 @@ export function issueIdempotentOrderAccessToken(tenantId: string, key: string): 
   const secret = String(process.env.SESSION_CSRF_SECRET || '');
   if (secret.length < 16) throw new Error('SESSION_CSRF_SECRET is required for storefront idempotency');
   const token = createHmac('sha256', secret)
-    .update(`storefront-order-access-v1:${tenantId}:${key}`, 'utf8').digest('base64url');
+    .update(`storefront-order-access-v1:${tenantId}:${key}`, 'utf8')
+    .digest('base64url');
   return { token, hash: hashOrderAccessToken(token) };
 }
 
@@ -111,10 +112,14 @@ export interface OnlineOrderCollection {
 
 /** SF-3: decides whether the delivery invoice is already paid or is cash-on-delivery. */
 export function resolveOnlineOrderCollection(order: OnlineOrderPaymentState): OnlineOrderCollection {
-  const provider = String(order.gateway_provider || '').trim().toLowerCase();
+  const provider = String(order.gateway_provider || '')
+    .trim()
+    .toLowerCase();
   const isMarketplace =
     (MARKETPLACE_PROVIDERS as readonly string[]).includes(provider) ||
-    String(order.payment_method || '').trim().toLowerCase() === MARKETPLACE_PREPAID_PAYMENT_METHOD;
+    String(order.payment_method || '')
+      .trim()
+      .toLowerCase() === MARKETPLACE_PREPAID_PAYMENT_METHOD;
   const collected =
     order.payment_status === 'paid' &&
     ((COLLECTING_PAYMENT_PROVIDERS as readonly string[]).includes(provider) || isMarketplace);
@@ -174,7 +179,9 @@ export function buildGatewayWebhookUrl(
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
   for (const candidate of [env.APP_PUBLIC_URL, origin]) {
-    const base = String(candidate || '').trim().replace(/\/$/, '');
+    const base = String(candidate || '')
+      .trim()
+      .replace(/\/$/, '');
     if (/^https?:\/\/[^\s/]+$/i.test(base)) return `${base}/api/storefront/webhooks/${provider}`;
   }
   return null;

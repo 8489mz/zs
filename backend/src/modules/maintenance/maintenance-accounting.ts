@@ -14,7 +14,12 @@ export async function postMaintenanceJournal(
   foundation: AccountingTenantFoundationService,
   posting: AccountingPostingService,
   auth: AuthContext,
-  sourceType: 'maintenance_advance' | 'maintenance_advance_refund' | 'maintenance_delivery' | 'maintenance_part_issue' | 'maintenance_part_return',
+  sourceType:
+    | 'maintenance_advance'
+    | 'maintenance_advance_refund'
+    | 'maintenance_delivery'
+    | 'maintenance_part_issue'
+    | 'maintenance_part_return',
   sourceId: number,
   branchId: number | null,
   locationId: number | null,
@@ -23,14 +28,23 @@ export async function postMaintenanceJournal(
   const scope = requireTenantScope(auth);
   const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
   const normalized = lines
-    .map((line) => ({ ...line, debit: roundMoney(Number(line.debit || 0), digits), credit: roundMoney(Number(line.credit || 0), digits) }))
+    .map((line) => ({
+      ...line,
+      debit: roundMoney(Number(line.debit || 0), digits),
+      credit: roundMoney(Number(line.credit || 0), digits),
+    }))
     .filter((line) => line.debit !== 0 || line.credit !== 0);
   if (!normalized.length) return null;
-  if (normalized.some((line) => !Number.isFinite(line.debit) || !Number.isFinite(line.credit) || line.debit < 0 || line.credit < 0)) {
+  if (
+    normalized.some(
+      (line) => !Number.isFinite(line.debit) || !Number.isFinite(line.credit) || line.debit < 0 || line.credit < 0,
+    )
+  ) {
     throw new AppError('Invalid maintenance accounting amount', 'MAINTENANCE_AMOUNT_INVALID', 422);
   }
   await foundation.ensureForAuth(trx, auth);
-  const accounts = await trx.selectFrom('accounting_accounts')
+  const accounts = await trx
+    .selectFrom('accounting_accounts')
     .select(['id', 'code', 'is_active'])
     .where('tenant_id', '=', scope.tenantId)
     .where('code', 'in', [...new Set(normalized.map((line) => line.code))])
@@ -40,14 +54,23 @@ export async function postMaintenanceJournal(
     throw new AppError('Required maintenance ledger account missing', 'MAINTENANCE_ACCOUNT_MISSING', 409);
   }
   return posting.postDomainJournal(trx, {
-    sourceType, sourceId, tenantId: scope.tenantId, accountId: scope.accountId,
-    entryDate: new Date(), description: `Maintenance source ${sourceType} #${sourceId}`,
-    branchId, locationId, createdBy: auth.userId, postedBy: auth.userId,
+    sourceType,
+    sourceId,
+    tenantId: scope.tenantId,
+    accountId: scope.accountId,
+    entryDate: new Date(),
+    description: `Maintenance source ${sourceType} #${sourceId}`,
+    branchId,
+    locationId,
+    createdBy: auth.userId,
+    postedBy: auth.userId,
     lines: normalized.map((line) => ({
       accountId: byCode.get(line.code)!,
       description: line.description,
-      debit: line.debit, credit: line.credit,
-      partnerType: 'none' as const, partnerId: null,
+      debit: line.debit,
+      credit: line.credit,
+      partnerType: 'none' as const,
+      partnerId: null,
     })),
   });
 }

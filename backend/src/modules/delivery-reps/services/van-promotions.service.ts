@@ -50,9 +50,7 @@ export interface UpsertFmcgPromotionDto {
 
 @Injectable()
 export class VanPromotionsService {
-  constructor(
-    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
-  ) {}
+  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   private get anyDb(): any {
     return this.db as any;
@@ -62,10 +60,7 @@ export class VanPromotionsService {
     tenantId: string,
     filters?: { isActive?: boolean; promoType?: string },
   ): Promise<FmcgPromotion[]> {
-    let query = this.anyDb
-      .selectFrom('fmcg_promotions')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.anyDb.selectFrom('fmcg_promotions').selectAll().where('tenant_id', '=', tenantId);
 
     if (filters?.isActive !== undefined) {
       query = query.where('is_active', '=', filters.isActive);
@@ -74,10 +69,7 @@ export class VanPromotionsService {
       query = query.where('promo_type', '=', filters.promoType);
     }
 
-    const rows = await query
-      .orderBy('priority', 'desc')
-      .orderBy('id', 'desc')
-      .execute();
+    const rows = await query.orderBy('priority', 'desc').orderBy('id', 'desc').execute();
 
     return rows.map((r: any) => this.mapPromotionRow(r));
   }
@@ -102,9 +94,10 @@ export class VanPromotionsService {
       throw new AppError('اسم العرض الترويجي إلزامي', 'INVALID_PROMOTION_NAME', 400);
     }
 
-    const code = dto.code && dto.code.trim()
-      ? dto.code.trim().toUpperCase()
-      : `PROMO-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const code =
+      dto.code && dto.code.trim()
+        ? dto.code.trim().toUpperCase()
+        : `PROMO-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const [inserted] = await this.anyDb
       .insertInto('fmcg_promotions')
@@ -132,11 +125,7 @@ export class VanPromotionsService {
     return this.mapPromotionRow(inserted);
   }
 
-  async updatePromotion(
-    tenantId: string,
-    id: number,
-    dto: Partial<UpsertFmcgPromotionDto>,
-  ): Promise<FmcgPromotion> {
+  async updatePromotion(tenantId: string, id: number, dto: Partial<UpsertFmcgPromotionDto>): Promise<FmcgPromotion> {
     await this.getPromotionById(tenantId, id);
 
     const updatePayload: any = {
@@ -153,7 +142,8 @@ export class VanPromotionsService {
     if (dto.startDate !== undefined) updatePayload.start_date = dto.startDate || null;
     if (dto.endDate !== undefined) updatePayload.end_date = dto.endDate || null;
     if (dto.isActive !== undefined) updatePayload.is_active = dto.isActive;
-    if (dto.maxApplicationsPerOrder !== undefined) updatePayload.max_applications_per_order = dto.maxApplicationsPerOrder;
+    if (dto.maxApplicationsPerOrder !== undefined)
+      updatePayload.max_applications_per_order = dto.maxApplicationsPerOrder;
     if (dto.priority !== undefined) updatePayload.priority = dto.priority;
     if (dto.notes !== undefined) updatePayload.notes = dto.notes;
 
@@ -170,11 +160,7 @@ export class VanPromotionsService {
 
   async deletePromotion(tenantId: string, id: number): Promise<{ ok: boolean }> {
     await this.getPromotionById(tenantId, id);
-    await this.anyDb
-      .deleteFrom('fmcg_promotions')
-      .where('id', '=', id)
-      .where('tenant_id', '=', tenantId)
-      .execute();
+    await this.anyDb.deleteFrom('fmcg_promotions').where('id', '=', id).where('tenant_id', '=', tenantId).execute();
 
     return { ok: true };
   }
@@ -221,7 +207,11 @@ export class VanPromotionsService {
   private mapPromotionRow(r: any): FmcgPromotion {
     const parseJson = (val: any) => {
       if (typeof val === 'string') {
-        try { return JSON.parse(val); } catch { return val; }
+        try {
+          return JSON.parse(val);
+        } catch {
+          return val;
+        }
       }
       return val || {};
     };

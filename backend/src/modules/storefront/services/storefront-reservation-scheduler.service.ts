@@ -47,9 +47,12 @@ export class StorefrontReservationSchedulerService implements OnApplicationBoots
     }, 30_000);
 
     // Periodic sweep every 2 minutes (120,000 ms)
-    this.timer = setInterval(() => {
-      void this.sweepExpiredReservations();
-    }, 2 * 60 * 1000);
+    this.timer = setInterval(
+      () => {
+        void this.sweepExpiredReservations();
+      },
+      2 * 60 * 1000,
+    );
   }
 
   onModuleDestroy(): void {
@@ -70,9 +73,7 @@ export class StorefrontReservationSchedulerService implements OnApplicationBoots
       if (Date.now() - startedAt > SWEEP_STALE_MS) {
         // D-SF-12: the previous sweep never settled — reset the guard and
         // run a fresh sweep instead of staying wedged forever.
-        this.logger.warn(
-          'Automated reservation reaper: previous sweep wedged, resetting the running guard.',
-        );
+        this.logger.warn('Automated reservation reaper: previous sweep wedged, resetting the running guard.');
         this.running = false;
         wedgedReset = true;
       } else {

@@ -104,15 +104,21 @@ export interface MarketplaceWebhookEventIdentity {
   payloadHash: string;
 }
 
-export function extractMarketplaceEventIdentity(
-  payload: unknown,
-): MarketplaceWebhookEventIdentity {
+export function extractMarketplaceEventIdentity(payload: unknown): MarketplaceWebhookEventIdentity {
   const layers = nestedPayload(payload);
   const flat: Record<string, unknown> = {};
   for (const layer of layers) Object.assign(flat, layer);
   const eventType = stringField(flat, EVENT_TYPE_KEYS) || 'UNKNOWN';
   const eventKey = stringField(flat, EVENT_KEY_KEYS);
-  const sellerIds = [...new Set(layers.flatMap((layer) => SELLER_ID_KEYS.map((k) => layer[k]).filter((v): v is string => typeof v === 'string' && !!v.trim()).map((v) => v.trim())))];
+  const sellerIds = [
+    ...new Set(
+      layers.flatMap((layer) =>
+        SELLER_ID_KEYS.map((k) => layer[k])
+          .filter((v): v is string => typeof v === 'string' && !!v.trim())
+          .map((v) => v.trim()),
+      ),
+    ),
+  ];
   return { eventType, eventKey, sellerIds, payloadHash: sha256Hex(canonicalJson(payload)) };
 }
 
@@ -126,10 +132,7 @@ export function extractMarketplaceEventIdentity(
  * re-serializes the same event (different whitespace/key order) still
  * dedups; the hash covers payloads with no external key at all.
  */
-export function marketplaceWebhookDedupKey(
-  marketplace: string,
-  identity: MarketplaceWebhookEventIdentity,
-): string {
+export function marketplaceWebhookDedupKey(marketplace: string, identity: MarketplaceWebhookEventIdentity): string {
   const scope = identity.sellerIds[0] ?? 'unresolved';
   const key = identity.eventKey || identity.payloadHash;
   return `${marketplace}:${scope}:${key}`;
@@ -148,10 +151,7 @@ export interface MarketplaceTenantCandidate {
  * must never be attributed to the wrong tenant. Fail-closed, mirroring
  * the WH-1 exact-one rule for public payment webhooks.
  */
-export function matchMarketplaceTenant(
-  candidates: MarketplaceTenantCandidate[],
-  sellerIds: string[],
-): string | null {
+export function matchMarketplaceTenant(candidates: MarketplaceTenantCandidate[], sellerIds: string[]): string | null {
   const wanted = new Set(sellerIds);
   if (!wanted.size) return null;
   const matched = candidates.filter((c) => c.sellerIds.some((id) => wanted.has(id)));

@@ -72,7 +72,9 @@ export interface LeaveBalanceTypeIdentity {
 }
 
 function cleanLower(value: string | null | undefined): string {
-  return String(value || '').trim().toLowerCase();
+  return String(value || '')
+    .trim()
+    .toLowerCase();
 }
 
 /**

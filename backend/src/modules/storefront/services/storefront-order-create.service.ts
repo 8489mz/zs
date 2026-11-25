@@ -1,17 +1,15 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import {
-  Transaction,
-  Kysely,
-  sql,
-  type Selectable,
-} from 'kysely';
+import { Transaction, Kysely, sql, type Selectable } from 'kysely';
 import { Database } from '../../../database/database.types';
 import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { CreateOnlineOrderDto } from '../dto/create-online-order.dto';
 import { assertProductsNot86ed } from '../../sales/services/restaurant-advanced-fnb.service';
 import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
 import { PlanFeatureService } from '../../../core/auth/services/plan-feature.service';
-import { isStorefrontEntitledForOrders, STOREFRONT_NOT_ENTITLED_MESSAGE } from '../engines/storefront-entitlement.engine';
+import {
+  isStorefrontEntitledForOrders,
+  STOREFRONT_NOT_ENTITLED_MESSAGE,
+} from '../engines/storefront-entitlement.engine';
 import { resolveOrderLinePrice, formatVariantLineName } from '../engines/online-order-pricing.engine';
 import {
   issueOrderAccessToken,
@@ -23,7 +21,15 @@ import { reserveLocationStock } from '../../../common/utils/location-stock-ledge
 import { pickLocationCoveringOrder } from '../../../common/engines/branch-sellable-locations.engine';
 import { resolveBestStorefrontOffer, RawStorefrontOffer } from '../engines/storefront-offers.engine';
 import { roundMoney } from '../../accounting/engines/money-minor-units.engine';
-import { assertValidCustomerPhone, assertValidCustomerName, assertValidCustomerAddress, offerTimezone, storefrontMoneyDigits, isOutOfStockOrderingAllowed, assertOnlineStockAvailable } from '../storefront-helpers';
+import {
+  assertValidCustomerPhone,
+  assertValidCustomerName,
+  assertValidCustomerAddress,
+  offerTimezone,
+  storefrontMoneyDigits,
+  isOutOfStockOrderingAllowed,
+  assertOnlineStockAvailable,
+} from '../storefront-helpers';
 
 /**
  * StorefrontOrderCreateService — slice T2 of the storefront split.
@@ -179,9 +185,7 @@ export class StorefrontOrderCreateService {
     }
 
     const cleanKey = dto.idempotencyKey?.trim() || '';
-    const accessToken = cleanKey
-      ? issueIdempotentOrderAccessToken(tenant.id, cleanKey)
-      : issueOrderAccessToken();
+    const accessToken = cleanKey ? issueIdempotentOrderAccessToken(tenant.id, cleanKey) : issueOrderAccessToken();
     const replayResponse = (existingOrder: Selectable<Database['online_orders']>) => {
       if (!verifyOrderAccessToken(accessToken.token, existingOrder.access_token_hash)) {
         throw new BadRequestException('تعذر استعادة الطلب القديم بهذا المفتاح؛ يرجى التواصل مع المتجر');
@@ -192,12 +196,17 @@ export class StorefrontOrderCreateService {
         items = Array.isArray(parsed) ? parsed : [];
       } catch {}
       return {
-        ok: true, orderId: existingOrder.id, orderNumber: existingOrder.order_number,
+        ok: true,
+        orderId: existingOrder.id,
+        orderNumber: existingOrder.order_number,
         accessToken: accessToken.token,
         trackingUrl: buildOrderTrackingUrl(publicOrigin, slug, existingOrder.order_number, accessToken.token),
-        totalAmount: Number(existingOrder.total_amount), subtotal: Number(existingOrder.subtotal),
-        deliveryFee: Number(existingOrder.delivery_fee), discountAmount: Number(existingOrder.discount_amount || 0),
-        couponCode: existingOrder.coupon_code, items,
+        totalAmount: Number(existingOrder.total_amount),
+        subtotal: Number(existingOrder.subtotal),
+        deliveryFee: Number(existingOrder.delivery_fee),
+        discountAmount: Number(existingOrder.discount_amount || 0),
+        couponCode: existingOrder.coupon_code,
+        items,
         idempotentDuplicate: true,
       };
     };
@@ -247,8 +256,8 @@ export class StorefrontOrderCreateService {
     const cleanCustomerAddress = isDineIn
       ? `طاولة رقم ${dto.tableNumber}`
       : isPickup
-      ? 'استلام ذاتي من الفرع'
-      : (dto.customerAddress || '').trim();
+        ? 'استلام ذاتي من الفرع'
+        : (dto.customerAddress || '').trim();
 
     // An address that was provided must be non-empty after trimming;
     // no length or letter minimum beyond that. An absent address keeps
@@ -313,7 +322,7 @@ export class StorefrontOrderCreateService {
     ]);
 
     const offersByProductId = new Map<number, RawStorefrontOffer[]>();
-    for (const off of (activeOffers as RawStorefrontOffer[])) {
+    for (const off of activeOffers as RawStorefrontOffer[]) {
       const pid = Number(off.product_id);
       if (!offersByProductId.has(pid)) offersByProductId.set(pid, []);
       offersByProductId.get(pid)!.push(off);
@@ -332,7 +341,9 @@ export class StorefrontOrderCreateService {
 
     const allowOutOfStock = isOutOfStockOrderingAllowed(settings, tenant.slug, tenant.activity_type);
 
-    const orderCurrency = String(settings.get('currency') || (tenant as any).currency || 'EGP').trim().toUpperCase();
+    const orderCurrency = String(settings.get('currency') || (tenant as any).currency || 'EGP')
+      .trim()
+      .toUpperCase();
     // Same canonical digits as the quote (INV-STOREFRONT-LINE-TOTAL-DIGITS).
     const moneyDigits = storefrontMoneyDigits(settings, tenant);
 
@@ -353,24 +364,42 @@ export class StorefrontOrderCreateService {
     // invoiced. The storefront cart already keeps a single variant per product.
     const seenProductIds = new Set<number>();
     const validatedItems = dto.items.map((item, itemIndex) => {
-      const prod = productMap.get(item.productId) ?? productMap.get(Number(item.productId)) ?? productMap.get(String(item.productId));
+      const prod =
+        productMap.get(item.productId) ??
+        productMap.get(Number(item.productId)) ??
+        productMap.get(String(item.productId));
       if (!prod) {
         throw new BadRequestException(`عفواً، أحد الأصناف المطلوبة غير متاح في المتجر حالياً، يرجى تحديث السلة.`);
       }
       if (seenProductIds.has(Number(prod.id))) {
-        throw new BadRequestException(`لا يمكن طلب أكثر من مقاس أو سطر للصنف "${prod.name}" في نفس الطلب، يرجى توحيده في سطر واحد.`);
+        throw new BadRequestException(
+          `لا يمكن طلب أكثر من مقاس أو سطر للصنف "${prod.name}" في نفس الطلب، يرجى توحيده في سطر واحد.`,
+        );
       }
       seenProductIds.add(Number(prod.id));
       const availableStock = Math.max(0, Number(prod.stock_qty ?? 0) - Number(prod.reserved_qty ?? 0));
       assertOnlineStockAvailable(prod.name, availableStock, Math.max(1, Number(item.quantity || 1)), allowOutOfStock);
       // SF-4 / O54: the chosen variant is priced here, from the product's own metadata.
-      const priced = resolveOrderLinePrice(Number(prod.retail_price || 0), prod.metadata, item.variantName, storefrontMoneyDigits(settings, tenant));
+      const priced = resolveOrderLinePrice(
+        Number(prod.retail_price || 0),
+        prod.metadata,
+        item.variantName,
+        storefrontMoneyDigits(settings, tenant),
+      );
       if (!priced.ok) {
         throw new BadRequestException(`عفواً، المقاس المختار للصنف "${prod.name}" لم يعد متاحاً، يرجى تحديث السلة.`);
       }
       const quantity = Math.max(1, Number(item.quantity || 1));
       const pOffers = offersByProductId.get(Number(prod.id)) || [];
-      const bestOffer = resolveBestStorefrontOffer(priced.unitPrice, pOffers, quantity, undefined, new Date(), offerTimezone(settings), storefrontMoneyDigits(settings, tenant));
+      const bestOffer = resolveBestStorefrontOffer(
+        priced.unitPrice,
+        pOffers,
+        quantity,
+        undefined,
+        new Date(),
+        offerTimezone(settings),
+        storefrontMoneyDigits(settings, tenant),
+      );
       const unitPrice = bestOffer.hasDiscount ? bestOffer.price : priced.unitPrice;
       // INV-REST-KIOSK-MODIFIER-UI (R7-B1): the line total is the POS
       // formula — qty × (base unit price + Σ re-priced modifier
@@ -427,7 +456,10 @@ export class StorefrontOrderCreateService {
     subtotal = roundMoney(subtotal, moneyDigits);
     const roundedDeliveryFee = roundMoney(deliveryFee, moneyDigits);
     const roundedDiscountAmount = roundMoney(discountAmount, moneyDigits);
-    const roundedTotalAmount = roundMoney(Math.max(0, subtotal - roundedDiscountAmount) + roundedDeliveryFee, moneyDigits);
+    const roundedTotalAmount = roundMoney(
+      Math.max(0, subtotal - roundedDiscountAmount) + roundedDeliveryFee,
+      moneyDigits,
+    );
 
     // Get default primary branch
     const primaryBranch = await this.db
@@ -452,13 +484,23 @@ export class StorefrontOrderCreateService {
     // not surface later at conversion. Only ids that are real products
     // of this tenant are checked: a flat addon's id lives in another
     // table and must never false-positive against a product id.
-    const modifierComponentIds = [...new Set(contractItems.flatMap((item) =>
-      item.modifiers.map((mod: any) =>
-        Number(mod.productId || mod.componentProductId || mod.component_product_id || 0)).filter((id) => id > 0)))];
+    const modifierComponentIds = [
+      ...new Set(
+        contractItems.flatMap((item) =>
+          item.modifiers
+            .map((mod: any) => Number(mod.productId || mod.componentProductId || mod.component_product_id || 0))
+            .filter((id) => id > 0),
+        ),
+      ),
+    ];
     const modifierComponentChecks: Array<{ productId: number; name?: string }> = [];
     if (modifierComponentIds.length > 0) {
-      const componentRows = await this.db.selectFrom('products').select(['id'])
-        .where(sql<boolean>`tenant_id = ${tenant.id}`).where('id', 'in', modifierComponentIds).execute();
+      const componentRows = await this.db
+        .selectFrom('products')
+        .select(['id'])
+        .where(sql<boolean>`tenant_id = ${tenant.id}`)
+        .where('id', 'in', modifierComponentIds)
+        .execute();
       const realProductIds = new Set(componentRows.map((row) => Number(row.id)));
       const seenComponents = new Set<number>();
       for (const item of contractItems) {
@@ -471,13 +513,10 @@ export class StorefrontOrderCreateService {
         }
       }
     }
-    await assertProductsNot86ed(
-      this.db, tenant.id, targetBranchId,
-      [
-        ...validatedItems.map((item) => ({ productId: item.productId, name: item.name })),
-        ...modifierComponentChecks,
-      ],
-    );
+    await assertProductsNot86ed(this.db, tenant.id, targetBranchId, [
+      ...validatedItems.map((item) => ({ productId: item.productId, name: item.name })),
+      ...modifierComponentChecks,
+    ]);
 
     /**
      * المخزن الذي يُحجز منه هذا الطلب.
@@ -490,16 +529,24 @@ export class StorefrontOrderCreateService {
      * الآن المساران يسألان نفس المحرك. وطلب المتجر يحجز في مخزن واحد (العمود مفرد)، فنختار أول
      * مخزن في ترتيب الأولوية يغطي **كل** أسطر الطلب.
      */
-    let targetBranch: { id: number | string; default_stock_location_id?: number | string | null; sales_stock_mode?: string | null; allow_external_sales_stock?: boolean | null } | undefined;
+    let targetBranch:
+      | {
+          id: number | string;
+          default_stock_location_id?: number | string | null;
+          sales_stock_mode?: string | null;
+          allow_external_sales_stock?: boolean | null;
+        }
+      | undefined;
     if (targetBranchId) {
-      targetBranch = primaryBranch && targetBranchId === Number(primaryBranch.id)
-        ? primaryBranch
-        : await this.db
-            .selectFrom('branches')
-            .select(['id', 'default_stock_location_id', 'sales_stock_mode', 'allow_external_sales_stock'])
-            .where('id', '=', targetBranchId)
-            .where(sql<boolean>`tenant_id = ${tenant.id}`)
-            .executeTakeFirst();
+      targetBranch =
+        primaryBranch && targetBranchId === Number(primaryBranch.id)
+          ? primaryBranch
+          : await this.db
+              .selectFrom('branches')
+              .select(['id', 'default_stock_location_id', 'sales_stock_mode', 'allow_external_sales_stock'])
+              .where('id', '=', targetBranchId)
+              .where(sql<boolean>`tenant_id = ${tenant.id}`)
+              .executeTakeFirst();
     }
 
     let targetLocationId: number | null = targetBranch?.default_stock_location_id
@@ -522,7 +569,11 @@ export class StorefrontOrderCreateService {
           .select(['product_id', 'location_id', 'qty', 'reserved_qty'])
           .where(sql<boolean>`tenant_id = ${tenant.id}`)
           .where('product_id', 'in', Array.from(requiredByProduct.keys()))
-          .where('location_id', 'in', eligible.map((location) => location.id))
+          .where(
+            'location_id',
+            'in',
+            eligible.map((location) => location.id),
+          )
           .execute();
         const availability = new Map<string, number>();
         for (const row of stockRows) {
@@ -559,9 +610,12 @@ export class StorefrontOrderCreateService {
       // released at commit/rollback), and the unique index from migration 134 backs it up.
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'online_orders:' + tenant.id}))`.execute(trx);
       if (cleanKey) {
-        const existing = await trx.selectFrom('online_orders').selectAll()
+        const existing = await trx
+          .selectFrom('online_orders')
+          .selectAll()
           .where(sql<boolean>`tenant_id = ${tenant.id}`)
-          .where('idempotency_key', '=', cleanKey).executeTakeFirst();
+          .where('idempotency_key', '=', cleanKey)
+          .executeTakeFirst();
         if (existing) {
           return { order: existing, replayed: true as const };
         }
@@ -596,50 +650,47 @@ export class StorefrontOrderCreateService {
           });
           stockReserved = true;
         } catch (err: any) {
-          throw new BadRequestException(
-            err?.message || 'عفواً، الكمية المطلوبة غير متوفرة في مخزون الفرع المحدد.'
-          );
+          throw new BadRequestException(err?.message || 'عفواً، الكمية المطلوبة غير متوفرة في مخزون الفرع المحدد.');
         }
       }
 
       const inserted = await trx
-      .insertInto('online_orders')
-      .values({
-        tenant_id: tenant.id,
-        account_id: accountId,
-        order_number: orderNumber,
-        customer_name: cleanCustomerName,
-        customer_phone: (dto.customerPhone || '').trim(),
-        customer_address: cleanCustomerAddress,
-        customer_notes: (dto.customerNotes || '').trim(),
-        items_json: JSON.stringify(validatedItems),
-        subtotal,
-        delivery_fee: roundedDeliveryFee,
-        delivery_zone_id: deliveryZoneId,
-        delivery_zone_name: deliveryZoneName,
-        discount_amount: roundedDiscountAmount,
-        coupon_code: appliedCouponCode,
-        total_amount: roundedTotalAmount,
-        status: 'pending',
-        payment_method: dto.paymentMethod || 'cod',
-        payment_status: 'pending',
-        branch_id: branchId,
-        order_type: isDineIn ? 'dine_in' : 'delivery',
-        fulfillment_type: isDineIn ? 'dine_in' : (isPickup ? 'pickup' : 'delivery'),
-        country_code: countryCode,
-        pickup_branch_id: isPickup ? (dto.pickupBranchId || branchId) : null,
-        table_number: dto.tableNumber ? String(dto.tableNumber).trim() : null,
-        sale_id: null,
-        access_token_hash: accessToken.hash,
-        stock_reserved: stockReserved,
-        reserved_branch_id: stockReserved ? targetBranchId : null,
-        reserved_location_id: stockReserved ? targetLocationId : null,
-        stock_reserved_at: stockReserved ? now : null,
-        idempotency_key: cleanKey || null,
-      })
-      .returning(['id', 'order_number', 'total_amount', 'created_at'])
-      .executeTakeFirstOrThrow();
-
+        .insertInto('online_orders')
+        .values({
+          tenant_id: tenant.id,
+          account_id: accountId,
+          order_number: orderNumber,
+          customer_name: cleanCustomerName,
+          customer_phone: (dto.customerPhone || '').trim(),
+          customer_address: cleanCustomerAddress,
+          customer_notes: (dto.customerNotes || '').trim(),
+          items_json: JSON.stringify(validatedItems),
+          subtotal,
+          delivery_fee: roundedDeliveryFee,
+          delivery_zone_id: deliveryZoneId,
+          delivery_zone_name: deliveryZoneName,
+          discount_amount: roundedDiscountAmount,
+          coupon_code: appliedCouponCode,
+          total_amount: roundedTotalAmount,
+          status: 'pending',
+          payment_method: dto.paymentMethod || 'cod',
+          payment_status: 'pending',
+          branch_id: branchId,
+          order_type: isDineIn ? 'dine_in' : 'delivery',
+          fulfillment_type: isDineIn ? 'dine_in' : isPickup ? 'pickup' : 'delivery',
+          country_code: countryCode,
+          pickup_branch_id: isPickup ? dto.pickupBranchId || branchId : null,
+          table_number: dto.tableNumber ? String(dto.tableNumber).trim() : null,
+          sale_id: null,
+          access_token_hash: accessToken.hash,
+          stock_reserved: stockReserved,
+          reserved_branch_id: stockReserved ? targetBranchId : null,
+          reserved_location_id: stockReserved ? targetLocationId : null,
+          stock_reserved_at: stockReserved ? now : null,
+          idempotency_key: cleanKey || null,
+        })
+        .returning(['id', 'order_number', 'total_amount', 'created_at'])
+        .executeTakeFirstOrThrow();
 
       if (isDineIn || isPickup) {
         // O53: a DRAFT sale, not a posted one. It exists only so the kitchen display (which reads
@@ -776,7 +827,12 @@ export class StorefrontOrderCreateService {
     // fragments to a server, so it stays out of access logs and referrers (SF-1). Opening the link on
     // any device registers the order there, which is how "my orders" follows the customer without an
     // account.
-    const trackingUrl = buildOrderTrackingUrl(publicOrigin, slug, String(insertedOrder.order_number), accessToken.token);
+    const trackingUrl = buildOrderTrackingUrl(
+      publicOrigin,
+      slug,
+      String(insertedOrder.order_number),
+      accessToken.token,
+    );
 
     // Non-blocking auto WhatsApp notification via gateway if enabled
     if (this.whatsappService) {
@@ -790,35 +846,51 @@ export class StorefrontOrderCreateService {
     const cleanPhone = whatsappPhone.replace(/[^0-9]/g, '');
     const targetPhone = cleanPhone.startsWith('01') ? `2${cleanPhone}` : cleanPhone;
 
-    const currencySymbol = orderCurrency === 'KWD' ? 'د.ك' : orderCurrency === 'SAR' ? 'ر.س' : orderCurrency === 'AED' ? 'د.إ' : orderCurrency === 'QAR' ? 'ر.ق' : orderCurrency === 'BHD' ? 'د.ب' : orderCurrency === 'OMR' ? 'ر.ع' : 'ج';
-    const formatMoney = (n: number) => moneyDigits === 3 ? n.toFixed(3) : (orderCurrency === 'EGP' && n % 1 === 0 ? n.toFixed(0) : n.toFixed(2));
+    const currencySymbol =
+      orderCurrency === 'KWD'
+        ? 'د.ك'
+        : orderCurrency === 'SAR'
+          ? 'ر.س'
+          : orderCurrency === 'AED'
+            ? 'د.إ'
+            : orderCurrency === 'QAR'
+              ? 'ر.ق'
+              : orderCurrency === 'BHD'
+                ? 'د.ب'
+                : orderCurrency === 'OMR'
+                  ? 'ر.ع'
+                  : 'ج';
+    const formatMoney = (n: number) =>
+      moneyDigits === 3 ? n.toFixed(3) : orderCurrency === 'EGP' && n % 1 === 0 ? n.toFixed(0) : n.toFixed(2);
 
     const itemsSummary = validatedItems
       .map((i) => `- ${i.name} (×${i.quantity}) = ${formatMoney(i.total)} ${currencySymbol}`)
       .join('\n');
 
-    const paymentLabel = (dto.paymentMethod === 'credit_card')
-      ? 'بطاقة بنكية أونلاين (فيزا / ماستركارد)'
-      : (dto.paymentMethod === 'instapay_wallet')
-      ? 'تحويل مسبق (إنستاباي / محفظة)'
-      : 'دفع عند الاستلام (كاش)';
+    const paymentLabel =
+      dto.paymentMethod === 'credit_card'
+        ? 'بطاقة بنكية أونلاين (فيزا / ماستركارد)'
+        : dto.paymentMethod === 'instapay_wallet'
+          ? 'تحويل مسبق (إنستاباي / محفظة)'
+          : 'دفع عند الاستلام (كاش)';
     const notesPart = dto.customerNotes ? `\nملاحظات: ${dto.customerNotes}` : '';
     const zonePart = deliveryZoneName ? `\nالمنطقة: ${deliveryZoneName}` : '';
-    const discountPart = discountAmount > 0 ? `\nالخصم (${appliedCouponCode}): -${formatMoney(discountAmount)} ${currencySymbol}` : '';
+    const discountPart =
+      discountAmount > 0 ? `\nالخصم (${appliedCouponCode}): -${formatMoney(discountAmount)} ${currencySymbol}` : '';
     const shippingText = deliveryFee === 0 ? 'شحن مجاني' : `شامل التوصيل ${formatMoney(deliveryFee)} ${currencySymbol}`;
 
     const whatsappMessage = encodeURIComponent(
       `مرحباً، أود متابعة طلبي من متجركم:\n` +
-      `رقم الطلب: #${orderNumber}\n` +
-      `العميل: ${dto.customerName}\n` +
-      `الهاتف: ${dto.customerPhone}\n` +
-      `العنوان: ${dto.customerAddress || 'غير محدد'}` +
-      `${zonePart}` +
-      `${notesPart}\n` +
-      `طريقة الدفع: ${paymentLabel}\n\n` +
-      `الأصناف المطلوبة:\n${itemsSummary}\n\n` +
-      `المجموع: ${formatMoney(subtotal)} ${currencySymbol}${discountPart}\n` +
-      `الإجمالي: ${formatMoney(totalAmount)} ${currencySymbol} (${shippingText})`
+        `رقم الطلب: #${orderNumber}\n` +
+        `العميل: ${dto.customerName}\n` +
+        `الهاتف: ${dto.customerPhone}\n` +
+        `العنوان: ${dto.customerAddress || 'غير محدد'}` +
+        `${zonePart}` +
+        `${notesPart}\n` +
+        `طريقة الدفع: ${paymentLabel}\n\n` +
+        `الأصناف المطلوبة:\n${itemsSummary}\n\n` +
+        `المجموع: ${formatMoney(subtotal)} ${currencySymbol}${discountPart}\n` +
+        `الإجمالي: ${formatMoney(totalAmount)} ${currencySymbol} (${shippingText})`,
     );
 
     const whatsappUrl = targetPhone ? `https://wa.me/${targetPhone}?text=${whatsappMessage}` : null;

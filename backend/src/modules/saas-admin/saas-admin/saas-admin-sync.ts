@@ -11,7 +11,11 @@ export class SaasAdminSync {
     private readonly settingsService: SettingsService,
   ) {}
 
-  public async syncTenantModuleSettingsForPlan(tenantId: string, planId?: string | null, extraFeatures?: string[]): Promise<void> {
+  public async syncTenantModuleSettingsForPlan(
+    tenantId: string,
+    planId?: string | null,
+    extraFeatures?: string[],
+  ): Promise<void> {
     try {
       const userRow = await this.db
         .selectFrom('users')
@@ -27,7 +31,7 @@ export class SaasAdminSync {
           .select('feature_code')
           .where('plan_id', '=', planId as any)
           .execute();
-        baseFeatures = rows.map(r => r.feature_code);
+        baseFeatures = rows.map((r) => r.feature_code);
         if (baseFeatures.length === 0) {
           baseFeatures = getFallbackPlanFeatures(planId, { includeBand5MarkersOnUltimate: true });
         }
@@ -46,15 +50,15 @@ export class SaasAdminSync {
       const industryProfile = getIndustryProfile(verticalKey);
 
       const extra = Array.isArray(extraFeatures) ? extraFeatures : [];
-      const excluded = new Set(extra.filter(f => f.startsWith('-')).map(f => f.slice(1)));
-      const added = extra.filter(f => !f.startsWith('-'));
+      const excluded = new Set(extra.filter((f) => f.startsWith('-')).map((f) => f.slice(1)));
+      const added = extra.filter((f) => !f.startsWith('-'));
       // Always include the industry profile's defaultFeatures as a base — these are the
       // sector-identity features that are always granted regardless of the plan level.
       // Without this, Level 1 tier plans (which have zero plan_features rows by design)
       // would cause the sync to revoke ALL module settings, hiding POS, delivery fleet, etc.
       const effectiveFeatures = new Set([
-        ...industryProfile.defaultFeatures.filter(f => !excluded.has(f)),
-        ...baseFeatures.filter(f => !excluded.has(f)),
+        ...industryProfile.defaultFeatures.filter((f) => !excluded.has(f)),
+        ...baseFeatures.filter((f) => !excluded.has(f)),
         ...added,
       ]);
 
@@ -100,16 +104,31 @@ export class SaasAdminSync {
 
       // Check tenant vertical to prevent retail POS or weighing scale leakage into contracting/maritime/services
       // (tenantRow and verticalKey already fetched above when building effectiveFeatures)
-      const isNonRetailVertical = ['maritime_freight', 'contracting', 'wholesale_van', 'services', 'warehousing'].includes(verticalKey);
+      const isNonRetailVertical = [
+        'maritime_freight',
+        'contracting',
+        'wholesale_van',
+        'services',
+        'warehousing',
+      ].includes(verticalKey);
 
       // Strict vertical isolation + respect explicit SaaS Admin add-ons where permitted
       if (verticalKey !== 'maritime_freight') modulesToSet['maritimeFreightModuleEnabled'] = false;
       if (verticalKey !== 'contracting') modulesToSet['contractingModuleEnabled'] = false;
-      if (verticalKey !== 'import_export' && !effectiveFeatures.has('import')) modulesToSet['importModuleEnabled'] = false;
-      if (verticalKey !== 'manufacturing' && !effectiveFeatures.has('manufacturing')) modulesToSet['manufacturingModuleEnabled'] = false;
-      if (verticalKey !== 'restaurant' && !effectiveFeatures.has('restaurant')) modulesToSet['restaurantModuleEnabled'] = false;
-      if (verticalKey !== 'pharmacy' && !effectiveFeatures.has('pharmacy')) modulesToSet['enablePharmacyModule'] = false;
-      if (verticalKey !== 'maintenance' && (verticalKey as string) !== 'electronics' && !effectiveFeatures.has('maintenance')) modulesToSet['enableMobileStoreFeatures'] = false;
+      if (verticalKey !== 'import_export' && !effectiveFeatures.has('import'))
+        modulesToSet['importModuleEnabled'] = false;
+      if (verticalKey !== 'manufacturing' && !effectiveFeatures.has('manufacturing'))
+        modulesToSet['manufacturingModuleEnabled'] = false;
+      if (verticalKey !== 'restaurant' && !effectiveFeatures.has('restaurant'))
+        modulesToSet['restaurantModuleEnabled'] = false;
+      if (verticalKey !== 'pharmacy' && !effectiveFeatures.has('pharmacy'))
+        modulesToSet['enablePharmacyModule'] = false;
+      if (
+        verticalKey !== 'maintenance' &&
+        (verticalKey as string) !== 'electronics' &&
+        !effectiveFeatures.has('maintenance')
+      )
+        modulesToSet['enableMobileStoreFeatures'] = false;
       // Plan-gated toggle: off for non-retail; grant when plan has 'clothing'; omit otherwise to preserve sync marker semantics.
       if (isNonRetailVertical) modulesToSet['clothingModuleEnabled'] = false;
       else if (effectiveFeatures.has('clothing')) modulesToSet['clothingModuleEnabled'] = true;
@@ -117,8 +136,10 @@ export class SaasAdminSync {
       modulesToSet['servicesModuleEnabled'] = verticalKey === 'services' || effectiveFeatures.has('services');
       // Ensure foundational operational & plan-gated switches match SaaS Admin truth
       modulesToSet['purchasesModuleEnabled'] = effectiveFeatures.has('purchases');
-      modulesToSet['comboModuleEnabled'] = (effectiveFeatures.has('combo') || effectiveFeatures.has('purchases')) && !excluded.has('combo');
-      modulesToSet['inventoryModuleEnabled'] = effectiveFeatures.has('inventory') && !['maritime_freight', 'services'].includes(verticalKey);
+      modulesToSet['comboModuleEnabled'] =
+        (effectiveFeatures.has('combo') || effectiveFeatures.has('purchases')) && !excluded.has('combo');
+      modulesToSet['inventoryModuleEnabled'] =
+        effectiveFeatures.has('inventory') && !['maritime_freight', 'services'].includes(verticalKey);
       if (!effectiveFeatures.has('deliveryReps') && verticalKey !== 'wholesale_van') {
         modulesToSet['deliveryRepsModuleEnabled'] = false;
       }
@@ -177,7 +198,9 @@ export class SaasAdminSync {
       }
 
       const previouslyGranted = await this.readPlanManagedModuleKeys(tenantId);
-      const desiredKeys = Object.entries(modulesToSet).filter(([, value]) => value === true).map(([key]) => key);
+      const desiredKeys = Object.entries(modulesToSet)
+        .filter(([, value]) => value === true)
+        .map(([key]) => key);
       const desiredSet = new Set(desiredKeys);
       const toRevoke = previouslyGranted.filter((key) => !desiredSet.has(key));
 
@@ -209,7 +232,7 @@ export class SaasAdminSync {
       // succeed while the tenant's module switches never moved.
       console.error(
         `[syncTenantModuleSettingsForPlan] failed for tenant ${tenantId} (plan ${planId ?? 'none'}); ` +
-        `module switches may be out of step with the plan.`,
+          `module switches may be out of step with the plan.`,
         err,
       );
     }

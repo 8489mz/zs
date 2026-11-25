@@ -120,7 +120,13 @@ export class MaritimeFreightInquiriesService {
         .returningAll()
         .execute();
 
-      const finalNumber = formatDailyDocumentNumber('INQ', Number(inquiry.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
+      const finalNumber = formatDailyDocumentNumber(
+        'INQ',
+        Number(inquiry.id),
+        new Date(),
+        4,
+        await getTenantTimezone(trx, tenantId),
+      );
       const [updated] = await trx
         .updateTable('maritime_inquiries')
         .set({ inquiry_number: finalNumber })
@@ -135,10 +141,7 @@ export class MaritimeFreightInquiriesService {
 
   async getInquiries(auth: AuthContext, filters?: { status?: string; search?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let query = this.db
-      .selectFrom('maritime_inquiries')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('maritime_inquiries').selectAll().where('tenant_id', '=', tenantId);
 
     if (filters?.status && filters.status !== 'all') {
       query = query.where('status', '=', filters.status as any);
@@ -146,14 +149,16 @@ export class MaritimeFreightInquiriesService {
 
     if (filters?.search) {
       const term = `%${filters.search}%`;
-      query = query.where((eb) => eb.or([
-        eb('inquiry_number', 'ilike', term),
-        eb('customer_name', 'ilike', term),
-        eb('customer_phone', 'ilike', term),
-        eb('pol_name', 'ilike', term),
-        eb('pod_name', 'ilike', term),
-        eb('commodity_description', 'ilike', term)
-      ]));
+      query = query.where((eb) =>
+        eb.or([
+          eb('inquiry_number', 'ilike', term),
+          eb('customer_name', 'ilike', term),
+          eb('customer_phone', 'ilike', term),
+          eb('pol_name', 'ilike', term),
+          eb('pod_name', 'ilike', term),
+          eb('commodity_description', 'ilike', term),
+        ]),
+      );
     }
 
     return await query.orderBy('id', 'desc').execute();
@@ -191,7 +196,7 @@ export class MaritimeFreightInquiriesService {
       grossWeightKg: inquiry.gross_weight_kg ? Number(inquiry.gross_weight_kg) : undefined,
       volumetricWeightKg: inquiry.volumetric_weight_kg ? Number(inquiry.volumetric_weight_kg) : undefined,
       chargeableWeightKg: inquiry.chargeable_weight_kg ? Number(inquiry.chargeable_weight_kg) : undefined,
-      totalCbm: inquiry.total_cbm ? Number(inquiry.total_cbm) : (inquiry.cbm ? Number(inquiry.cbm) : undefined),
+      totalCbm: inquiry.total_cbm ? Number(inquiry.total_cbm) : inquiry.cbm ? Number(inquiry.cbm) : undefined,
       packageCount: inquiry.package_count ? Number(inquiry.package_count) : undefined,
       flightNumber: inquiry.flight_number || undefined,
       flightDate: inquiry.flight_date || undefined,
@@ -239,11 +244,12 @@ export class MaritimeFreightInquiriesService {
     if (dto.cutOffDeadline) {
       cutOffDate = new Date(dto.cutOffDeadline);
     } else {
-      const hours = dto.cutOffHours && dto.cutOffHours > 0
-        ? dto.cutOffHours
-        : urgency === 'urgent'
-          ? (pipelineConfig.rfqCutOffHoursUrgent || 6)
-          : (pipelineConfig.rfqCutOffHoursStandard || 24);
+      const hours =
+        dto.cutOffHours && dto.cutOffHours > 0
+          ? dto.cutOffHours
+          : urgency === 'urgent'
+            ? pipelineConfig.rfqCutOffHoursUrgent || 6
+            : pipelineConfig.rfqCutOffHoursStandard || 24;
       cutOffDate = new Date(Date.now() + hours * 3600 * 1000);
     }
 
@@ -310,7 +316,13 @@ export class MaritimeFreightInquiriesService {
         .returningAll()
         .execute();
 
-      const finalNumber = formatDailyDocumentNumber('RFQ', Number(rfq.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
+      const finalNumber = formatDailyDocumentNumber(
+        'RFQ',
+        Number(rfq.id),
+        new Date(),
+        4,
+        await getTenantTimezone(trx, tenantId),
+      );
       const [updatedRfq] = await trx
         .updateTable('maritime_rfqs')
         .set({ rfq_number: finalNumber })
@@ -338,10 +350,7 @@ export class MaritimeFreightInquiriesService {
 
   async getRfqs(auth: AuthContext, filters?: { status?: string; search?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let query = this.db
-      .selectFrom('maritime_rfqs')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('maritime_rfqs').selectAll().where('tenant_id', '=', tenantId);
 
     if (filters?.status && filters.status !== 'all') {
       query = query.where('status', '=', filters.status as any);
@@ -349,12 +358,14 @@ export class MaritimeFreightInquiriesService {
 
     if (filters?.search) {
       const term = `%${filters.search}%`;
-      query = query.where((eb) => eb.or([
-        eb('rfq_number', 'ilike', term),
-        eb('pol_name', 'ilike', term),
-        eb('pod_name', 'ilike', term),
-        eb('commodity_description', 'ilike', term)
-      ]));
+      query = query.where((eb) =>
+        eb.or([
+          eb('rfq_number', 'ilike', term),
+          eb('pol_name', 'ilike', term),
+          eb('pod_name', 'ilike', term),
+          eb('commodity_description', 'ilike', term),
+        ]),
+      );
     }
 
     const rfqs = await query.orderBy('id', 'desc').execute();
@@ -373,9 +384,12 @@ export class MaritimeFreightInquiriesService {
     return rfqs.map((rfq) => {
       const relatedBids = bids.filter((b) => b.rfq_id === String(rfq.id));
       const comparable = new Set(relatedBids.map((b) => String(b.currency).toUpperCase())).size <= 1;
-      const minBid = relatedBids.length > 0 && comparable
-        ? relatedBids.reduce((prev, curr) => Number(curr.total_freight_cost) < Number(prev.total_freight_cost) ? curr : prev)
-        : null;
+      const minBid =
+        relatedBids.length > 0 && comparable
+          ? relatedBids.reduce((prev, curr) =>
+              Number(curr.total_freight_cost) < Number(prev.total_freight_cost) ? curr : prev,
+            )
+          : null;
 
       return {
         ...rfq,

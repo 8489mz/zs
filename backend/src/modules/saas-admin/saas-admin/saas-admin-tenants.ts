@@ -48,7 +48,9 @@ export class SaasAdminTenants {
   async listTenants(query: ListSaasTenantsQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
     this.assertPlatformAccess(auth);
     const status = String(query.status || '').trim();
-    const search = String(query.search || '').trim().toLowerCase();
+    const search = String(query.search || '')
+      .trim()
+      .toLowerCase();
 
     let listQuery = this.db
       .selectFrom('tenants as t')
@@ -96,13 +98,15 @@ export class SaasAdminTenants {
     }
 
     if (search) {
-      listQuery = listQuery.where((eb) => eb.or([
-        eb(sql<string>`LOWER(t.slug)`, 'like', `%${search}%`),
-        eb(sql<string>`LOWER(t.business_name)`, 'like', `%${search}%`),
-        eb(sql<string>`LOWER(t.owner_name)`, 'like', `%${search}%`),
-        eb(sql<string>`LOWER(t.owner_phone)`, 'like', `%${search}%`),
-        eb(sql<string>`LOWER(COALESCE(t.owner_email, ''))`, 'like', `%${search}%`),
-      ]));
+      listQuery = listQuery.where((eb) =>
+        eb.or([
+          eb(sql<string>`LOWER(t.slug)`, 'like', `%${search}%`),
+          eb(sql<string>`LOWER(t.business_name)`, 'like', `%${search}%`),
+          eb(sql<string>`LOWER(t.owner_name)`, 'like', `%${search}%`),
+          eb(sql<string>`LOWER(t.owner_phone)`, 'like', `%${search}%`),
+          eb(sql<string>`LOWER(COALESCE(t.owner_email, ''))`, 'like', `%${search}%`),
+        ]),
+      );
     }
 
     const rows = await listQuery.execute();
@@ -135,13 +139,7 @@ export class SaasAdminTenants {
       ? await this.db
           .selectFrom('tenant_subscriptions as s')
           .leftJoin('saas_plans as p', 'p.id', 's.plan_id')
-          .select([
-            's.tenant_id',
-            's.status as sub_status',
-            's.ends_at',
-            's.grace_ends_at',
-            'p.name as plan_name',
-          ])
+          .select(['s.tenant_id', 's.status as sub_status', 's.ends_at', 's.grace_ends_at', 'p.name as plan_name'])
           .where('s.tenant_id', 'in', tenantIds)
           .orderBy('s.created_at', 'desc')
           .execute()
@@ -166,29 +164,41 @@ export class SaasAdminTenants {
       return {
         id: row.id,
         slug: cleanSlug,
-        businessName: isPlatform && (!row.business_name || row.business_name === 'النظام الأساسي') ? 'Z-Systems' : row.business_name,
+        businessName:
+          isPlatform && (!row.business_name || row.business_name === 'النظام الأساسي')
+            ? 'Z-Systems'
+            : row.business_name,
         ownerName: isPlatform && (!row.owner_name || row.owner_name === 'المسؤول') ? 'Z-Systems' : row.owner_name,
-        ownerPhone: isPlatform && (!row.owner_phone || row.owner_phone === '0000000000' || row.owner_phone === '01000000000') ? '01018017523' : row.owner_phone,
-        ownerEmail: isPlatform && !row.owner_email ? '8489mz@gmail.com' : (row.owner_email || ''),
+        ownerPhone:
+          isPlatform && (!row.owner_phone || row.owner_phone === '0000000000' || row.owner_phone === '01000000000')
+            ? '01018017523'
+            : row.owner_phone,
+        ownerEmail: isPlatform && !row.owner_email ? '8489mz@gmail.com' : row.owner_email || '',
         activityType: row.activity_type || '',
         status: isPlatform ? 'active' : row.status,
-        trialStartsAt: isPlatform ? null : (row.trial_starts_at ? new Date(row.trial_starts_at).toISOString() : null),
-        trialEndsAt: isPlatform ? null : (row.trial_ends_at ? new Date(row.trial_ends_at).toISOString() : null),
+        trialStartsAt: isPlatform ? null : row.trial_starts_at ? new Date(row.trial_starts_at).toISOString() : null,
+        trialEndsAt: isPlatform ? null : row.trial_ends_at ? new Date(row.trial_ends_at).toISOString() : null,
         activatedAt: row.activated_at ? new Date(row.activated_at).toISOString() : null,
         createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
         updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
-        trialDaysRemaining: isPlatform ? null : this.trialDaysRemaining(row.trial_ends_at ? new Date(row.trial_ends_at) : null),
+        trialDaysRemaining: isPlatform
+          ? null
+          : this.trialDaysRemaining(row.trial_ends_at ? new Date(row.trial_ends_at) : null),
         usersCount: Number(row.users_count || 0),
         activeUsersCount: Number(row.active_users_count || 0),
         ownerLocked: Boolean(owner?.locked),
         ownerIsActive: owner ? Boolean(owner.isActive) : false,
         ownerUsername: owner?.username || '',
-        planName: isPlatform ? 'مالك المنظومة (غير مقيد)' : (sub?.plan_name || resolvePlanDisplayName(row.plan_id)),
+        planName: isPlatform ? 'مالك المنظومة (غير مقيد)' : sub?.plan_name || resolvePlanDisplayName(row.plan_id),
         planId: row.plan_id || null,
-        extraFeatures: Array.isArray(row.extra_features) ? row.extra_features : typeof row.extra_features === 'string' ? JSON.parse(row.extra_features) : [],
-        subscriptionStatus: isPlatform ? 'active' : (sub?.sub_status || null),
-        subscriptionEndDate: isPlatform ? null : (sub?.ends_at ? new Date(sub.ends_at).toISOString() : null),
-        graceEndDate: isPlatform ? null : (sub?.grace_ends_at ? new Date(sub.grace_ends_at).toISOString() : null),
+        extraFeatures: Array.isArray(row.extra_features)
+          ? row.extra_features
+          : typeof row.extra_features === 'string'
+            ? JSON.parse(row.extra_features)
+            : [],
+        subscriptionStatus: isPlatform ? 'active' : sub?.sub_status || null,
+        subscriptionEndDate: isPlatform ? null : sub?.ends_at ? new Date(sub.ends_at).toISOString() : null,
+        graceEndDate: isPlatform ? null : sub?.grace_ends_at ? new Date(sub.grace_ends_at).toISOString() : null,
         isPlatform,
       };
     });
@@ -199,11 +209,7 @@ export class SaasAdminTenants {
   async getTenantById(id: string, auth: AuthContext): Promise<Record<string, unknown>> {
     this.assertPlatformAccess(auth);
     const tenantId = String(id || '').trim();
-    const tenant = await this.db
-      .selectFrom('tenants')
-      .selectAll()
-      .where('id', '=', tenantId)
-      .executeTakeFirst();
+    const tenant = await this.db.selectFrom('tenants').selectAll().where('id', '=', tenantId).executeTakeFirst();
     if (!tenant) throw new NotFoundException('النسخة غير موجودة.');
 
     const usersSummary = await this.db
@@ -251,7 +257,11 @@ export class SaasAdminTenants {
         .where('tenant_id', '=', tenantId)
         .orderBy('feature_code', 'asc')
         .execute();
-      featureOverrides = overrideRows.map((r) => ({ featureCode: String(r.feature_code), granted: Boolean(r.granted), reason: r.reason ?? null }));
+      featureOverrides = overrideRows.map((r) => ({
+        featureCode: String(r.feature_code),
+        granted: Boolean(r.granted),
+        reason: r.reason ?? null,
+      }));
     } catch {
       featureOverrides = [];
     }
@@ -262,18 +272,32 @@ export class SaasAdminTenants {
       tenant: {
         id: tenant.id,
         slug: cleanSlug,
-        businessName: isPlatform && (!tenant.business_name || tenant.business_name === 'النظام الأساسي') ? 'Z-Systems' : tenant.business_name,
-        ownerName: isPlatform && (!tenant.owner_name || tenant.owner_name === 'المسؤول') ? 'Z-Systems' : tenant.owner_name,
-        ownerPhone: isPlatform && (!tenant.owner_phone || tenant.owner_phone === '0000000000' || tenant.owner_phone === '01000000000') ? '01018017523' : tenant.owner_phone,
-        ownerEmail: isPlatform && !tenant.owner_email ? '8489mz@gmail.com' : (tenant.owner_email || ''),
+        businessName:
+          isPlatform && (!tenant.business_name || tenant.business_name === 'النظام الأساسي')
+            ? 'Z-Systems'
+            : tenant.business_name,
+        ownerName:
+          isPlatform && (!tenant.owner_name || tenant.owner_name === 'المسؤول') ? 'Z-Systems' : tenant.owner_name,
+        ownerPhone:
+          isPlatform &&
+          (!tenant.owner_phone || tenant.owner_phone === '0000000000' || tenant.owner_phone === '01000000000')
+            ? '01018017523'
+            : tenant.owner_phone,
+        ownerEmail: isPlatform && !tenant.owner_email ? '8489mz@gmail.com' : tenant.owner_email || '',
         activityType: tenant.activity_type || '',
         status: isPlatform ? 'active' : tenant.status,
-        trialStartsAt: isPlatform ? null : (tenant.trial_starts_at ? new Date(tenant.trial_starts_at).toISOString() : null),
-        trialEndsAt: isPlatform ? null : (tenant.trial_ends_at ? new Date(tenant.trial_ends_at).toISOString() : null),
+        trialStartsAt: isPlatform
+          ? null
+          : tenant.trial_starts_at
+            ? new Date(tenant.trial_starts_at).toISOString()
+            : null,
+        trialEndsAt: isPlatform ? null : tenant.trial_ends_at ? new Date(tenant.trial_ends_at).toISOString() : null,
         activatedAt: tenant.activated_at ? new Date(tenant.activated_at).toISOString() : null,
         createdAt: tenant.created_at ? new Date(tenant.created_at).toISOString() : null,
         updatedAt: tenant.updated_at ? new Date(tenant.updated_at).toISOString() : null,
-        trialDaysRemaining: isPlatform ? null : this.trialDaysRemaining(tenant.trial_ends_at ? new Date(tenant.trial_ends_at) : null),
+        trialDaysRemaining: isPlatform
+          ? null
+          : this.trialDaysRemaining(tenant.trial_ends_at ? new Date(tenant.trial_ends_at) : null),
         usersCount: Number(usersSummary?.users_count || 0),
         activeUsersCount: Number(usersSummary?.active_users_count || 0),
         lastLoginAt: owner?.last_login_at ? new Date(owner.last_login_at).toISOString() : null,
@@ -281,7 +305,11 @@ export class SaasAdminTenants {
         planId: tenant.plan_id || null,
         planName: isPlatform ? 'مالك المنظومة (كامل الصلاحيات والأنظمة)' : resolvePlanDisplayName(tenant.plan_id),
         isPlatform,
-        extraFeatures: Array.isArray(tenant.extra_features) ? tenant.extra_features : typeof tenant.extra_features === 'string' ? JSON.parse(tenant.extra_features) : [],
+        extraFeatures: Array.isArray(tenant.extra_features)
+          ? tenant.extra_features
+          : typeof tenant.extra_features === 'string'
+            ? JSON.parse(tenant.extra_features)
+            : [],
         featureOverrides,
       },
     };
@@ -303,18 +331,15 @@ export class SaasAdminTenants {
         'a.details',
         'a.created_at',
         'u.username as actor_name',
-        'imp.username as impersonator_name'
+        'imp.username as impersonator_name',
       ])
-      .where((eb) => eb.or([
-        eb('a.tenant_id', '=', tenantId),
-        eb('a.target_tenant_id', '=', tenantId)
-      ]))
+      .where((eb) => eb.or([eb('a.tenant_id', '=', tenantId), eb('a.target_tenant_id', '=', tenantId)]))
       .orderBy('a.created_at', 'desc')
       .limit(100)
       .execute();
 
     return {
-      events: events.map(e => ({
+      events: events.map((e) => ({
         id: e.id,
         action: e.action,
         details: e.details,
@@ -322,8 +347,8 @@ export class SaasAdminTenants {
         // Present only when a platform admin took this action while impersonating the
         // tenant's owner. Null on everything the tenant did themselves.
         impersonatedBy: e.impersonator_name || null,
-        createdAt: new Date(e.created_at).toISOString()
-      }))
+        createdAt: new Date(e.created_at).toISOString(),
+      })),
     };
   }
 
@@ -355,10 +380,15 @@ export class SaasAdminTenants {
       },
     );
 
-    await this.audit.log('إنشاء نسخة تجريبية', `تم إنشاء نسخة تجريبية: ${result.tenant.slug} (${result.tenant.id})`, auth, {
-      targetTenantId: String(result.tenant.id),
-      eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_TRIAL_CREATED,
-    });
+    await this.audit.log(
+      'إنشاء نسخة تجريبية',
+      `تم إنشاء نسخة تجريبية: ${result.tenant.slug} (${result.tenant.id})`,
+      auth,
+      {
+        targetTenantId: String(result.tenant.id),
+        eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_TRIAL_CREATED,
+      },
+    );
     return result;
   }
 }

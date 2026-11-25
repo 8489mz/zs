@@ -37,7 +37,12 @@ export interface MarketplaceSyncMappingsDeps {
 export class MarketplaceSyncMappingsService {
   private readonly db: Kysely<Database>;
   private readonly audit: AuditService;
-  private readonly getSettingJson: <T>(key: string, tenantId: string, defaultValue: T, executor?: Kysely<Database>) => Promise<T>;
+  private readonly getSettingJson: <T>(
+    key: string,
+    tenantId: string,
+    defaultValue: T,
+    executor?: Kysely<Database>,
+  ) => Promise<T>;
   private readonly setSettingJson: <T>(key: string, tenantId: string, value: T) => Promise<void>;
 
   constructor(deps: MarketplaceSyncMappingsDeps) {
@@ -61,7 +66,10 @@ export class MarketplaceSyncMappingsService {
       .where('tenant_id', '=', scope.tenantId)
       .execute();
 
-    const productMap = new Map<number, { name: string; barcode: string; stock_qty: number; cost_price: number; retail_price: number }>();
+    const productMap = new Map<
+      number,
+      { name: string; barcode: string; stock_qty: number; cost_price: number; retail_price: number }
+    >();
     for (const p of products) {
       productMap.set(Number(p.id), {
         name: p.name,
@@ -99,7 +107,10 @@ export class MarketplaceSyncMappingsService {
     });
   }
 
-  async saveMapping(payload: Omit<MarketplaceSkuMapping, 'id'> & { id?: string }, auth: AuthContext): Promise<MarketplaceSkuMapping> {
+  async saveMapping(
+    payload: Omit<MarketplaceSkuMapping, 'id'> & { id?: string },
+    auth: AuthContext,
+  ): Promise<MarketplaceSkuMapping> {
     const scope = requireTenantScope(auth);
     const mappings = await this.getSettingJson<MarketplaceSkuMapping[]>('marketplace_sku_mappings', scope.tenantId, []);
 
@@ -187,7 +198,11 @@ export class MarketplaceSyncMappingsService {
       throw new BadRequestException('شيت الاستيراد فارغ أو لا يحتوي على صفوف بيانات.');
     }
 
-    const existingMappings = await this.getSettingJson<MarketplaceSkuMapping[]>('marketplace_sku_mappings', scope.tenantId, []);
+    const existingMappings = await this.getSettingJson<MarketplaceSkuMapping[]>(
+      'marketplace_sku_mappings',
+      scope.tenantId,
+      [],
+    );
     const existingMap = new Map<string, MarketplaceSkuMapping>();
     for (const m of existingMappings) {
       existingMap.set(`${m.marketplace}:${m.marketplaceSku.trim().toLowerCase()}`, m);
@@ -200,9 +215,9 @@ export class MarketplaceSyncMappingsService {
       .where('is_active', '=', true)
       .execute();
 
-    const productByBarcode = new Map<string, typeof products[0]>();
-    const productByStyle = new Map<string, typeof products[0]>();
-    const productByName = new Map<string, typeof products[0]>();
+    const productByBarcode = new Map<string, (typeof products)[0]>();
+    const productByStyle = new Map<string, (typeof products)[0]>();
+    const productByName = new Map<string, (typeof products)[0]>();
 
     for (const p of products) {
       if (p.barcode) productByBarcode.set(p.barcode.trim().toLowerCase(), p);
@@ -223,7 +238,10 @@ export class MarketplaceSyncMappingsService {
 
       const mp = (row.marketplace || '').trim().toLowerCase() as SupportedMarketplace;
       if (!allowedMarketplaces.includes(mp)) {
-        errors.push({ row: rowIndex, reason: `اسم المنصة غير مدعوم: "${row.marketplace}". المتاح: amazon, noon, jumia, trendyol.` });
+        errors.push({
+          row: rowIndex,
+          reason: `اسم المنصة غير مدعوم: "${row.marketplace}". المتاح: amazon, noon, jumia, trendyol.`,
+        });
         skippedCount++;
         continue;
       }
@@ -235,12 +253,13 @@ export class MarketplaceSyncMappingsService {
         continue;
       }
 
-      let matchedProduct: typeof products[0] | undefined;
+      let matchedProduct: (typeof products)[0] | undefined;
       if (row.barcode) {
         matchedProduct = productByBarcode.get(row.barcode.trim().toLowerCase());
       }
       if (!matchedProduct && row.sku) {
-        matchedProduct = productByBarcode.get(row.sku.trim().toLowerCase()) || productByStyle.get(row.sku.trim().toLowerCase());
+        matchedProduct =
+          productByBarcode.get(row.sku.trim().toLowerCase()) || productByStyle.get(row.sku.trim().toLowerCase());
       }
       if (!matchedProduct && row.productName) {
         matchedProduct = productByName.get(row.productName.trim().toLowerCase());
@@ -259,7 +278,8 @@ export class MarketplaceSyncMappingsService {
       const existing = existingMap.get(key);
 
       const customPrice = row.customPrice != null && Number(row.customPrice) > 0 ? Number(row.customPrice) : undefined;
-      const competitorPrice = row.competitorPrice != null && Number(row.competitorPrice) > 0 ? Number(row.competitorPrice) : undefined;
+      const competitorPrice =
+        row.competitorPrice != null && Number(row.competitorPrice) > 0 ? Number(row.competitorPrice) : undefined;
       const syncStock = row.syncStock !== false;
 
       if (existing) {
@@ -274,16 +294,26 @@ export class MarketplaceSyncMappingsService {
           existing.competitorPrice = competitorPrice;
           const myPrice = customPrice ?? Number(matchedProduct.retail_price || 0);
           existing.buyBoxPrice = competitorPrice;
-          existing.buyBoxStatus = myPrice <= competitorPrice ? 'winning' : (myPrice - competitorPrice <= competitorPrice * 0.05 ? 'at_risk' : 'losing');
+          existing.buyBoxStatus =
+            myPrice <= competitorPrice
+              ? 'winning'
+              : myPrice - competitorPrice <= competitorPrice * 0.05
+                ? 'at_risk'
+                : 'losing';
         }
         if (row.marketplaceTitle) existing.marketplaceTitle = row.marketplaceTitle;
         existing.syncStock = syncStock;
         updatedCount++;
       } else {
         const myPrice = customPrice ?? Number(matchedProduct.retail_price || 0);
-        const buyBoxStatus = competitorPrice != null
-          ? (myPrice <= competitorPrice ? 'winning' : (myPrice - competitorPrice <= competitorPrice * 0.05 ? 'at_risk' : 'losing'))
-          : undefined;
+        const buyBoxStatus =
+          competitorPrice != null
+            ? myPrice <= competitorPrice
+              ? 'winning'
+              : myPrice - competitorPrice <= competitorPrice * 0.05
+                ? 'at_risk'
+                : 'losing'
+            : undefined;
 
         const newMapping: MarketplaceSkuMapping = {
           id: `mp_map_${Date.now()}_${Math.floor(Math.random() * 10000)}`,

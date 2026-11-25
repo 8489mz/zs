@@ -133,9 +133,7 @@ export class FieldSaleService {
           .sort((a: any, b: any) => Number(a.product_id) - Number(b.product_id))
           .map((row: any) => `${Number(row.product_id)}:${Number(row.qty)}`)
           .join('|');
-        const payloadItemsSig = sortedItems
-          .map((it) => `${Number(it.productId)}:${Number(it.qty)}`)
-          .join('|');
+        const payloadItemsSig = sortedItems.map((it) => `${Number(it.productId)}:${Number(it.qty)}`).join('|');
         if (dbItemsSig === payloadItemsSig) {
           return {
             ok: true,

@@ -57,7 +57,8 @@ export class PricingFiltersDto {
 
 export class PricingOperationDto {
   @IsIn(['percent_increase', 'percent_decrease', 'fixed_increase', 'fixed_decrease', 'set_price', 'margin_from_cost'])
-  type!: 'percent_increase' | 'percent_decrease' | 'fixed_increase' | 'fixed_decrease' | 'set_price' | 'margin_from_cost';
+  type!:
+    'percent_increase' | 'percent_decrease' | 'fixed_increase' | 'fixed_decrease' | 'set_price' | 'margin_from_cost';
 
   @Type(() => Number)
   @IsNumber()
@@ -240,8 +241,6 @@ export class PricingRuleMatchDto {
   styleCode?: string;
 }
 
-
-
 export class PricingPagingDto {
   @IsOptional()
   @Type(() => Number)
@@ -330,7 +329,8 @@ export type PricingPreviewPayload = {
     inStockOnly?: boolean;
   };
   operation: {
-    type: 'percent_increase' | 'percent_decrease' | 'fixed_increase' | 'fixed_decrease' | 'set_price' | 'margin_from_cost';
+    type:
+      'percent_increase' | 'percent_decrease' | 'fixed_increase' | 'fixed_decrease' | 'set_price' | 'margin_from_cost';
     value: number;
   };
   targets: Array<'retail' | 'wholesale'>;

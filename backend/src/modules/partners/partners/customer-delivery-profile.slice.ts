@@ -86,7 +86,9 @@ export class CustomerDeliveryProfileSlice {
     }
 
     const isSingleMatch = customers.length === 1;
-    const isExactPhoneMatch = Boolean(digits && digits.length >= 10 && customers[0].phone && customers[0].phone.replace(/\D/g, '') === digits);
+    const isExactPhoneMatch = Boolean(
+      digits && digits.length >= 10 && customers[0].phone && customers[0].phone.replace(/\D/g, '') === digits,
+    );
 
     if (isSingleMatch || isExactPhoneMatch) {
       const primaryCustomer = customers[0];
@@ -168,10 +170,21 @@ export class CustomerDeliveryProfileSlice {
         .execute(),
       this.db
         .selectFrom('sales as s')
-        .leftJoin('branches as b', (join) => join.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id'))
+        .leftJoin('branches as b', (join) =>
+          join.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id'),
+        )
         .select([
-          's.id', 's.doc_no', 's.total', 's.subtotal', 's.discount', 's.tax_amount',
-          's.delivery_fee', 's.order_type', 's.customer_address', 's.note', 's.created_at',
+          's.id',
+          's.doc_no',
+          's.total',
+          's.subtotal',
+          's.discount',
+          's.tax_amount',
+          's.delivery_fee',
+          's.order_type',
+          's.customer_address',
+          's.note',
+          's.created_at',
           'b.name as branch_name',
         ])
         .where('s.customer_id', '=', id)
@@ -183,40 +196,57 @@ export class CustomerDeliveryProfileSlice {
     ]);
 
     const saleIds = recentSales.map((s) => Number(s.id));
-    const saleItems = saleIds.length > 0 ? await this.db
-      .selectFrom('sale_items')
-      .select(['id', 'sale_id', 'product_id', 'product_name', 'qty', 'unit_price', 'line_total', 'unit_name', 'unit_multiplier', 'modifiers', 'notes'])
-      .where('sale_id', 'in', saleIds)
-      .where(this.tenantPredicate(actor))
-      .orderBy('id', 'asc')
-      .execute() : [];
+    const saleItems =
+      saleIds.length > 0
+        ? await this.db
+            .selectFrom('sale_items')
+            .select([
+              'id',
+              'sale_id',
+              'product_id',
+              'product_name',
+              'qty',
+              'unit_price',
+              'line_total',
+              'unit_name',
+              'unit_multiplier',
+              'modifiers',
+              'notes',
+            ])
+            .where('sale_id', 'in', saleIds)
+            .where(this.tenantPredicate(actor))
+            .orderBy('id', 'asc')
+            .execute()
+        : [];
 
     const recentOrders = recentSales.map((sale) => {
-      const items = saleItems.filter((it) => Number(it.sale_id) === Number(sale.id)).map((it) => {
-        let parsedModifiers: any[] = [];
-        if (typeof it.modifiers === 'string') {
-          try {
-            parsedModifiers = JSON.parse(it.modifiers || '[]');
-          } catch {
-            parsedModifiers = [];
+      const items = saleItems
+        .filter((it) => Number(it.sale_id) === Number(sale.id))
+        .map((it) => {
+          let parsedModifiers: any[] = [];
+          if (typeof it.modifiers === 'string') {
+            try {
+              parsedModifiers = JSON.parse(it.modifiers || '[]');
+            } catch {
+              parsedModifiers = [];
+            }
+          } else if (Array.isArray(it.modifiers)) {
+            parsedModifiers = it.modifiers;
           }
-        } else if (Array.isArray(it.modifiers)) {
-          parsedModifiers = it.modifiers;
-        }
 
-        return {
-          id: Number(it.id),
-          productId: String(it.product_id || ''),
-          name: String(it.product_name || ''),
-          qty: Number(it.qty || 1),
-          unitPrice: Number(it.unit_price || 0),
-          lineTotal: Number(it.line_total || 0),
-          unitName: String(it.unit_name || ''),
-          unitMultiplier: Number(it.unit_multiplier || 1),
-          modifiers: parsedModifiers,
-          notes: String(it.notes || ''),
-        };
-      });
+          return {
+            id: Number(it.id),
+            productId: String(it.product_id || ''),
+            name: String(it.product_name || ''),
+            qty: Number(it.qty || 1),
+            unitPrice: Number(it.unit_price || 0),
+            lineTotal: Number(it.line_total || 0),
+            unitName: String(it.unit_name || ''),
+            unitMultiplier: Number(it.unit_multiplier || 1),
+            modifiers: parsedModifiers,
+            notes: String(it.notes || ''),
+          };
+        });
 
       return {
         id: Number(sale.id),

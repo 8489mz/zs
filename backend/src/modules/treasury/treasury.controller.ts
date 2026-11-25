@@ -27,13 +27,20 @@ export class TreasuryController {
 
   @Post('expenses/:id/cancel')
   @RequirePermissions('treasury')
-  cancelExpense(@Param('id') id: string, @Body() payload: CancelExpenseDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  cancelExpense(
+    @Param('id') id: string,
+    @Body() payload: CancelExpenseDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.treasuryService.cancelExpense(Number(id), payload || {}, req.authContext!);
   }
 
   @Post('treasury/transfers')
   @RequirePermissions('treasury')
-  createTransfer(@Body() payload: CreateTreasuryTransferDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  createTransfer(
+    @Body() payload: CreateTreasuryTransferDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.treasuryService.createTransfer(payload, req.authContext!);
   }
 }

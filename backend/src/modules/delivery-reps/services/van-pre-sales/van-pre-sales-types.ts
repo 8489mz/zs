@@ -96,9 +96,21 @@ export type ConvertPreSalesOrderPayload = {
   notes?: string;
 };
 
-export type ListWarehouseCatalogResult = { ok?: boolean; items: PreSalesCatalogItem[]; products?: PreSalesCatalogItem[]; total: number; targetWarehouseId?: number | null };
+export type ListWarehouseCatalogResult = {
+  ok?: boolean;
+  items: PreSalesCatalogItem[];
+  products?: PreSalesCatalogItem[];
+  total: number;
+  targetWarehouseId?: number | null;
+};
 
-export type CreatePreSalesOrderResult = { ok: boolean; orderId: number; orderNumber: string; totalAmount: number; itemsCount: number };
+export type CreatePreSalesOrderResult = {
+  ok: boolean;
+  orderId: number;
+  orderNumber: string;
+  totalAmount: number;
+  itemsCount: number;
+};
 
 export type ApprovePreSalesOrderResult = { ok: boolean; status: string };
 

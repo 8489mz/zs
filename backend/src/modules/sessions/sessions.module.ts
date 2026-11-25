@@ -11,6 +11,12 @@ import { MfaService } from './mfa.service';
 @Module({
   imports: [AuditModule, ActivationModule],
   controllers: [SessionsController],
-  providers: [InMemoryRateLimitService, PlatformMailService, PasswordResetMailService, PasswordResetService, MfaService],
+  providers: [
+    InMemoryRateLimitService,
+    PlatformMailService,
+    PasswordResetMailService,
+    PasswordResetService,
+    MfaService,
+  ],
 })
 export class SessionsModule {}

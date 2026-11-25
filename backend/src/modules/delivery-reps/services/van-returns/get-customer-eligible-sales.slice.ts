@@ -1,7 +1,11 @@
 import { Kysely, sql } from '../../../../database/kysely';
 import { Database } from '../../../../database/database.types';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
+import {
+  currencyMoneyDigits,
+  roundMoney,
+  type MoneyDigits,
+} from '../../../accounting/engines/money-minor-units.engine';
 
 export type GetCustomerEligibleSalesBoundDeps = {
   computeAlreadyReturnedQtyBySaleItem(tenantId: string, saleIds: number[]): Promise<Map<number, number>>;
@@ -58,10 +62,7 @@ export class GetCustomerEligibleSalesSlice {
       query = query.where(sql<boolean>`coalesce(s.delivery_rep_id, vt.rep_id) = ${Number(repId)}`);
     }
 
-    const sales = await query
-      .orderBy('s.id', 'desc')
-      .limit(20)
-      .execute();
+    const sales = await query.orderBy('s.id', 'desc').limit(20).execute();
 
     if (!sales.length) return [];
 

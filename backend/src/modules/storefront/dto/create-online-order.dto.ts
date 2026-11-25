@@ -1,5 +1,22 @@
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
 
 /* INV-REST-KIOSK-MODIFIER-UI (R7-B1): one modifier picked on a kiosk line.
  * The shape mirrors the POS cart modifier (GroupModifierSelection in
@@ -171,4 +188,3 @@ export class CreateOnlineOrderDto {
   @MaxLength(128)
   idempotencyKey?: string;
 }
-

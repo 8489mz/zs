@@ -35,7 +35,10 @@ export type AttendancePunchResolution = {
 };
 
 export class AttendancePunchError extends Error {
-  constructor(message: string, public readonly code: string) {
+  constructor(
+    message: string,
+    public readonly code: string,
+  ) {
     super(message);
     this.name = 'AttendancePunchError';
   }
@@ -103,10 +106,7 @@ export function resolveAttendancePunch(
  * `punchAction === 'check_out'` **لا** يبدأ جلسة جديدة حتى لو أُرسل `allowRecheckin`:
  * الفرع القديم كان يفحص `mode`/`allowRecheckin` وحدهما فيكتب طلب انصراف كأنه حضور جديد.
  */
-export function startsNewSession(
-  input: AttendancePunchInput,
-  hasCompletedSession: boolean,
-): boolean {
+export function startsNewSession(input: AttendancePunchInput, hasCompletedSession: boolean): boolean {
   if (!hasCompletedSession) return false;
   if (input.punchAction === 'check_out') return false;
   return input.mode === 'new_session' || Boolean(input.allowRecheckin);

@@ -40,7 +40,10 @@ const VAN_SUSPICION_EVENT_CODES: string[] = [
 export class ManagerActionsService {
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
-  async list(limit = 8, auth: AuthContext): Promise<{ insights: ManagerActionInsight[]; scope: ReturnType<typeof requireTenantScope> }> {
+  async list(
+    limit = 8,
+    auth: AuthContext,
+  ): Promise<{ insights: ManagerActionInsight[]; scope: ReturnType<typeof requireTenantScope> }> {
     const scope = requireTenantScope(auth);
     const safeLimit = Math.max(1, Math.min(25, Math.floor(Number(limit) || 8)));
     const [
@@ -71,7 +74,11 @@ export class ManagerActionsService {
     ]);
 
     const settingsMap = settingsRows.reduce<Record<string, any>>((acc, row) => {
-      try { acc[row.key] = JSON.parse(row.value); } catch { acc[row.key] = row.value; }
+      try {
+        acc[row.key] = JSON.parse(row.value);
+      } catch {
+        acc[row.key] = row.value;
+      }
       return acc;
     }, {});
 
@@ -87,7 +94,8 @@ export class ManagerActionsService {
         installments,
         onlineOrders,
         vanSuspicionAlerts,
-        stagnantThresholdDays: Number(settingsMap.stagnantProductDays) > 0 ? Number(settingsMap.stagnantProductDays) : 60,
+        stagnantThresholdDays:
+          Number(settingsMap.stagnantProductDays) > 0 ? Number(settingsMap.stagnantProductDays) : 60,
         expiryAlertDays: Number(settingsMap.expiryAlertDays) > 0 ? Number(settingsMap.expiryAlertDays) : 60,
         limit: safeLimit,
       }),
@@ -126,10 +134,7 @@ export class ManagerActionsService {
     return this.db
       .selectFrom('sale_items as si')
       .innerJoin('sales as s', 's.id', 'si.sale_id')
-      .select([
-        'si.product_id',
-        sql<Date>`max(s.created_at)`.as('last_sold_at'),
-      ])
+      .select(['si.product_id', sql<Date>`max(s.created_at)`.as('last_sold_at')])
       .where('s.status', '=', 'posted')
       .where('s.created_at', '>=', oneYearAgo)
       .where('si.product_id', 'is not', null)
@@ -197,13 +202,7 @@ export class ManagerActionsService {
     return this.db
       .selectFrom('pharmacy_batches as pb')
       .leftJoin('products as p', 'p.id', 'pb.product_id')
-      .select([
-        'pb.id',
-        'p.name as product_name',
-        'pb.batch_number',
-        'pb.expiry_date',
-        'pb.quantity',
-      ])
+      .select(['pb.id', 'p.name as product_name', 'pb.batch_number', 'pb.expiry_date', 'pb.quantity'])
       .where(sql<boolean>`pb.tenant_id = ${tenantId}`)
       .where('pb.status', '=', 'active')
       .where(sql<boolean>`cast(pb.quantity as numeric) > 0`)

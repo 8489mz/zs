@@ -1,4 +1,9 @@
-import { summarizeHourlyAttendance, prorateMonthlyWage, daysInCalendarMonth, WorkPunch } from './hourly-attendance-pay.engine';
+import {
+  summarizeHourlyAttendance,
+  prorateMonthlyWage,
+  daysInCalendarMonth,
+  WorkPunch,
+} from './hourly-attendance-pay.engine';
 import { MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 /** Default direct-advance cash cap when no per-currency value is configured (N2: current behaviour, preserved). */
@@ -34,13 +39,19 @@ export function resolveDirectAdvanceCashCap(
  */
 export function currencyDisplayLabel(currency: string | undefined): string {
   const code = String(currency || '').toUpperCase();
-  return code === 'KWD' ? 'د.ك'
-    : code === 'SAR' ? 'ر.س'
-    : code === 'AED' ? 'د.إ'
-    : code === 'QAR' ? 'ر.ق'
-    : code === 'BHD' ? 'د.ب'
-    : code === 'OMR' ? 'ر.ع'
-    : 'ج.م';
+  return code === 'KWD'
+    ? 'د.ك'
+    : code === 'SAR'
+      ? 'ر.س'
+      : code === 'AED'
+        ? 'د.إ'
+        : code === 'QAR'
+          ? 'ر.ق'
+          : code === 'BHD'
+            ? 'د.ب'
+            : code === 'OMR'
+              ? 'ر.ع'
+              : 'ج.م';
 }
 
 export interface EmployeeWithdrawalContext {
@@ -74,7 +85,7 @@ export interface EmployeeWithdrawalContext {
   };
   currentCycle: {
     cycleStart: string; // YYYY-MM-DD
-    cycleEnd: string;   // YYYY-MM-DD
+    cycleEnd: string; // YYYY-MM-DD
     daysElapsed: number;
   };
   punches: WorkPunch[];
@@ -158,18 +169,17 @@ export interface EmployeeWithdrawalBalanceResult {
 
 function roundHours(val: number): number {
   // Hours are a quantity, not money: 2dp is the unit of hours, not book digits.
-  return Number((Math.round(Number(val + 'e+2')) + 'e-2'));
+  return Number(Math.round(Number(val + 'e+2')) + 'e-2');
 }
 
 export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContext): EmployeeWithdrawalBalanceResult {
   const minorUnits = ctx.minorUnits;
   // Settled band is half a minor unit: at 3dp a 0.004 balance is a credit, not settled.
-  const halfMinor = 1 / (2 * (10 ** minorUnits));
+  const halfMinor = 1 / (2 * 10 ** minorUnits);
   const currencyLabel = currencyDisplayLabel(ctx.contract?.currency);
   const configuredCap = Number(ctx.directAdvanceCashCap);
-  const directAdvanceCashCap = Number.isFinite(configuredCap) && configuredCap > 0
-    ? configuredCap
-    : DEFAULT_DIRECT_ADVANCE_CASH_CAP;
+  const directAdvanceCashCap =
+    Number.isFinite(configuredCap) && configuredCap > 0 ? configuredCap : DEFAULT_DIRECT_ADVANCE_CASH_CAP;
   const isHourly = ctx.employee.compensationType === 'hourly';
   const payFreq = ctx.employee.payFrequency || 'monthly';
   const baseSalary = Number(ctx.contract?.baseSalary || 0);
@@ -178,7 +188,7 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
   const schedule = resolvePayoutSchedule(
     payFreq,
     ctx.todayDate || ctx.currentCycle.cycleEnd,
-    ctx.currentCycle.cycleEnd
+    ctx.currentCycle.cycleEnd,
   );
 
   const cycleStart = schedule.cycleStart || ctx.currentCycle.cycleStart;
@@ -207,11 +217,12 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
     isProrated = false;
   } else if (payFreq === 'daily') {
     accrualSource = 'attendance_records';
-    const presentRecords = ctx.punches.filter(p => String(p.status || '').toLowerCase() === 'present');
+    const presentRecords = ctx.punches.filter((p) => String(p.status || '').toLowerCase() === 'present');
     completedDays = presentRecords.length > 0 ? presentRecords.length : Math.max(1, daysElapsed);
     // D4: the daily wage is the monthly wage over the days of the preview
     // month (the month containing today) — never a fixed 30.
-    const dailyWage = baseSalary > 0 ? roundMoney(baseSalary / daysInCalendarMonth(ctx.todayDate || cycleStart), minorUnits) : 0;
+    const dailyWage =
+      baseSalary > 0 ? roundMoney(baseSalary / daysInCalendarMonth(ctx.todayDate || cycleStart), minorUnits) : 0;
     accruedEarnings = roundMoney(completedDays * dailyWage, minorUnits);
     calculationText = `${completedDays} يوم استحقاق × ${dailyWage} ${currencyLabel}/يوم`;
     isProrated = false;
@@ -219,8 +230,14 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
     accrualSource = 'payroll_item';
     const item = ctx.activePayrollItem;
     // Gross pay minus attendance deductions (before loan deduction)
-    const rawEarned = roundMoney(Number(item.grossPay || item.baseSalary || 0) - Number(item.deductionAmount || 0), minorUnits);
-    const fullCyclePay = rawEarned > 0 ? rawEarned : roundMoney(Number(item.netPay || 0) + Number(item.loanDeductionAmount || 0), minorUnits);
+    const rawEarned = roundMoney(
+      Number(item.grossPay || item.baseSalary || 0) - Number(item.deductionAmount || 0),
+      minorUnits,
+    );
+    const fullCyclePay =
+      rawEarned > 0
+        ? rawEarned
+        : roundMoney(Number(item.netPay || 0) + Number(item.loanDeductionAmount || 0), minorUnits);
     const normalizedFullPay = fullCyclePay > 0 ? fullCyclePay : roundMoney(Number(item.baseSalary || 0), minorUnits);
 
     // If employee item was already disbursed/paid, cycle accrual is fully settled
@@ -284,7 +301,7 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
   }
 
   // 4. Net Available Balance: (Accrued + Unpaid Payroll) - Total Debt
-  const netAvailableBalance = roundMoney((unpaidApprovedPayroll + accruedEarnings) - totalDebt, minorUnits);
+  const netAvailableBalance = roundMoney(unpaidApprovedPayroll + accruedEarnings - totalDebt, minorUnits);
 
   let balanceStatus: 'credit' | 'debit' | 'settled' = 'settled';
   if (netAvailableBalance > halfMinor) {
@@ -295,9 +312,10 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
 
   // 5. Governance Ceilings: Direct Cashier Advance Cap (50% max of net available, capped at the configured per-currency cap)
   const directAdvanceCeilingPct = 50;
-  const maxDirectAdvance = netAvailableBalance > halfMinor
-    ? roundMoney(Math.min(directAdvanceCashCap, netAvailableBalance * (directAdvanceCeilingPct / 100)), minorUnits)
-    : 0;
+  const maxDirectAdvance =
+    netAvailableBalance > halfMinor
+      ? roundMoney(Math.min(directAdvanceCashCap, netAvailableBalance * (directAdvanceCeilingPct / 100)), minorUnits)
+      : 0;
 
   return {
     employee: {
@@ -357,15 +375,14 @@ export interface PayoutScheduleResult {
 export function resolvePayoutSchedule(
   payFrequency: 'daily' | 'weekly' | 'biweekly' | 'monthly',
   todayStr: string,
-  payrollPeriodEnd?: string
+  payrollPeriodEnd?: string,
 ): PayoutScheduleResult {
   const parts = todayStr.split('-').map(Number);
   const year = parts[0] || new Date().getUTCFullYear();
   const month = parts[1] || 1;
   const day = parts[2] || 1;
 
-  const fmt = (y: number, m: number, d: number) =>
-    `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const fmt = (y: number, m: number, d: number) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
   const lastDayOfMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
 
@@ -424,7 +441,7 @@ export function resolvePayoutSchedule(
     const dayOfWeek = dateObj.getUTCDay(); // 4 = Thu, 5 = Fri
     const isPayoutDue = dayOfWeek === 4 || dayOfWeek === 5;
     const daysUntilThu = (4 - dayOfWeek + 7) % 7;
-    const daysUntilPayout = isPayoutDue ? 0 : (daysUntilThu === 0 ? 7 : daysUntilThu);
+    const daysUntilPayout = isPayoutDue ? 0 : daysUntilThu === 0 ? 7 : daysUntilThu;
     const nextDateObj = new Date(dateObj.getTime() + daysUntilPayout * 86400000);
     const nextPayoutDate = fmt(nextDateObj.getUTCFullYear(), nextDateObj.getUTCMonth() + 1, nextDateObj.getUTCDate());
 
@@ -448,9 +465,10 @@ export function resolvePayoutSchedule(
 
   // Monthly
   const cycleStart = fmt(year, month, 1);
-  const cycleEnd = payrollPeriodEnd && payrollPeriodEnd.slice(0, 7) === todayStr.slice(0, 7)
-    ? payrollPeriodEnd
-    : fmt(year, month, lastDayOfMonth);
+  const cycleEnd =
+    payrollPeriodEnd && payrollPeriodEnd.slice(0, 7) === todayStr.slice(0, 7)
+      ? payrollPeriodEnd
+      : fmt(year, month, lastDayOfMonth);
   const nextPayoutDate = cycleEnd;
   const isPayoutDue = todayStr >= cycleEnd || day >= lastDayOfMonth - 1;
   const daysUntilPayout = Math.max(0, lastDayOfMonth - day);

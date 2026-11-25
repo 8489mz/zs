@@ -9,7 +9,12 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
-import { currencyMoneyDigits, fromMinorUnits, roundMoney, toMinorUnits } from '../../accounting/engines/money-minor-units.engine';
+import {
+  currencyMoneyDigits,
+  fromMinorUnits,
+  roundMoney,
+  toMinorUnits,
+} from '../../accounting/engines/money-minor-units.engine';
 
 @Injectable()
 export class SettingsAdminService {
@@ -20,14 +25,19 @@ export class SettingsAdminService {
 
   assertAdmin(auth?: AuthContext | null): asserts auth is AuthContext {
     if (!auth) throw new ForbiddenException('Authentication required');
-    const canManage = auth.role === 'super_admin' || auth.permissions.includes('settings') || auth.permissions.includes('canManageSettings');
+    const canManage =
+      auth.role === 'super_admin' ||
+      auth.permissions.includes('settings') ||
+      auth.permissions.includes('canManageSettings');
     if (!canManage) throw new ForbiddenException('Missing required permissions');
   }
 
   private assertDestructiveAdminPermission(auth?: AuthContext | null): asserts auth is AuthContext {
     if (!auth) throw new ForbiddenException('Authentication required');
-    const canRunDestructiveAdminOperation = auth.role === 'super_admin' || auth.permissions.includes('canManageBackups');
-    if (!canRunDestructiveAdminOperation) throw new ForbiddenException('Destructive admin operations require super_admin or canManageBackups permission');
+    const canRunDestructiveAdminOperation =
+      auth.role === 'super_admin' || auth.permissions.includes('canManageBackups');
+    if (!canRunDestructiveAdminOperation)
+      throw new ForbiddenException('Destructive admin operations require super_admin or canManageBackups permission');
   }
 
   private withScope(payload: Record<string, unknown>, actor: AuthContext): Record<string, unknown> {
@@ -109,14 +119,56 @@ export class SettingsAdminService {
       treasuryNet,
     ] = await Promise.all([
       this.count('users', actor),
-      this.db.selectFrom('users').select((eb) => eb.fn.countAll<number>().as('count')).where('is_active', '=', true).where(sql<boolean>`tenant_id = ${scope.tenantId}`).executeTakeFirstOrThrow().then((row) => Number(row.count || 0)),
+      this.db
+        .selectFrom('users')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('is_active', '=', true)
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .executeTakeFirstOrThrow()
+        .then((row) => Number(row.count || 0)),
       this.count('sessions', actor),
-      this.db.selectFrom('sessions').select((eb) => eb.fn.countAll<number>().as('count')).where('expires_at', '<', new Date()).where(sql<boolean>`tenant_id = ${scope.tenantId}`).executeTakeFirstOrThrow().then((row) => Number(row.count || 0)),
-      this.db.selectFrom('branches').select((eb) => eb.fn.countAll<number>().as('count')).where('is_active', '=', true).where(sql<boolean>`tenant_id = ${scope.tenantId}`).executeTakeFirstOrThrow().then((row) => Number(row.count || 0)),
-      this.db.selectFrom('stock_locations').select((eb) => eb.fn.countAll<number>().as('count')).where('is_active', '=', true).where(sql<boolean>`tenant_id = ${scope.tenantId}`).executeTakeFirstOrThrow().then((row) => Number(row.count || 0)),
-      this.db.selectFrom('customers').select((eb) => eb.fn.countAll<number>().as('count')).where('is_active', '=', true).where(sql<boolean>`tenant_id = ${scope.tenantId}`).executeTakeFirstOrThrow().then((row) => Number(row.count || 0)),
-      this.db.selectFrom('suppliers').select((eb) => eb.fn.countAll<number>().as('count')).where('is_active', '=', true).where(sql<boolean>`tenant_id = ${scope.tenantId}`).executeTakeFirstOrThrow().then((row) => Number(row.count || 0)),
-      this.db.selectFrom('products').select((eb) => eb.fn.countAll<number>().as('count')).where('is_active', '=', true).where(sql<boolean>`tenant_id = ${scope.tenantId}`).executeTakeFirstOrThrow().then((row) => Number(row.count || 0)),
+      this.db
+        .selectFrom('sessions')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('expires_at', '<', new Date())
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .executeTakeFirstOrThrow()
+        .then((row) => Number(row.count || 0)),
+      this.db
+        .selectFrom('branches')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('is_active', '=', true)
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .executeTakeFirstOrThrow()
+        .then((row) => Number(row.count || 0)),
+      this.db
+        .selectFrom('stock_locations')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('is_active', '=', true)
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .executeTakeFirstOrThrow()
+        .then((row) => Number(row.count || 0)),
+      this.db
+        .selectFrom('customers')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('is_active', '=', true)
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .executeTakeFirstOrThrow()
+        .then((row) => Number(row.count || 0)),
+      this.db
+        .selectFrom('suppliers')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('is_active', '=', true)
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .executeTakeFirstOrThrow()
+        .then((row) => Number(row.count || 0)),
+      this.db
+        .selectFrom('products')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('is_active', '=', true)
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .executeTakeFirstOrThrow()
+        .then((row) => Number(row.count || 0)),
       this.count('sales', actor),
       this.count('purchases', actor),
       this.count('return_documents', actor),
@@ -160,16 +212,19 @@ export class SettingsAdminService {
   async getMaintenanceReport(actor: AuthContext): Promise<Record<string, unknown>> {
     const diagnostics = await this.getDiagnostics(actor);
     const handoff = this.handoffFileState();
-    return this.withScope({
-      summary: {
-        expiredSessions: Number((diagnostics.counts as Record<string, unknown>).expiredSessions || 0),
-        backupSnapshots: Number((diagnostics.counts as Record<string, unknown>).backupSnapshots || 0),
-        auditLogs: Number((diagnostics.counts as Record<string, unknown>).auditLogs || 0),
-        docsReady: handoff.ready,
-        docsCoverage: `${handoff.present}/${handoff.expected}`,
-        missingDocs: handoff.missing,
+    return this.withScope(
+      {
+        summary: {
+          expiredSessions: Number((diagnostics.counts as Record<string, unknown>).expiredSessions || 0),
+          backupSnapshots: Number((diagnostics.counts as Record<string, unknown>).backupSnapshots || 0),
+          auditLogs: Number((diagnostics.counts as Record<string, unknown>).auditLogs || 0),
+          docsReady: handoff.ready,
+          docsCoverage: `${handoff.present}/${handoff.expected}`,
+          missingDocs: handoff.missing,
+        },
       },
-    }, actor);
+      actor,
+    );
   }
 
   async getLaunchReadiness(actor: AuthContext): Promise<Record<string, unknown>> {
@@ -178,68 +233,84 @@ export class SettingsAdminService {
     const expiredSessions = Number((diagnostics.counts as Record<string, unknown>).expiredSessions || 0);
     const snapshots = Number((diagnostics.counts as Record<string, unknown>).backupSnapshots || 0);
 
-    return this.withScope({
-      summary: {
-        envTemplateReady: handoff.ready,
-        backupSnapshotsAvailable: snapshots > 0 ? 'yes' : 'no',
-        expiredSessionsOpen: expiredSessions,
-        bootstrapAdminExpectedOffInProduction: process.env.ENABLE_BOOTSTRAP_ADMIN === 'true' ? 'no' : 'yes',
-        csrfConfigured: process.env.SESSION_CSRF_SECRET ? 'yes' : 'no',
-        cookiesSecureFlag: process.env.SESSION_COOKIE_SECURE === 'true' ? 'yes' : 'no',
+    return this.withScope(
+      {
+        summary: {
+          envTemplateReady: handoff.ready,
+          backupSnapshotsAvailable: snapshots > 0 ? 'yes' : 'no',
+          expiredSessionsOpen: expiredSessions,
+          bootstrapAdminExpectedOffInProduction: process.env.ENABLE_BOOTSTRAP_ADMIN === 'true' ? 'no' : 'yes',
+          csrfConfigured: process.env.SESSION_CSRF_SECRET ? 'yes' : 'no',
+          cookiesSecureFlag: process.env.SESSION_COOKIE_SECURE === 'true' ? 'yes' : 'no',
+        },
       },
-    }, actor);
+      actor,
+    );
   }
 
   async getOperationalReadiness(actor: AuthContext): Promise<Record<string, unknown>> {
     const diagnostics = await this.getDiagnostics(actor);
-    return this.withScope({
-      summary: {
-        activeUsers: Number((diagnostics.counts as Record<string, unknown>).activeUsers || 0),
-        branches: Number((diagnostics.counts as Record<string, unknown>).branches || 0),
-        locations: Number((diagnostics.counts as Record<string, unknown>).locations || 0),
-        products: Number((diagnostics.counts as Record<string, unknown>).products || 0),
-        treasuryNet: Number((diagnostics.finance as Record<string, unknown>).treasuryNet || 0),
-        customerBalance: Number((diagnostics.finance as Record<string, unknown>).customerBalance || 0),
-        supplierBalance: Number((diagnostics.finance as Record<string, unknown>).supplierBalance || 0),
+    return this.withScope(
+      {
+        summary: {
+          activeUsers: Number((diagnostics.counts as Record<string, unknown>).activeUsers || 0),
+          branches: Number((diagnostics.counts as Record<string, unknown>).branches || 0),
+          locations: Number((diagnostics.counts as Record<string, unknown>).locations || 0),
+          products: Number((diagnostics.counts as Record<string, unknown>).products || 0),
+          treasuryNet: Number((diagnostics.finance as Record<string, unknown>).treasuryNet || 0),
+          customerBalance: Number((diagnostics.finance as Record<string, unknown>).customerBalance || 0),
+          supplierBalance: Number((diagnostics.finance as Record<string, unknown>).supplierBalance || 0),
+        },
       },
-    }, actor);
+      actor,
+    );
   }
 
   async getUatReadiness(actor: AuthContext): Promise<Record<string, unknown>> {
-    return this.withScope({
-      summary: {
-        backendBuild: 'run npm run build',
-        backendInfraTests: 'run npm run test:infra',
-        frontendQa: 'run npm run qa:commercial-ready',
-        backupRestoreDrill: 'verify from settings backup workspace',
-        smokeFlow: 'sale + purchase + return + reports sanity',
+    return this.withScope(
+      {
+        summary: {
+          backendBuild: 'run npm run build',
+          backendInfraTests: 'run npm run test:infra',
+          frontendQa: 'run npm run qa:commercial-ready',
+          backupRestoreDrill: 'verify from settings backup workspace',
+          smokeFlow: 'sale + purchase + return + reports sanity',
+        },
       },
-    }, actor);
+      actor,
+    );
   }
 
   async getSupportSnapshot(actor: AuthContext): Promise<Record<string, unknown>> {
     const diagnostics = await this.getDiagnostics(actor);
-    return this.withScope({
-      generatedAt: new Date().toISOString(),
-      appHost: process.env.APP_HOST || 'unset',
-      appPort: process.env.APP_PORT || 'unset',
-      // The tenant's business timezone, not the env value: the snapshot
-      // must agree with the tenant setting the reports path now honours.
-      businessTimezone: await getTenantTimezone(this.db, this.scope(actor).tenantId),
-      activeUsers: Number((diagnostics.counts as Record<string, unknown>).activeUsers || 0),
-      products: Number((diagnostics.counts as Record<string, unknown>).products || 0),
-      sales: Number((diagnostics.counts as Record<string, unknown>).sales || 0),
-      purchases: Number((diagnostics.counts as Record<string, unknown>).purchases || 0),
-      returns: Number((diagnostics.counts as Record<string, unknown>).returns || 0),
-      expiredSessions: Number((diagnostics.counts as Record<string, unknown>).expiredSessions || 0),
-      backupSnapshots: Number((diagnostics.counts as Record<string, unknown>).backupSnapshots || 0),
-    }, actor);
+    return this.withScope(
+      {
+        generatedAt: new Date().toISOString(),
+        appHost: process.env.APP_HOST || 'unset',
+        appPort: process.env.APP_PORT || 'unset',
+        // The tenant's business timezone, not the env value: the snapshot
+        // must agree with the tenant setting the reports path now honours.
+        businessTimezone: await getTenantTimezone(this.db, this.scope(actor).tenantId),
+        activeUsers: Number((diagnostics.counts as Record<string, unknown>).activeUsers || 0),
+        products: Number((diagnostics.counts as Record<string, unknown>).products || 0),
+        sales: Number((diagnostics.counts as Record<string, unknown>).sales || 0),
+        purchases: Number((diagnostics.counts as Record<string, unknown>).purchases || 0),
+        returns: Number((diagnostics.counts as Record<string, unknown>).returns || 0),
+        expiredSessions: Number((diagnostics.counts as Record<string, unknown>).expiredSessions || 0),
+        backupSnapshots: Number((diagnostics.counts as Record<string, unknown>).backupSnapshots || 0),
+      },
+      actor,
+    );
   }
 
   async cleanupExpiredSessions(actor: AuthContext): Promise<Record<string, unknown>> {
     this.assertDestructiveAdminPermission(actor);
     const { tenantId } = this.scope(actor);
-    const result = await this.db.deleteFrom('sessions').where('expires_at', '<', new Date()).where(sql<boolean>`tenant_id = ${tenantId}`).executeTakeFirst();
+    const result = await this.db
+      .deleteFrom('sessions')
+      .where('expires_at', '<', new Date())
+      .where(sql<boolean>`tenant_id = ${tenantId}`)
+      .executeTakeFirst();
     const removed = Number(result.numDeletedRows || 0);
     await this.audit.log('تنظيف الجلسات', `تم حذف ${removed} جلسة منتهية بواسطة ${actor.username}`, actor);
     return { ok: true, removed };
@@ -286,7 +357,12 @@ export class SettingsAdminService {
       }
       const nextBalance = fromMinorUnits(toMinorUnits(Number(row.ledger_balance || 0), bookDigits), bookDigits);
       if (nextBalance === currentBalance) continue;
-      await (db as any).updateTable(partnerTable).set({ balance: nextBalance, updated_at: sql`NOW()` }).where('id', '=', Number(row.id)).where(sql<boolean>`tenant_id = ${tenantId}`).execute();
+      await (db as any)
+        .updateTable(partnerTable)
+        .set({ balance: nextBalance, updated_at: sql`NOW()` })
+        .where('id', '=', Number(row.id))
+        .where(sql<boolean>`tenant_id = ${tenantId}`)
+        .execute();
       updated += 1;
     }
     return { updated, skipped };
@@ -316,8 +392,16 @@ export class SettingsAdminService {
       const suppliers = await this.reconcilePartners(trx, tenantId, 'supplier');
       return { customers, suppliers };
     });
-    await this.audit.log('مطابقة أرصدة العملاء', `تمت مطابقة ${result.customers.updated} عميل بواسطة ${actor.username}`, actor);
-    await this.audit.log('مطابقة أرصدة الموردين', `تمت مطابقة ${result.suppliers.updated} مورد بواسطة ${actor.username}`, actor);
+    await this.audit.log(
+      'مطابقة أرصدة العملاء',
+      `تمت مطابقة ${result.customers.updated} عميل بواسطة ${actor.username}`,
+      actor,
+    );
+    await this.audit.log(
+      'مطابقة أرصدة الموردين',
+      `تمت مطابقة ${result.suppliers.updated} مورد بواسطة ${actor.username}`,
+      actor,
+    );
     return {
       ok: true,
       customersUpdated: result.customers.updated,

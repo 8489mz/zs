@@ -14,7 +14,9 @@ export class PublicController {
   ) {}
 
   private maskEmail(value: unknown): string {
-    const email = String(value || '').trim().toLowerCase();
+    const email = String(value || '')
+      .trim()
+      .toLowerCase();
     const [localRaw, domainRaw] = email.split('@');
     const local = localRaw || '';
     const domain = domainRaw || '';
@@ -30,11 +32,12 @@ export class PublicController {
 
   private sanitizeError(error: unknown): Record<string, unknown> {
     const candidate = (error ?? {}) as Record<string, unknown>;
-    const status = typeof (candidate as { status?: unknown }).status === 'number'
-      ? (candidate as { status: number }).status
-      : typeof (candidate as { statusCode?: unknown }).statusCode === 'number'
-        ? (candidate as { statusCode: number }).statusCode
-        : undefined;
+    const status =
+      typeof (candidate as { status?: unknown }).status === 'number'
+        ? (candidate as { status: number }).status
+        : typeof (candidate as { statusCode?: unknown }).statusCode === 'number'
+          ? (candidate as { statusCode: number }).statusCode
+          : undefined;
 
     return {
       name: typeof candidate.name === 'string' ? candidate.name : 'Error',
@@ -110,4 +113,3 @@ export class PublicController {
     };
   }
 }
-

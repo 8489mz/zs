@@ -13,7 +13,17 @@ import { SettingsModule } from '../settings/settings.module';
 @Module({
   imports: [AccountingModule, SettingsModule],
   controllers: [MaritimeFreightController, MaritimePublicTrackingController, MaritimeCustomerPortalController],
-  providers: [MaritimeFreightService, MaritimeMailService, MaritimeAutomationSchedulerService, MaritimeCustomerPortalService],
-  exports: [MaritimeFreightService, MaritimeMailService, MaritimeAutomationSchedulerService, MaritimeCustomerPortalService],
+  providers: [
+    MaritimeFreightService,
+    MaritimeMailService,
+    MaritimeAutomationSchedulerService,
+    MaritimeCustomerPortalService,
+  ],
+  exports: [
+    MaritimeFreightService,
+    MaritimeMailService,
+    MaritimeAutomationSchedulerService,
+    MaritimeCustomerPortalService,
+  ],
 })
 export class MaritimeFreightModule {}

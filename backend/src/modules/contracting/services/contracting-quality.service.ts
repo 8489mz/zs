@@ -62,7 +62,11 @@ export class ContractingQualityService {
     this.db = deps.db;
   }
 
-  async getInspectionRequests(auth: AuthContext, projectId: string, status?: string): Promise<ContractingInspectionRequest[]> {
+  async getInspectionRequests(
+    auth: AuthContext,
+    projectId: string,
+    status?: string,
+  ): Promise<ContractingInspectionRequest[]> {
     const { tenantId } = requireTenantScope(auth);
     let q = (this.db as any)
       .selectFrom('contracting_inspection_requests as w')
@@ -120,7 +124,11 @@ export class ContractingQualityService {
     }));
   }
 
-  async createInspectionRequest(auth: AuthContext, projectId: string, dto: CreateInspectionRequestDto): Promise<ContractingInspectionRequest> {
+  async createInspectionRequest(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateInspectionRequestDto,
+  ): Promise<ContractingInspectionRequest> {
     const { tenantId } = requireTenantScope(auth);
     const businessTz = await getTenantTimezone(this.db, tenantId);
     // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
@@ -211,7 +219,12 @@ export class ContractingQualityService {
     return { success: true };
   }
 
-  async getSnagItems(auth: AuthContext, projectId: string, status?: string, severity?: string): Promise<ContractingSnagItem[]> {
+  async getSnagItems(
+    auth: AuthContext,
+    projectId: string,
+    status?: string,
+    severity?: string,
+  ): Promise<ContractingSnagItem[]> {
     const { tenantId } = requireTenantScope(auth);
     let q = (this.db as any)
       .selectFrom('contracting_snag_items as s')
@@ -304,8 +317,11 @@ export class ContractingQualityService {
       .updateTable('contracting_snag_items')
       .set({
         status: dto.status,
-        rectified_date: dto.status !== 'open' ? (dto.rectifiedDate || (await resolveBusinessDateKey(this.db, tenantId, new Date()))) : null,
-        verified_by: dto.status === 'verified_closed' ? (dto.verifiedBy || auth.username || 'المهندس المشرف') : null,
+        rectified_date:
+          dto.status !== 'open'
+            ? dto.rectifiedDate || (await resolveBusinessDateKey(this.db, tenantId, new Date()))
+            : null,
+        verified_by: dto.status === 'verified_closed' ? dto.verifiedBy || auth.username || 'المهندس المشرف' : null,
         notes: dto.notes || undefined,
         updated_at: new Date(),
       })
@@ -360,7 +376,11 @@ export class ContractingQualityService {
     }));
   }
 
-  async createProjectHandover(auth: AuthContext, projectId: string, dto: CreateProjectHandoverDto): Promise<ContractingProjectHandover> {
+  async createProjectHandover(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateProjectHandoverDto,
+  ): Promise<ContractingProjectHandover> {
     const { tenantId } = requireTenantScope(auth);
     const warrantyStart = dto.warrantyStartDate || dto.handoverDate;
     const d = new Date(warrantyStart);
@@ -485,7 +505,11 @@ export class ContractingQualityService {
     // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
     // D6a): the number derives from the row id inside one
     // transaction, never from a COUNT(*).
-    const prefix = getDailyDocumentPrefix(dto.submittalType === 'shop_drawing' ? 'DWG-SUB' : 'MAT-SUB', undefined, businessTz);
+    const prefix = getDailyDocumentPrefix(
+      dto.submittalType === 'shop_drawing' ? 'DWG-SUB' : 'MAT-SUB',
+      undefined,
+      businessTz,
+    );
     const tempNumber = `SUB-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const row = await this.db.transaction().execute(async (trx) => {
@@ -599,7 +623,11 @@ export class ContractingQualityService {
     }));
   }
 
-  async createMaterialEscalation(auth: AuthContext, projectId: string, dto: CreateMaterialEscalationDto): Promise<ContractingMaterialEscalation> {
+  async createMaterialEscalation(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateMaterialEscalationDto,
+  ): Promise<ContractingMaterialEscalation> {
     const { tenantId } = requireTenantScope(auth);
     const businessTz = await getTenantTimezone(this.db, tenantId);
     // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
@@ -691,7 +719,10 @@ export class ContractingQualityService {
     return updated;
   }
 
-  async getSubcontractorBackcharges(auth: AuthContext, projectId: string): Promise<ContractingSubcontractorBackcharge[]> {
+  async getSubcontractorBackcharges(
+    auth: AuthContext,
+    projectId: string,
+  ): Promise<ContractingSubcontractorBackcharge[]> {
     const { tenantId } = requireTenantScope(auth);
     const rows = await (this.db as any)
       .selectFrom('contracting_subcontractor_backcharges as cb')
@@ -738,7 +769,11 @@ export class ContractingQualityService {
     }));
   }
 
-  async createSubcontractorBackcharge(auth: AuthContext, projectId: string, dto: CreateSubcontractorBackchargeDto): Promise<ContractingSubcontractorBackcharge> {
+  async createSubcontractorBackcharge(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateSubcontractorBackchargeDto,
+  ): Promise<ContractingSubcontractorBackcharge> {
     const { tenantId } = requireTenantScope(auth);
     const businessTz = await getTenantTimezone(this.db, tenantId);
     // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as

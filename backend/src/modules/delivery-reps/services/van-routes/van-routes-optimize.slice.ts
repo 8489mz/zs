@@ -4,7 +4,11 @@ import { AppError } from '../../../../common/errors/app-error';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
 import { normalizeCustomerCode, getCustomerRepBalancesMap } from '../van-common.util';
-import { extractAssignedRepIds, extractCoordinatesFromCustomerLocation, loadRepPermissions } from '../../rep-target.engine';
+import {
+  extractAssignedRepIds,
+  extractCoordinatesFromCustomerLocation,
+  loadRepPermissions,
+} from '../../rep-target.engine';
 import { optimizeRouteTsp, RouteStopInput, RouteOptimizationResult } from '../../route-optimization.engine';
 
 export interface VanRoutesOptimizeSliceBoundDeps {
@@ -62,7 +66,11 @@ export class VanRoutesOptimizeSlice {
       customerRows = allActive.filter((c: any) => {
         let meta: any = {};
         if (typeof c.metadata === 'string') {
-          try { meta = JSON.parse(c.metadata); } catch { meta = {}; }
+          try {
+            meta = JSON.parse(c.metadata);
+          } catch {
+            meta = {};
+          }
         } else if (c.metadata && typeof c.metadata === 'object') {
           meta = c.metadata;
         }
@@ -102,7 +110,11 @@ export class VanRoutesOptimizeSlice {
         const cid = Number(c.id);
         let meta: any = {};
         if (typeof c.metadata === 'string') {
-          try { meta = JSON.parse(c.metadata); } catch { meta = {}; }
+          try {
+            meta = JSON.parse(c.metadata);
+          } catch {
+            meta = {};
+          }
         } else if (c.metadata && typeof c.metadata === 'object') {
           meta = c.metadata;
         }
@@ -132,7 +144,11 @@ export class VanRoutesOptimizeSlice {
       const cId = Number(c.id);
       let meta: any = {};
       if (typeof c.metadata === 'string') {
-        try { meta = JSON.parse(c.metadata); } catch { meta = {}; }
+        try {
+          meta = JSON.parse(c.metadata);
+        } catch {
+          meta = {};
+        }
       } else if (c.metadata && typeof c.metadata === 'object') {
         meta = c.metadata;
       }
@@ -185,7 +201,11 @@ export class VanRoutesOptimizeSlice {
 
         let meta: any = {};
         if (typeof cRow.metadata === 'string') {
-          try { meta = JSON.parse(cRow.metadata); } catch { meta = {}; }
+          try {
+            meta = JSON.parse(cRow.metadata);
+          } catch {
+            meta = {};
+          }
         } else if (cRow.metadata && typeof cRow.metadata === 'object') {
           meta = { ...cRow.metadata };
         }

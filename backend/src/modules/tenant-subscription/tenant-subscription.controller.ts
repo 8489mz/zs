@@ -1,4 +1,16 @@
-import { Body, Controller, ForbiddenException, Get, Headers, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Headers,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
@@ -23,8 +35,15 @@ export class TenantSubscriptionController {
   private assertSubscriptionManagePermission(req: RequestWithAuth): void {
     const role = req.authContext?.role;
     const permissions = req.authContext?.permissions ?? [];
-    if (role !== 'admin' && role !== 'super_admin' && !permissions.includes('settings') && !permissions.includes('canManageSettings')) {
-      throw new ForbiddenException('إدارة وتجديد اشتراك المنشأة مقتصرة على مالك الحساب (Admin) أو من يملك صلاحيات الإعدادات.');
+    if (
+      role !== 'admin' &&
+      role !== 'super_admin' &&
+      !permissions.includes('settings') &&
+      !permissions.includes('canManageSettings')
+    ) {
+      throw new ForbiddenException(
+        'إدارة وتجديد اشتراك المنشأة مقتصرة على مالك الحساب (Admin) أو من يملك صلاحيات الإعدادات.',
+      );
     }
   }
 
@@ -56,7 +75,10 @@ export class TenantSubscriptionController {
 
   @Post('initiate-online-payment')
   @UseGuards(SessionAuthGuard)
-  initiateOnlinePayment(@Body() dto: InitiateOnlinePaymentDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  initiateOnlinePayment(
+    @Body() dto: InitiateOnlinePaymentDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     this.assertSubscriptionManagePermission(req);
     return this.service.initiateOnlinePayment(dto, this.paymentManager, req.authContext!);
   }
@@ -379,9 +401,10 @@ export class TenantSubscriptionController {
     // Paymob delivers the signed HMAC in the callback query string, not
     // necessarily in an HTTP header. The gateway must still verify the
     // signature itself before any subscription credit is granted.
-    const verifiedHeaders = gateway.toLowerCase() === 'paymob' && typeof paymobQueryHmac === 'string'
-      ? { ...headers, hmac: paymobQueryHmac }
-      : headers;
+    const verifiedHeaders =
+      gateway.toLowerCase() === 'paymob' && typeof paymobQueryHmac === 'string'
+        ? { ...headers, hmac: paymobQueryHmac }
+        : headers;
     return this.paymentManager.processWebhook(gateway, verifiedHeaders, body, rawBody);
   }
 }

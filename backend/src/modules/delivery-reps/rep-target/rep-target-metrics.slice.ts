@@ -117,35 +117,42 @@ export function calculateRepTargetMetrics(input: RepTargetCalculationInput): Rep
   }
 
   // Multi-dimensional: Collection Target Calculations
-  const colTarget = input.collectionTarget !== undefined && input.collectionTarget !== null && !isNaN(Number(input.collectionTarget))
-    ? Math.max(0, Math.round(Number(input.collectionTarget)))
-    : null;
-  const colActual = input.actualCollectionsMTD !== undefined && input.actualCollectionsMTD !== null
-    ? Math.max(0, roundBookMoney(Number(input.actualCollectionsMTD), input.moneyDigits))
-    : 0;
+  const colTarget =
+    input.collectionTarget !== undefined && input.collectionTarget !== null && !isNaN(Number(input.collectionTarget))
+      ? Math.max(0, Math.round(Number(input.collectionTarget)))
+      : null;
+  const colActual =
+    input.actualCollectionsMTD !== undefined && input.actualCollectionsMTD !== null
+      ? Math.max(0, roundBookMoney(Number(input.actualCollectionsMTD), input.moneyDigits))
+      : 0;
 
-  const collectionAchievementRate = colTarget && colTarget > 0 ? Number(((colActual / colTarget) * 100).toFixed(1)) : null;
+  const collectionAchievementRate =
+    colTarget && colTarget > 0 ? Number(((colActual / colTarget) * 100).toFixed(1)) : null;
   const remainingCollection = colTarget && colTarget > 0 ? Math.max(0, Math.round(colTarget - colActual)) : 0;
   const isCollectionAchieved = colTarget && colTarget > 0 ? colActual >= colTarget : false;
   let requiredDailyCollection = 0;
   if (colTarget && colTarget > 0 && !isCollectionAchieved && remainingCollection > 0) {
-    requiredDailyCollection = remainingWorkingDays > 0 ? Math.ceil(remainingCollection / remainingWorkingDays) : remainingCollection;
+    requiredDailyCollection =
+      remainingWorkingDays > 0 ? Math.ceil(remainingCollection / remainingWorkingDays) : remainingCollection;
   }
 
   // Multi-dimensional: Visits Target Calculations
-  const visTarget = input.visitsTarget !== undefined && input.visitsTarget !== null && !isNaN(Number(input.visitsTarget))
-    ? Math.max(0, Math.round(Number(input.visitsTarget)))
-    : null;
-  const visActual = input.actualVisitsMTD !== undefined && input.actualVisitsMTD !== null
-    ? Math.max(0, Math.round(Number(input.actualVisitsMTD)))
-    : 0;
+  const visTarget =
+    input.visitsTarget !== undefined && input.visitsTarget !== null && !isNaN(Number(input.visitsTarget))
+      ? Math.max(0, Math.round(Number(input.visitsTarget)))
+      : null;
+  const visActual =
+    input.actualVisitsMTD !== undefined && input.actualVisitsMTD !== null
+      ? Math.max(0, Math.round(Number(input.actualVisitsMTD)))
+      : 0;
 
   const visitsAchievementRate = visTarget && visTarget > 0 ? Number(((visActual / visTarget) * 100).toFixed(1)) : null;
   const remainingVisits = visTarget && visTarget > 0 ? Math.max(0, visTarget - visActual) : 0;
   const isVisitsAchieved = visTarget && visTarget > 0 ? visActual >= visTarget : false;
   let requiredDailyVisits = 0;
   if (visTarget && visTarget > 0 && !isVisitsAchieved && remainingVisits > 0) {
-    requiredDailyVisits = remainingWorkingDays > 0 ? Math.ceil(remainingVisits / remainingWorkingDays) : remainingVisits;
+    requiredDailyVisits =
+      remainingWorkingDays > 0 ? Math.ceil(remainingVisits / remainingWorkingDays) : remainingVisits;
   }
 
   return {

@@ -87,11 +87,7 @@ export class MaintenanceController {
 
   @Post(':id/parts')
   @RequireAnyPermission('services', 'sales', 'products')
-  addPart(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() payload: AddTicketPartDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  addPart(@Param('id', ParseIntPipe) id: number, @Body() payload: AddTicketPartDto, @Req() req: RequestWithAuth) {
     return this.maintenanceService.addPart(id, payload, req.authContext!);
   }
 

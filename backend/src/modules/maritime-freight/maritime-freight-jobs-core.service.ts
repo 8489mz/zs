@@ -5,19 +5,18 @@ import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { convertFxAmount } from '../accounting/engines/fx-conversion.engine';
 import { resolveSaleTaxRate } from '../sales/engines/sale-tax-rate.engine';
 import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.engine';
-import {
-  NotFoundException,
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { NotFoundException, BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { sql, type Kysely } from '../../database/kysely';
 import { type Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { CreateMaritimeJobDto } from './dto/create-job.dto';
 import { DCSA_STANDARD_MILESTONES, ROAD_FREIGHT_MILESTONES } from './maritime-freight.types';
-import { calculateAirChargeableWeight, validateIataAwbNumber, IATA_CARGO_IQ_MILESTONES } from './engines/air-freight.engine';
+import {
+  calculateAirChargeableWeight,
+  validateIataAwbNumber,
+  IATA_CARGO_IQ_MILESTONES,
+} from './engines/air-freight.engine';
 import { validateCmrWaybillNumber } from './engines/road-freight.engine';
 import * as crypto from 'crypto';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
@@ -60,7 +59,11 @@ export interface MaritimeFreightJobsCoreDeps {
   db: Kysely<Database>;
   accountingPosting: AccountingPostingService;
   resolveTenantConfiguredTaxRate: (queryable: Kysely<Database>, tenantId: string) => Promise<unknown>;
-  resolveFreightExchangeRate: (tenantId: string, currency: string | undefined, suppliedRate?: number) => Promise<number>;
+  resolveFreightExchangeRate: (
+    tenantId: string,
+    currency: string | undefined,
+    suppliedRate?: number,
+  ) => Promise<number>;
   resolveAccountId: (tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
   assertMaritimeJournalPeriodOpen: (trx: any, tenantId: string, entryDate: Date) => Promise<void>;
 }
@@ -71,7 +74,11 @@ export class MaritimeFreightJobsCoreService {
   private readonly db: Kysely<Database>;
   private readonly accountingPosting: AccountingPostingService;
   private readonly resolveTenantConfiguredTaxRate: (queryable: Kysely<Database>, tenantId: string) => Promise<unknown>;
-  private readonly resolveFreightExchangeRate: (tenantId: string, currency: string | undefined, suppliedRate?: number) => Promise<number>;
+  private readonly resolveFreightExchangeRate: (
+    tenantId: string,
+    currency: string | undefined,
+    suppliedRate?: number,
+  ) => Promise<number>;
   private readonly resolveAccountId: (tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
   private readonly assertMaritimeJournalPeriodOpen: (trx: any, tenantId: string, entryDate: Date) => Promise<void>;
 
@@ -86,38 +93,62 @@ export class MaritimeFreightJobsCoreService {
 
   async assertJobCanClose(tenantId: string, jobId: string) {
     const [unbilledCharge, unpostedCarrierInvoice, journals, containers, invoicedCharges] = await Promise.all([
-      this.db.selectFrom('maritime_job_charges').select('id').where('tenant_id', '=', tenantId)
-        .where('job_id', '=', jobId).where('is_invoiced', '=', false)
+      this.db
+        .selectFrom('maritime_job_charges')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('job_id', '=', jobId)
+        .where('is_invoiced', '=', false)
         .where((eb) => eb.or([eb('cost_amount', '>', 0), eb('sell_amount', '>', 0)]))
         .executeTakeFirst(),
-      this.db.selectFrom('maritime_carrier_invoices').select('id').where('tenant_id', '=', tenantId)
-        .where('job_id', '=', jobId).where('journal_entry_id', 'is', null).executeTakeFirst(),
-      this.db.selectFrom('journal_entries as je')
-        .innerJoin('journal_entry_lines as jl', (join: any) => join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id'))
+      this.db
+        .selectFrom('maritime_carrier_invoices')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('job_id', '=', jobId)
+        .where('journal_entry_id', 'is', null)
+        .executeTakeFirst(),
+      this.db
+        .selectFrom('journal_entries as je')
+        .innerJoin('journal_entry_lines as jl', (join: any) =>
+          join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id'),
+        )
         .select(['je.source_type', 'jl.debit', 'jl.credit'])
-        .where('je.tenant_id', '=', tenantId).where('je.source_id', '=', Number(jobId))
+        .where('je.tenant_id', '=', tenantId)
+        .where('je.source_id', '=', Number(jobId))
         .where('je.status', '=', 'posted')
         .where('je.source_type', 'in', ['maritime_job', 'maritime_job_expense', 'maritime_carrier_invoice'])
         .execute(),
-      this.db.selectFrom('maritime_containers').select(['return_deadline', 'empty_returned_at', 'demurrage_rate_per_day'])
-        .where('tenant_id', '=', tenantId).where('job_id', '=', jobId).execute(),
-      this.db.selectFrom('maritime_job_charges').select(['charge_code', 'charge_name_en', 'sell_amount', 'cost_amount', 'currency'])
-        .where('tenant_id', '=', tenantId).where('job_id', '=', jobId).where('is_invoiced', '=', true).execute(),
+      this.db
+        .selectFrom('maritime_containers')
+        .select(['return_deadline', 'empty_returned_at', 'demurrage_rate_per_day'])
+        .where('tenant_id', '=', tenantId)
+        .where('job_id', '=', jobId)
+        .execute(),
+      this.db
+        .selectFrom('maritime_job_charges')
+        .select(['charge_code', 'charge_name_en', 'sell_amount', 'cost_amount', 'currency'])
+        .where('tenant_id', '=', tenantId)
+        .where('job_id', '=', jobId)
+        .where('is_invoiced', '=', true)
+        .execute(),
     ]);
     if (unbilledCharge || unpostedCarrierInvoice) {
       throw new BadRequestException('لا يمكن إغلاق الشحنة: توجد تكاليف غير مفوترة أو فاتورة ناقل غير مرحلة');
     }
-    const expenses = journals.filter((row) => row.source_type !== 'maritime_job')
+    const expenses = journals
+      .filter((row) => row.source_type !== 'maritime_job')
       .reduce((sum, row) => sum + Number(row.debit || 0), 0);
-    const billed = journals.filter((row) => row.source_type === 'maritime_job')
+    const billed = journals
+      .filter((row) => row.source_type === 'maritime_job')
       .reduce((sum, row) => sum + Number(row.credit || 0), 0);
     if (expenses > billed + 0.01) {
       throw new BadRequestException('لا يمكن إغلاق الشحنة: المصروفات المرحلة تتجاوز فواتير العميل المرحلة');
     }
     let chargeCostsBase = 0;
     for (const charge of invoicedCharges) {
-      chargeCostsBase += Number(charge.cost_amount || 0) *
-        await this.resolveFreightExchangeRate(tenantId, charge.currency);
+      chargeCostsBase +=
+        Number(charge.cost_amount || 0) * (await this.resolveFreightExchangeRate(tenantId, charge.currency));
     }
     if (chargeCostsBase > billed + 0.01) {
       throw new BadRequestException('لا يمكن إغلاق الشحنة: تكاليف بنود التشغيل تتجاوز الفواتير المرحلة للعميل');
@@ -130,16 +161,29 @@ export class MaritimeFreightJobsCoreService {
       // the UTC slice would render the previous day on any host east of
       // UTC; key it from host-local calendar parts instead.
       value instanceof Date ? formatLocalCalendarDay(value) : String(value || '').slice(0, 10);
-    const hasDueDemurrage = (await Promise.all(containers.map(async (container) => {
-      if (!container.return_deadline) return false;
-      const returnedDay = await resolveBusinessDateKey(
-        this.db, tenantId, container.empty_returned_at ? new Date(container.empty_returned_at) : new Date(),
-      );
-      return returnedDay > deadlineDayKey(container.return_deadline) &&
-        Number(container.demurrage_rate_per_day || 0) > 0;
-    }))).some(Boolean);
-    if (hasDueDemurrage && (billed <= 0 || !invoicedCharges.some((charge) =>
-      /DEM|DETENTION/i.test(`${charge.charge_code} ${charge.charge_name_en}`) && Number(charge.sell_amount) > 0))) {
+    const hasDueDemurrage = (
+      await Promise.all(
+        containers.map(async (container) => {
+          if (!container.return_deadline) return false;
+          const returnedDay = await resolveBusinessDateKey(
+            this.db,
+            tenantId,
+            container.empty_returned_at ? new Date(container.empty_returned_at) : new Date(),
+          );
+          return (
+            returnedDay > deadlineDayKey(container.return_deadline) && Number(container.demurrage_rate_per_day || 0) > 0
+          );
+        }),
+      )
+    ).some(Boolean);
+    if (
+      hasDueDemurrage &&
+      (billed <= 0 ||
+        !invoicedCharges.some(
+          (charge) =>
+            /DEM|DETENTION/i.test(`${charge.charge_code} ${charge.charge_name_en}`) && Number(charge.sell_amount) > 0,
+        ))
+    ) {
       throw new BadRequestException('لا يمكن إغلاق الشحنة: غرامات الحاويات المستحقة لم تُفوتر للعميل');
     }
   }
@@ -149,31 +193,58 @@ export class MaritimeFreightJobsCoreService {
     if (!cmr.valid || !cmr.isInternationalCmr) {
       throw new BadRequestException('لا يمكن تأكيد تسليم الشحنة البرية دون رقم بوليصة CMR مكتمل');
     }
-    const documents = await this.db.selectFrom('maritime_job_documents')
-      .select(['doc_type', 'title', 'file_url']).where('tenant_id', '=', tenantId)
-      .where('job_id', '=', jobId).execute();
-    if (!documents.some((doc) => /POD|SIGNED.?CMR|إثبات التسليم/i.test(`${doc.doc_type} ${doc.title}`) &&
-      /^(https?:\/\/|s3:\/\/)/i.test(doc.file_url))) {
+    const documents = await this.db
+      .selectFrom('maritime_job_documents')
+      .select(['doc_type', 'title', 'file_url'])
+      .where('tenant_id', '=', tenantId)
+      .where('job_id', '=', jobId)
+      .execute();
+    if (
+      !documents.some(
+        (doc) =>
+          /POD|SIGNED.?CMR|إثبات التسليم/i.test(`${doc.doc_type} ${doc.title}`) &&
+          /^(https?:\/\/|s3:\/\/)/i.test(doc.file_url),
+      )
+    ) {
       throw new BadRequestException('يرجى إرفاق مستند إثبات التسليم POD أو بوليصة CMR موقعة قبل التسليم');
     }
   }
 
-  async assertUniqueMasterBl(tenantId: string, mbl: string | null | undefined, jobId?: string, parentJobId?: string | null, trx?: any) {
+  async assertUniqueMasterBl(
+    tenantId: string,
+    mbl: string | null | undefined,
+    jobId?: string,
+    parentJobId?: string | null,
+    trx?: any,
+  ) {
     const normalized = mbl?.trim().toUpperCase();
     if (!normalized) return;
-    const existing: Array<{ id: string; parent_job_id: string | null }> = await (trx || this.db).selectFrom('maritime_jobs').select(['id', 'parent_job_id'])
-      .where('tenant_id', '=', tenantId).where(sql<string>`UPPER(TRIM(mbl_number))`, '=', normalized)
+    const existing: Array<{ id: string; parent_job_id: string | null }> = await (trx || this.db)
+      .selectFrom('maritime_jobs')
+      .select(['id', 'parent_job_id'])
+      .where('tenant_id', '=', tenantId)
+      .where(sql<string>`UPPER(TRIM(mbl_number))`, '=', normalized)
       .execute();
     const familyId = parentJobId || jobId;
-    if (existing.some((row) => String(row.id) !== jobId &&
-      !(familyId && (String(row.id) === String(familyId) || row.parent_job_id === familyId)))) {
+    if (
+      existing.some(
+        (row) =>
+          String(row.id) !== jobId &&
+          !(familyId && (String(row.id) === String(familyId) || row.parent_job_id === familyId)),
+      )
+    ) {
       throw new BadRequestException('رقم بوليصة الشحن الرئيسية Master B/L مستخدم في أمر شحن آخر');
     }
   }
 
   async postContainerDepositJournal(
-    trx: any, tenantId: string, containerId: string, amount: number, currency: string,
-    event: 'open' | 'refund' | 'forfeit', userId: number,
+    trx: any,
+    tenantId: string,
+    containerId: string,
+    amount: number,
+    currency: string,
+    event: 'open' | 'refund' | 'forfeit',
+    userId: number,
   ) {
     if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('مبلغ تأمين الحاوية غير صالح');
     const assetId = await this.resolveAccountId(tenantId, '1170');
@@ -192,12 +263,18 @@ export class MaritimeFreightJobsCoreService {
       const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
       baseAmount = convertFxAmount(amount, rate, digits);
     } else {
-      const opening = await trx.selectFrom('journal_entries as je')
-        .innerJoin('journal_entry_lines as jl', (join: any) => join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id'))
-        .select('jl.debit').where('je.tenant_id', '=', tenantId)
+      const opening = await trx
+        .selectFrom('journal_entries as je')
+        .innerJoin('journal_entry_lines as jl', (join: any) =>
+          join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id'),
+        )
+        .select('jl.debit')
+        .where('je.tenant_id', '=', tenantId)
         .where('je.source_type', '=', 'maritime_container_deposit_open')
-        .where('je.source_id', '=', Number(containerId)).where('je.status', '=', 'posted')
-        .where('jl.account_id', '=', assetId).executeTakeFirst();
+        .where('je.source_id', '=', Number(containerId))
+        .where('je.status', '=', 'posted')
+        .where('jl.account_id', '=', assetId)
+        .executeTakeFirst();
       if (!opening || Number(opening.debit) <= 0) {
         throw new BadRequestException('يلزم إثبات قيد دفع تأمين الحاوية قبل تسجيل الاسترداد أو المصادرة');
       }
@@ -207,11 +284,30 @@ export class MaritimeFreightJobsCoreService {
     await this.assertMaritimeJournalPeriodOpen(trx, tenantId, entryDate);
     const description = `تأمين حاوية ${containerId}: ${event} (${amount} ${currency})`;
     await this.accountingPosting.postDomainJournal(trx, {
-      tenantId, accountId: tenantId, entryDate, description,
-      sourceType: `maritime_container_deposit_${event}`, sourceId: Number(containerId), createdBy: userId,
+      tenantId,
+      accountId: tenantId,
+      entryDate,
+      description,
+      sourceType: `maritime_container_deposit_${event}`,
+      sourceId: Number(containerId),
+      createdBy: userId,
       lines: [
-        { accountId: event === 'open' ? assetId : otherId, description, debit: baseAmount, credit: 0, partnerType: 'none', partnerId: null },
-        { accountId: event === 'open' ? otherId : assetId, description, debit: 0, credit: baseAmount, partnerType: 'none', partnerId: null },
+        {
+          accountId: event === 'open' ? assetId : otherId,
+          description,
+          debit: baseAmount,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+        },
+        {
+          accountId: event === 'open' ? otherId : assetId,
+          description,
+          debit: 0,
+          credit: baseAmount,
+          partnerType: 'none',
+          partnerId: null,
+        },
       ],
     });
   }
@@ -308,7 +404,9 @@ export class MaritimeFreightJobsCoreService {
     // every creation path funnels through createJob.
     const acidCheck = evaluateAcidNumber(dto.direction || 'import', dto.podCode, dto.acidNumber);
     if (acidCheck.required && !acidCheck.valid) {
-      throw new BadRequestException('رقم ACID مطلوب للشحنات الواردة إلى الموانئ المصرية ويجب أن يتكون من 19 رقماً بالضبط.');
+      throw new BadRequestException(
+        'رقم ACID مطلوب للشحنات الواردة إلى الموانئ المصرية ويجب أن يتكون من 19 رقماً بالضبط.',
+      );
     }
     if (!acidCheck.required && dto.acidNumber && !acidCheck.valid) {
       this.logger.warn(
@@ -334,7 +432,9 @@ export class MaritimeFreightJobsCoreService {
 
     return await this.db.transaction().execute(async (trx) => {
       if (dto.mblNumber?.trim()) {
-        await sql`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${dto.mblNumber.trim().toUpperCase()}))`.execute(trx);
+        await sql`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${dto.mblNumber.trim().toUpperCase()}))`.execute(
+          trx,
+        );
         await this.assertUniqueMasterBl(tenantId, dto.mblNumber, undefined, dto.parentJobId, trx);
       }
       const tempNumber = `JOB-TMP-${crypto.randomUUID()}`;
@@ -397,7 +497,11 @@ export class MaritimeFreightJobsCoreService {
           roe_clause_agreed: dto.roeClauseAgreed !== undefined ? Boolean(dto.roeClauseAgreed) : true,
           si_cutoff_date: dto.siCutoffDate ? new Date(dto.siCutoffDate) : null,
           vgm_cutoff_date: dto.vgmCutoffDate ? new Date(dto.vgmCutoffDate) : null,
-          port_cutoff_date: dto.portCutoffDate ? new Date(dto.portCutoffDate) : (dto.portCutOff ? new Date(dto.portCutOff) : null),
+          port_cutoff_date: dto.portCutoffDate
+            ? new Date(dto.portCutoffDate)
+            : dto.portCutOff
+              ? new Date(dto.portCutOff)
+              : null,
           delivery_address: dto.deliveryAddress || null,
           status: 'active',
           notes: dto.notes || null,
@@ -406,7 +510,13 @@ export class MaritimeFreightJobsCoreService {
         .returningAll()
         .execute();
 
-      const finalJobNumber = formatDailyDocumentNumber('JOB', Number(job.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
+      const finalJobNumber = formatDailyDocumentNumber(
+        'JOB',
+        Number(job.id),
+        new Date(),
+        4,
+        await getTenantTimezone(trx, tenantId),
+      );
 
       if (dto.parentJobId) {
         await trx
@@ -433,9 +543,9 @@ export class MaritimeFreightJobsCoreService {
         for (const chg of dto.charges) {
           const cost = Number(chg.costAmount || 0);
           const sell = Number(chg.sellAmount || 0);
-          const profit = Number(chg.profitAmount ?? (sell - cost));
+          const profit = Number(chg.profitAmount ?? sell - cost);
           const taxPct = resolveSaleTaxRate(chg.taxRatePercent, configuredTaxRate);
-          const taxAmt = Number(chg.taxAmount ?? (sell * taxPct / 100));
+          const taxAmt = Number(chg.taxAmount ?? (sell * taxPct) / 100);
           await trx
             .insertInto('maritime_job_charges')
             .values({
@@ -459,7 +569,8 @@ export class MaritimeFreightJobsCoreService {
 
       // 2. Automatically create an Accounting Cost Center under dimension = 'project'
       let costCenterId: string | null = null;
-      const modeLabel = dto.transportMode === 'air' ? 'شحنة جوية' : dto.transportMode === 'road' ? 'شحنة برية' : 'شحنة بحرية';
+      const modeLabel =
+        dto.transportMode === 'air' ? 'شحنة جوية' : dto.transportMode === 'road' ? 'شحنة برية' : 'شحنة بحرية';
       const existingCc = await trx
         .selectFrom('cost_centers')
         .select(['id'])
@@ -506,13 +617,13 @@ export class MaritimeFreightJobsCoreService {
       const initialTitle = isAir
         ? 'تأكيد حجز الشحنة الجوية (Air Cargo Booked)'
         : isRoad
-        ? 'تعيين وسيلة النقل البري والسائق (Truck & Driver Assigned)'
-        : 'تأكيد الحجز الملاحي (Booking Confirmed)';
+          ? 'تعيين وسيلة النقل البري والسائق (Truck & Driver Assigned)'
+          : 'تأكيد الحجز الملاحي (Booking Confirmed)';
       const initialNotes = isAir
         ? `تم فتح أمر التشغيل وتأكيد الحجز الجوي برقم ${dto.mawbNumber || finalJobNumber}`
         : isRoad
-        ? `تم فتح أمر التشغيل وتعيين وسيلة النقل البري برقم ${dto.bookingNumber || finalJobNumber}`
-        : `تم فتح أمر التشغيل وتأكيد الحجز بنجاح برقم ${dto.bookingNumber || finalJobNumber}`;
+          ? `تم فتح أمر التشغيل وتعيين وسيلة النقل البري برقم ${dto.bookingNumber || finalJobNumber}`
+          : `تم فتح أمر التشغيل وتأكيد الحجز بنجاح برقم ${dto.bookingNumber || finalJobNumber}`;
 
       await trx
         .insertInto('maritime_job_milestones')
@@ -545,10 +656,18 @@ export class MaritimeFreightJobsCoreService {
               deposit_currency: c.depositCurrency || 'EGP',
               deposit_status: Number(c.depositAmount || 0) > 0 ? 'held_by_line' : 'not_required',
             })
-            .returning('id').execute();
+            .returning('id')
+            .execute();
           if (Number(c.depositAmount || 0) > 0) {
-            await this.postContainerDepositJournal(trx, tenantId, String(container.id), Number(c.depositAmount),
-              c.depositCurrency || 'EGP', 'open', auth.userId);
+            await this.postContainerDepositJournal(
+              trx,
+              tenantId,
+              String(container.id),
+              Number(c.depositAmount),
+              c.depositCurrency || 'EGP',
+              'open',
+              auth.userId,
+            );
           }
         }
       }
@@ -680,11 +799,33 @@ export class MaritimeFreightJobsCoreService {
         hawbNumber: quote.hawb_number || rfq?.hawb_number || null,
         paymentTerm: quote.payment_term,
         shippingLineId: bid?.shipping_line_id || null,
-        shippingLineName: bid?.shipping_line_name || (quote.transport_mode === 'air' ? 'شركة طيران معتمدة' : quote.transport_mode === 'road' ? 'شركة نقل بري معتمدة' : 'خط ملاحي معتمد'),
-        polCode: rfq?.pol_code || (quote.transport_mode === 'road' ? 'EGSOC' : quote.transport_mode === 'air' ? 'CAI' : 'CNSHA'),
-        polName: rfq?.pol_name || (quote.transport_mode === 'air' ? 'مطار الشحن' : quote.transport_mode === 'road' ? 'الميناء الجاف / موقع الشحن' : 'ميناء الشحن'),
-        podCode: rfq?.pod_code || (quote.transport_mode === 'road' ? 'EGTRD' : quote.transport_mode === 'air' ? 'DXB' : 'EGALY'),
-        podName: rfq?.pod_name || (quote.transport_mode === 'air' ? 'مطار الوصول' : quote.transport_mode === 'road' ? 'الميناء الجاف / موقع الوصول' : 'ميناء الوصول'),
+        shippingLineName:
+          bid?.shipping_line_name ||
+          (quote.transport_mode === 'air'
+            ? 'شركة طيران معتمدة'
+            : quote.transport_mode === 'road'
+              ? 'شركة نقل بري معتمدة'
+              : 'خط ملاحي معتمد'),
+        polCode:
+          rfq?.pol_code ||
+          (quote.transport_mode === 'road' ? 'EGSOC' : quote.transport_mode === 'air' ? 'CAI' : 'CNSHA'),
+        polName:
+          rfq?.pol_name ||
+          (quote.transport_mode === 'air'
+            ? 'مطار الشحن'
+            : quote.transport_mode === 'road'
+              ? 'الميناء الجاف / موقع الشحن'
+              : 'ميناء الشحن'),
+        podCode:
+          rfq?.pod_code ||
+          (quote.transport_mode === 'road' ? 'EGTRD' : quote.transport_mode === 'air' ? 'DXB' : 'EGALY'),
+        podName:
+          rfq?.pod_name ||
+          (quote.transport_mode === 'air'
+            ? 'مطار الوصول'
+            : quote.transport_mode === 'road'
+              ? 'الميناء الجاف / موقع الوصول'
+              : 'ميناء الوصول'),
         bookingNumber: `BKG-${Math.floor(100000 + Math.random() * 900000)}`,
         containers: containersPayload,
         notes: `أمر تشغيل تم تحويله وتفعيله آلياً من عرض السعر ${quote.quotation_number}`,
@@ -709,10 +850,7 @@ export class MaritimeFreightJobsCoreService {
 
   async getJobs(auth: AuthContext, filters?: { status?: string; search?: string; milestone?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let query = this.db
-      .selectFrom('maritime_jobs')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('maritime_jobs').selectAll().where('tenant_id', '=', tenantId);
 
     if (filters?.status && filters.status !== 'all') {
       query = query.where('status', '=', filters.status as any);
@@ -724,14 +862,16 @@ export class MaritimeFreightJobsCoreService {
 
     if (filters?.search) {
       const term = `%${filters.search}%`;
-      query = query.where((eb) => eb.or([
-        eb('job_number', 'ilike', term),
-        eb('customer_name', 'ilike', term),
-        eb('booking_number', 'ilike', term),
-        eb('mbl_number', 'ilike', term),
-        eb('hbl_number', 'ilike', term),
-        eb('vessel_name', 'ilike', term)
-      ]));
+      query = query.where((eb) =>
+        eb.or([
+          eb('job_number', 'ilike', term),
+          eb('customer_name', 'ilike', term),
+          eb('booking_number', 'ilike', term),
+          eb('mbl_number', 'ilike', term),
+          eb('hbl_number', 'ilike', term),
+          eb('vessel_name', 'ilike', term),
+        ]),
+      );
     }
 
     const jobs = await query.orderBy('id', 'desc').execute();

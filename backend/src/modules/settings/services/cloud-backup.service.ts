@@ -27,7 +27,7 @@ export class CloudBackupService {
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
-    private readonly backupService: SettingsBackupService
+    private readonly backupService: SettingsBackupService,
   ) {}
 
   async getCloudConfig(auth: AuthContext): Promise<CloudBackupConfig> {
@@ -54,7 +54,7 @@ export class CloudBackupService {
         accessKeyId: '',
         secretAccessKey: '',
         retentionDays: 30,
-        lastBackupStatus: ''
+        lastBackupStatus: '',
       };
     }
 
@@ -69,7 +69,7 @@ export class CloudBackupService {
         accessKeyId: '',
         secretAccessKey: '',
         retentionDays: 30,
-        lastBackupStatus: ''
+        lastBackupStatus: '',
       };
     }
   }
@@ -79,7 +79,7 @@ export class CloudBackupService {
     const updated: CloudBackupConfig = {
       ...current,
       ...config,
-      retentionDays: Number(config.retentionDays || current.retentionDays || 30)
+      retentionDays: Number(config.retentionDays || current.retentionDays || 30),
     };
 
     const tenantId = String(auth.tenantId);
@@ -91,12 +91,12 @@ export class CloudBackupService {
         tenant_id: tenantId,
         account_id: accountId,
         key: CLOUD_BACKUP_SETTING_KEY,
-        value: JSON.stringify(updated)
+        value: JSON.stringify(updated),
       })
       .onConflict((oc) =>
         oc.columns(['tenant_id', 'key']).doUpdateSet({
-          value: JSON.stringify(updated)
-        })
+          value: JSON.stringify(updated),
+        }),
       )
       .execute();
 
@@ -123,7 +123,7 @@ export class CloudBackupService {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
         body: '',
-        date
+        date,
       });
 
       const res = await fetch(url, { method: 'GET', headers });
@@ -165,16 +165,15 @@ export class CloudBackupService {
       secretAccessKey: config.secretAccessKey,
       body: zipBuffer,
       date,
-      contentType: 'application/zip'
+      contentType: 'application/zip',
     });
 
     try {
       const response = await fetch(url, {
         method: 'PUT',
         headers,
-        body: new Uint8Array(zipBuffer)
+        body: new Uint8Array(zipBuffer),
       });
-
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -183,19 +182,25 @@ export class CloudBackupService {
       }
 
       // Record success
-      await this.saveCloudConfig({
-        lastBackupAt: new Date().toISOString(),
-        lastBackupStatus: 'success',
-        lastError: ''
-      }, auth);
+      await this.saveCloudConfig(
+        {
+          lastBackupAt: new Date().toISOString(),
+          lastBackupStatus: 'success',
+          lastError: '',
+        },
+        auth,
+      );
 
       return url;
     } catch (error: any) {
-      await this.saveCloudConfig({
-        lastBackupAt: new Date().toISOString(),
-        lastBackupStatus: 'failed',
-        lastError: error.message
-      }, auth);
+      await this.saveCloudConfig(
+        {
+          lastBackupAt: new Date().toISOString(),
+          lastBackupStatus: 'failed',
+          lastError: error.message,
+        },
+        auth,
+      );
       throw error;
     }
   }
@@ -206,7 +211,9 @@ export class CloudBackupService {
    * 2. Saves to local disk if configured
    * 3. Uploads to Cloud S3 storage
    */
-  async triggerCloudBackupNow(auth: AuthContext): Promise<{ success: boolean; fileName: string; cloudUrl: string; sizeBytes: number }> {
+  async triggerCloudBackupNow(
+    auth: AuthContext,
+  ): Promise<{ success: boolean; fileName: string; cloudUrl: string; sizeBytes: number }> {
     const { zipBuffer } = await this.backupService.exportBackup(auth);
     const now = new Date();
     const pad = (v: number) => String(v).padStart(2, '0');
@@ -218,7 +225,7 @@ export class CloudBackupService {
       success: true,
       fileName,
       cloudUrl,
-      sizeBytes: zipBuffer.length
+      sizeBytes: zipBuffer.length,
     };
   }
 
@@ -243,13 +250,10 @@ export class CloudBackupService {
     const amzDate = params.date.toISOString().replace(/[:-]|\.\d{3}/g, '');
     const dateStamp = amzDate.substring(0, 8);
 
-    const payloadHash = crypto
-      .createHash('sha256')
-      .update(params.body)
-      .digest('hex');
+    const payloadHash = crypto.createHash('sha256').update(params.body).digest('hex');
 
     const headers: Record<string, string> = {
-      'host': host,
+      host: host,
       'x-amz-date': amzDate,
       'x-amz-content-sha256': payloadHash,
     };
@@ -259,7 +263,7 @@ export class CloudBackupService {
     }
 
     const sortedHeaderKeys = Object.keys(headers).sort();
-    const canonicalHeaders = sortedHeaderKeys.map(k => `${k}:${headers[k]}\n`).join('');
+    const canonicalHeaders = sortedHeaderKeys.map((k) => `${k}:${headers[k]}\n`).join('');
     const signedHeaders = sortedHeaderKeys.join(';');
 
     const canonicalRequest = [
@@ -268,7 +272,7 @@ export class CloudBackupService {
       urlObj.search ? urlObj.search.substring(1) : '',
       canonicalHeaders,
       signedHeaders,
-      payloadHash
+      payloadHash,
     ].join('\n');
 
     const algorithm = 'AWS4-HMAC-SHA256';
@@ -277,7 +281,7 @@ export class CloudBackupService {
       algorithm,
       amzDate,
       credentialScope,
-      crypto.createHash('sha256').update(canonicalRequest).digest('hex')
+      crypto.createHash('sha256').update(canonicalRequest).digest('hex'),
     ].join('\n');
 
     const kDate = crypto.createHmac('sha256', `AWS4${params.secretAccessKey}`).update(dateStamp).digest();
@@ -291,7 +295,7 @@ export class CloudBackupService {
 
     return {
       ...headers,
-      'Authorization': authHeader
+      Authorization: authHeader,
     };
   }
 }

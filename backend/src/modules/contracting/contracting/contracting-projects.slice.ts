@@ -2,12 +2,7 @@ import { Kysely } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { ContractingProjectsService } from '../services/contracting-projects.service';
-import {
-  CreateProjectDto,
-  UpdateProjectDto,
-  MarkTenderLostDto,
-  AwardTenderDto,
-} from '../dto/contracting.dto';
+import { CreateProjectDto, UpdateProjectDto, MarkTenderLostDto, AwardTenderDto } from '../dto/contracting.dto';
 import { ContractingProjectSummary } from '../contracting.types';
 
 export class ContractingProjectsSlice {

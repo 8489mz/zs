@@ -209,7 +209,11 @@ export function calculateProgressiveDelayDeduction(params: ProgressiveDelayParam
 /**
  * Calculates statutory Social Insurance (e.g., GOSI) for both employee and employer.
  */
-export function calculateSocialInsurance(params: SocialInsuranceParams): { employeeShare: number; employerShare: number; insurableWage: number } {
+export function calculateSocialInsurance(params: SocialInsuranceParams): {
+  employeeShare: number;
+  employerShare: number;
+  insurableWage: number;
+} {
   const toMoney = (val: number): number => roundMoney(Number(val || 0), params.minorUnits);
   if (!params.isEnabled || !params.hasEmployeeInsurance) {
     return { employeeShare: 0, employerShare: 0, insurableWage: 0 };
@@ -245,10 +249,15 @@ export function calculateIncomeTax(params: IncomeTaxParams): number {
   let expectedMin = 0;
   for (let i = 0; i < brackets.length; i++) {
     const band = brackets[i];
-    if (!Number.isFinite(band.min) || band.min !== expectedMin
-      || !Number.isFinite(band.rate) || band.rate < 0 || band.rate > 1
-      || (band.max !== null && (!Number.isFinite(band.max) || band.max <= band.min))
-      || (band.max === null && i !== brackets.length - 1)) {
+    if (
+      !Number.isFinite(band.min) ||
+      band.min !== expectedMin ||
+      !Number.isFinite(band.rate) ||
+      band.rate < 0 ||
+      band.rate > 1 ||
+      (band.max !== null && (!Number.isFinite(band.max) || band.max <= band.min)) ||
+      (band.max === null && i !== brackets.length - 1)
+    ) {
       throw new RangeError('Tax brackets must be contiguous, ordered and use decimal rates between zero and one');
     }
     expectedMin = band.max === null ? expectedMin : band.max;
@@ -299,7 +308,9 @@ export function calculateEmployeePayrollLine(input: PayrollLineItemInput): Payro
   // 1. Statutory deductions
   const statutoryTotal = toMoney(employeeSocialInsurance + incomeTax);
   if (!Number.isFinite(grossPay) || !Number.isFinite(statutoryTotal) || statutoryTotal > grossPay) {
-    throw new RangeError(`Payroll employee #${input.employeeId}: statutory deductions exceed gross earnings; fix insurance/tax configuration`);
+    throw new RangeError(
+      `Payroll employee #${input.employeeId}: statutory deductions exceed gross earnings; fix insurance/tax configuration`,
+    );
   }
 
   // 2. Deduction ceiling rule (Labor Law 50% cap or policy cap)
@@ -352,7 +363,7 @@ export function calculateEmployeePayrollLine(input: PayrollLineItemInput): Payro
   }
 
   const totalDeductions = toMoney(
-    statutoryTotal + appliedAttendance + appliedLeave + appliedAsset + appliedOther + appliedLoan
+    statutoryTotal + appliedAttendance + appliedLeave + appliedAsset + appliedOther + appliedLoan,
   );
 
   const netPay = toMoney(Math.max(0, grossPay - totalDeductions));
@@ -398,7 +409,10 @@ export function calculateEmployeePayrollLine(input: PayrollLineItemInput): Payro
  *
  * Assert: Total Debit == Total Credit (down to 0.01 precision).
  */
-export function reconcilePayrollRunJournalTotals(items: PayrollLineItemOutput[], minorUnits: MoneyDigits): PayrollJournalTotals {
+export function reconcilePayrollRunJournalTotals(
+  items: PayrollLineItemOutput[],
+  minorUnits: MoneyDigits,
+): PayrollJournalTotals {
   const toMoney = (val: number): number => roundMoney(Number(val || 0), minorUnits);
   let grossSalariesExpense = 0;
   let employerInsuranceExpense = 0;
@@ -409,7 +423,9 @@ export function reconcilePayrollRunJournalTotals(items: PayrollLineItemOutput[],
   let otherIncomePenaltiesCredit = 0;
 
   for (const item of items) {
-    grossSalariesExpense = toMoney(grossSalariesExpense + item.grossPay - item.attendanceDeduction - item.leaveDeduction - item.otherDeductions);
+    grossSalariesExpense = toMoney(
+      grossSalariesExpense + item.grossPay - item.attendanceDeduction - item.leaveDeduction - item.otherDeductions,
+    );
     employerInsuranceExpense = toMoney(employerInsuranceExpense + item.employerSocialInsurance);
     netPayable = toMoney(netPayable + item.netPay);
     employeeInsuranceTotal = toMoney(employeeInsuranceTotal + item.employeeSocialInsurance);
@@ -424,11 +440,11 @@ export function reconcilePayrollRunJournalTotals(items: PayrollLineItemOutput[],
 
   const totalDebit = toMoney(grossSalariesExpense + employerInsuranceExpense);
   const totalCredit = toMoney(
-    netPayable + socialInsurancePayable + incomeTaxPayable + loanAdvancesCredit + otherIncomePenaltiesCredit
+    netPayable + socialInsurancePayable + incomeTaxPayable + loanAdvancesCredit + otherIncomePenaltiesCredit,
   );
 
   const discrepancy = toMoney(Math.abs(totalDebit - totalCredit));
-  const isBalanced = discrepancy <= 1 / (10 ** minorUnits);
+  const isBalanced = discrepancy <= 1 / 10 ** minorUnits;
 
   return {
     grossSalariesExpense,

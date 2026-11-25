@@ -47,7 +47,9 @@ async function hasPharmacyPrecedence(trx: Trx, productId: number, scope: Scope):
 }
 
 function isExpired(expiry: string | null | undefined, todayIso: string): boolean {
-  const exp = String(expiry || '').trim().slice(0, 10);
+  const exp = String(expiry || '')
+    .trim()
+    .slice(0, 10);
   if (!exp) return false;
   return exp.length === 7 ? exp < todayIso.slice(0, 7) : exp < todayIso;
 }
@@ -116,7 +118,11 @@ export async function moveVanInventoryBatches(
       .forUpdate()
       .execute();
     if (destRows.length > 1) {
-      throw new AppError('تشغيلة وجهة مكررة تحتاج مصالحة قبل نقلها لسيارة التوزيع', 'VAN_BATCH_DESTINATION_DUPLICATE', 409);
+      throw new AppError(
+        'تشغيلة وجهة مكررة تحتاج مصالحة قبل نقلها لسيارة التوزيع',
+        'VAN_BATCH_DESTINATION_DUPLICATE',
+        409,
+      );
     }
     // NULL == NULL merges: both sides normalize to '' before comparing.
     const destExpiry = String(destRows[0]?.expiry_date ?? '').slice(0, 10);
@@ -206,9 +212,7 @@ export async function deductVanSaleInventoryBatches(
     .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
     .where('status', '=', 'active')
     .where('quantity', '>', 0)
-    .where((eb: any) =>
-      eb.or([eb('location_id', '=', vanLocationId), eb('location_id', 'is', null)]),
-    )
+    .where((eb: any) => eb.or([eb('location_id', '=', vanLocationId), eb('location_id', 'is', null)]))
     .orderBy('expiry_date', (ob: any) => ob.asc().nullsLast())
     .orderBy('id', 'asc')
     .forUpdate()
@@ -260,17 +264,30 @@ export async function restoreReturnedInventoryBatches(
   scope: Scope,
 ): Promise<void> {
   const trxAny = trx as any;
-  const allocations = await trxAny.selectFrom('sale_inventory_batch_allocations').selectAll()
-    .where('tenant_id', '=', scope.tenantId).where('sale_id', '=', saleId)
-    .where('sale_item_id', '=', saleItemId).where('product_id', '=', productId)
-    .orderBy('id', 'desc').forUpdate().execute();
+  const allocations = await trxAny
+    .selectFrom('sale_inventory_batch_allocations')
+    .selectAll()
+    .where('tenant_id', '=', scope.tenantId)
+    .where('sale_id', '=', saleId)
+    .where('sale_item_id', '=', saleItemId)
+    .where('product_id', '=', productId)
+    .orderBy('id', 'desc')
+    .forUpdate()
+    .execute();
   if (!allocations.length) {
-    const anyBatch = await trxAny.selectFrom('inventory_batches').select('id')
-      .where('tenant_id', '=', scope.tenantId).where('product_id', '=', productId)
-      .limit(1).executeTakeFirst();
+    const anyBatch = await trxAny
+      .selectFrom('inventory_batches')
+      .select('id')
+      .where('tenant_id', '=', scope.tenantId)
+      .where('product_id', '=', productId)
+      .limit(1)
+      .executeTakeFirst();
     if (anyBatch) {
-      throw new AppError('الفاتورة بلا تخصيص تشغيلة رغم وجود سجل تشغيلات للصنف؛ يلزم مصالحة قبل المرتجع',
-        'INVENTORY_BATCH_RECONCILIATION_REQUIRED', 422);
+      throw new AppError(
+        'الفاتورة بلا تخصيص تشغيلة رغم وجود سجل تشغيلات للصنف؛ يلزم مصالحة قبل المرتجع',
+        'INVENTORY_BATCH_RECONCILIATION_REQUIRED',
+        422,
+      );
     }
     return;
   }
@@ -283,14 +300,24 @@ export async function restoreReturnedInventoryBatches(
     skip = Number((skip - previouslyRestored).toFixed(3));
     const restore = Math.min(Number((sold - previouslyRestored).toFixed(3)), remaining);
     if (restore <= 0) continue;
-    const batch = await trxAny.selectFrom('inventory_batches').select(['id', 'quantity', 'expiry_date'])
-      .where('tenant_id', '=', scope.tenantId).where('id', '=', Number(allocation.inventory_batch_id))
-      .forUpdate().executeTakeFirstOrThrow();
+    const batch = await trxAny
+      .selectFrom('inventory_batches')
+      .select(['id', 'quantity', 'expiry_date'])
+      .where('tenant_id', '=', scope.tenantId)
+      .where('id', '=', Number(allocation.inventory_batch_id))
+      .forUpdate()
+      .executeTakeFirstOrThrow();
     const expired = isExpired(batch.expiry_date, today);
-    await trxAny.updateTable('inventory_batches').set({
-      quantity: Number((Number(batch.quantity) + restore).toFixed(3)),
-      status: expired ? 'expired' : 'active', updated_at: sql`NOW()`,
-    }).where('tenant_id', '=', scope.tenantId).where('id', '=', Number(batch.id)).execute();
+    await trxAny
+      .updateTable('inventory_batches')
+      .set({
+        quantity: Number((Number(batch.quantity) + restore).toFixed(3)),
+        status: expired ? 'expired' : 'active',
+        updated_at: sql`NOW()`,
+      })
+      .where('tenant_id', '=', scope.tenantId)
+      .where('id', '=', Number(batch.id))
+      .execute();
     remaining = Number((remaining - restore).toFixed(3));
     if (remaining <= 0) break;
   }

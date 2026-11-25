@@ -128,7 +128,10 @@ export function parseSubmittedPerDayCash(value: unknown, bookDigits: MoneyDigits
 }
 
 export function sumPerDayCash(days: PerDayCashInput[], bookDigits: MoneyDigits): number {
-  return roundMoney(days.reduce((s, d) => s + Number(d.countedCash || 0), 0), bookDigits);
+  return roundMoney(
+    days.reduce((s, d) => s + Number(d.countedCash || 0), 0),
+    bookDigits,
+  );
 }
 
 /**
@@ -144,8 +147,12 @@ export function cashPortionOfSale(
   bookDigits: MoneyDigits,
 ): number {
   const total = roundMoney(Number(sale.total || 0), bookDigits);
-  const channel = String(sale.paymentChannel || '').trim().toLowerCase();
-  const type = String(sale.paymentType || '').trim().toLowerCase();
+  const channel = String(sale.paymentChannel || '')
+    .trim()
+    .toLowerCase();
+  const type = String(sale.paymentType || '')
+    .trim()
+    .toLowerCase();
   if (channel === 'cash' || type === 'cash') return total;
   if (type === 'split' || channel === 'mixed') {
     return roundMoney(Math.max(0, total - Number(sale.creditOwed || 0)), bookDigits);
@@ -211,7 +218,11 @@ export function bucketTripCashByDay(rows: TripCashRow[], timezone: string, bookD
  * shortfall stays a shortage (variance), an overage stays
  * unallocated — neither invents an invoice.
  */
-export function allocateDayRemittance(bucket: DayBucket, remittedAmount: number, bookDigits: MoneyDigits): DayAllocation[] {
+export function allocateDayRemittance(
+  bucket: DayBucket,
+  remittedAmount: number,
+  bookDigits: MoneyDigits,
+): DayAllocation[] {
   const out: DayAllocation[] = [];
   let remaining = roundMoney(Number(remittedAmount || 0), bookDigits);
   if (remaining <= 0) return out;

@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { RequirePermissions, RequireAnyPermission } from '../../core/auth/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
@@ -37,13 +50,10 @@ import {
 import { HrService } from './hr.service';
 import { RequireFeature } from '../../core/auth/decorators/feature.decorator';
 
-
-
 @Controller('api/hr')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('hr')
 export class HrController {
-
   @Get('settings/payroll-policies')
   @RequireAnyPermission('hrPayrollView', 'hrPayrollManage', 'hrSalaryView', 'hrSalaryManage')
   async getPayrollPolicies(@Req() req: RequestWithAuth) {
@@ -63,13 +73,29 @@ export class HrController {
   constructor(private readonly hr: HrService) {}
 
   @Get('summary')
-  @RequireAnyPermission('hr', 'hrEmployees', 'hrAttendance', 'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove')
+  @RequireAnyPermission(
+    'hr',
+    'hrEmployees',
+    'hrAttendance',
+    'hrLoans',
+    'hrPayrollView',
+    'hrPayrollManage',
+    'hrPayrollApprove',
+  )
   summary(@Req() req: RequestWithAuth) {
     return this.hr.summary(req.authContext!);
   }
 
   @Get('reports/summary')
-  @RequireAnyPermission('hrEmployees', 'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView', 'hrSalaryManage')
+  @RequireAnyPermission(
+    'hrEmployees',
+    'hrLoans',
+    'hrPayrollView',
+    'hrPayrollManage',
+    'hrPayrollApprove',
+    'hrSalaryView',
+    'hrSalaryManage',
+  )
   reportsSummary(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth) {
     return this.hr.reportsSummary(query, req.authContext!);
   }
@@ -106,13 +132,21 @@ export class HrController {
 
   @Post('attendance/exceptions/:id/approve')
   @RequirePermissions('hrAttendance')
-  approveAttendanceException(@Param('id', ParseIntPipe) id: number, @Body() payload: DecideAttendanceExceptionDto, @Req() req: RequestWithAuth) {
+  approveAttendanceException(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: DecideAttendanceExceptionDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.decideAttendanceException(id, 'approved', payload, req.authContext!);
   }
 
   @Post('attendance/exceptions/:id/skip')
   @RequirePermissions('hrAttendance')
-  skipAttendanceException(@Param('id', ParseIntPipe) id: number, @Body() payload: DecideAttendanceExceptionDto, @Req() req: RequestWithAuth) {
+  skipAttendanceException(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: DecideAttendanceExceptionDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.decideAttendanceException(id, 'skipped', payload, req.authContext!);
   }
 
@@ -130,7 +164,11 @@ export class HrController {
 
   @Put('leave-types/:id')
   @RequirePermissions('hrEmployees')
-  updateLeaveType(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertLeaveTypeDto, @Req() req: RequestWithAuth) {
+  updateLeaveType(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertLeaveTypeDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertLeaveType(id, payload, req.authContext!);
   }
 
@@ -148,19 +186,31 @@ export class HrController {
 
   @Post('leave-requests/:id/approve')
   @RequirePermissions('hrEmployees')
-  approveLeaveRequest(@Param('id', ParseIntPipe) id: number, @Body() payload: DecideLeaveRequestDto, @Req() req: RequestWithAuth) {
+  approveLeaveRequest(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: DecideLeaveRequestDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.approveLeaveRequest(id, payload, req.authContext!);
   }
 
   @Post('leave-requests/:id/reject')
   @RequirePermissions('hrEmployees')
-  rejectLeaveRequest(@Param('id', ParseIntPipe) id: number, @Body() payload: DecideLeaveRequestDto, @Req() req: RequestWithAuth) {
+  rejectLeaveRequest(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: DecideLeaveRequestDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.rejectLeaveRequest(id, payload, req.authContext!);
   }
 
   @Post('leave-requests/:id/cancel')
   @RequirePermissions('hrEmployees')
-  cancelLeaveRequest(@Param('id', ParseIntPipe) id: number, @Body() payload: DecideLeaveRequestDto, @Req() req: RequestWithAuth) {
+  cancelLeaveRequest(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: DecideLeaveRequestDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.cancelLeaveRequest(id, payload, req.authContext!);
   }
 
@@ -178,31 +228,51 @@ export class HrController {
 
   @Put('assets/:id')
   @RequirePermissions('hrEmployees')
-  updateEmployeeAsset(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertEmployeeAssetDto, @Req() req: RequestWithAuth) {
+  updateEmployeeAsset(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertEmployeeAssetDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertEmployeeAsset(id, payload, req.authContext!);
   }
 
   @Post('assets/:id/return')
   @RequirePermissions('hrEmployees')
-  returnEmployeeAsset(@Param('id', ParseIntPipe) id: number, @Body() payload: EmployeeAssetActionDto, @Req() req: RequestWithAuth) {
+  returnEmployeeAsset(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: EmployeeAssetActionDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.returnEmployeeAsset(id, payload, req.authContext!);
   }
 
   @Post('assets/:id/lost')
   @RequirePermissions('hrEmployees')
-  markEmployeeAssetLost(@Param('id', ParseIntPipe) id: number, @Body() payload: EmployeeAssetActionDto, @Req() req: RequestWithAuth) {
+  markEmployeeAssetLost(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: EmployeeAssetActionDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.markEmployeeAssetLost(id, payload, req.authContext!);
   }
 
   @Post('assets/:id/damaged')
   @RequirePermissions('hrEmployees')
-  markEmployeeAssetDamaged(@Param('id', ParseIntPipe) id: number, @Body() payload: EmployeeAssetActionDto, @Req() req: RequestWithAuth) {
+  markEmployeeAssetDamaged(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: EmployeeAssetActionDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.markEmployeeAssetDamaged(id, payload, req.authContext!);
   }
 
   @Post('assets/:id/cancel')
   @RequirePermissions('hrEmployees')
-  cancelEmployeeAsset(@Param('id', ParseIntPipe) id: number, @Body() payload: EmployeeAssetActionDto, @Req() req: RequestWithAuth) {
+  cancelEmployeeAsset(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: EmployeeAssetActionDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.cancelEmployeeAsset(id, payload, req.authContext!);
   }
 
@@ -280,25 +350,41 @@ export class HrController {
 
   @Post('payroll-run-items/:id/pay')
   @RequirePermissions('hrPayrollApprove')
-  payPayrollRunItem(@Param('id', ParseIntPipe) id: number, @Body() payload: PayPayrollItemDto, @Req() req: RequestWithAuth) {
+  payPayrollRunItem(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: PayPayrollItemDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.payPayrollRunItem(id, payload, req.authContext!);
   }
 
   @Post('payroll-runs/:id/wps')
   @RequirePermissions('hrPayrollManage')
-  generatePayrollWps(@Param('id', ParseIntPipe) id: number, @Body() payload: GenerateWpsDto, @Req() req: RequestWithAuth) {
+  generatePayrollWps(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: GenerateWpsDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.generatePayrollWps(id, payload, req.authContext!);
   }
 
   @Patch('payroll-run-items/:id')
   @RequirePermissions('hrPayrollManage')
-  updatePayrollRunItem(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertPayrollItemDto, @Req() req: RequestWithAuth) {
+  updatePayrollRunItem(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertPayrollItemDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.updatePayrollRunItem(id, payload, req.authContext!);
   }
 
   @Post('payroll-run-items/:id/adjustments')
   @RequirePermissions('hrPayrollManage')
-  createPayrollAdjustment(@Param('id', ParseIntPipe) id: number, @Body() payload: CreatePayrollAdjustmentDto, @Req() req: RequestWithAuth) {
+  createPayrollAdjustment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: CreatePayrollAdjustmentDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.createPayrollAdjustment(id, payload, req.authContext!);
   }
 
@@ -309,7 +395,16 @@ export class HrController {
   }
 
   @Get('departments')
-  @RequireAnyPermission('hr', 'hrEmployees', 'hrAttendance', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'settings', 'canManageSettings')
+  @RequireAnyPermission(
+    'hr',
+    'hrEmployees',
+    'hrAttendance',
+    'hrPayrollView',
+    'hrPayrollManage',
+    'hrPayrollApprove',
+    'settings',
+    'canManageSettings',
+  )
   listDepartments(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth) {
     return this.hr.listMasterData('departments', query, req.authContext!);
   }
@@ -322,7 +417,11 @@ export class HrController {
 
   @Put('departments/:id')
   @RequireAnyPermission('hrEmployees', 'settings', 'canManageSettings')
-  updateDepartment(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertHrMasterDataDto, @Req() req: RequestWithAuth) {
+  updateDepartment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertHrMasterDataDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertMasterData('departments', id, payload, req.authContext!);
   }
 
@@ -333,7 +432,14 @@ export class HrController {
   }
 
   @Get('job-titles')
-  @RequireAnyPermission('hrEmployees', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'settings', 'canManageSettings')
+  @RequireAnyPermission(
+    'hrEmployees',
+    'hrPayrollView',
+    'hrPayrollManage',
+    'hrPayrollApprove',
+    'settings',
+    'canManageSettings',
+  )
   listJobTitles(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth) {
     return this.hr.listMasterData('job-titles', query, req.authContext!);
   }
@@ -346,7 +452,11 @@ export class HrController {
 
   @Put('job-titles/:id')
   @RequireAnyPermission('hrEmployees', 'settings', 'canManageSettings')
-  updateJobTitle(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertHrMasterDataDto, @Req() req: RequestWithAuth) {
+  updateJobTitle(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertHrMasterDataDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertMasterData('job-titles', id, payload, req.authContext!);
   }
 
@@ -357,7 +467,14 @@ export class HrController {
   }
 
   @Get('positions')
-  @RequireAnyPermission('hrEmployees', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'settings', 'canManageSettings')
+  @RequireAnyPermission(
+    'hrEmployees',
+    'hrPayrollView',
+    'hrPayrollManage',
+    'hrPayrollApprove',
+    'settings',
+    'canManageSettings',
+  )
   listPositions(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth) {
     return this.hr.listMasterData('positions', query, req.authContext!);
   }
@@ -370,7 +487,11 @@ export class HrController {
 
   @Put('positions/:id')
   @RequireAnyPermission('hrEmployees', 'settings', 'canManageSettings')
-  updatePosition(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertHrMasterDataDto, @Req() req: RequestWithAuth) {
+  updatePosition(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertHrMasterDataDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertMasterData('positions', id, payload, req.authContext!);
   }
 
@@ -398,10 +519,13 @@ export class HrController {
     return this.hr.getEmployeeProfile(id, req.authContext!);
   }
 
-  
   @Get('employees/:id/end-of-service/preview')
   @RequirePermissions('hrEmployees')
-  async getEndOfServicePreview(@Param('id', ParseIntPipe) id: number, @Query('endDate') endDate: string, @Req() req: RequestWithAuth) {
+  async getEndOfServicePreview(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('endDate') endDate: string,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.getEndOfServicePreview(id, endDate, req.authContext!);
   }
 
@@ -415,7 +539,11 @@ export class HrController {
 
   @Put('employees/:id')
   @RequirePermissions('hrEmployees')
-  updateEmployee(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertEmployeeDto, @Req() req: RequestWithAuth) {
+  updateEmployee(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertEmployeeDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertEmployee(id, payload, req.authContext!);
   }
 
@@ -427,13 +555,21 @@ export class HrController {
 
   @Patch('employees/:id/status')
   @RequirePermissions('hrEmployees')
-  updateEmployeeStatus(@Param('id', ParseIntPipe) id: number, @Body() payload: UpdateEmployeeStatusDto, @Req() req: RequestWithAuth) {
+  updateEmployeeStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpdateEmployeeStatusDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.updateEmployeeStatus(id, payload.status, req.authContext!);
   }
 
   @Put('employees/:id/credentials')
   @RequirePermissions('hrEmployees')
-  updateEmployeeCredentials(@Param('id', ParseIntPipe) id: number, @Body() payload: UpdateEmployeeCredentialsDto, @Req() req: RequestWithAuth) {
+  updateEmployeeCredentials(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpdateEmployeeCredentialsDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.updateEmployeeCredentials(id, payload, req.authContext!);
   }
 
@@ -468,13 +604,22 @@ export class HrController {
 
   @Post('employees/:employeeId/contacts')
   @RequirePermissions('hrEmployees')
-  createContact(@Param('employeeId', ParseIntPipe) employeeId: number, @Body() payload: UpsertEmployeeContactDto, @Req() req: RequestWithAuth) {
+  createContact(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() payload: UpsertEmployeeContactDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertContact(employeeId, null, payload, req.authContext!);
   }
 
   @Put('employees/:employeeId/contacts/:id')
   @RequirePermissions('hrEmployees')
-  updateContact(@Param('employeeId', ParseIntPipe) employeeId: number, @Param('id', ParseIntPipe) id: number, @Body() payload: UpsertEmployeeContactDto, @Req() req: RequestWithAuth) {
+  updateContact(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertEmployeeContactDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertContact(employeeId, id, payload, req.authContext!);
   }
 
@@ -486,13 +631,22 @@ export class HrController {
 
   @Post('employees/:employeeId/documents')
   @RequirePermissions('hrEmployees')
-  createDocument(@Param('employeeId', ParseIntPipe) employeeId: number, @Body() payload: UpsertEmployeeDocumentDto, @Req() req: RequestWithAuth) {
+  createDocument(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() payload: UpsertEmployeeDocumentDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertDocument(employeeId, null, payload, req.authContext!);
   }
 
   @Put('employees/:employeeId/documents/:id')
   @RequirePermissions('hrEmployees')
-  updateDocument(@Param('employeeId', ParseIntPipe) employeeId: number, @Param('id', ParseIntPipe) id: number, @Body() payload: UpsertEmployeeDocumentDto, @Req() req: RequestWithAuth) {
+  updateDocument(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertEmployeeDocumentDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertDocument(employeeId, id, payload, req.authContext!);
   }
 
@@ -504,13 +658,22 @@ export class HrController {
 
   @Post('employees/:employeeId/contracts')
   @RequirePermissions('hrContracts', 'hrSalaryManage')
-  createContract(@Param('employeeId', ParseIntPipe) employeeId: number, @Body() payload: UpsertEmploymentContractDto, @Req() req: RequestWithAuth) {
+  createContract(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() payload: UpsertEmploymentContractDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertContract(employeeId, null, payload, req.authContext!);
   }
 
   @Put('employees/:employeeId/contracts/:id')
   @RequirePermissions('hrContracts', 'hrSalaryManage')
-  updateContract(@Param('employeeId', ParseIntPipe) employeeId: number, @Param('id', ParseIntPipe) id: number, @Body() payload: UpsertEmploymentContractDto, @Req() req: RequestWithAuth) {
+  updateContract(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertEmploymentContractDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertContract(employeeId, id, payload, req.authContext!);
   }
 
@@ -522,13 +685,22 @@ export class HrController {
 
   @Post('employees/:employeeId/compensation')
   @RequirePermissions('hrContracts', 'hrSalaryManage')
-  createCompensation(@Param('employeeId', ParseIntPipe) employeeId: number, @Body() payload: UpsertCompensationPackageDto, @Req() req: RequestWithAuth) {
+  createCompensation(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() payload: UpsertCompensationPackageDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertCompensation(employeeId, null, payload, req.authContext!);
   }
 
   @Put('employees/:employeeId/compensation/:id')
   @RequirePermissions('hrContracts', 'hrSalaryManage')
-  updateCompensation(@Param('employeeId', ParseIntPipe) employeeId: number, @Param('id', ParseIntPipe) id: number, @Body() payload: UpsertCompensationPackageDto, @Req() req: RequestWithAuth) {
+  updateCompensation(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertCompensationPackageDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.upsertCompensation(employeeId, id, payload, req.authContext!);
   }
 
@@ -546,7 +718,11 @@ export class HrController {
 
   @Put('loans/:id')
   @RequirePermissions('hrLoans')
-  updateLoan(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertEmployeeLoanDto, @Req() req: RequestWithAuth) {
+  updateLoan(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertEmployeeLoanDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.hr.updateLoan(id, payload, req.authContext!);
   }
 
@@ -585,7 +761,15 @@ export class HrController {
   }
 
   @Get('holidays')
-  @RequireAnyPermission('hrEmployees', 'hrAttendance', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'settings', 'canManageSettings')
+  @RequireAnyPermission(
+    'hrEmployees',
+    'hrAttendance',
+    'hrPayrollView',
+    'hrPayrollManage',
+    'hrPayrollApprove',
+    'settings',
+    'canManageSettings',
+  )
   listHolidays(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth) {
     return this.hr.listHolidays(query, req.authContext!);
   }
@@ -608,4 +792,3 @@ export class HrController {
     return this.hr.deleteHoliday(id, req.authContext!);
   }
 }
-

@@ -144,7 +144,12 @@ export class ServicesService {
   private async assertServiceNotInClosedShift(
     db: Kysely<Database>,
     serviceId: number,
-    serviceRow: { branch_id?: number | string | null; location_id?: number | string | null; created_by?: number | string | null; created_at?: Date | string | null },
+    serviceRow: {
+      branch_id?: number | string | null;
+      location_id?: number | string | null;
+      created_by?: number | string | null;
+      created_at?: Date | string | null;
+    },
     operation: 'update' | 'delete',
     auth: AuthContext,
   ): Promise<void> {
@@ -182,22 +187,28 @@ export class ServicesService {
     `.execute(db);
     if (found.rows?.length) {
       throw new AppError(
-        operation === 'delete'
-          ? 'لا يمكن حذف خدمة تنتمي إلى وردية مغلقة'
-          : 'لا يمكن تعديل خدمة تنتمي إلى وردية مغلقة',
+        operation === 'delete' ? 'لا يمكن حذف خدمة تنتمي إلى وردية مغلقة' : 'لا يمكن تعديل خدمة تنتمي إلى وردية مغلقة',
         'SERVICE_SHIFT_CLOSED',
         422,
       );
     }
   }
 
-  async listServices(query: Record<string, unknown>, auth: AuthContext, db: Kysely<Database> = this.db): Promise<Record<string, unknown>> {
+  async listServices(
+    query: Record<string, unknown>,
+    auth: AuthContext,
+    db: Kysely<Database> = this.db,
+  ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     // Book digits once per call; `db` is the transaction handle when the
     // caller runs inside runInTransaction, never the pool inside a txn.
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(db, scope.tenantId));
-    const search = String(query.search || '').trim().toLowerCase();
-    const filter = String(query.filter || 'all').trim().toLowerCase();
+    const search = String(query.search || '')
+      .trim()
+      .toLowerCase();
+    const filter = String(query.filter || 'all')
+      .trim()
+      .toLowerCase();
     // INV-SERVICES-TODAY-COUNT: "today" is the TENANT-local day, and a row
     // counts when its service_date falls on that day. The old code compared
     // String(row.serviceDate).slice(0, 10) with a UTC ISO date -- but
@@ -218,7 +229,14 @@ export class ServicesService {
     // page 1 of 20; `db` stays the transaction handle throughout.
     const channel = sql<string>`CASE WHEN btrim(coalesce(s.payment_channel, '')) = 'card' THEN 'card' ELSE 'cash' END`;
     const where = sql<boolean>`s.tenant_id = ${scope.tenantId}${filter === 'today' ? sql` AND (s.service_date AT TIME ZONE ${businessTz})::date = ${today}::date` : sql``}${filter === 'high' ? sql` AND s.amount >= 100` : sql``}${filter === 'notes' ? sql` AND btrim(coalesce(s.notes, ''), E' \t\n\r\f\v') <> ''` : sql``}${search ? sql` AND (strpos(lower(coalesce(s.name, '')), ${search}) > 0 OR strpos(lower(coalesce(s.notes, '')), ${search}) > 0 OR strpos(lower(coalesce(u.username, '')), ${search}) > 0 OR strpos(lower(coalesce(b.name, '')), ${search}) > 0 OR strpos(lower(coalesce(l.name, '')), ${search}) > 0)` : sql``}`;
-    const counts = await sql<{ total_items: string; total_amount: string; cash_amount: string; card_amount: string; today_count: string; max_amount: string | null }>`
+    const counts = await sql<{
+      total_items: string;
+      total_amount: string;
+      cash_amount: string;
+      card_amount: string;
+      today_count: string;
+      max_amount: string | null;
+    }>`
       SELECT COUNT(*) AS total_items,
         coalesce(SUM(s.amount), 0) AS total_amount,
         coalesce(SUM(s.amount) FILTER (WHERE ${channel} = 'cash'), 0) AS cash_amount,
@@ -347,15 +365,26 @@ export class ServicesService {
       capture.serviceId = Number(inserted.rows?.[0]?.id || 0);
       if (!(capture.serviceId > 0)) throw new AppError('Service could not be saved', 'SERVICE_SAVE_FAILED', 400);
 
-      capture.treasuryTransactionId = await this.syncServiceTreasuryTransaction(trx, capture.serviceId, normalizedService, auth, financeScope);
+      capture.treasuryTransactionId = await this.syncServiceTreasuryTransaction(
+        trx,
+        capture.serviceId,
+        normalizedService,
+        auth,
+        financeScope,
+      );
       capture.postingResult = await this.accountingPosting.postService(trx, capture.serviceId, 1, auth);
 
       const responsePayload = { ok: true, ...(await this.listServices({}, auth, trx)) };
       if (idemCtx && idemCtx.idempotencyKey && idemCtx.operationType) {
         await this.idempotency.commitOperation(
           trx,
-          { tenantId: tenantScope.tenantId, accountId: tenantScope.accountId, idempotencyKey: idemCtx.idempotencyKey, operationType: idemCtx.operationType },
-          responsePayload
+          {
+            tenantId: tenantScope.tenantId,
+            accountId: tenantScope.accountId,
+            idempotencyKey: idemCtx.idempotencyKey,
+            operationType: idemCtx.operationType,
+          },
+          responsePayload,
         );
       }
       return responsePayload;
@@ -390,7 +419,15 @@ export class ServicesService {
     };
 
     const finalResponse = await this.tx.runInTransaction(this.db, async (trx) => {
-      const existing = await sql<{ id: number; branch_id?: number | string | null; location_id?: number | string | null; revision: number; created_by?: number | string | null; created_at?: Date | string | null; name?: string | null }>`
+      const existing = await sql<{
+        id: number;
+        branch_id?: number | string | null;
+        location_id?: number | string | null;
+        revision: number;
+        created_by?: number | string | null;
+        created_at?: Date | string | null;
+        name?: string | null;
+      }>`
         select id, branch_id, location_id, revision, created_by, created_at, name
         from services
         where tenant_id = ${tenantScope.tenantId} and id = ${id}
@@ -402,7 +439,10 @@ export class ServicesService {
 
       await this.assertServiceNotInClosedShift(trx, id, existingRow, 'update', auth);
 
-      const financeScope = { branchId: this.toNullableNumber(existingRow.branch_id), locationId: this.toNullableNumber(existingRow.location_id) };
+      const financeScope = {
+        branchId: this.toNullableNumber(existingRow.branch_id),
+        locationId: this.toNullableNumber(existingRow.location_id),
+      };
 
       await this.accountingPosting.reverseService(trx, id, existingRow.revision, auth);
 
@@ -421,8 +461,13 @@ export class ServicesService {
       if (idemCtx && idemCtx.idempotencyKey && idemCtx.operationType) {
         await this.idempotency.commitOperation(
           trx,
-          { tenantId: tenantScope.tenantId, accountId: tenantScope.accountId, idempotencyKey: idemCtx.idempotencyKey, operationType: idemCtx.operationType },
-          responsePayload
+          {
+            tenantId: tenantScope.tenantId,
+            accountId: tenantScope.accountId,
+            idempotencyKey: idemCtx.idempotencyKey,
+            operationType: idemCtx.operationType,
+          },
+          responsePayload,
         );
       }
       return responsePayload;
@@ -441,7 +486,15 @@ export class ServicesService {
     }
 
     const finalResponse = await this.tx.runInTransaction(this.db, async (trx) => {
-      const existing = await sql<{ id: number; revision: number; name?: string | null; branch_id?: number | string | null; location_id?: number | string | null; created_by?: number | string | null; created_at?: Date | string | null }>`
+      const existing = await sql<{
+        id: number;
+        revision: number;
+        name?: string | null;
+        branch_id?: number | string | null;
+        location_id?: number | string | null;
+        created_by?: number | string | null;
+        created_at?: Date | string | null;
+      }>`
         select id, revision, name, branch_id, location_id, created_by, created_at
         from services
         where tenant_id = ${tenantScope.tenantId} and id = ${id}
@@ -466,8 +519,13 @@ export class ServicesService {
       if (idemCtx && idemCtx.idempotencyKey && idemCtx.operationType) {
         await this.idempotency.commitOperation(
           trx,
-          { tenantId: tenantScope.tenantId, accountId: tenantScope.accountId, idempotencyKey: idemCtx.idempotencyKey, operationType: idemCtx.operationType },
-          responsePayload
+          {
+            tenantId: tenantScope.tenantId,
+            accountId: tenantScope.accountId,
+            idempotencyKey: idemCtx.idempotencyKey,
+            operationType: idemCtx.operationType,
+          },
+          responsePayload,
         );
       }
       return responsePayload;

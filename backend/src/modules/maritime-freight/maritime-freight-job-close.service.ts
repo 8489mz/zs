@@ -50,13 +50,32 @@ export interface MaritimeFreightJobCloseDeps {
   db: Kysely<Database>;
   accountingPosting: AccountingPostingService;
   assertJobCanClose: (tenantId: string, jobId: string) => Promise<void>;
-  assertRoadProofOfDelivery: (tenantId: string, jobId: string, bookingNumber: string | null | undefined) => Promise<void>;
-  assertUniqueMasterBl: (tenantId: string, mbl: string | null | undefined, jobId?: string, parentJobId?: string | null, trx?: any) => Promise<void>;
-  syncConsolidationParentTotals: (queryable: any, tenantId: string, parentJobId: string | number) => Promise<{ synced: boolean; grossWeightKg: number; totalCbm: number; packageCount: number }>;
+  assertRoadProofOfDelivery: (
+    tenantId: string,
+    jobId: string,
+    bookingNumber: string | null | undefined,
+  ) => Promise<void>;
+  assertUniqueMasterBl: (
+    tenantId: string,
+    mbl: string | null | undefined,
+    jobId?: string,
+    parentJobId?: string | null,
+    trx?: any,
+  ) => Promise<void>;
+  syncConsolidationParentTotals: (
+    queryable: any,
+    tenantId: string,
+    parentJobId: string | number,
+  ) => Promise<{ synced: boolean; grossWeightKg: number; totalCbm: number; packageCount: number }>;
   getJobById: (auth: AuthContext, id: string) => Promise<any>;
   resolveTenantConfiguredTaxRate: (queryable: Kysely<Database>, tenantId: string) => Promise<unknown>;
   hasPostedCloseJournal: (queryable: any, tenantId: string, sourceType: string, sourceId: number) => Promise<boolean>;
-  resolveMaritimeAccountIdOn: (queryable: any, tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
+  resolveMaritimeAccountIdOn: (
+    queryable: any,
+    tenantId: string,
+    code: string,
+    fallbackCode?: string,
+  ) => Promise<number | null>;
 }
 
 @Injectable()
@@ -64,13 +83,37 @@ export class MaritimeFreightJobCloseService {
   private readonly db: Kysely<Database>;
   private readonly accountingPosting: AccountingPostingService;
   private readonly assertJobCanClose: (tenantId: string, jobId: string) => Promise<void>;
-  private readonly assertRoadProofOfDelivery: (tenantId: string, jobId: string, bookingNumber: string | null | undefined) => Promise<void>;
-  private readonly assertUniqueMasterBl: (tenantId: string, mbl: string | null | undefined, jobId?: string, parentJobId?: string | null, trx?: any) => Promise<void>;
-  private readonly syncConsolidationParentTotals: (queryable: any, tenantId: string, parentJobId: string | number) => Promise<{ synced: boolean; grossWeightKg: number; totalCbm: number; packageCount: number }>;
+  private readonly assertRoadProofOfDelivery: (
+    tenantId: string,
+    jobId: string,
+    bookingNumber: string | null | undefined,
+  ) => Promise<void>;
+  private readonly assertUniqueMasterBl: (
+    tenantId: string,
+    mbl: string | null | undefined,
+    jobId?: string,
+    parentJobId?: string | null,
+    trx?: any,
+  ) => Promise<void>;
+  private readonly syncConsolidationParentTotals: (
+    queryable: any,
+    tenantId: string,
+    parentJobId: string | number,
+  ) => Promise<{ synced: boolean; grossWeightKg: number; totalCbm: number; packageCount: number }>;
   private readonly getJobById: (auth: AuthContext, id: string) => Promise<any>;
   private readonly resolveTenantConfiguredTaxRate: (queryable: Kysely<Database>, tenantId: string) => Promise<unknown>;
-  private readonly hasPostedCloseJournal: (queryable: any, tenantId: string, sourceType: string, sourceId: number) => Promise<boolean>;
-  private readonly resolveMaritimeAccountIdOn: (queryable: any, tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
+  private readonly hasPostedCloseJournal: (
+    queryable: any,
+    tenantId: string,
+    sourceType: string,
+    sourceId: number,
+  ) => Promise<boolean>;
+  private readonly resolveMaritimeAccountIdOn: (
+    queryable: any,
+    tenantId: string,
+    code: string,
+    fallbackCode?: string,
+  ) => Promise<number | null>;
 
   constructor(deps: MaritimeFreightJobCloseDeps) {
     this.db = deps.db;
@@ -88,119 +131,130 @@ export class MaritimeFreightJobCloseService {
   async updateJob(auth: AuthContext, id: string, dto: any) {
     const { tenantId } = requireTenantScope(auth);
     return await this.db.transaction().execute(async (trx) => {
-    const existing = await trx
-      .selectFrom('maritime_jobs')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
-      .forUpdate()
-      .executeTakeFirst();
+      const existing = await trx
+        .selectFrom('maritime_jobs')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id as any)
+        .forUpdate()
+        .executeTakeFirst();
 
-    if (!existing) throw new NotFoundException('Shipment Job not found');
-    const closingMode = dto.transportMode || existing.transport_mode;
-    if (dto.status === 'completed' && existing.status !== 'completed') {
-      await this.assertJobCanClose(tenantId, id);
-      if (closingMode === 'air' && existing.milestone_status !== 'DLV') {
-        throw new BadRequestException('إغلاق الشحنة الجوية يتطلب استكمال معالم Cargo iQ حتى التسليم');
+      if (!existing) throw new NotFoundException('Shipment Job not found');
+      const closingMode = dto.transportMode || existing.transport_mode;
+      if (dto.status === 'completed' && existing.status !== 'completed') {
+        await this.assertJobCanClose(tenantId, id);
+        if (closingMode === 'air' && existing.milestone_status !== 'DLV') {
+          throw new BadRequestException('إغلاق الشحنة الجوية يتطلب استكمال معالم Cargo iQ حتى التسليم');
+        }
+        if (closingMode === 'road') {
+          await this.assertRoadProofOfDelivery(tenantId, id, dto.bookingNumber ?? existing.booking_number);
+        }
       }
-      if (closingMode === 'road') {
-        await this.assertRoadProofOfDelivery(tenantId, id, dto.bookingNumber ?? existing.booking_number);
+      if (dto.mblNumber !== undefined) {
+        if (dto.mblNumber?.trim()) {
+          await sql`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${dto.mblNumber.trim().toUpperCase()}))`.execute(
+            trx,
+          );
+        }
+        await this.assertUniqueMasterBl(tenantId, dto.mblNumber, id, existing.parent_job_id, trx);
       }
-    }
-    if (dto.mblNumber !== undefined) {
-      if (dto.mblNumber?.trim()) {
-        await sql`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${dto.mblNumber.trim().toUpperCase()}))`.execute(trx);
+
+      const updatePayload: any = {
+        updated_at: sql`NOW()`,
+      };
+
+      const transportMode = dto.transportMode || existing.transport_mode;
+      if (dto.transportMode !== undefined) updatePayload.transport_mode = dto.transportMode;
+      if (dto.airCargoType !== undefined) updatePayload.air_cargo_type = dto.airCargoType || null;
+      if (dto.flightNumber !== undefined) updatePayload.flight_number = dto.flightNumber || null;
+      if (dto.flightDate !== undefined) updatePayload.flight_date = dto.flightDate || null;
+
+      if (transportMode === 'air' && dto.mawbNumber) {
+        const mawbValidation = validateIataAwbNumber(dto.mawbNumber);
+        if (!mawbValidation.valid) {
+          throw new BadRequestException(mawbValidation.error);
+        }
+        updatePayload.mawb_number = mawbValidation.formattedAwb || dto.mawbNumber;
+      } else if (dto.mawbNumber !== undefined) {
+        updatePayload.mawb_number = dto.mawbNumber || null;
       }
-      await this.assertUniqueMasterBl(tenantId, dto.mblNumber, id, existing.parent_job_id, trx);
-    }
 
-    const updatePayload: any = {
-      updated_at: sql`NOW()`,
-    };
+      if (dto.hawbNumber !== undefined) updatePayload.hawb_number = dto.hawbNumber || null;
 
-    const transportMode = dto.transportMode || existing.transport_mode;
-    if (dto.transportMode !== undefined) updatePayload.transport_mode = dto.transportMode;
-    if (dto.airCargoType !== undefined) updatePayload.air_cargo_type = dto.airCargoType || null;
-    if (dto.flightNumber !== undefined) updatePayload.flight_number = dto.flightNumber || null;
-    if (dto.flightDate !== undefined) updatePayload.flight_date = dto.flightDate || null;
+      const grossWeightKg =
+        dto.grossWeightKg !== undefined ? Number(dto.grossWeightKg || 0) : Number(existing.gross_weight_kg || 0);
+      const totalCbm = dto.totalCbm !== undefined ? Number(dto.totalCbm || 0) : Number(existing.total_cbm || 0);
+      let volumetricWeightKg =
+        dto.volumetricWeightKg !== undefined
+          ? Number(dto.volumetricWeightKg || 0)
+          : Number(existing.volumetric_weight_kg || 0);
+      let chargeableWeightKg =
+        dto.chargeableWeightKg !== undefined
+          ? Number(dto.chargeableWeightKg || 0)
+          : Number(existing.chargeable_weight_kg || 0);
 
-    if (transportMode === 'air' && dto.mawbNumber) {
-      const mawbValidation = validateIataAwbNumber(dto.mawbNumber);
-      if (!mawbValidation.valid) {
-        throw new BadRequestException(mawbValidation.error);
+      if (transportMode === 'air' && (grossWeightKg > 0 || totalCbm > 0)) {
+        const airCalc = calculateAirChargeableWeight({ grossWeightKg, cbm: totalCbm });
+        volumetricWeightKg = Math.max(volumetricWeightKg, airCalc.volumetricWeightKg);
+        chargeableWeightKg = Math.max(chargeableWeightKg, airCalc.chargeableWeightKg);
       }
-      updatePayload.mawb_number = mawbValidation.formattedAwb || dto.mawbNumber;
-    } else if (dto.mawbNumber !== undefined) {
-      updatePayload.mawb_number = dto.mawbNumber || null;
-    }
 
-    if (dto.hawbNumber !== undefined) updatePayload.hawb_number = dto.hawbNumber || null;
+      if (dto.grossWeightKg !== undefined) updatePayload.gross_weight_kg = grossWeightKg;
+      if (dto.volumetricWeightKg !== undefined || (transportMode === 'air' && volumetricWeightKg > 0))
+        updatePayload.volumetric_weight_kg = volumetricWeightKg;
+      if (dto.chargeableWeightKg !== undefined || (transportMode === 'air' && chargeableWeightKg > 0))
+        updatePayload.chargeable_weight_kg = chargeableWeightKg;
+      if (dto.totalCbm !== undefined) updatePayload.total_cbm = totalCbm;
+      if (dto.packageCount !== undefined) updatePayload.package_count = Number(dto.packageCount || 0);
+      if (dto.status !== undefined) updatePayload.status = dto.status;
+      if (dto.vesselName !== undefined) updatePayload.vessel_name = dto.vesselName || null;
+      if (dto.voyageNumber !== undefined) updatePayload.voyage_number = dto.voyageNumber || null;
+      if (dto.bookingNumber !== undefined) updatePayload.booking_number = dto.bookingNumber || null;
+      if (dto.polCode !== undefined) updatePayload.pol_code = dto.polCode;
+      if (dto.polName !== undefined) updatePayload.pol_name = dto.polName;
+      if (dto.podCode !== undefined) updatePayload.pod_code = dto.podCode;
+      if (dto.podName !== undefined) updatePayload.pod_name = dto.podName;
+      if (dto.etd !== undefined) updatePayload.etd = dto.etd || null;
+      if (dto.eta !== undefined) updatePayload.eta = dto.eta || null;
+      if (dto.portCutOff !== undefined) updatePayload.port_cut_off = dto.portCutOff || null;
+      if (dto.blType !== undefined) updatePayload.bl_type = dto.blType;
+      if (dto.mblNumber !== undefined) updatePayload.mbl_number = dto.mblNumber?.trim().toUpperCase() || null;
+      if (dto.hblNumber !== undefined) updatePayload.hbl_number = dto.hblNumber || null;
+      if (dto.shipperDetails !== undefined) updatePayload.shipper_details = dto.shipperDetails || null;
+      if (dto.consigneeDetails !== undefined) updatePayload.consignee_details = dto.consigneeDetails || null;
+      if (dto.notifyParty !== undefined) updatePayload.notify_party = dto.notifyParty || null;
+      if (dto.shippingLineId !== undefined) updatePayload.shipping_line_id = dto.shippingLineId || null;
+      if (dto.shippingLineName !== undefined) updatePayload.shipping_line_name = dto.shippingLineName;
+      if (dto.notes !== undefined) updatePayload.notes = dto.notes || null;
 
-    const grossWeightKg = dto.grossWeightKg !== undefined ? Number(dto.grossWeightKg || 0) : Number(existing.gross_weight_kg || 0);
-    const totalCbm = dto.totalCbm !== undefined ? Number(dto.totalCbm || 0) : Number(existing.total_cbm || 0);
-    let volumetricWeightKg = dto.volumetricWeightKg !== undefined ? Number(dto.volumetricWeightKg || 0) : Number(existing.volumetric_weight_kg || 0);
-    let chargeableWeightKg = dto.chargeableWeightKg !== undefined ? Number(dto.chargeableWeightKg || 0) : Number(existing.chargeable_weight_kg || 0);
+      const [updatedJob] = await trx
+        .updateTable('maritime_jobs')
+        .set(updatePayload)
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id as any)
+        .returningAll()
+        .execute();
 
-    if (transportMode === 'air' && (grossWeightKg > 0 || totalCbm > 0)) {
-      const airCalc = calculateAirChargeableWeight({ grossWeightKg, cbm: totalCbm });
-      volumetricWeightKg = Math.max(volumetricWeightKg, airCalc.volumetricWeightKg);
-      chargeableWeightKg = Math.max(chargeableWeightKg, airCalc.chargeableWeightKg);
-    }
+      // INV-MARITIME-STORED-MONEY-POST-AT-CLOSE: closing the job
+      // posts its stored money in the same transaction, so a failed
+      // posting rolls the close back with it. A re-close of an
+      // already-completed job re-runs the (idempotent) posting, so
+      // a RETN-completed job can still post here as the recovery
+      // path when the milestone path failed.
+      if (dto.status === 'completed') {
+        await this.postStoredMoneyAtClose(trx, tenantId, id, auth);
+      }
 
-    if (dto.grossWeightKg !== undefined) updatePayload.gross_weight_kg = grossWeightKg;
-    if (dto.volumetricWeightKg !== undefined || (transportMode === 'air' && volumetricWeightKg > 0)) updatePayload.volumetric_weight_kg = volumetricWeightKg;
-    if (dto.chargeableWeightKg !== undefined || (transportMode === 'air' && chargeableWeightKg > 0)) updatePayload.chargeable_weight_kg = chargeableWeightKg;
-    if (dto.totalCbm !== undefined) updatePayload.total_cbm = totalCbm;
-    if (dto.packageCount !== undefined) updatePayload.package_count = Number(dto.packageCount || 0);
-    if (dto.status !== undefined) updatePayload.status = dto.status;
-    if (dto.vesselName !== undefined) updatePayload.vessel_name = dto.vesselName || null;
-    if (dto.voyageNumber !== undefined) updatePayload.voyage_number = dto.voyageNumber || null;
-    if (dto.bookingNumber !== undefined) updatePayload.booking_number = dto.bookingNumber || null;
-    if (dto.polCode !== undefined) updatePayload.pol_code = dto.polCode;
-    if (dto.polName !== undefined) updatePayload.pol_name = dto.polName;
-    if (dto.podCode !== undefined) updatePayload.pod_code = dto.podCode;
-    if (dto.podName !== undefined) updatePayload.pod_name = dto.podName;
-    if (dto.etd !== undefined) updatePayload.etd = dto.etd || null;
-    if (dto.eta !== undefined) updatePayload.eta = dto.eta || null;
-    if (dto.portCutOff !== undefined) updatePayload.port_cut_off = dto.portCutOff || null;
-    if (dto.blType !== undefined) updatePayload.bl_type = dto.blType;
-    if (dto.mblNumber !== undefined) updatePayload.mbl_number = dto.mblNumber?.trim().toUpperCase() || null;
-    if (dto.hblNumber !== undefined) updatePayload.hbl_number = dto.hblNumber || null;
-    if (dto.shipperDetails !== undefined) updatePayload.shipper_details = dto.shipperDetails || null;
-    if (dto.consigneeDetails !== undefined) updatePayload.consignee_details = dto.consigneeDetails || null;
-    if (dto.notifyParty !== undefined) updatePayload.notify_party = dto.notifyParty || null;
-    if (dto.shippingLineId !== undefined) updatePayload.shipping_line_id = dto.shippingLineId || null;
-    if (dto.shippingLineName !== undefined) updatePayload.shipping_line_name = dto.shippingLineName;
-    if (dto.notes !== undefined) updatePayload.notes = dto.notes || null;
+      // INV-MARITIME-CONSOLIDATION-TOTALS-REAL: editing a child
+      // re-derives its parent's totals in the same transaction, so
+      // the parent can never drift from its line items. Editing a
+      // parent directly (no parent_job_id) leaves its totals as
+      // edited until the next child change re-derives them.
+      if ((updatedJob as any)?.parent_job_id) {
+        await this.syncConsolidationParentTotals(trx, tenantId, (updatedJob as any).parent_job_id);
+      }
 
-    const [updatedJob] = await trx
-      .updateTable('maritime_jobs')
-      .set(updatePayload)
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
-      .returningAll()
-      .execute();
-
-    // INV-MARITIME-STORED-MONEY-POST-AT-CLOSE: closing the job
-    // posts its stored money in the same transaction, so a failed
-    // posting rolls the close back with it. A re-close of an
-    // already-completed job re-runs the (idempotent) posting, so
-    // a RETN-completed job can still post here as the recovery
-    // path when the milestone path failed.
-    if (dto.status === 'completed') {
-      await this.postStoredMoneyAtClose(trx, tenantId, id, auth);
-    }
-
-    // INV-MARITIME-CONSOLIDATION-TOTALS-REAL: editing a child
-    // re-derives its parent's totals in the same transaction, so
-    // the parent can never drift from its line items. Editing a
-    // parent directly (no parent_job_id) leaves its totals as
-    // edited until the next child change re-derives them.
-    if ((updatedJob as any)?.parent_job_id) {
-      await this.syncConsolidationParentTotals(trx, tenantId, (updatedJob as any).parent_job_id);
-    }
-
-    return updatedJob;
+      return updatedJob;
     });
   }
 
@@ -286,9 +340,9 @@ export class MaritimeFreightJobCloseService {
       const computeValues = (chg: JobChargeDto) => {
         const cost = Number(chg.costAmount || 0);
         const sell = Number(chg.sellAmount || 0);
-        const profit = Number(chg.profitAmount ?? (sell - cost));
+        const profit = Number(chg.profitAmount ?? sell - cost);
         const taxPct = resolveSaleTaxRate(chg.taxRatePercent, configuredTaxRate);
-        const taxAmt = Number(chg.taxAmount ?? (sell * taxPct / 100));
+        const taxAmt = Number(chg.taxAmount ?? (sell * taxPct) / 100);
         return {
           charge_code: chg.chargeCode || 'CHG',
           charge_name_ar: chg.chargeNameAr || 'رسوم نولون / خدمات',
@@ -344,7 +398,11 @@ export class MaritimeFreightJobCloseService {
           .deleteFrom('maritime_job_charges')
           .where('tenant_id', '=', tenantId)
           .where('job_id', '=', String(jobId))
-          .where('id', 'in', omitted.map((row) => String(row.id)))
+          .where(
+            'id',
+            'in',
+            omitted.map((row) => String(row.id)),
+          )
           .execute();
       }
 
@@ -356,19 +414,23 @@ export class MaritimeFreightJobCloseService {
         .where('is_invoiced', '=', true)
         .execute();
       if (invoicedRows.length > 0) {
-        const posted = await trx.selectFrom('journal_entries as je')
-          .innerJoin('journal_entry_lines as jl', (join: any) => join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id'))
+        const posted = await trx
+          .selectFrom('journal_entries as je')
+          .innerJoin('journal_entry_lines as jl', (join: any) =>
+            join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id'),
+          )
           .select(sql<number>`COALESCE(SUM(jl.credit), 0)`.as('amount'))
-          .where('je.tenant_id', '=', tenantId).where('je.source_id', '=', Number(jobId))
-          .where('je.source_type', '=', 'maritime_job').where('je.status', '=', 'posted')
+          .where('je.tenant_id', '=', tenantId)
+          .where('je.source_id', '=', Number(jobId))
+          .where('je.source_type', '=', 'maritime_job')
+          .where('je.status', '=', 'posted')
           .executeTakeFirst();
         let markedTotal = 0;
         for (const row of invoicedRows) {
           if (Number(row.sell_amount || 0) <= 0) {
             throw new BadRequestException('لا يمكن وسم بند تكلفة مفوتر دون مبلغ بيع للعميل');
           }
-          markedTotal += Number(row.sell_amount) *
-            await resolveFxRate(trx, tenantId, row.currency || 'USD');
+          markedTotal += Number(row.sell_amount) * (await resolveFxRate(trx, tenantId, row.currency || 'USD'));
         }
         if (markedTotal > Number(posted?.amount || 0) + 0.01) {
           throw new BadRequestException('البنود الموسومة مفوترة تتجاوز فواتير العميل المرحلة فعلياً');
@@ -407,9 +469,13 @@ export class MaritimeFreightJobCloseService {
     // through the canonical engine. convertFxAmount is not used:
     // the spread can be negative or zero.
     const baseCurrency = await tenantBaseCurrency(this.db, tenantId);
-    const invoices = await this.db.selectFrom('maritime_carrier_invoices')
-      .select(['currency', 'total_invoiced_amount']).where('tenant_id', '=', tenantId)
-      .where('job_id', '=', String(jobId)).where('journal_entry_id', 'is not', null).execute();
+    const invoices = await this.db
+      .selectFrom('maritime_carrier_invoices')
+      .select(['currency', 'total_invoiced_amount'])
+      .where('tenant_id', '=', tenantId)
+      .where('job_id', '=', String(jobId))
+      .where('journal_entry_id', 'is not', null)
+      .execute();
     const foreignInvoices = invoices.filter((invoice) => invoice.currency.toUpperCase() !== baseCurrency.toUpperCase());
     if (new Set(foreignInvoices.map((invoice) => invoice.currency.toUpperCase())).size > 1) {
       throw new BadRequestException('توجد أكثر من عملة ناقل؛ يلزم احتساب فروق الصرف لكل عملة على حدة');
@@ -445,7 +511,12 @@ export class MaritimeFreightJobCloseService {
    * two accounts and break the revaluation service's own name
    * check on the shared code. A missing parent fails closed.
    */
-  async resolveMaritimeFxOffsetAccountOn(queryable: any, tenantId: string, accountId: string, gain: boolean): Promise<number> {
+  async resolveMaritimeFxOffsetAccountOn(
+    queryable: any,
+    tenantId: string,
+    accountId: string,
+    gain: boolean,
+  ): Promise<number> {
     const code = forexOffsetCode(gain ? 1 : -1);
     const nameEn = gain ? 'Unrealized FX Gains' : 'Unrealized FX Losses';
     const existing = await queryable
@@ -468,7 +539,8 @@ export class MaritimeFreightJobCloseService {
       .where('tenant_id', '=', tenantId)
       .where('code', '=', parentCode)
       .executeTakeFirst();
-    if (!parent) throw new BadRequestException('حساب الإيرادات أو المصروفات الأخرى غير موجود؛ لا يمكن إنشاء حساب فروق العملة.');
+    if (!parent)
+      throw new BadRequestException('حساب الإيرادات أو المصروفات الأخرى غير موجود؛ لا يمكن إنشاء حساب فروق العملة.');
     await queryable
       .insertInto('accounting_accounts')
       .values({
@@ -608,7 +680,10 @@ export class MaritimeFreightJobCloseService {
         forex = { posted: false, amount: spread, reason: 'already posted at an earlier close' };
       } else {
         const payableId = await this.resolveMaritimeAccountIdOn(queryable, tenantId, '2110');
-        if (!payableId) throw new BadRequestException('تعذر ترحيل فرق العملة عند الإغلاق: حساب الذمم الدائنة (2110) غير متاح في شجرة الحسابات.');
+        if (!payableId)
+          throw new BadRequestException(
+            'تعذر ترحيل فرق العملة عند الإغلاق: حساب الذمم الدائنة (2110) غير متاح في شجرة الحسابات.',
+          );
         const gain = spread > 0;
         const offsetId = await this.resolveMaritimeFxOffsetAccountOn(queryable, tenantId, accountId, gain);
         const amount = Math.abs(spread);
@@ -651,7 +726,9 @@ export class MaritimeFreightJobCloseService {
       const expenseId = await this.resolveMaritimeAccountIdOn(queryable, tenantId, '6400', '5100');
       const payableId = await this.resolveMaritimeAccountIdOn(queryable, tenantId, '2110');
       if (!expenseId || !payableId) {
-        throw new BadRequestException('تعذر ترحيل تكلفة النقل البري عند الإغلاق: حساب المصروف (6400/5100) أو الذمم الدائنة (2110) غير متاح.');
+        throw new BadRequestException(
+          'تعذر ترحيل تكلفة النقل البري عند الإغلاق: حساب المصروف (6400/5100) أو الذمم الدائنة (2110) غير متاح.',
+        );
       }
       const entryId = await postCloseJournal(
         'maritime_trucking_close',
@@ -680,14 +757,17 @@ export class MaritimeFreightJobCloseService {
       if (String(policy.status) !== 'active') continue;
       const premium = Number(policy.premium_amount || 0);
       if (!(premium > 0)) continue;
-      if (await this.hasPostedCloseJournal(queryable, tenantId, 'maritime_insurance_close', Number(policy.id))) continue;
+      if (await this.hasPostedCloseJournal(queryable, tenantId, 'maritime_insurance_close', Number(policy.id)))
+        continue;
       const rate = await resolveFxRate(queryable, tenantId, policy.currency || undefined);
       const basePremium = convertFxAmount(premium, rate, digits);
       if (!(basePremium > 0)) continue;
       const expenseId = await this.resolveMaritimeAccountIdOn(queryable, tenantId, '6400', '5100');
       const payableId = await this.resolveMaritimeAccountIdOn(queryable, tenantId, '2110');
       if (!expenseId || !payableId) {
-        throw new BadRequestException('تعذر ترحيل قسط التأمين عند الإغلاق: حساب المصروف (6400/5100) أو الذمم الدائنة (2110) غير متاح.');
+        throw new BadRequestException(
+          'تعذر ترحيل قسط التأمين عند الإغلاق: حساب المصروف (6400/5100) أو الذمم الدائنة (2110) غير متاح.',
+        );
       }
       const entryId = await postCloseJournal(
         'maritime_insurance_close',
@@ -714,7 +794,10 @@ export class MaritimeFreightJobCloseService {
         .where('id', '=', String(jobId) as any)
         .executeTakeFirstOrThrow();
       const newOther = roundMoney(Number(fresh.other_costs_total || 0) + postedCosts, digits);
-      const newNet = roundMoney(Number(fresh.client_invoiced_total || 0) - (Number(fresh.carrier_cost_total || 0) + newOther), digits);
+      const newNet = roundMoney(
+        Number(fresh.client_invoiced_total || 0) - (Number(fresh.carrier_cost_total || 0) + newOther),
+        digits,
+      );
       await queryable
         .updateTable('maritime_jobs')
         .set({ other_costs_total: newOther, net_profit: newNet, updated_at: sql`NOW()` })

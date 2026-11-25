@@ -54,7 +54,7 @@ export class ListFieldReturnsSlice {
     return rows.map((r: any) => ({
       ...r,
       totalAmount: Number(r.totalAmount || 0),
-      items: typeof r.itemsJson === 'string' ? JSON.parse(r.itemsJson) : (r.itemsJson || []),
+      items: typeof r.itemsJson === 'string' ? JSON.parse(r.itemsJson) : r.itemsJson || [],
     }));
   }
 }

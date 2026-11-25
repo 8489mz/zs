@@ -51,11 +51,7 @@ export class ContractingFieldController {
   }
 
   @Put('subcontractors/:id')
-  async updateSubcontractor(
-    @Param('id') id: string,
-    @Body() dto: UpdateSubcontractorDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async updateSubcontractor(@Param('id') id: string, @Body() dto: UpdateSubcontractorDto, @Req() req: RequestWithAuth) {
     return this.contractingService.updateSubcontractor(req.authContext!, Number(id), dto);
   }
 
@@ -80,10 +76,7 @@ export class ContractingFieldController {
   }
 
   @Post('subcontractors/payments')
-  async createSubcontractorPayment(
-    @Body() dto: CreateSubcontractorPaymentDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async createSubcontractorPayment(@Body() dto: CreateSubcontractorPaymentDto, @Req() req: RequestWithAuth) {
     return this.contractingService.createSubcontractorPayment(req.authContext!, dto);
   }
 
@@ -115,20 +108,12 @@ export class ContractingFieldController {
   }
 
   @Post('projects/:projectId/rfis')
-  async createRfi(
-    @Param('projectId') projectId: string,
-    @Body() dto: CreateRfiDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async createRfi(@Param('projectId') projectId: string, @Body() dto: CreateRfiDto, @Req() req: RequestWithAuth) {
     return this.contractingService.createRfi(req.authContext!, projectId, dto);
   }
 
   @Put('rfis/:id/answer')
-  async answerRfi(
-    @Param('id') id: string,
-    @Body() dto: AnswerRfiDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async answerRfi(@Param('id') id: string, @Body() dto: AnswerRfiDto, @Req() req: RequestWithAuth) {
     return this.contractingService.answerRfi(req.authContext!, id, dto);
   }
 
@@ -151,11 +136,7 @@ export class ContractingFieldController {
   }
 
   @Put('tasks/:id')
-  async updateScheduleTask(
-    @Param('id') id: string,
-    @Body() dto: UpdateScheduleTaskDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async updateScheduleTask(@Param('id') id: string, @Body() dto: UpdateScheduleTaskDto, @Req() req: RequestWithAuth) {
     return this.contractingService.updateScheduleTask(req.authContext!, id, dto);
   }
 
@@ -224,5 +205,4 @@ export class ContractingFieldController {
   async deleteMasterPriceItem(@Param('id') id: string, @Req() req: RequestWithAuth) {
     return this.contractingService.deleteMasterPriceItem(req.authContext!, id);
   }
-
 }

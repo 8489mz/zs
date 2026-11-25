@@ -30,11 +30,7 @@ export class ContractingCoreController {
   // --------------------------------------------------------------------------
 
   @Get('projects')
-  async getProjects(
-    @Query('status') status: string,
-    @Query('search') search: string,
-    @Req() req: RequestWithAuth,
-  ) {
+  async getProjects(@Query('status') status: string, @Query('search') search: string, @Req() req: RequestWithAuth) {
     return this.contractingService.getProjects(req.authContext!, { status, search });
   }
 
@@ -49,11 +45,7 @@ export class ContractingCoreController {
   }
 
   @Put('projects/:id')
-  async updateProject(
-    @Param('id') id: string,
-    @Body() dto: UpdateProjectDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async updateProject(@Param('id') id: string, @Body() dto: UpdateProjectDto, @Req() req: RequestWithAuth) {
     return this.contractingService.updateProject(req.authContext!, id, dto);
   }
 
@@ -68,20 +60,12 @@ export class ContractingCoreController {
   }
 
   @Post('projects/:id/mark-lost')
-  async markTenderLost(
-    @Param('id') id: string,
-    @Body() dto: MarkTenderLostDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async markTenderLost(@Param('id') id: string, @Body() dto: MarkTenderLostDto, @Req() req: RequestWithAuth) {
     return this.contractingService.markTenderLost(req.authContext!, id, dto);
   }
 
   @Post('projects/:id/award')
-  async awardTender(
-    @Param('id') id: string,
-    @Body() dto: AwardTenderDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async awardTender(@Param('id') id: string, @Body() dto: AwardTenderDto, @Req() req: RequestWithAuth) {
     return this.contractingService.awardTender(req.authContext!, id, dto);
   }
 
@@ -113,11 +97,7 @@ export class ContractingCoreController {
   }
 
   @Put('boq/:id')
-  async updateBoqItem(
-    @Param('id') id: string,
-    @Body() dto: UpdateBoqItemDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async updateBoqItem(@Param('id') id: string, @Body() dto: UpdateBoqItemDto, @Req() req: RequestWithAuth) {
     return this.contractingService.updateBoqItem(req.authContext!, id, dto);
   }
 
@@ -207,5 +187,4 @@ export class ContractingCoreController {
   ) {
     return this.contractingService.createSubcontract(req.authContext!, projectId, dto);
   }
-
 }

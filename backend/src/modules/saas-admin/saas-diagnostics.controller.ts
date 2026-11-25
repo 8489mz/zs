@@ -48,10 +48,7 @@ export class SaasDiagnosticsController {
       limits: { fileSize: 30 * 1024 * 1024 }, // 30MB limit
     }),
   )
-  async uploadDiagnosticBundle(
-    @UploadedFile() file: Express.Multer.File,
-    @Body() body: UploadDiagnosticDto,
-  ) {
+  async uploadDiagnosticBundle(@UploadedFile() file: Express.Multer.File, @Body() body: UploadDiagnosticDto) {
     if (!file) {
       throw new BadRequestException('ملف التقرير التشخيصي (file) مطلوب');
     }
@@ -81,10 +78,7 @@ export class SaasDiagnosticsController {
    */
   @Get(':id/download')
   @UseGuards(SessionAuthGuard, SuperAdminRoleGuard)
-  async downloadDiagnostic(
-    @Param('id', ParseIntPipe) id: number,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async downloadDiagnostic(@Param('id', ParseIntPipe) id: number, @Res({ passthrough: true }) res: Response) {
     const fileInfo = await this.diagnosticsService.getDiagnosticFile(id);
 
     res.set({

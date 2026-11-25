@@ -26,7 +26,11 @@ export class SaasAdminDeveloper {
     private readonly bound: SaasAdminDeveloperBoundDeps,
   ) {}
 
-  private async syncTenantModuleSettingsForPlan(tenantId: string, planId?: string | null, extraFeatures?: string[]): Promise<void> {
+  private async syncTenantModuleSettingsForPlan(
+    tenantId: string,
+    planId?: string | null,
+    extraFeatures?: string[],
+  ): Promise<void> {
     return this.bound.syncTenantModuleSettingsForPlan(tenantId, planId, extraFeatures);
   }
 
@@ -42,9 +46,9 @@ export class SaasAdminDeveloper {
     const plans = await this.db.selectFrom('plans').selectAll().orderBy('price', 'asc').execute();
     const planFeatures = await this.db.selectFrom('plan_features').selectAll().execute();
 
-    const result = plans.map(p => ({
+    const result = plans.map((p) => ({
       ...p,
-      features: planFeatures.filter(f => f.plan_id === p.id).map(f => f.feature_code)
+      features: planFeatures.filter((f) => f.plan_id === p.id).map((f) => f.feature_code),
     }));
     this.featurePlansCache = { data: result, expiresAt: now + this.CACHE_TTL_MS };
     return result;
@@ -63,17 +67,20 @@ export class SaasAdminDeveloper {
     // Auto-create default tenant if running locally and missing
     if (!tenant && dto.tenantId === 'default') {
       const now = new Date();
-      await this.db.insertInto('tenants').values({
-        id: 'default',
-        slug: 'default',
-        business_name: 'Z-Systems',
-        owner_name: 'Z-Systems',
-        owner_phone: '01018017523',
-        owner_email: '8489mz@gmail.com',
-        status: 'active',
-        trial_starts_at: now,
-        trial_ends_at: new Date(now.getTime() + 3650 * 24 * 60 * 60 * 1000)
-      } as any).execute();
+      await this.db
+        .insertInto('tenants')
+        .values({
+          id: 'default',
+          slug: 'default',
+          business_name: 'Z-Systems',
+          owner_name: 'Z-Systems',
+          owner_phone: '01018017523',
+          owner_email: '8489mz@gmail.com',
+          status: 'active',
+          trial_starts_at: now,
+          trial_ends_at: new Date(now.getTime() + 3650 * 24 * 60 * 60 * 1000),
+        } as any)
+        .execute();
       tenant = { id: 'default', slug: 'default', plan_id: null, extra_features: null };
     }
 
@@ -91,7 +98,12 @@ export class SaasAdminDeveloper {
 
       // Auto-sync the operational module switches for this tenant so newly activated features are immediately enabled!
       const effectivePlanId = dto.planId !== undefined ? (dto.planId === '' ? null : dto.planId) : tenant.plan_id;
-      const effectiveExtra = dto.extraFeatures !== undefined ? dto.extraFeatures : (typeof tenant.extra_features === 'string' ? JSON.parse(tenant.extra_features || '[]') : tenant.extra_features || []);
+      const effectiveExtra =
+        dto.extraFeatures !== undefined
+          ? dto.extraFeatures
+          : typeof tenant.extra_features === 'string'
+            ? JSON.parse(tenant.extra_features || '[]')
+            : tenant.extra_features || [];
       await this.syncTenantModuleSettingsForPlan(tenant.id, effectivePlanId, effectiveExtra);
       if (effectivePlanId) {
         await this.syncTenantSubscriptionPlan(tenant.id, effectivePlanId);
@@ -124,7 +136,9 @@ export class SaasAdminDeveloper {
           { targetTenantId: tenant.id },
         );
       } catch (error) {
-        this.logger.error(`developer plan change for ${tenant.id} was not audited: ${(error as Error)?.message || error}`);
+        this.logger.error(
+          `developer plan change for ${tenant.id} was not audited: ${(error as Error)?.message || error}`,
+        );
       }
     }
 

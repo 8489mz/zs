@@ -60,7 +60,9 @@ export function tripSaleContribution(input: {
 }): TripSaleContribution {
   const total = num(input.total);
   const paid = num(input.paidAmount);
-  const channel = String(input.paymentChannel || '').trim().toLowerCase();
+  const channel = String(input.paymentChannel || '')
+    .trim()
+    .toLowerCase();
   const rows = Array.isArray(input.payments) ? input.payments : [];
 
   if (channel === 'mixed') {
@@ -93,8 +95,12 @@ export function tripSaleContribution(input: {
   const instapay = INSTAPAY_CHANNELS.includes(channel) ? (paid > 0 ? paid : total) : 0;
   const cardTender = channel === 'card' ? paid : 0;
   const walletTender = channel === 'wallet' ? paid : 0;
-  const knownChannel = channel === 'cash' || channel === 'credit' || channel === 'card' || channel === 'wallet'
-    || INSTAPAY_CHANNELS.includes(channel);
+  const knownChannel =
+    channel === 'cash' ||
+    channel === 'credit' ||
+    channel === 'card' ||
+    channel === 'wallet' ||
+    INSTAPAY_CHANNELS.includes(channel);
   const credit = knownChannel
     ? Math.max(0, total - cash - instapay - cardTender - walletTender)
     : Math.max(0, total - paid);

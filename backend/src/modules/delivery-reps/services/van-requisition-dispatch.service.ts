@@ -87,12 +87,7 @@ export class VanRequisitionDispatchService {
     });
 
     if (payload.dispatchImmediately) {
-      const dispatchRes = await this.dispatchRequisition(
-        tenantId,
-        accountId,
-        subRes.requisitionId,
-        userId,
-      );
+      const dispatchRes = await this.dispatchRequisition(tenantId, accountId, subRes.requisitionId, userId);
       return {
         ok: true,
         docNo: subRes.docNo,
@@ -111,7 +106,12 @@ export class VanRequisitionDispatchService {
     };
   }
 
-  async approveAndDispatchRequisition(tenantId: string, accountId: string, requisitionId: number, reviewedByUserId: number) {
+  async approveAndDispatchRequisition(
+    tenantId: string,
+    accountId: string,
+    requisitionId: number,
+    reviewedByUserId: number,
+  ) {
     const req = await this.vanRequisitionsService.getRequisitionForDispatch(tenantId, requisitionId);
 
     // Check if the rep already has an active open trip
@@ -144,16 +144,11 @@ export class VanRequisitionDispatchService {
       isSupplementary = true;
     } else {
       // Open a fresh trip for the rep
-      const tripResult = await this.openTripAndLoad(
-        Number(req.rep_id),
-        tenantId,
-        accountId,
-        {
-          sourceWarehouseId: Number(req.source_warehouse_id),
-          items: req.itemsToLoad,
-          notes: req.notes || `صرف وتحميل بناءً على طلب إذن تحميل #${req.doc_no}`,
-        },
-      );
+      const tripResult = await this.openTripAndLoad(Number(req.rep_id), tenantId, accountId, {
+        sourceWarehouseId: Number(req.source_warehouse_id),
+        items: req.itemsToLoad,
+        notes: req.notes || `صرف وتحميل بناءً على طلب إذن تحميل #${req.doc_no}`,
+      });
       tripId = tripResult.tripId;
     }
 

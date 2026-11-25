@@ -4,9 +4,7 @@ import { normalizeArabicSearch } from '../../../common/utils/arabic-search.util'
 function applySearch(query: any, searchPattern: string | undefined, fields: string[]) {
   if (!searchPattern) return query;
   return query.where((eb: any) =>
-    eb.or(
-      fields.map((field) => eb(sql.raw(`lower(coalesce(${field}, ''))`), 'like', searchPattern)),
-    ),
+    eb.or(fields.map((field) => eb(sql.raw(`lower(coalesce(${field}, ''))`), 'like', searchPattern))),
   );
 }
 
@@ -45,9 +43,7 @@ function applyArabicNormalizedSearch(query: any, searchPattern: string | undefin
   // wildcards as noise, so re-wrap after normalizing.
   const normalizedPattern = `%${normalizeArabicSearch(searchPattern)}%`;
   return query.where((eb: any) =>
-    eb.or(
-      fields.map((field) => eb(sql.raw(normalizeArabicSql(field)), 'like', normalizedPattern)),
-    ),
+    eb.or(fields.map((field) => eb(sql.raw(normalizeArabicSql(field)), 'like', normalizedPattern))),
   );
 }
 
@@ -66,7 +62,14 @@ export function applySignedAmountFilter(query: any, amountColumn: string, filter
 }
 
 export function applyTreasurySearch(query: any, searchPattern: string | undefined) {
-  return applySearch(query, searchPattern, ['t.txn_type', 't.note', 't.reference_type', 'u.username', 'b.name', 'l.name']);
+  return applySearch(query, searchPattern, [
+    't.txn_type',
+    't.note',
+    't.reference_type',
+    'u.username',
+    'b.name',
+    'l.name',
+  ]);
 }
 
 export function applyAuditSearch(query: any, searchPattern: string | undefined) {

@@ -94,7 +94,14 @@ export class VanRequisitionsService {
           .execute();
 
         const requisitionId = Number(inserted.id);
-        const docNo = await generateDailySequenceNumber(trxAny, this.db, 'van_load_requisitions', 'doc_no', 'REQ', tenantId);
+        const docNo = await generateDailySequenceNumber(
+          trxAny,
+          this.db,
+          'van_load_requisitions',
+          'doc_no',
+          'REQ',
+          tenantId,
+        );
         await trxAny
           .updateTable('van_load_requisitions')
           .set({ doc_no: docNo })
@@ -109,7 +116,7 @@ export class VanRequisitionsService {
     // Otherwise (e.g. driver submitted across all warehouses), group items by their source warehouse
     const itemsByWarehouse = new Map<number, typeof payload.items>();
     for (const item of payload.items) {
-      const whId = item.sourceWarehouseId ? Number(item.sourceWarehouseId) : (defaultWhId || 1);
+      const whId = item.sourceWarehouseId ? Number(item.sourceWarehouseId) : defaultWhId || 1;
       const list = itemsByWarehouse.get(whId) || [];
       list.push({ ...item, sourceWarehouseId: whId });
       itemsByWarehouse.set(whId, list);
@@ -142,7 +149,14 @@ export class VanRequisitionsService {
           .execute();
 
         const requisitionId = Number(inserted.id);
-        const docNo = await generateDailySequenceNumber(trxAny, this.db, 'van_load_requisitions', 'doc_no', 'REQ', tenantId);
+        const docNo = await generateDailySequenceNumber(
+          trxAny,
+          this.db,
+          'van_load_requisitions',
+          'doc_no',
+          'REQ',
+          tenantId,
+        );
         await trxAny
           .updateTable('van_load_requisitions')
           .set({ doc_no: docNo })
@@ -211,8 +225,8 @@ export class VanRequisitionsService {
 
     const allProductIds = new Set<number>();
     const parsedRows = rows.map((r: any) => {
-      const req = typeof r.requestedItems === 'string' ? JSON.parse(r.requestedItems) : (r.requestedItems || []);
-      const app = typeof r.approvedItems === 'string' ? JSON.parse(r.approvedItems) : (r.approvedItems || req);
+      const req = typeof r.requestedItems === 'string' ? JSON.parse(r.requestedItems) : r.requestedItems || [];
+      const app = typeof r.approvedItems === 'string' ? JSON.parse(r.approvedItems) : r.approvedItems || req;
       req.forEach((it: any) => allProductIds.add(Number(it.productId)));
       app.forEach((it: any) => allProductIds.add(Number(it.productId)));
       return { ...r, requestedItems: req, approvedItems: app };
@@ -222,7 +236,14 @@ export class VanRequisitionsService {
       const pids = Array.from(allProductIds);
       const prods = await this.anyDb
         .selectFrom('products')
-        .select(['id', 'name', 'barcode', 'retail_price as retailPrice', 'stock_qty as stockQty', 'reserved_qty as reservedQty'])
+        .select([
+          'id',
+          'name',
+          'barcode',
+          'retail_price as retailPrice',
+          'stock_qty as stockQty',
+          'reserved_qty as reservedQty',
+        ])
         .where('id', 'in', pids)
         .where('tenant_id', '=', tenantId)
         .execute();
@@ -237,11 +258,14 @@ export class VanRequisitionsService {
         .orderBy('multiplier', 'desc')
         .execute();
 
-      const unitsMap = new Map<number, {
-        baseUnitName: string;
-        packagingUnit?: { name: string; multiplier: number };
-        isWeight: boolean;
-      }>();
+      const unitsMap = new Map<
+        number,
+        {
+          baseUnitName: string;
+          packagingUnit?: { name: string; multiplier: number };
+          isWeight: boolean;
+        }
+      >();
 
       for (const u of unitRows) {
         const pid = Number(u.product_id);
@@ -269,7 +293,13 @@ export class VanRequisitionsService {
             entry.isWeight = true;
           }
         } else if (mult > 1) {
-          if (!entry.packagingUnit || name.includes('كرتون') || name.includes('صندوق') || name.includes('طرد') || name.includes('شيكارة')) {
+          if (
+            !entry.packagingUnit ||
+            name.includes('كرتون') ||
+            name.includes('صندوق') ||
+            name.includes('طرد') ||
+            name.includes('شيكارة')
+          ) {
             entry.packagingUnit = { name: name || 'كرتونة', multiplier: mult };
           }
         }
@@ -297,9 +327,10 @@ export class VanRequisitionsService {
           const uInfo = unitsMap.get(pid);
           const packUnit = it.packagingUnit || uInfo?.packagingUnit;
           const baseName = it.unitName || uInfo?.baseUnitName || 'قطعة';
-          const isWeight = it.isWeight !== undefined
-            ? Boolean(it.isWeight)
-            : Boolean(uInfo?.isWeight || /كجم|كيلو|جرام|جم|وزن|kg/i.test(p?.name || ''));
+          const isWeight =
+            it.isWeight !== undefined
+              ? Boolean(it.isWeight)
+              : Boolean(uInfo?.isWeight || /كجم|كيلو|جرام|جم|وزن|kg/i.test(p?.name || ''));
 
           // Canonical available at the source warehouse (same function
           // the form and the dispatch pre-check read).
@@ -309,14 +340,16 @@ export class VanRequisitionsService {
           const globalReserved = Number((p as any)?.reservedQty || 0);
           const discrepancy = globalStock - (bal?.locatedSum || 0);
           const unassignedQty = (bal?.unassignedQty || 0) + (discrepancy > 0.001 ? discrepancy : 0);
-          const warehouseAvailQty = computeVanLoadAvailableQty(computeLocationAvailability({
-            locationQty: whBal?.qty || 0,
-            locationReserved: whBal?.reservedQty || 0,
-            unassignedQty,
-            unassignedReserved: bal?.unassignedReserved || 0,
-            globalStock,
-            globalReserved,
-          }));
+          const warehouseAvailQty = computeVanLoadAvailableQty(
+            computeLocationAvailability({
+              locationQty: whBal?.qty || 0,
+              locationReserved: whBal?.reservedQty || 0,
+              unassignedQty,
+              unassignedReserved: bal?.unassignedReserved || 0,
+              globalStock,
+              globalReserved,
+            }),
+          );
 
           let cartons = it.cartons !== undefined ? Number(it.cartons) : undefined;
           let pieces = it.pieces !== undefined ? Number(it.pieces) : undefined;
@@ -418,9 +451,11 @@ export class VanRequisitionsService {
       throw new AppError('طلب التحميل تمت معالجته بالفعل', 'ALREADY_PROCESSED', 400);
     }
 
-    const itemsToLoad = typeof req.approved_items === 'string'
-      ? JSON.parse(req.approved_items)
-      : (req.approved_items || (typeof req.requested_items === 'string' ? JSON.parse(req.requested_items) : req.requested_items));
+    const itemsToLoad =
+      typeof req.approved_items === 'string'
+        ? JSON.parse(req.approved_items)
+        : req.approved_items ||
+          (typeof req.requested_items === 'string' ? JSON.parse(req.requested_items) : req.requested_items);
 
     return {
       ...req,
@@ -454,7 +489,12 @@ export class VanRequisitionsService {
     return { ok: true, requisitionId, tripId };
   }
 
-  async rejectLoadRequisition(tenantId: string, requisitionId: number, rejectionReason: string, reviewedByUserId: number) {
+  async rejectLoadRequisition(
+    tenantId: string,
+    requisitionId: number,
+    rejectionReason: string,
+    reviewedByUserId: number,
+  ) {
     const req = await this.anyDb
       .selectFrom('van_load_requisitions')
       .select(['id', 'status'])
@@ -491,7 +531,11 @@ export class VanRequisitionsService {
       .executeTakeFirst();
     if (!req) throw new AppError('طلب التحميل غير موجود', 'REQUISITION_NOT_FOUND', 404);
     if (req.status === 'dispatched') {
-      throw new AppError('لا يمكن حذف إذن تحميل تم صرفه وتحميله بالفعل على السيارة، يمكنك تصفية الرحلة من شاشة الرحلات', 'CANNOT_DELETE_DISPATCHED', 400);
+      throw new AppError(
+        'لا يمكن حذف إذن تحميل تم صرفه وتحميله بالفعل على السيارة، يمكنك تصفية الرحلة من شاشة الرحلات',
+        'CANNOT_DELETE_DISPATCHED',
+        400,
+      );
     }
     await this.anyDb
       .deleteFrom('van_load_requisitions')
@@ -524,9 +568,8 @@ export class VanRequisitionsService {
       throw new AppError('لا يمكن إلغاء طلب تمت معالجته بالفعل', 'ALREADY_PROCESSED', 400);
     }
 
-    const previousItems = typeof req.requested_items === 'string'
-      ? JSON.parse(req.requested_items)
-      : (req.requested_items || []);
+    const previousItems =
+      typeof req.requested_items === 'string' ? JSON.parse(req.requested_items) : req.requested_items || [];
 
     await this.anyDb
       .deleteFrom('van_load_requisitions')
@@ -652,7 +695,10 @@ export class VanRequisitionsService {
 
     const stockRows = await stockQuery.execute();
 
-    const stockMap = new Map<number, Array<{ warehouseId: number; warehouseName: string; qty: number; reservedQty: number }>>();
+    const stockMap = new Map<
+      number,
+      Array<{ warehouseId: number; warehouseName: string; qty: number; reservedQty: number }>
+    >();
     for (const row of stockRows) {
       const pid = Number(row.product_id);
       const qty = Number(row.qty || 0);
@@ -672,11 +718,14 @@ export class VanRequisitionsService {
     }
 
     const productIds = products.map((p: any) => Number(p.id));
-    const unitsMap = new Map<number, {
-      baseUnitName: string;
-      packagingUnit?: { name: string; multiplier: number };
-      isWeight: boolean;
-    }>();
+    const unitsMap = new Map<
+      number,
+      {
+        baseUnitName: string;
+        packagingUnit?: { name: string; multiplier: number };
+        isWeight: boolean;
+      }
+    >();
     const fefoBatchMap = new Map<number, { batchNumber: string | null; expiryDate: string }>();
     // INV-VAN-LOAD-AVAILABLE-QTY (F10): per-product balance detail for
     // the canonical available (all locations, so the unassigned leg
@@ -745,7 +794,8 @@ export class VanRequisitionsService {
         const pid = Number(b.product_id);
         if (!pid || !b.expiry_date) continue;
         if (warehouseId && b.location_id && Number(b.location_id) !== Number(warehouseId)) continue;
-        if (repScope?.hasLoadHistory && b.location_id && !repScope.sourceWarehouseIds.has(Number(b.location_id))) continue;
+        if (repScope?.hasLoadHistory && b.location_id && !repScope.sourceWarehouseIds.has(Number(b.location_id)))
+          continue;
         if (!fefoBatchMap.has(pid)) {
           fefoBatchMap.set(pid, {
             batchNumber: b.batch_number ? String(b.batch_number) : null,
@@ -760,7 +810,8 @@ export class VanRequisitionsService {
         const pid = Number(b.product_id);
         if (!pid || fefoBatchMap.has(pid)) continue;
         if (warehouseId && b.location_id && Number(b.location_id) !== Number(warehouseId)) continue;
-        if (repScope?.hasLoadHistory && b.location_id && !repScope.sourceWarehouseIds.has(Number(b.location_id))) continue;
+        if (repScope?.hasLoadHistory && b.location_id && !repScope.sourceWarehouseIds.has(Number(b.location_id)))
+          continue;
         fefoBatchMap.set(pid, {
           batchNumber: b.batch_number ? String(b.batch_number) : null,
           expiryDate: b.expiry_date ? String(b.expiry_date) : '',
@@ -793,7 +844,13 @@ export class VanRequisitionsService {
             entry.isWeight = true;
           }
         } else if (mult > 1) {
-          if (!entry.packagingUnit || name.includes('كرتون') || name.includes('صندوق') || name.includes('طرد') || name.includes('شيكارة')) {
+          if (
+            !entry.packagingUnit ||
+            name.includes('كرتون') ||
+            name.includes('صندوق') ||
+            name.includes('طرد') ||
+            name.includes('شيكارة')
+          ) {
             entry.packagingUnit = { name: name || 'كرتونة', multiplier: mult };
           }
         }
@@ -830,21 +887,20 @@ export class VanRequisitionsService {
       const unassignedQty = (bal?.unassignedQty || 0) + (discrepancy > 0.001 ? discrepancy : 0);
       const unassignedReserved = bal?.unassignedReserved || 0;
       const canonicalFor = (locationQty: number, locationReserved: number): number =>
-        computeVanLoadAvailableQty(computeLocationAvailability({
-          locationQty,
-          locationReserved,
-          unassignedQty,
-          unassignedReserved,
-          globalStock,
-          globalReserved,
-        }));
-      const whStocks = (targetWhId
-        ? allWhStocks.filter((w) => w.warehouseId === targetWhId)
-        : allWhStocks
-      ).map((w) => ({ ...w, availableQty: canonicalFor(w.qty, w.reservedQty) }));
-      const totalStock = targetWhId
-        ? (whStocks[0]?.qty || 0)
-        : whStocks.reduce((sum, w) => sum + w.qty, 0);
+        computeVanLoadAvailableQty(
+          computeLocationAvailability({
+            locationQty,
+            locationReserved,
+            unassignedQty,
+            unassignedReserved,
+            globalStock,
+            globalReserved,
+          }),
+        );
+      const whStocks = (targetWhId ? allWhStocks.filter((w) => w.warehouseId === targetWhId) : allWhStocks).map(
+        (w) => ({ ...w, availableQty: canonicalFor(w.qty, w.reservedQty) }),
+      );
+      const totalStock = targetWhId ? whStocks[0]?.qty || 0 : whStocks.reduce((sum, w) => sum + w.qty, 0);
       // One requested warehouse: the canonical number for that
       // warehouse — computed from the warehouse row even when the row
       // is missing, because unassigned stock is sellable from any
@@ -852,18 +908,16 @@ export class VanRequisitionsService {
       // per-warehouse location legs (each floored at zero) plus the
       // single unassigned leg, capped by the global leg — the same
       // three legs, aggregated.
-      const targetRow = targetWhId
-        ? allWhStocks.find((w) => w.warehouseId === targetWhId)
-        : undefined;
+      const targetRow = targetWhId ? allWhStocks.find((w) => w.warehouseId === targetWhId) : undefined;
       const availableQty = targetWhId
         ? canonicalFor(targetRow?.qty || 0, targetRow?.reservedQty || 0)
         : Math.min(
-          whStocks.reduce((sum, w) => sum + Math.max(0, w.qty - w.reservedQty), 0) +
-            Math.max(0, unassignedQty - unassignedReserved),
-          Math.max(0, globalStock - globalReserved),
-        );
+            whStocks.reduce((sum, w) => sum + Math.max(0, w.qty - w.reservedQty), 0) +
+              Math.max(0, unassignedQty - unassignedReserved),
+            Math.max(0, globalStock - globalReserved),
+          );
       const reservedQty = targetWhId
-        ? (targetRow?.reservedQty || 0)
+        ? targetRow?.reservedQty || 0
         : whStocks.reduce((sum, w) => sum + w.reservedQty, 0) + unassignedReserved;
       const pendingHolds = (holdsByProduct.get(pId) || []).filter(
         (h) => targetWhId === undefined || h.sourceWarehouseId === targetWhId,
@@ -875,7 +929,11 @@ export class VanRequisitionsService {
       let metaObj: any = null;
       if (p.metadata) {
         if (typeof p.metadata === 'string') {
-          try { metaObj = JSON.parse(p.metadata); } catch { metaObj = null; }
+          try {
+            metaObj = JSON.parse(p.metadata);
+          } catch {
+            metaObj = null;
+          }
         } else if (typeof p.metadata === 'object') {
           metaObj = p.metadata;
         }

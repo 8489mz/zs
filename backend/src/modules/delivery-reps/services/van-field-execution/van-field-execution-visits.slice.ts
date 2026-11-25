@@ -26,11 +26,7 @@ export class VanFieldExecutionVisitsSlice {
    * checkOutVisit still applies to them. A missing row is a 404; a
    * row owned by another rep is a 403 — never a silent no-op.
    */
-  private async assertVisitOwnedByRep(
-    tenantId: string,
-    visitId: number,
-    repId: number,
-  ) {
+  private async assertVisitOwnedByRep(tenantId: string, visitId: number, repId: number) {
     const visit = await this.db
       .selectFrom('van_store_visits')
       .selectAll()
@@ -42,11 +38,7 @@ export class VanFieldExecutionVisitsSlice {
       throw new AppError('سجل الزيارة غير موجود', 'VISIT_NOT_FOUND', 404);
     }
     if (Number((visit as any).rep_id) !== Number(repId)) {
-      throw new AppError(
-        'هذه الزيارة تخص مندوباً آخر، لا يمكنك التعديل عليها',
-        'REP_VISIT_NOT_OWNED',
-        403,
-      );
+      throw new AppError('هذه الزيارة تخص مندوباً آخر، لا يمكنك التعديل عليها', 'REP_VISIT_NOT_OWNED', 403);
     }
     return visit;
   }
@@ -54,12 +46,7 @@ export class VanFieldExecutionVisitsSlice {
   /**
    * 1. Check-In: Initiates a structured store visit with GPS geofencing verification
    */
-  async checkInVisit(
-    tenantId: string,
-    accountId: number,
-    repId: number,
-    payload: CheckInVisitPayload,
-  ) {
+  async checkInVisit(tenantId: string, accountId: number, repId: number, payload: CheckInVisitPayload) {
     if (!payload.customerId) {
       throw new AppError('معرف العميل مطلوب لتسجيل الزيارة', 'CUSTOMER_ID_REQUIRED', 400);
     }
@@ -92,9 +79,8 @@ export class VanFieldExecutionVisitsSlice {
       throw new AppError('العميل غير مسجل في النظام', 'CUSTOMER_NOT_FOUND', 404);
     }
 
-    const meta = typeof customer.metadata === 'string'
-      ? JSON.parse(customer.metadata || '{}')
-      : (customer.metadata || {});
+    const meta =
+      typeof customer.metadata === 'string' ? JSON.parse(customer.metadata || '{}') : customer.metadata || {};
 
     // INV-REP-SCOPED-CUSTOMER-READS (H7/D5): a check-in is not a free
     // pass to a customer. The rep must be assigned to this customer, or
@@ -237,12 +223,7 @@ export class VanFieldExecutionVisitsSlice {
   /**
    * 3. Reason for No-Sale: Records mandatory reason when visit yielded no transaction
    */
-  async recordVisitNoSale(
-    tenantId: string,
-    visitId: number,
-    payload: RecordNoSalePayload,
-    repId?: number | null,
-  ) {
+  async recordVisitNoSale(tenantId: string, visitId: number, payload: RecordNoSalePayload, repId?: number | null) {
     if (!payload.noSaleReason) {
       throw new AppError('سبب عدم البيع إلزامي', 'NO_SALE_REASON_REQUIRED', 400);
     }
@@ -272,28 +253,24 @@ export class VanFieldExecutionVisitsSlice {
   /**
    * 4. Check-Out: Completes visit and computes dwell time
    */
-  async checkOutVisit(
-    tenantId: string,
-    visitId: number,
-    payload?: CheckOutVisitPayload,
-    repId?: number | null,
-  ) {
+  async checkOutVisit(tenantId: string, visitId: number, payload?: CheckOutVisitPayload, repId?: number | null) {
     // INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D6): a driver checks out
     // only his own visit. Staff callers pass no repId.
-    const visit = repId != null
-      ? await this.assertVisitOwnedByRep(tenantId, visitId, repId)
-      : await (async () => {
-          const row = await this.db
-            .selectFrom('van_store_visits')
-            .selectAll()
-            .where('id', '=', visitId)
-            .where('tenant_id', '=', tenantId)
-            .executeTakeFirst();
-          if (!row) {
-            throw new AppError('سجل الزيارة غير موجود', 'VISIT_NOT_FOUND', 404);
-          }
-          return row;
-        })();
+    const visit =
+      repId != null
+        ? await this.assertVisitOwnedByRep(tenantId, visitId, repId)
+        : await (async () => {
+            const row = await this.db
+              .selectFrom('van_store_visits')
+              .selectAll()
+              .where('id', '=', visitId)
+              .where('tenant_id', '=', tenantId)
+              .executeTakeFirst();
+            if (!row) {
+              throw new AppError('سجل الزيارة غير موجود', 'VISIT_NOT_FOUND', 404);
+            }
+            return row;
+          })();
 
     // INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D6): caller-supplied
     // sale/collection amounts are NEVER trusted as typed. An amount
@@ -348,26 +325,19 @@ export class VanFieldExecutionVisitsSlice {
 
     const suppliedSaleAmount = payload?.saleAmount;
     if (suppliedSaleAmount != null && verifiedSale == null) {
-      throw new AppError(
-        'لا يمكن إرفاق مبلغ بيع بلا فاتورة موثقة تخص هذه الزيارة',
-        'REP_VISIT_SALE_UNVERIFIED',
-        403,
-      );
+      throw new AppError('لا يمكن إرفاق مبلغ بيع بلا فاتورة موثقة تخص هذه الزيارة', 'REP_VISIT_SALE_UNVERIFIED', 403);
     }
     if (
       suppliedSaleAmount != null &&
       verifiedSale != null &&
       Math.abs(Number(suppliedSaleAmount) - Number((verifiedSale as any).total)) > 0.01
     ) {
-      throw new AppError(
-        'مبلغ البيع المرسل لا يطابق إجمالي الفاتورة المرتبطة',
-        'REP_VISIT_SALE_AMOUNT_MISMATCH',
-        403,
-      );
+      throw new AppError('مبلغ البيع المرسل لا يطابق إجمالي الفاتورة المرتبطة', 'REP_VISIT_SALE_AMOUNT_MISMATCH', 403);
     }
-    const hasSale = verifiedSale != null
-      ? true
-      : (payload?.hasSale ?? (suppliedSaleAmount != null && Number(suppliedSaleAmount) > 0));
+    const hasSale =
+      verifiedSale != null
+        ? true
+        : (payload?.hasSale ?? (suppliedSaleAmount != null && Number(suppliedSaleAmount) > 0));
     if (hasSale && verifiedSale == null) {
       throw new AppError(
         'لا يمكن تسجيل بيع على الزيارة بلا فاتورة موثقة تخص هذه الزيارة',
@@ -412,8 +382,8 @@ export class VanFieldExecutionVisitsSlice {
         );
       }
     }
-    const hasCollection = payload?.hasCollection ??
-      (suppliedCollectionAmount != null && Number(suppliedCollectionAmount) > 0);
+    const hasCollection =
+      payload?.hasCollection ?? (suppliedCollectionAmount != null && Number(suppliedCollectionAmount) > 0);
     if (hasCollection) {
       const paymentsSum = await readFieldCollectionsSum();
       if (saleCashPaid <= 0 && paymentsSum <= 0) {
@@ -426,10 +396,7 @@ export class VanFieldExecutionVisitsSlice {
     }
 
     const checkOutAt = new Date();
-    const dwellSeconds = FmcgVisitExecutionEngine.calculateDwellTimeSeconds(
-      visit.check_in_at,
-      checkOutAt,
-    );
+    const dwellSeconds = FmcgVisitExecutionEngine.calculateDwellTimeSeconds(visit.check_in_at, checkOutAt);
 
     const [updated] = await this.db
       .updateTable('van_store_visits')
@@ -438,9 +405,12 @@ export class VanFieldExecutionVisitsSlice {
         dwell_time_seconds: dwellSeconds,
         has_sale: hasSale,
         sale_id: verifiedSale != null ? Number((verifiedSale as any).id) : visit.sale_id,
-        sale_amount: verifiedSale != null
-          ? Number((verifiedSale as any).total)
-          : (payload?.saleAmount != null ? payload.saleAmount : visit.sale_amount),
+        sale_amount:
+          verifiedSale != null
+            ? Number((verifiedSale as any).total)
+            : payload?.saleAmount != null
+              ? payload.saleAmount
+              : visit.sale_amount,
         has_collection: hasCollection,
         collection_amount: payload?.collectionAmount != null ? payload.collectionAmount : visit.collection_amount,
         updated_at: new Date().toISOString(),

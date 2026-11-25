@@ -1,22 +1,16 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
-import {
-  Kysely,
-  sql,
-  type Transaction,
-  type Selectable,
-} from 'kysely';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Kysely, sql, type Transaction, type Selectable } from 'kysely';
 import { Database } from '../../../database/database.types';
 import { CreateOnlineOrderDto } from '../dto/create-online-order.dto';
 import { CustomerOrderRefDto } from '../dto/customer-order-lookup.dto';
 import { resolveOrderLinePrice, formatVariantLineName } from '../engines/online-order-pricing.engine';
 import { verifyOrderAccessToken } from '../engines/online-order-access.engine';
 import { reserveLocationStock, releaseLocationStock } from '../../../common/utils/location-stock-ledger';
-import { isReservationExpired, extractReservationItems, DEFAULT_ONLINE_PAYMENT_TIMEOUT_MS } from '../engines/storefront-reservation.engine';
+import {
+  isReservationExpired,
+  extractReservationItems,
+  DEFAULT_ONLINE_PAYMENT_TIMEOUT_MS,
+} from '../engines/storefront-reservation.engine';
 import { resolveBestStorefrontOffer, RawStorefrontOffer } from '../engines/storefront-offers.engine';
 import { roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import {
@@ -102,7 +96,11 @@ export class StorefrontCustomerOrdersService {
   private readonly onlineOrderModifiersTotal: (modifiers: any[] | undefined) => number;
   private readonly enforceOnlineOrderModifierContract: StorefrontCustomerOrdersDeps['enforceOnlineOrderModifierContract'];
   private readonly claimCouponUse: (trx: Transaction<Database>, tenantId: string, couponId: number) => Promise<void>;
-  private readonly releaseCouponUse: (trx: Transaction<Database>, tenantId: string, couponCode: string) => Promise<void>;
+  private readonly releaseCouponUse: (
+    trx: Transaction<Database>,
+    tenantId: string,
+    couponCode: string,
+  ) => Promise<void>;
   private readonly logger: Logger;
 
   constructor(deps: StorefrontCustomerOrdersDeps) {
@@ -175,7 +173,9 @@ export class StorefrontCustomerOrdersService {
     const candidates = await qb.orderBy('o.created_at', 'desc').limit(60).execute();
     // order_number is not unique even inside a tenant, so every candidate row is checked against
     // its own hash — a token proves ownership of one row, not of a number.
-    const rows = candidates.filter((r) => verifyOrderAccessToken(tokenByNumber.get(r.order_number), r.access_token_hash));
+    const rows = candidates.filter((r) =>
+      verifyOrderAccessToken(tokenByNumber.get(r.order_number), r.access_token_hash),
+    );
 
     return {
       ok: true,
@@ -187,7 +187,11 @@ export class StorefrontCustomerOrdersService {
 
         let effectiveStatus: string = r.status;
         if (r.status !== 'cancelled') {
-          if (r.status === 'delivered' || r.sale_delivery_status === 'delivered' || r.sale_delivery_status === 'settled') {
+          if (
+            r.status === 'delivered' ||
+            r.sale_delivery_status === 'delivered' ||
+            r.sale_delivery_status === 'settled'
+          ) {
             effectiveStatus = 'delivered';
           } else if (r.status === 'shipped' || r.sale_delivery_status === 'out_for_delivery') {
             effectiveStatus = 'shipped';
@@ -267,7 +271,9 @@ export class StorefrontCustomerOrdersService {
     // Paid online orders are not cancelled from the public side: the money has to be refunded,
     // and that is a merchant decision.
     if (order.payment_status === 'paid') {
-      throw new BadRequestException('لا يمكن إلغاء طلب تم سداده إلكترونياً من هنا، يرجى التواصل مع المتجر لاسترداد المبلغ');
+      throw new BadRequestException(
+        'لا يمكن إلغاء طلب تم سداده إلكترونياً من هنا، يرجى التواصل مع المتجر لاسترداد المبلغ',
+      );
     }
 
     await this.db.transaction().execute(async (trx) => {
@@ -375,13 +381,28 @@ export class StorefrontCustomerOrdersService {
       .where('id', 'in', rawProductIds)
       .execute();
 
-    const activeOffers = await this.db.selectFrom('product_offers')
-      .select(['id', 'product_id', 'offer_type', 'value', sql<string>`start_date::text`.as('start_date'),
-        sql<string>`end_date::text`.as('end_date'), 'min_qty', 'is_active',
-        'bogo_buy_qty', 'bogo_get_qty', 'bogo_discount_percent', 'happy_hour_start', 'happy_hour_end', 'days_of_week'])
+    const activeOffers = await this.db
+      .selectFrom('product_offers')
+      .select([
+        'id',
+        'product_id',
+        'offer_type',
+        'value',
+        sql<string>`start_date::text`.as('start_date'),
+        sql<string>`end_date::text`.as('end_date'),
+        'min_qty',
+        'is_active',
+        'bogo_buy_qty',
+        'bogo_get_qty',
+        'bogo_discount_percent',
+        'happy_hour_start',
+        'happy_hour_end',
+        'days_of_week',
+      ])
       .where(sql<boolean>`tenant_id = ${tenant.id}`)
       .where('product_id', 'in', rawProductIds)
-      .where('is_active', '=', true).execute();
+      .where('is_active', '=', true)
+      .execute();
     const offersByProductId = new Map<number, RawStorefrontOffer[]>();
     for (const offer of activeOffers) {
       const id = Number(offer.product_id);
@@ -424,18 +445,32 @@ export class StorefrontCustomerOrdersService {
         throw new BadRequestException('أحد أصناف الطلب لم يعد متاحاً، يرجى تحديث السلة');
       }
       if (seenProductIds.has(Number(p.id))) {
-        throw new BadRequestException(`لا يمكن طلب أكثر من مقاس أو سطر للصنف "${p.name}" في نفس الطلب، يرجى توحيده في سطر واحد.`);
+        throw new BadRequestException(
+          `لا يمكن طلب أكثر من مقاس أو سطر للصنف "${p.name}" في نفس الطلب، يرجى توحيده في سطر واحد.`,
+        );
       }
       seenProductIds.add(Number(p.id));
-      assertOnlineStockAvailable(p.name, Number(p.stock_qty ?? 0), Math.max(1, Number(item.quantity || 1)), updateAllowsOutOfStock);
+      assertOnlineStockAvailable(
+        p.name,
+        Number(p.stock_qty ?? 0),
+        Math.max(1, Number(item.quantity || 1)),
+        updateAllowsOutOfStock,
+      );
 
       const priced = resolveOrderLinePrice(Number(p.retail_price || 0), p.metadata, item.variantName, moneyDigits);
       if (!priced.ok) {
         throw new BadRequestException(`عفواً، المقاس المختار للصنف "${p.name}" لم يعد متاحاً، يرجى تحديث السلة.`);
       }
       const qty = Math.max(1, Number(item.quantity || 1));
-      const bestOffer = resolveBestStorefrontOffer(priced.unitPrice, offersByProductId.get(Number(p.id)), qty,
-        undefined, new Date(), offerTimezone(settings), moneyDigits);
+      const bestOffer = resolveBestStorefrontOffer(
+        priced.unitPrice,
+        offersByProductId.get(Number(p.id)),
+        qty,
+        undefined,
+        new Date(),
+        offerTimezone(settings),
+        moneyDigits,
+      );
       const price = bestOffer.hasDiscount ? bestOffer.price : priced.unitPrice;
       // INV-REST-KIOSK-MODIFIER-UI (R7-B1): same POS line formula as
       // create — qty × (base + Σ re-priced modifier price × qty).
@@ -480,7 +515,10 @@ export class StorefrontCustomerOrdersService {
     subtotal = roundMoney(subtotal, moneyDigits);
     const roundedDeliveryFee = roundMoney(deliveryFee, moneyDigits);
     const roundedDiscountAmount = roundMoney(discountAmount, moneyDigits);
-    const roundedTotalAmount = roundMoney(Math.max(0, subtotal - roundedDiscountAmount) + roundedDeliveryFee, moneyDigits);
+    const roundedTotalAmount = roundMoney(
+      Math.max(0, subtotal - roundedDiscountAmount) + roundedDeliveryFee,
+      moneyDigits,
+    );
 
     await this.db.transaction().execute(async (trx) => {
       const lockedOrder = await trx
@@ -495,13 +533,20 @@ export class StorefrontCustomerOrdersService {
         throw new NotFoundException('الطلب غير موجود');
       }
 
-      if (lockedOrder.status !== 'pending' || lockedOrder.sale_id || lockedOrder.payment_status === 'paid' ||
-          lockedOrder.kitchen_draft_sale_id || lockedOrder.gateway_order_id) {
+      if (
+        lockedOrder.status !== 'pending' ||
+        lockedOrder.sale_id ||
+        lockedOrder.payment_status === 'paid' ||
+        lockedOrder.kitchen_draft_sale_id ||
+        lockedOrder.gateway_order_id
+      ) {
         throw new BadRequestException('لا يمكن تعديل الطلب لتغير حالته أثناء الحفظ، يرجى إعادة المحاولة.');
       }
-      if (String(lockedOrder.items_json) !== String(order.items_json) ||
-          String(lockedOrder.coupon_code || '') !== String(order.coupon_code || '') ||
-          Number(lockedOrder.total_amount) !== Number(order.total_amount)) {
+      if (
+        String(lockedOrder.items_json) !== String(order.items_json) ||
+        String(lockedOrder.coupon_code || '') !== String(order.coupon_code || '') ||
+        Number(lockedOrder.total_amount) !== Number(order.total_amount)
+      ) {
         throw new BadRequestException('تغير الطلب أثناء التعديل، يرجى تحديث الصفحة وإعادة المحاولة');
       }
 
@@ -510,7 +555,10 @@ export class StorefrontCustomerOrdersService {
       }
       // The order no longer carries the coupon it consumed (removed, swapped, or no longer eligible).
       const currentOrderCoupon = lockedOrder.coupon_code ? String(lockedOrder.coupon_code) : null;
-      if (currentOrderCoupon && currentOrderCoupon.toUpperCase() !== String(charges.appliedCouponCode || '').toUpperCase()) {
+      if (
+        currentOrderCoupon &&
+        currentOrderCoupon.toUpperCase() !== String(charges.appliedCouponCode || '').toUpperCase()
+      ) {
         await this.releaseCouponUse(trx, tenant.id, currentOrderCoupon);
       }
 
@@ -549,39 +597,37 @@ export class StorefrontCustomerOrdersService {
           });
           nextStockReserved = true;
         } catch (err: any) {
-          throw new BadRequestException(
-            err?.message || 'عفواً، الكمية المطلوبة بعد التعديل غير متوفرة في مخزون الفرع.'
-          );
+          throw new BadRequestException(err?.message || 'عفواً، الكمية المطلوبة بعد التعديل غير متوفرة في مخزون الفرع.');
         }
       }
 
       const result = await trx
-      .updateTable('online_orders')
-      .set({
-        items_json: JSON.stringify(validatedItems),
-        subtotal,
-        delivery_fee: roundedDeliveryFee,
-        delivery_zone_id: charges.deliveryZoneId,
-        delivery_zone_name: charges.deliveryZoneName,
-        discount_amount: roundedDiscountAmount,
-        coupon_code: charges.appliedCouponCode,
-        total_amount: roundedTotalAmount,
-        stock_reserved: nextStockReserved,
-        stock_reserved_at: nextStockReserved ? new Date() : null,
-        customer_name: (dto.customerName || order.customer_name).trim(),
-        customer_phone: (dto.customerPhone || order.customer_phone).trim(),
-        customer_address: dto.customerAddress ? dto.customerAddress.trim() : order.customer_address,
-        customer_notes: dto.customerNotes ? dto.customerNotes.trim() : order.customer_notes,
-        payment_method: dto.paymentMethod || order.payment_method,
-        updated_at: new Date(),
-      })
-      .where('id', '=', order.id)
-      .where(sql<boolean>`tenant_id = ${tenant.id}`)
-      // SF-6: the edit only lands while the store has not picked the order up. Without this, an edit
-      // racing the cashier's "load into cart" rewrote an order the cashier was already billing.
-      .where('status', '=', 'pending')
-      .where('sale_id', 'is', null)
-      .executeTakeFirst();
+        .updateTable('online_orders')
+        .set({
+          items_json: JSON.stringify(validatedItems),
+          subtotal,
+          delivery_fee: roundedDeliveryFee,
+          delivery_zone_id: charges.deliveryZoneId,
+          delivery_zone_name: charges.deliveryZoneName,
+          discount_amount: roundedDiscountAmount,
+          coupon_code: charges.appliedCouponCode,
+          total_amount: roundedTotalAmount,
+          stock_reserved: nextStockReserved,
+          stock_reserved_at: nextStockReserved ? new Date() : null,
+          customer_name: (dto.customerName || order.customer_name).trim(),
+          customer_phone: (dto.customerPhone || order.customer_phone).trim(),
+          customer_address: dto.customerAddress ? dto.customerAddress.trim() : order.customer_address,
+          customer_notes: dto.customerNotes ? dto.customerNotes.trim() : order.customer_notes,
+          payment_method: dto.paymentMethod || order.payment_method,
+          updated_at: new Date(),
+        })
+        .where('id', '=', order.id)
+        .where(sql<boolean>`tenant_id = ${tenant.id}`)
+        // SF-6: the edit only lands while the store has not picked the order up. Without this, an edit
+        // racing the cashier's "load into cart" rewrote an order the cashier was already billing.
+        .where('status', '=', 'pending')
+        .where('sale_id', 'is', null)
+        .executeTakeFirst();
 
       // Throwing inside the transaction also rolls back the coupon claim/release above.
       if (Number(result?.numUpdatedRows || 0) === 0) {

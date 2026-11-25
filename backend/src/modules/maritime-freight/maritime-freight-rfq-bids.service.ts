@@ -1,9 +1,4 @@
-import {
-  NotFoundException,
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { NotFoundException, BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { sql, type Kysely } from '../../database/kysely';
 import { type Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
@@ -65,9 +60,12 @@ export class MaritimeFreightRfqBidsService {
 
     if (!rfq) throw new NotFoundException('RFQ not found');
 
-    const lineIds: number[] = Array.isArray(customLineIds) && customLineIds.length > 0
-      ? customLineIds
-      : (Array.isArray(rfq.target_line_ids) ? rfq.target_line_ids : []);
+    const lineIds: number[] =
+      Array.isArray(customLineIds) && customLineIds.length > 0
+        ? customLineIds
+        : Array.isArray(rfq.target_line_ids)
+          ? rfq.target_line_ids
+          : [];
 
     if (lineIds.length === 0) {
       return { sentCount: 0, message: 'No target shipping lines selected' };
@@ -83,9 +81,12 @@ export class MaritimeFreightRfqBidsService {
       throw new BadRequestException('One or more shipping lines do not belong to this tenant');
     }
     if (Array.isArray(customLineIds) && customLineIds.length > 0) {
-      await this.db.updateTable('maritime_rfqs')
+      await this.db
+        .updateTable('maritime_rfqs')
         .set({ target_line_ids: JSON.stringify(customLineIds) })
-        .where('tenant_id', '=', tenantId).where('id', '=', rfqId as any).execute();
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', rfqId as any)
+        .execute();
     }
 
     let sentCount = 0;
@@ -100,7 +101,8 @@ export class MaritimeFreightRfqBidsService {
     let customMailConfig: any = null;
     if (mailConfigRow?.value) {
       try {
-        customMailConfig = typeof mailConfigRow.value === 'string' ? JSON.parse(mailConfigRow.value) : mailConfigRow.value;
+        customMailConfig =
+          typeof mailConfigRow.value === 'string' ? JSON.parse(mailConfigRow.value) : mailConfigRow.value;
       } catch {}
     }
 
@@ -119,11 +121,19 @@ export class MaritimeFreightRfqBidsService {
       .execute();
 
     const companySettings = companySettingsRows.reduce<Record<string, string>>((acc, r) => {
-      try { acc[r.key] = JSON.parse(r.value); } catch { acc[r.key] = r.value; }
+      try {
+        acc[r.key] = JSON.parse(r.value);
+      } catch {
+        acc[r.key] = r.value;
+      }
       return acc;
     }, {});
 
-    const defaultCompanyName = companySettings.companyName || companySettings.storeName || tenantRow?.business_name || 'إدارة العمليات واللوجستيات';
+    const defaultCompanyName =
+      companySettings.companyName ||
+      companySettings.storeName ||
+      tenantRow?.business_name ||
+      'إدارة العمليات واللوجستيات';
     const defaultCompanyEmail = companySettings.email || tenantRow?.owner_email || '';
     const defaultCompanyPhone = companySettings.phone || tenantRow?.owner_phone || '';
 
@@ -132,9 +142,12 @@ export class MaritimeFreightRfqBidsService {
     const user = String(customMailConfig?.smtpUser || process.env.SMTP_USER || '').trim();
     const pass = String(customMailConfig?.smtpPassword || process.env.SMTP_PASSWORD || '').trim();
     const rawFromEmail = String(customMailConfig?.fromEmail || '').trim();
-    const fromEmail = (rawFromEmail && rawFromEmail.includes('@'))
-      ? rawFromEmail
-      : (user && user.includes('@') ? user : (defaultCompanyEmail || String(process.env.SMTP_FROM || '').trim()));
+    const fromEmail =
+      rawFromEmail && rawFromEmail.includes('@')
+        ? rawFromEmail
+        : user && user.includes('@')
+          ? user
+          : defaultCompanyEmail || String(process.env.SMTP_FROM || '').trim();
     const fromName = String(customMailConfig?.fromName?.trim() || defaultCompanyName).trim();
 
     let transporter: any = null;
@@ -180,7 +193,10 @@ export class MaritimeFreightRfqBidsService {
 
       let subject = `[${rfq.rfq_number}] Freight Rate Inquiry: ${rfq.pol_code} to ${rfq.pod_code} (${rfq.container_count}x ${rfq.container_type})`;
       if (customMailConfig?.emailSubjectTemplate?.trim()) {
-        subject = replacePlaceholders(customMailConfig.emailSubjectTemplate, carrier.name_en || carrier.name_ar || 'Carrier');
+        subject = replacePlaceholders(
+          customMailConfig.emailSubjectTemplate,
+          carrier.name_en || carrier.name_ar || 'Carrier',
+        );
         if (!subject.includes(rfq.rfq_number)) {
           subject = `[${rfq.rfq_number}] ` + subject;
         }
@@ -245,7 +261,9 @@ export class MaritimeFreightRfqBidsService {
         } catch (err: any) {
           this.logger.error(`Failed to send RFQ email to ${targetEmail}: ${err?.message}`);
           if (process.env.APP_MODE !== 'CLOUD_SAAS') {
-            this.logger.log(`[SIMULATION FALLBACK] RFQ Email recorded for ${carrier.name_en} <${targetEmail}>: ${subject}`);
+            this.logger.log(
+              `[SIMULATION FALLBACK] RFQ Email recorded for ${carrier.name_en} <${targetEmail}>: ${subject}`,
+            );
             sentCount++;
           }
         }
@@ -292,7 +310,8 @@ export class MaritimeFreightRfqBidsService {
     // A public magic-link bid may name a carrier but cannot attach a
     // shipping_line record from another tenant, even if its global ID leaks.
     if (dto?.shippingLineId != null && String(dto.shippingLineId).trim()) {
-      const tenantLine = await this.db.selectFrom('shipping_lines')
+      const tenantLine = await this.db
+        .selectFrom('shipping_lines')
         .select('id')
         .where('id', '=', String(dto.shippingLineId) as any)
         .where('tenant_id', '=', tenantId)
@@ -362,7 +381,9 @@ export class MaritimeFreightRfqBidsService {
       if (!bid) throw new NotFoundException('Bid not found');
 
       // Lock RFQ row to prevent concurrent race conditions
-      await sql`SELECT id FROM maritime_rfqs WHERE tenant_id = ${tenantId} AND id = ${bid.rfq_id} FOR UPDATE`.execute(trx);
+      await sql`SELECT id FROM maritime_rfqs WHERE tenant_id = ${tenantId} AND id = ${bid.rfq_id} FOR UPDATE`.execute(
+        trx,
+      );
 
       // INV-MARITIME-RFQ-TERMINAL-STATE: a closed or cancelled RFQ
       // never gains or changes a winner. The row is already locked
@@ -431,7 +452,9 @@ export class MaritimeFreightRfqBidsService {
 
     // Ocean Freight Match
     const ofMatch =
-      text.match(/(?:ocean\s*freight|freight\s*rate|base\s*rate|spot\s*rate|sea\s*freight|\bBAS\b|\bO\/?F\b)\s*[:=-]?\s*(?:\$|USD|EUR|€|EGP|SAR)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i) ||
+      text.match(
+        /(?:ocean\s*freight|freight\s*rate|base\s*rate|spot\s*rate|sea\s*freight|\bBAS\b|\bO\/?F\b)\s*[:=-]?\s*(?:\$|USD|EUR|€|EGP|SAR)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i,
+      ) ||
       text.match(/(?:freight|rate)\s*[:=-]\s*(?:\$|USD|EUR|€|EGP|SAR)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i) ||
       text.match(/(?:usd|\$)\s*([0-9,]+(?:\.[0-9]{1,2})?)/i) ||
       text.match(/([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:usd|\$)/i);
@@ -440,8 +463,9 @@ export class MaritimeFreightRfqBidsService {
     }
 
     // Free Days Match
-    const fdMatch = text.match(/(?:free\s*(?:days|time)|detention|demurrage)(?:[^\d\n\r]*?)[:=]?\s*([0-9]{1,2})/i) ||
-                    text.match(/([0-9]{1,2})\s*(?:days?\s*free|free\s*days?|f\/?d)/i);
+    const fdMatch =
+      text.match(/(?:free\s*(?:days|time)|detention|demurrage)(?:[^\d\n\r]*?)[:=]?\s*([0-9]{1,2})/i) ||
+      text.match(/([0-9]{1,2})\s*(?:days?\s*free|free\s*days?|f\/?d)/i);
     if (fdMatch && fdMatch[1]) {
       freeDays = parseInt(fdMatch[1], 10);
     }
@@ -453,13 +477,17 @@ export class MaritimeFreightRfqBidsService {
     }
 
     // Origin THC
-    const oThcMatch = text.match(/(?:origin\s*thc|thc\s*origin|o\.?thc)(?:[^\d\n\r$]*?)[:=]?\s*\$?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i);
+    const oThcMatch = text.match(
+      /(?:origin\s*thc|thc\s*origin|o\.?thc)(?:[^\d\n\r$]*?)[:=]?\s*\$?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i,
+    );
     if (oThcMatch && oThcMatch[1]) {
       thcOrigin = parseFloat(oThcMatch[1].replace(/,/g, ''));
     }
 
     // Destination THC
-    const dThcMatch = text.match(/(?:dest(?:ination)?\s*thc|thc\s*dest(?:ination)?|d\.?thc)(?:[^\d\n\r$]*?)[:=]?\s*\$?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i);
+    const dThcMatch = text.match(
+      /(?:dest(?:ination)?\s*thc|thc\s*dest(?:ination)?|d\.?thc)(?:[^\d\n\r$]*?)[:=]?\s*\$?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i,
+    );
     if (dThcMatch && dThcMatch[1]) {
       thcDestination = parseFloat(dThcMatch[1].replace(/,/g, ''));
     }
@@ -521,15 +549,20 @@ export class MaritimeFreightRfqBidsService {
     }
 
     // 2. Booking Number
-    const bkgMatch = text.match(/(?:booking\s*(?:reference|ref|number|no|confirmation|#)|bkg\s*(?:no|#)?)\s*[:=]?\s*([A-Z0-9-]{5,30})/i) ||
-                     text.match(/booking\s*[:=]\s*([A-Z0-9-]{5,30})/i) ||
-                     text.match(/\b([0-9]{9})\b/);
+    const bkgMatch =
+      text.match(
+        /(?:booking\s*(?:reference|ref|number|no|confirmation|#)|bkg\s*(?:no|#)?)\s*[:=]?\s*([A-Z0-9-]{5,30})/i,
+      ) ||
+      text.match(/booking\s*[:=]\s*([A-Z0-9-]{5,30})/i) ||
+      text.match(/\b([0-9]{9})\b/);
     if (bkgMatch && bkgMatch[1]) {
       bookingNumber = bkgMatch[1].trim();
     }
 
     // 3. Vessel Name & Voyage
-    const vesselMatch = text.match(/(?:vessel\s*(?:name)?|mother\s*vessel|ship\s*name)\s*[:=]?\s*([A-Za-z0-9\s.-]+?)(?=\s*(?:voyage|voy|etd|pol|pod|\n|$))/i);
+    const vesselMatch = text.match(
+      /(?:vessel\s*(?:name)?|mother\s*vessel|ship\s*name)\s*[:=]?\s*([A-Za-z0-9\s.-]+?)(?=\s*(?:voyage|voy|etd|pol|pod|\n|$))/i,
+    );
     if (vesselMatch && vesselMatch[1]) {
       vesselName = vesselMatch[1].replace(/[\r\n]+/g, ' ').trim();
     }
@@ -552,17 +585,27 @@ export class MaritimeFreightRfqBidsService {
     };
 
     // 4. ETD / ETA / Cut-off
-    etd = extractDate(/(?:etd|departure\s*date|sailing\s*date|est\.?\s*dep\.?)\s*[:=]?\s*([0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}|[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{4})/i);
-    eta = extractDate(/(?:eta|arrival\s*date|est\.?\s*arr\.?)\s*[:=]?\s*([0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}|[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{4})/i);
-    portCutOff = extractDate(/(?:port\s*cut[- ]?off|cy\s*cut[- ]?off|closing\s*date|cargo\s*cut[- ]?off|cut[- ]?off)\s*[:=]?\s*([0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}|[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{4})/i);
+    etd = extractDate(
+      /(?:etd|departure\s*date|sailing\s*date|est\.?\s*dep\.?)\s*[:=]?\s*([0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}|[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{4})/i,
+    );
+    eta = extractDate(
+      /(?:eta|arrival\s*date|est\.?\s*arr\.?)\s*[:=]?\s*([0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}|[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{4})/i,
+    );
+    portCutOff = extractDate(
+      /(?:port\s*cut[- ]?off|cy\s*cut[- ]?off|closing\s*date|cargo\s*cut[- ]?off|cut[- ]?off)\s*[:=]?\s*([0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}|[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{4})/i,
+    );
 
     // 5. POL / POD
-    const polMatch = text.match(/(?:pol|port\s*of\s*loading|origin\s*port|from)\s*[:=]?\s*([A-Za-z0-9\s,.-]+?)(?=\s*(?:pod|port\s*of\s*discharge|to|etd|\n|$))/i);
+    const polMatch = text.match(
+      /(?:pol|port\s*of\s*loading|origin\s*port|from)\s*[:=]?\s*([A-Za-z0-9\s,.-]+?)(?=\s*(?:pod|port\s*of\s*discharge|to|etd|\n|$))/i,
+    );
     if (polMatch && polMatch[1]) {
       polName = polMatch[1].replace(/[\r\n]+/g, ' ').trim();
     }
 
-    const podMatch = text.match(/(?:pod|port\s*of\s*discharge|destination\s*port|to)\s*[:=]?\s*([A-Za-z0-9\s,.-]+?)(?=\s*(?:eta|vessel|\n|$))/i);
+    const podMatch = text.match(
+      /(?:pod|port\s*of\s*discharge|destination\s*port|to)\s*[:=]?\s*([A-Za-z0-9\s,.-]+?)(?=\s*(?:eta|vessel|\n|$))/i,
+    );
     if (podMatch && podMatch[1]) {
       podName = podMatch[1].replace(/[\r\n]+/g, ' ').trim();
     }

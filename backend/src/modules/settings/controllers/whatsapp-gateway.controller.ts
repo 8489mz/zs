@@ -25,21 +25,18 @@ export class WhatsAppGatewayController {
 
   @Post('test')
   @RequirePermissions('canManageSettings')
-  sendTestMessage(@Body('phone') phone: string, @Req() req: RequestWithAuth): Promise<{ success: boolean; message?: string }> {
+  sendTestMessage(
+    @Body('phone') phone: string,
+    @Req() req: RequestWithAuth,
+  ): Promise<{ success: boolean; message?: string }> {
     return this.whatsappService.sendTestMessage(phone, req.authContext!);
   }
 
   @Post('simulate-bot')
   @RequirePermissions('canManageSettings')
-  simulateBot(
-    @Body('question') question: string,
-    @Req() req: RequestWithAuth,
-  ) {
+  simulateBot(@Body('question') question: string, @Req() req: RequestWithAuth) {
     const { tenantId } = requireTenantScope(req.authContext!);
-    return this.whatsappService.handleInboundWebhook(
-      { phone: '01000000000', question, simulate: true },
-      tenantId,
-    );
+    return this.whatsappService.handleInboundWebhook({ phone: '01000000000', question, simulate: true }, tenantId);
   }
 
   @Post('send-invoice/:saleId')
@@ -63,11 +60,21 @@ export class WhatsAppPublicWebhookController {
 
   @Post('webhook')
   handleWebhook(@Body() body: any, @Req() req: any, @Query('tenantId') tenantId?: string) {
-    return this.whatsappService.handleVerifiedInboundWebhook(body, tenantId, req.headers['x-zs-webhook-signature'], req.rawBody);
+    return this.whatsappService.handleVerifiedInboundWebhook(
+      body,
+      tenantId,
+      req.headers['x-zs-webhook-signature'],
+      req.rawBody,
+    );
   }
 
   @Post('webhook/:tenantId')
   handleTenantWebhook(@Param('tenantId') tenantId: string, @Body() body: any, @Req() req: any) {
-    return this.whatsappService.handleVerifiedInboundWebhook(body, tenantId, req.headers['x-zs-webhook-signature'], req.rawBody);
+    return this.whatsappService.handleVerifiedInboundWebhook(
+      body,
+      tenantId,
+      req.headers['x-zs-webhook-signature'],
+      req.rawBody,
+    );
   }
 }

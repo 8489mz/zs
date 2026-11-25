@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { IPaymentGateway, PaymentInitiateInput, PaymentInitiateResult, WebhookValidationResult } from './payment-gateway.interface';
+import {
+  IPaymentGateway,
+  PaymentInitiateInput,
+  PaymentInitiateResult,
+  WebhookValidationResult,
+} from './payment-gateway.interface';
 import * as crypto from 'crypto';
 import { platformNoReplyEmail } from '../../storefront/engines/store-public-url.engine';
 import { assertSubscriptionSandboxAllowed } from './subscription-sandbox-policy';
@@ -109,7 +114,11 @@ export class XPayGatewayService implements IPaymentGateway {
     };
   }
 
-  async verifyAndParseWebhook(headers: Record<string, any>, body: any, rawBody?: Buffer): Promise<WebhookValidationResult> {
+  async verifyAndParseWebhook(
+    headers: Record<string, any>,
+    body: any,
+    rawBody?: Buffer,
+  ): Promise<WebhookValidationResult> {
     const signature = headers['x-xpay-signature'] || headers['x-signature'] || '';
 
     // Fail-closed: without a configured secret or a signature to check, the webhook is untrusted.
@@ -138,8 +147,10 @@ export class XPayGatewayService implements IPaymentGateway {
 
     const tenantId = getField('tenant_id') || data?.tenant_id || data?.metadata?.tenant_id;
     const planId = Number(getField('plan_id') || data?.plan_id || data?.metadata?.plan_id) || undefined;
-    const durationMonths = Number(getField('duration_months') || data?.duration_months || data?.metadata?.duration_months) || 12;
-    const isSuccessful = data?.status === 'successful' || data?.status === 'paid' || data?.transaction_status === 'SUCCESS';
+    const durationMonths =
+      Number(getField('duration_months') || data?.duration_months || data?.metadata?.duration_months) || 12;
+    const isSuccessful =
+      data?.status === 'successful' || data?.status === 'paid' || data?.transaction_status === 'SUCCESS';
 
     return {
       isValid,

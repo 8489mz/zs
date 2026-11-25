@@ -37,14 +37,26 @@ export class DeleteTicketSlice {
         throw new AppError('تذكرة الصيانة غير موجودة', 'TICKET_NOT_FOUND', 404);
       }
 
-      const historicalMovement = await trx.selectFrom('stock_movements')
-        .select('id').where('tenant_id', '=', scope.tenantId)
-        .where('reference_type', '=', 'maintenance_ticket').where('reference_id', '=', id).executeTakeFirst();
-      const cashMovement = await trx.selectFrom('treasury_transactions')
-        .select('id').where('tenant_id', '=', scope.tenantId)
-        .where('reference_type', '=', 'maintenance_ticket').where('reference_id', '=', id).executeTakeFirst();
+      const historicalMovement = await trx
+        .selectFrom('stock_movements')
+        .select('id')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('reference_type', '=', 'maintenance_ticket')
+        .where('reference_id', '=', id)
+        .executeTakeFirst();
+      const cashMovement = await trx
+        .selectFrom('treasury_transactions')
+        .select('id')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('reference_type', '=', 'maintenance_ticket')
+        .where('reference_id', '=', id)
+        .executeTakeFirst();
       if (Number(ticket.advance_payment) > 0 || ticket.status === 'delivered' || cashMovement) {
-        throw new AppError('لا يمكن حذف تذكرة صيانة مسلّمة أو تم تحصيل مبالغ مالية لها؛ يجب عمل تسوية أو إلغاء مالي', 'MAINTENANCE_REVERSAL_REQUIRED', 409);
+        throw new AppError(
+          'لا يمكن حذف تذكرة صيانة مسلّمة أو تم تحصيل مبالغ مالية لها؛ يجب عمل تسوية أو إلغاء مالي',
+          'MAINTENANCE_REVERSAL_REQUIRED',
+          409,
+        );
       }
       const parts = await trx
         .selectFrom('maintenance_ticket_parts')
@@ -55,7 +67,11 @@ export class DeleteTicketSlice {
 
       for (const part of parts) {
         const returnQty = Number(part.qty);
-        const targetLocationId = part.location_id ? Number(part.location_id) : (ticket.location_id ? Number(ticket.location_id) : null);
+        const targetLocationId = part.location_id
+          ? Number(part.location_id)
+          : ticket.location_id
+            ? Number(ticket.location_id)
+            : null;
         let targetBranchId = ticket.branch_id ? Number(ticket.branch_id) : null;
 
         // Same branch derivation as addPart (see there): deleting a
@@ -86,9 +102,19 @@ export class DeleteTicketSlice {
           allowNegative: true,
         });
 
-        const stockValue = roundMoney(Number(part.unit_cost || 0) * returnQty, currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)));
+        const stockValue = roundMoney(
+          Number(part.unit_cost || 0) * returnQty,
+          currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)),
+        );
         if (stockValue > 0) {
-          await valueStockReceipt(trx, scope.tenantId, Number(part.product_id), stockChange.globalAfter, returnQty, stockValue);
+          await valueStockReceipt(
+            trx,
+            scope.tenantId,
+            Number(part.product_id),
+            stockChange.globalAfter,
+            returnQty,
+            stockValue,
+          );
         }
 
         const movement = await trx
@@ -115,11 +141,24 @@ export class DeleteTicketSlice {
           .executeTakeFirstOrThrow();
 
         if (stockValue > 0) {
-          await postMaintenanceJournal(trx, this.accountingFoundation, this.accountingPosting, auth,
-            'maintenance_part_return', Number(movement.id), targetBranchId, targetLocationId, [
-              { code: '1140', debit: stockValue, description: 'Returned maintenance spare part inventory on ticket deletion' },
+          await postMaintenanceJournal(
+            trx,
+            this.accountingFoundation,
+            this.accountingPosting,
+            auth,
+            'maintenance_part_return',
+            Number(movement.id),
+            targetBranchId,
+            targetLocationId,
+            [
+              {
+                code: '1140',
+                debit: stockValue,
+                description: 'Returned maintenance spare part inventory on ticket deletion',
+              },
               { code: '5100', credit: stockValue, description: 'Reverse maintenance part cost on ticket deletion' },
-            ]);
+            ],
+          );
         }
       }
 
@@ -138,7 +177,11 @@ export class DeleteTicketSlice {
       return parts.length;
     });
 
-    await this.audit.log('حذف تذكرة صيانة', `تم حذف تذكرة الصيانة #${id} واسترجاع ${partsCount} قطعة غيار إلى المخزون`, auth);
+    await this.audit.log(
+      'حذف تذكرة صيانة',
+      `تم حذف تذكرة الصيانة #${id} واسترجاع ${partsCount} قطعة غيار إلى المخزون`,
+      auth,
+    );
     return { ok: true };
   }
 }

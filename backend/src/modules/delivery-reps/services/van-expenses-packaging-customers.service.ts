@@ -23,11 +23,7 @@ import {
   normalizeCustomerCode,
   resolveVanMoneyAuditActor,
 } from './van-common.util';
-import {
-  extractAssignedRepIds,
-  loadRepPermissions,
-  resolveIsolatedRepCustomerBalance,
-} from '../rep-target.engine';
+import { extractAssignedRepIds, loadRepPermissions, resolveIsolatedRepCustomerBalance } from '../rep-target.engine';
 import { DAY_KEY_TO_ARABIC, normalizeDayKey } from '../van-routes-schedule.util';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
@@ -36,7 +32,19 @@ import { type RecordVanSuspicionParams } from './van-fraud-radar.service';
 export type VanExpensesPackagingCustomersDeps = {
   db: Kysely<Database>;
   audit: AuditService;
-  verifySupervisorPin: (tenantId: string, pinInput?: string | null, repId?: number | null, queryable?: any, accountId?: string | null) => Promise<{ approved: boolean; supervisorId?: number; supervisorName?: string; supervisorRole?: string; approvalMode?: 'pin' | 'account' }>;
+  verifySupervisorPin: (
+    tenantId: string,
+    pinInput?: string | null,
+    repId?: number | null,
+    queryable?: any,
+    accountId?: string | null,
+  ) => Promise<{
+    approved: boolean;
+    supervisorId?: number;
+    supervisorName?: string;
+    supervisorRole?: string;
+    approvalMode?: 'pin' | 'account';
+  }>;
   recordSuspicionEvent: (params: RecordVanSuspicionParams) => Promise<void>;
   assertTripOwnedByRep: (tenantId: string, tripId: number, repId: number) => Promise<void>;
   assertRepServedCustomer: (tenantId: string, repId: number, customerId: number) => Promise<void>;
@@ -120,7 +128,13 @@ export class VanExpensesPackagingCustomersService {
     let approvedSupervisorName: string | undefined = undefined;
 
     if (payload.supervisorOverridePin) {
-      const pinCheck = await this.verifySupervisorPin(tenantId, payload.supervisorOverridePin, repId, undefined, accountId);
+      const pinCheck = await this.verifySupervisorPin(
+        tenantId,
+        payload.supervisorOverridePin,
+        repId,
+        undefined,
+        accountId,
+      );
       supervisorApproved = pinCheck.approved;
       approvedSupervisorId = pinCheck.supervisorId;
       approvedSupervisorName = pinCheck.supervisorName;
@@ -446,7 +460,11 @@ export class VanExpensesPackagingCustomersService {
     const phone = (body.phone || '').trim();
     const address = (body.address || district || '').trim();
 
-    const rawDays = body.visitDays || body.metadata?.visit_days || body.metadata?.visitDays || (body.metadata?.visit_day ? [body.metadata.visit_day] : []);
+    const rawDays =
+      body.visitDays ||
+      body.metadata?.visit_days ||
+      body.metadata?.visitDays ||
+      (body.metadata?.visit_day ? [body.metadata.visit_day] : []);
     const normalizedDays = Array.isArray(rawDays)
       ? rawDays.map((d: string) => DAY_KEY_TO_ARABIC[normalizeDayKey(d)] || d).filter(Boolean)
       : [];
@@ -470,12 +488,7 @@ export class VanExpensesPackagingCustomersService {
       existing = await this.anyDb
         .selectFrom('customers')
         .where('tenant_id', '=', tenantId)
-        .where((eb: any) =>
-          eb.or([
-            eb('phone', '=', cleanPhone),
-            eb('phone', '=', phone),
-          ]),
-        )
+        .where((eb: any) => eb.or([eb('phone', '=', cleanPhone), eb('phone', '=', phone)]))
         .select(['id', 'name', 'phone', 'address', 'metadata', 'balance'])
         .executeTakeFirst();
     }
@@ -492,7 +505,11 @@ export class VanExpensesPackagingCustomersService {
     if (existing) {
       let existingMeta: any = {};
       if (typeof existing.metadata === 'string') {
-        try { existingMeta = JSON.parse(existing.metadata); } catch { existingMeta = {}; }
+        try {
+          existingMeta = JSON.parse(existing.metadata);
+        } catch {
+          existingMeta = {};
+        }
       } else if (existing.metadata && typeof existing.metadata === 'object') {
         existingMeta = existing.metadata;
       }
@@ -502,9 +519,7 @@ export class VanExpensesPackagingCustomersService {
         assignedRepIds.push(Number(repId));
       }
 
-      const existingVisitDays: string[] = Array.isArray(existingMeta.visit_days)
-        ? existingMeta.visit_days
-        : [];
+      const existingVisitDays: string[] = Array.isArray(existingMeta.visit_days) ? existingMeta.visit_days : [];
       const mergedDays = Array.from(new Set([...existingVisitDays, ...visit_days]));
       const custCode = normalizeCustomerCode(existingMeta.customer_code || existingMeta.code, existing.id);
 
@@ -828,7 +843,7 @@ export class VanExpensesPackagingCustomersService {
     if (recentCustomerPayments && recentCustomerPayments.length > 0) {
       collectionsList = recentCustomerPayments.map((c: any) => {
         const receiptMatch = c.note ? String(c.note).match(/#([A-Z0-9-]+)/) : null;
-        const receiptNumber = receiptMatch ? receiptMatch[1] : (c.transferReference ? `TR-${c.id}` : `COL-${c.id}`);
+        const receiptNumber = receiptMatch ? receiptMatch[1] : c.transferReference ? `TR-${c.id}` : `COL-${c.id}`;
 
         let paymentMethod = 'cash';
         const noteText = String(c.note || '').toLowerCase();
@@ -892,7 +907,11 @@ export class VanExpensesPackagingCustomersService {
 
     let custMeta: any = {};
     if (typeof customer.metadata === 'string') {
-      try { custMeta = JSON.parse(customer.metadata); } catch { custMeta = {}; }
+      try {
+        custMeta = JSON.parse(customer.metadata);
+      } catch {
+        custMeta = {};
+      }
     } else if (customer.metadata && typeof customer.metadata === 'object') {
       custMeta = customer.metadata;
     }
@@ -921,9 +940,13 @@ export class VanExpensesPackagingCustomersService {
       overdueInvoices.reduce((sum: number, inv: any) => sum + Number(inv.remaining || 0), 0),
       moneyDigits,
     );
-    const oldestOverdueDays = overdueInvoices.length > 0
-      ? Math.max(0, Math.floor((Date.now() - new Date(overdueInvoices[0].saleDate).getTime()) / (1000 * 60 * 60 * 24)))
-      : 0;
+    const oldestOverdueDays =
+      overdueInvoices.length > 0
+        ? Math.max(
+            0,
+            Math.floor((Date.now() - new Date(overdueInvoices[0].saleDate).getTime()) / (1000 * 60 * 60 * 24)),
+          )
+        : 0;
 
     return {
       ok: true,
@@ -944,7 +967,7 @@ export class VanExpensesPackagingCustomersService {
         totalOverdueAmount,
         oldestOverdueDays,
       },
-      packagingBalance: Array.isArray(packaging) ? packaging : (packaging?.packages || []),
+      packagingBalance: Array.isArray(packaging) ? packaging : packaging?.packages || [],
       recentSales: recentSales.map((s: any) => ({
         id: Number(s.id),
         docNo: String(s.docNo || `INV-${s.id}`),

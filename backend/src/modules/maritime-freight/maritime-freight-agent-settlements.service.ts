@@ -41,13 +41,21 @@ export interface MaritimeFreightAgentSettlementsDeps {
   // Bound kernel helper (same name as the facade member, so the moved
   // bodies are byte-identical). resolveFreightExchangeRate stays in the
   // facade forever (kernel).
-  resolveFreightExchangeRate: (tenantId: string, currency: string | undefined, suppliedRate?: number) => Promise<number>;
+  resolveFreightExchangeRate: (
+    tenantId: string,
+    currency: string | undefined,
+    suppliedRate?: number,
+  ) => Promise<number>;
 }
 
 @Injectable()
 export class MaritimeFreightAgentSettlementsService {
   private readonly db: Kysely<Database>;
-  private readonly resolveFreightExchangeRate: (tenantId: string, currency: string | undefined, suppliedRate?: number) => Promise<number>;
+  private readonly resolveFreightExchangeRate: (
+    tenantId: string,
+    currency: string | undefined,
+    suppliedRate?: number,
+  ) => Promise<number>;
 
   constructor(deps: MaritimeFreightAgentSettlementsDeps) {
     this.db = deps.db;
@@ -60,10 +68,7 @@ export class MaritimeFreightAgentSettlementsService {
 
   async listAgentSettlements(auth: AuthContext, filters?: { agentId?: string; status?: string; search?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let query = this.db
-      .selectFrom('maritime_agent_settlements')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('maritime_agent_settlements').selectAll().where('tenant_id', '=', tenantId);
 
     if (filters?.agentId) {
       query = query.where('agent_id', '=', String(filters.agentId));
@@ -73,11 +78,13 @@ export class MaritimeFreightAgentSettlementsService {
     }
     if (filters?.search) {
       const term = `%${filters.search}%`;
-      query = query.where((eb) => eb.or([
-        eb('agent_name', 'ilike', term),
-        eb('job_number', 'ilike', term),
-        eb('reference_number', 'ilike', term),
-      ]));
+      query = query.where((eb) =>
+        eb.or([
+          eb('agent_name', 'ilike', term),
+          eb('job_number', 'ilike', term),
+          eb('reference_number', 'ilike', term),
+        ]),
+      );
     }
 
     return await query.orderBy('id', 'desc').execute();
@@ -101,7 +108,8 @@ export class MaritimeFreightAgentSettlementsService {
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const localEq = convertFxAmount(amount, rate, digits);
 
-    const settlementPrefix = dto.settlementType === 'debit_note' ? 'ADN' : dto.settlementType === 'credit_note' ? 'ACN' : 'APS';
+    const settlementPrefix =
+      dto.settlementType === 'debit_note' ? 'ADN' : dto.settlementType === 'credit_note' ? 'ACN' : 'APS';
     const suppliedRef = dto.referenceNumber?.trim() || null;
 
     // The generated reference number follows the module-wide
@@ -134,7 +142,15 @@ export class MaritimeFreightAgentSettlementsService {
       if (suppliedRef) return row;
       const [renamed] = await trx
         .updateTable('maritime_agent_settlements')
-        .set({ reference_number: formatDailyDocumentNumber(settlementPrefix, Number(row.id), new Date(), 4, await getTenantTimezone(trx, tenantId)) })
+        .set({
+          reference_number: formatDailyDocumentNumber(
+            settlementPrefix,
+            Number(row.id),
+            new Date(),
+            4,
+            await getTenantTimezone(trx, tenantId),
+          ),
+        })
         .where('id', '=', row.id)
         .where('tenant_id', '=', tenantId)
         .returningAll()

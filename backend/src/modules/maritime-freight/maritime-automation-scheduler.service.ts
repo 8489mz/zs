@@ -33,18 +33,24 @@ export class MaritimeAutomationSchedulerService implements OnApplicationBootstra
     }, 45000);
 
     // 2. Periodic IMAP bids check every 15 minutes (15 * 60 * 1000 ms)
-    this.syncTimer = setInterval(() => {
-      this.runPeriodicBidsSync().catch((err) => {
-        this.logger.warn(`Periodic maritime bids sync check error: ${err?.message}`);
-      });
-    }, 15 * 60 * 1000);
+    this.syncTimer = setInterval(
+      () => {
+        this.runPeriodicBidsSync().catch((err) => {
+          this.logger.warn(`Periodic maritime bids sync check error: ${err?.message}`);
+        });
+      },
+      15 * 60 * 1000,
+    );
 
     // 3. Demurrage expiry scan every 6 hours
-    this.demurrageTimer = setInterval(() => {
-      this.runPeriodicDemurrageScan().catch((err) => {
-        this.logger.warn(`Periodic maritime demurrage scan error: ${err?.message}`);
-      });
-    }, 6 * 60 * 60 * 1000);
+    this.demurrageTimer = setInterval(
+      () => {
+        this.runPeriodicDemurrageScan().catch((err) => {
+          this.logger.warn(`Periodic maritime demurrage scan error: ${err?.message}`);
+        });
+      },
+      6 * 60 * 60 * 1000,
+    );
   }
 
   onModuleDestroy() {
@@ -80,7 +86,7 @@ export class MaritimeAutomationSchedulerService implements OnApplicationBootstra
           const config = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
           if (config && config.autoReadInboundBids && config.imapUser && config.imapPassword) {
             this.logger.debug(`Running automated inbound bids sync for tenant [${row.tenant_id}]...`);
-            
+
             const syntheticAuth: AuthContext = {
               userId: 0,
               sessionId: 'scheduler-system',
@@ -194,7 +200,9 @@ export class MaritimeAutomationSchedulerService implements OnApplicationBootstra
               demurrageAmount,
             );
           } catch (err: any) {
-            this.logger.warn(`Demurrage auto-charge failed for container ${c.container_number} (job ${c.job_id}): ${err?.message}`);
+            this.logger.warn(
+              `Demurrage auto-charge failed for container ${c.container_number} (job ${c.job_id}): ${err?.message}`,
+            );
           }
         } else {
           // Within safe or warning window
@@ -213,7 +221,9 @@ export class MaritimeAutomationSchedulerService implements OnApplicationBootstra
           }
 
           if (daysRemaining <= 3 && daysRemaining >= 0) {
-            this.logger.log(`[Demurrage Warning] Container ${c.container_number} (Job #${c.job_id}) has ${daysRemaining} free days remaining!`);
+            this.logger.log(
+              `[Demurrage Warning] Container ${c.container_number} (Job #${c.job_id}) has ${daysRemaining} free days remaining!`,
+            );
 
             // Proactive WhatsApp Demurrage Alert to Customer
             try {

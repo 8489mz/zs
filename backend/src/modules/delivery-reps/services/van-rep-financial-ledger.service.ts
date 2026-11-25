@@ -46,7 +46,12 @@ export class VanRepFinancialLedgerService {
   }
 
   private get ledgerDeps(): VanRepFinancialLedgerDeps {
-    return { db: this.db, audit: this.audit, accountingPosting: this.accountingPosting, verifySupervisorPin: this.verifySupervisorPin };
+    return {
+      db: this.db,
+      audit: this.audit,
+      accountingPosting: this.accountingPosting,
+      verifySupervisorPin: this.verifySupervisorPin,
+    };
   }
 
   private getRepFinancialLedgerInstance?: GetRepFinancialLedgerSlice;
@@ -63,8 +68,7 @@ export class VanRepFinancialLedgerService {
         this.shortageCustodySlice.assertRepStockShortageCustodyLeg(trx, tenantId, item, amount, bookDigits),
       resolveRepShortageReceivingShift: (trx, params) =>
         this.shortageCustodySlice.resolveRepShortageReceivingShift(trx, params),
-      insertRepShortageCashRow: (trx, params) =>
-        this.shortageCustodySlice.insertRepShortageCashRow(trx, params),
+      insertRepShortageCashRow: (trx, params) => this.shortageCustodySlice.insertRepShortageCashRow(trx, params),
     }));
   }
 

@@ -64,10 +64,7 @@ function requiredDate(value: string | null | undefined): boolean {
  * bank transfers (the clearance gate in package 2 enforces them
  * before clearance/receipt posting) — they are never required here.
  */
-export function validatePaymentEvidence(
-  method: string,
-  evidence: TransferPaymentEvidence,
-): void {
+export function validatePaymentEvidence(method: string, evidence: TransferPaymentEvidence): void {
   if (!isPaymentMethod(method)) {
     throw new Error(
       `[IMPORT_PAYMENT_METHOD_UNKNOWN] Payment method '${method}' is not a supported import payment method.`,

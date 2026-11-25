@@ -1,4 +1,3 @@
-
 /**
  * Pure Calculation Engine for Representative Monthly Sales Targets.
  *
@@ -41,10 +40,7 @@ export {
   type GeofenceEvaluationResult,
   evaluateGeofenceCompliance,
 } from './rep-target/rep-geo.slice';
-export {
-  type BatchExpiryStatusResult,
-  evaluateBatchExpiryStatus,
-} from './rep-target/batch-expiry.slice';
+export { type BatchExpiryStatusResult, evaluateBatchExpiryStatus } from './rep-target/batch-expiry.slice';
 export {
   type CustomerRepLedgerEntryInput,
   type CustomerRepBalanceItem,

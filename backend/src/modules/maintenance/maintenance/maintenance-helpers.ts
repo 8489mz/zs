@@ -36,12 +36,7 @@ export async function findSoldSerialSaleId(
     .select('sale_id')
     .where('tenant_id', '=', tenantId)
     .where('status', '=', 'sold')
-    .where((eb) =>
-      eb.or([
-        sql<boolean>`LOWER(serial_number) = ${needle}`,
-        sql<boolean>`LOWER(imei_2) = ${needle}`,
-      ]),
-    )
+    .where((eb) => eb.or([sql<boolean>`LOWER(serial_number) = ${needle}`, sql<boolean>`LOWER(imei_2) = ${needle}`]))
     .orderBy('id', 'desc')
     .executeTakeFirst();
   return row?.sale_id ? Number(row.sale_id) : null;
@@ -52,9 +47,11 @@ export function isFinancialTicketChange(
   payload: Pick<UpsertMaintenanceTicketDto, 'advancePayment' | 'finalCost' | 'expectedCost' | 'status'>,
   existing: { advance_payment: number; final_cost: number; expected_cost: number; status: string },
 ): boolean {
-  if (payload.advancePayment !== undefined && Number(payload.advancePayment) !== Number(existing.advance_payment)) return true;
+  if (payload.advancePayment !== undefined && Number(payload.advancePayment) !== Number(existing.advance_payment))
+    return true;
   if (payload.finalCost !== undefined && Number(payload.finalCost) !== Number(existing.final_cost)) return true;
-  if (payload.expectedCost !== undefined && Number(payload.expectedCost) !== Number(existing.expected_cost)) return true;
+  if (payload.expectedCost !== undefined && Number(payload.expectedCost) !== Number(existing.expected_cost))
+    return true;
   if (payload.status !== undefined && payload.status !== existing.status) return true;
   return false;
 }
@@ -180,8 +177,7 @@ export function resolveQuoteFields(
     updates.quoted_cost = Number(payload.quotedCost);
   }
   const priorApprovalCovers =
-    payload.quotedCost === undefined ||
-    Number(payload.quotedCost) === Number(stored.quoted_cost ?? 0);
+    payload.quotedCost === undefined || Number(payload.quotedCost) === Number(stored.quoted_cost ?? 0);
   let effectiveApproved = priorApprovalCovers && stored.quote_approved_at !== null;
   if (payload.approveQuote === true) {
     if (effectiveQuotedCost === null || effectiveQuotedCost <= 0) {

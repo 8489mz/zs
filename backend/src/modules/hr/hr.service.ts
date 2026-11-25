@@ -50,9 +50,23 @@ import { getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-ti
 import { calculatePayrollLoanDueTotal, requireLoanMoney } from './payroll-loan-allocation.engine';
 import { MoneyDigits, currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
 import { calculateHourlyOvertimePremium } from './engines/payroll-calculation.engine';
-import { calculateHrPayrollRunLine, requirePayrollMonetaryCurrency, requireStoredHrMoney, canReincludeAutoExcludedPayrollItem, AUTO_PAYROLL_EXCLUSION_NOTE } from './engines/hr-payroll-run.engine';
-import { validateHrStatutoryPolicy,   type HrStatutoryPolicy } from './engines/hr-statutory-policy.engine';
-import { summarizeHourlyAttendance, calculateEffectiveContractPay, calculateEffectiveCompensationPay, calculateDatedPayrollAdjustment, payrollCalendarMonthFraction,   type EffectiveSalaryContract, type EffectiveCompensationPackage } from './engines/hourly-attendance-pay.engine';
+import {
+  calculateHrPayrollRunLine,
+  requirePayrollMonetaryCurrency,
+  requireStoredHrMoney,
+  canReincludeAutoExcludedPayrollItem,
+  AUTO_PAYROLL_EXCLUSION_NOTE,
+} from './engines/hr-payroll-run.engine';
+import { validateHrStatutoryPolicy, type HrStatutoryPolicy } from './engines/hr-statutory-policy.engine';
+import {
+  summarizeHourlyAttendance,
+  calculateEffectiveContractPay,
+  calculateEffectiveCompensationPay,
+  calculateDatedPayrollAdjustment,
+  payrollCalendarMonthFraction,
+  type EffectiveSalaryContract,
+  type EffectiveCompensationPackage,
+} from './engines/hourly-attendance-pay.engine';
 import { type EmployeeWithdrawalBalanceResult } from './engines/employee-withdrawal-balance.engine';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
 
@@ -266,11 +280,20 @@ export class HrService {
     }
   }
 
-  async listMasterData(kind: MasterKind, query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
+  async listMasterData(
+    kind: MasterKind,
+    query: Record<string, unknown>,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.leaveService.listMasterData(kind, query, auth);
   }
 
-  async upsertMasterData(kind: MasterKind, id: number | null, payload: UpsertHrMasterDataDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertMasterData(
+    kind: MasterKind,
+    id: number | null,
+    payload: UpsertHrMasterDataDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.leaveService.upsertMasterData(kind, id, payload, auth);
   }
 
@@ -298,8 +321,11 @@ export class HrService {
     return this.employeesService.getEmployeeProfile(id, auth);
   }
 
-  
-  async getEndOfServicePreview(id: number, dateStr: string | undefined, auth: AuthContext): Promise<Record<string, unknown>> {
+  async getEndOfServicePreview(
+    id: number,
+    dateStr: string | undefined,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeesService.getEndOfServicePreview(id, dateStr, auth);
   }
 
@@ -315,7 +341,11 @@ export class HrService {
     return this.employeesService.createEmployeeFromRecruitment(trx, input, auth);
   }
 
-  async upsertEmployee(id: number | null, payload: UpsertEmployeeDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertEmployee(
+    id: number | null,
+    payload: UpsertEmployeeDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeesService.upsertEmployee(id, payload, auth);
   }
 
@@ -323,7 +353,11 @@ export class HrService {
     return this.employeesService.updateEmployeeStatus(id, status, auth);
   }
 
-  async updateEmployeeCredentials(employeeId: number, payload: UpdateEmployeeCredentialsDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async updateEmployeeCredentials(
+    employeeId: number,
+    payload: UpdateEmployeeCredentialsDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeesService.updateEmployeeCredentials(employeeId, payload, auth);
   }
 
@@ -335,7 +369,12 @@ export class HrService {
     return this.employeeRecordsService.listContacts(employeeId, auth);
   }
 
-  async upsertContact(employeeId: number, id: number | null, payload: UpsertEmployeeContactDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertContact(
+    employeeId: number,
+    id: number | null,
+    payload: UpsertEmployeeContactDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeeRecordsService.upsertContact(employeeId, id, payload, auth);
   }
 
@@ -343,7 +382,12 @@ export class HrService {
     return this.employeeRecordsService.listDocuments(employeeId, auth);
   }
 
-  async upsertDocument(employeeId: number, id: number | null, payload: UpsertEmployeeDocumentDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertDocument(
+    employeeId: number,
+    id: number | null,
+    payload: UpsertEmployeeDocumentDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeeRecordsService.upsertDocument(employeeId, id, payload, auth);
   }
 
@@ -351,7 +395,12 @@ export class HrService {
     return this.employeeRecordsService.listContracts(employeeId, auth);
   }
 
-  async upsertContract(employeeId: number, id: number | null, payload: UpsertEmploymentContractDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertContract(
+    employeeId: number,
+    id: number | null,
+    payload: UpsertEmploymentContractDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeeRecordsService.upsertContract(employeeId, id, payload, auth);
   }
 
@@ -359,7 +408,12 @@ export class HrService {
     return this.employeeRecordsService.listCompensation(employeeId, auth);
   }
 
-  async upsertCompensation(employeeId: number, id: number | null, payload: UpsertCompensationPackageDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertCompensation(
+    employeeId: number,
+    id: number | null,
+    payload: UpsertCompensationPackageDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeeRecordsService.upsertCompensation(employeeId, id, payload, auth);
   }
 
@@ -367,7 +421,11 @@ export class HrService {
     return this.employeeRecordsService.listEmployeeAdjustments(employeeId, auth);
   }
 
-  async createEmployeeAdjustment(employeeId: number, payload: CreateEmployeeAdjustmentDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async createEmployeeAdjustment(
+    employeeId: number,
+    payload: CreateEmployeeAdjustmentDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeeRecordsService.createEmployeeAdjustment(employeeId, payload, auth);
   }
 
@@ -403,7 +461,11 @@ export class HrService {
     return this.employeesService.listLedger(employeeId, auth);
   }
 
-  async getEmployeeFinancialStatement(employeeId: number, query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
+  async getEmployeeFinancialStatement(
+    employeeId: number,
+    query: Record<string, unknown>,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.reportsService.getEmployeeFinancialStatement(employeeId, query, auth);
   }
 
@@ -439,7 +501,11 @@ export class HrService {
     return this.payrollPostingService.payPayrollRun(id, payload, auth);
   }
 
-  async payPayrollRunItem(itemId: number, payload: PayPayrollItemDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async payPayrollRunItem(
+    itemId: number,
+    payload: PayPayrollItemDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.payrollPostingService.payPayrollRunItem(itemId, payload, auth);
   }
 
@@ -451,11 +517,19 @@ export class HrService {
     return this.payrollRunsService.generatePayrollWps(id, payload, auth);
   }
 
-  async updatePayrollRunItem(id: number, payload: UpsertPayrollItemDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async updatePayrollRunItem(
+    id: number,
+    payload: UpsertPayrollItemDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.payrollRunsService.updatePayrollRunItem(id, payload, auth);
   }
 
-  async createPayrollAdjustment(id: number, payload: CreatePayrollAdjustmentDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async createPayrollAdjustment(
+    id: number,
+    payload: CreatePayrollAdjustmentDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.payrollRunsService.createPayrollAdjustment(id, payload, auth);
   }
 
@@ -471,11 +545,17 @@ export class HrService {
     return this.attendanceRecordsService.bulkSaveAttendance(payload, auth);
   }
 
-  async upsertAttendanceRecord(payload: UpsertAttendanceRecordDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertAttendanceRecord(
+    payload: UpsertAttendanceRecordDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.attendanceRecordsService.upsertAttendanceRecord(payload, auth);
   }
 
-  async bulkImportAttendanceRecords(payload: BulkImportAttendanceDto, auth: AuthContext): Promise<{ imported: number; skipped: number; errors: string[] }> {
+  async bulkImportAttendanceRecords(
+    payload: BulkImportAttendanceDto,
+    auth: AuthContext,
+  ): Promise<{ imported: number; skipped: number; errors: string[] }> {
     return this.attendanceRecordsService.bulkImportAttendanceRecords(payload, auth);
   }
 
@@ -483,7 +563,12 @@ export class HrService {
     return this.attendanceExceptionsService.listAttendanceExceptions(query, auth);
   }
 
-  async decideAttendanceException(id: number, status: 'approved' | 'skipped', payload: DecideAttendanceExceptionDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async decideAttendanceException(
+    id: number,
+    status: 'approved' | 'skipped',
+    payload: DecideAttendanceExceptionDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.attendanceExceptionsService.decideAttendanceException(id, status, payload, auth);
   }
 
@@ -491,7 +576,11 @@ export class HrService {
     return this.leaveService.listLeaveTypes(query, auth);
   }
 
-  async upsertLeaveType(id: number | null, payload: UpsertLeaveTypeDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertLeaveType(
+    id: number | null,
+    payload: UpsertLeaveTypeDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.leaveService.upsertLeaveType(id, payload, auth);
   }
 
@@ -503,15 +592,27 @@ export class HrService {
     return this.leaveService.createLeaveRequest(payload, auth);
   }
 
-  async approveLeaveRequest(id: number, payload: DecideLeaveRequestDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async approveLeaveRequest(
+    id: number,
+    payload: DecideLeaveRequestDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.leaveService.approveLeaveRequest(id, payload, auth);
   }
 
-  async rejectLeaveRequest(id: number, payload: DecideLeaveRequestDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async rejectLeaveRequest(
+    id: number,
+    payload: DecideLeaveRequestDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.leaveService.rejectLeaveRequest(id, payload, auth);
   }
 
-  async cancelLeaveRequest(id: number, payload: DecideLeaveRequestDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async cancelLeaveRequest(
+    id: number,
+    payload: DecideLeaveRequestDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.leaveService.cancelLeaveRequest(id, payload, auth);
   }
 
@@ -519,23 +620,43 @@ export class HrService {
     return this.employeeRecordsService.listEmployeeAssets(query, auth);
   }
 
-  async upsertEmployeeAsset(id: number | null, payload: UpsertEmployeeAssetDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertEmployeeAsset(
+    id: number | null,
+    payload: UpsertEmployeeAssetDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeeRecordsService.upsertEmployeeAsset(id, payload, auth);
   }
 
-  async returnEmployeeAsset(id: number, payload: EmployeeAssetActionDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async returnEmployeeAsset(
+    id: number,
+    payload: EmployeeAssetActionDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeeRecordsService.returnEmployeeAsset(id, payload, auth);
   }
 
-  async markEmployeeAssetLost(id: number, payload: EmployeeAssetActionDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async markEmployeeAssetLost(
+    id: number,
+    payload: EmployeeAssetActionDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeeRecordsService.markEmployeeAssetLost(id, payload, auth);
   }
 
-  async markEmployeeAssetDamaged(id: number, payload: EmployeeAssetActionDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async markEmployeeAssetDamaged(
+    id: number,
+    payload: EmployeeAssetActionDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeeRecordsService.markEmployeeAssetDamaged(id, payload, auth);
   }
 
-  async cancelEmployeeAsset(id: number, payload: EmployeeAssetActionDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async cancelEmployeeAsset(
+    id: number,
+    payload: EmployeeAssetActionDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.employeeRecordsService.cancelEmployeeAsset(id, payload, auth);
   }
 
@@ -559,4 +680,3 @@ export class HrService {
     return this.advancesService.createQuickCashAdvance(payload, auth);
   }
 }
-

@@ -92,8 +92,8 @@ export class MaritimeCustomerPortalService {
       const cleanNoCountry = cleanDigits.startsWith('20')
         ? cleanDigits.slice(2)
         : cleanDigits.startsWith('0')
-        ? cleanDigits.slice(1)
-        : cleanDigits;
+          ? cleanDigits.slice(1)
+          : cleanDigits;
 
       const tenantFilter = companyScope ? String(companyScope).trim() : undefined;
 
@@ -129,8 +129,8 @@ export class MaritimeCustomerPortalService {
         const cPhoneNoCountry = cPhone.startsWith('20')
           ? cPhone.slice(2)
           : cPhone.startsWith('0')
-          ? cPhone.slice(1)
-          : cPhone;
+            ? cPhone.slice(1)
+            : cPhone;
         return cPhone === cleanDigits || cPhoneNoCountry === cleanNoCountry || c.phone === rawPhone;
       });
 
@@ -152,7 +152,11 @@ export class MaritimeCustomerPortalService {
           401,
         );
       }
-      const pinCheck = await verifyPassword(pinCode, String(matched.portal_pin_hash), String(matched.portal_pin_salt || ''));
+      const pinCheck = await verifyPassword(
+        pinCode,
+        String(matched.portal_pin_hash),
+        String(matched.portal_pin_salt || ''),
+      );
       if (!pinCheck.valid) {
         throw new AppError('رمز الدخول السري (PIN) غير صحيح', 'UNAUTHORIZED_CUSTOMER', 401);
       }
@@ -464,7 +468,10 @@ export class MaritimeCustomerPortalService {
   /**
    * List Customer Shipments with containers & live milestones
    */
-  async getShipments(auth: CustomerPortalContext, query: { status?: string; search?: string; page?: string; pageSize?: string }) {
+  async getShipments(
+    auth: CustomerPortalContext,
+    query: { status?: string; search?: string; page?: string; pageSize?: string },
+  ) {
     const page = Math.max(1, Number(query.page || 1));
     const pageSize = Math.min(100, Math.max(1, Number(query.pageSize || 20)));
     const offset = (page - 1) * pageSize;
@@ -497,12 +504,7 @@ export class MaritimeCustomerPortalService {
     const totalRes = await baseQuery.select((eb) => eb.fn.countAll<string>().as('count')).executeTakeFirst();
     const total = Number(totalRes?.count || 0);
 
-    const jobs = await baseQuery
-      .selectAll()
-      .orderBy('created_at', 'desc')
-      .offset(offset)
-      .limit(pageSize)
-      .execute();
+    const jobs = await baseQuery.selectAll().orderBy('created_at', 'desc').offset(offset).limit(pageSize).execute();
 
     // Attach containers and milestones
     const enriched = await Promise.all(
@@ -665,7 +667,13 @@ export class MaritimeCustomerPortalService {
         .returningAll()
         .execute();
 
-      const finalNumber = formatDailyDocumentNumber('INQ', Number(inquiry.id), new Date(), 4, await getTenantTimezone(trx, auth.tenantId));
+      const finalNumber = formatDailyDocumentNumber(
+        'INQ',
+        Number(inquiry.id),
+        new Date(),
+        4,
+        await getTenantTimezone(trx, auth.tenantId),
+      );
       await trx
         .updateTable('maritime_inquiries')
         .set({ inquiry_number: finalNumber })

@@ -1,4 +1,15 @@
-import { IsString, IsNumber, IsOptional, Min, IsIn, IsPositive, IsArray, IsBoolean, IsNotEmpty, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  Min,
+  IsIn,
+  IsPositive,
+  IsArray,
+  IsBoolean,
+  IsNotEmpty,
+  MaxLength,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateCustomsBrokerDto {

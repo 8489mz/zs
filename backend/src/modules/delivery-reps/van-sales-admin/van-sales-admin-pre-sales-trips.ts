@@ -29,29 +29,25 @@ export class VanSalesAdminPreSalesTripsSlice {
     });
   }
 
-  async getPreSalesOrderDetails(
-    req: RequestWithAuth,
-    id: number,
-  ) {
+  async getPreSalesOrderDetails(req: RequestWithAuth, id: number) {
     const { tenantId } = requireTenantScope(req.authContext!);
     return this.vanPreSalesService.getPreSalesOrderDetails(id, tenantId);
   }
 
-  async approvePreSalesOrder(
-    req: RequestWithAuth,
-    id: number,
-  ) {
+  async approvePreSalesOrder(req: RequestWithAuth, id: number) {
     const { tenantId, accountId } = requireTenantScope(req.authContext!);
     return this.vanPreSalesService.approvePreSalesOrder(id, Number(req.authContext!.userId), tenantId, accountId);
   }
 
-  async rejectPreSalesOrder(
-    req: RequestWithAuth,
-    id: number,
-    reason?: string,
-  ) {
+  async rejectPreSalesOrder(req: RequestWithAuth, id: number, reason?: string) {
     const { tenantId, accountId } = requireTenantScope(req.authContext!);
-    return this.vanPreSalesService.rejectPreSalesOrder(id, Number(req.authContext!.userId), tenantId, accountId, reason);
+    return this.vanPreSalesService.rejectPreSalesOrder(
+      id,
+      Number(req.authContext!.userId),
+      tenantId,
+      accountId,
+      reason,
+    );
   }
 
   async consolidatePreSalesOrdersToRequisition(
@@ -90,13 +86,7 @@ export class VanSalesAdminPreSalesTripsSlice {
     return this.vanPreSalesService.convertPreSalesOrderToInvoice(id, req.authContext!, body);
   }
 
-  async listTrips(
-    req: RequestWithAuth,
-    repId?: string,
-    status?: string,
-    dateFrom?: string,
-    dateTo?: string,
-  ) {
+  async listTrips(req: RequestWithAuth, repId?: string, status?: string, dateFrom?: string, dateTo?: string) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const trips = await this.vanSalesService.listTripsForAdmin(tenantId, {
       repId: repId ? Number(repId) : undefined,
@@ -107,14 +97,12 @@ export class VanSalesAdminPreSalesTripsSlice {
     return { ok: true, trips };
   }
 
-  async getTripDetails(
-    req: RequestWithAuth,
-    id: number,
-    page: string,
-    pageSize: string,
-  ) {
+  async getTripDetails(req: RequestWithAuth, id: number, page: string, pageSize: string) {
     const { tenantId } = requireTenantScope(req.authContext!);
-    const details = await this.vanSalesService.getTripDetailsForAdmin(tenantId, id, { page: Number(page), pageSize: Number(pageSize) });
+    const details = await this.vanSalesService.getTripDetailsForAdmin(tenantId, id, {
+      page: Number(page),
+      pageSize: Number(pageSize),
+    });
     return { ok: true, ...details };
   }
 

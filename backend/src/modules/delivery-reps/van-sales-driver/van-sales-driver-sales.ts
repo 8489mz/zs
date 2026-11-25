@@ -13,7 +13,9 @@ export interface VanSalesDriverSalesDeps {
   vanSalesService: VanSalesService;
   // Bound kernel helper (stays in the facade; passed bound so the moved
   // bodies stay byte-identical).
-  verifyDriver: (authHeader: string) => Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string }>;
+  verifyDriver: (
+    authHeader: string,
+  ) => Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string }>;
 }
 
 @Injectable()
@@ -140,19 +142,13 @@ export class VanSalesDriverSalesSlice {
     });
   }
 
-  async listTripDamagedSwaps(
-    authHeader: string,
-    tripId: number,
-  ) {
+  async listTripDamagedSwaps(authHeader: string, tripId: number) {
     const driver = await this.verifyDriver(authHeader);
     const swaps = await this.vanSalesService.listTripDamagedSwaps(driver.tenantId, tripId, driver.repId);
     return { ok: true, swaps };
   }
 
-  async getCustomerEligibleSales(
-    authHeader: string,
-    customerId: number,
-  ) {
+  async getCustomerEligibleSales(authHeader: string, customerId: number) {
     const driver = await this.verifyDriver(authHeader);
     const sales = await this.vanSalesService.getCustomerEligibleSales(driver.tenantId, customerId, driver.repId);
     return { ok: true, sales };
@@ -166,7 +162,14 @@ export class VanSalesDriverSalesSlice {
       saleId?: number | null;
       returnReason: 'damaged' | 'expired' | 'manufacturing_defect' | 'stagnant' | 'order_mismatch' | 'customer_request';
       refundMethod?: 'credit' | 'cash';
-      items: { productId: number; qty: number; unitPrice: number; saleItemId?: number; unitMultiplier?: number; unitName?: string }[];
+      items: {
+        productId: number;
+        qty: number;
+        unitPrice: number;
+        saleItemId?: number;
+        unitMultiplier?: number;
+        unitName?: string;
+      }[];
       notes?: string;
       // INV-VAN-OFFLINE-TIMESTAMPS: the instant the return was made
       // offline (outbox createdAt, ISO with offset).

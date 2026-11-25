@@ -47,30 +47,33 @@ export class VanCollectionsAndSwapsService {
   }
 
   private get collectionsDeps(): VanCollectionsAndSwapsDeps {
-    return { db: this.db, audit: this.audit, accountingPosting: this.accountingPosting, vanFraudRadarService: this.vanFraudRadarService, generateDailySequenceNumber: this.generateDailySequenceNumber, recordSuspicionEvent: this.recordSuspicionEvent, resolveSystemAuthContext: this.resolveSystemAuthContext, verifySupervisorPin: this.verifySupervisorPin, moveVanStock: this.moveVanStock };
+    return {
+      db: this.db,
+      audit: this.audit,
+      accountingPosting: this.accountingPosting,
+      vanFraudRadarService: this.vanFraudRadarService,
+      generateDailySequenceNumber: this.generateDailySequenceNumber,
+      recordSuspicionEvent: this.recordSuspicionEvent,
+      resolveSystemAuthContext: this.resolveSystemAuthContext,
+      verifySupervisorPin: this.verifySupervisorPin,
+      moveVanStock: this.moveVanStock,
+    };
   }
 
   private recordFieldCollectionSliceInstance?: RecordFieldCollectionSlice;
   private get recordFieldCollectionSlice(): RecordFieldCollectionSlice {
-    return (this.recordFieldCollectionSliceInstance ??= new RecordFieldCollectionSlice(
-      this.collectionsDeps,
-    ));
+    return (this.recordFieldCollectionSliceInstance ??= new RecordFieldCollectionSlice(this.collectionsDeps));
   }
 
   private executeDamagedSwapSliceInstance?: ExecuteDamagedSwapSlice;
   private get executeDamagedSwapSlice(): ExecuteDamagedSwapSlice {
-    return (this.executeDamagedSwapSliceInstance ??= new ExecuteDamagedSwapSlice(
-      this.collectionsDeps,
-    ));
+    return (this.executeDamagedSwapSliceInstance ??= new ExecuteDamagedSwapSlice(this.collectionsDeps));
   }
 
   private repScopedReadsSliceInstance?: RepScopedReadsSlice;
   private get repScopedReadsSlice(): RepScopedReadsSlice {
-    return (this.repScopedReadsSliceInstance ??= new RepScopedReadsSlice(
-      this.collectionsDeps,
-    ));
+    return (this.repScopedReadsSliceInstance ??= new RepScopedReadsSlice(this.collectionsDeps));
   }
-
 
   async recordFieldCollectionInternal(
     repId: number,

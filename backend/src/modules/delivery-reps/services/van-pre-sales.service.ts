@@ -52,10 +52,8 @@ export class VanPreSalesService {
       // pattern adapted to this slice's direct-function ctor type): s1 and
       // the facade method are resolved at CALL time, so a spec mocking the
       // facade method after construction still intercepts.
-      this.s2Instance = new CreatePreSalesOrderSlice(
-        this.db,
-        (tenantId, preferredLocationId, productIds) =>
-          this.resolveDefaultWarehouseLocationId(tenantId, preferredLocationId, productIds),
+      this.s2Instance = new CreatePreSalesOrderSlice(this.db, (tenantId, preferredLocationId, productIds) =>
+        this.resolveDefaultWarehouseLocationId(tenantId, preferredLocationId, productIds),
       );
     }
     return this.s2Instance;
@@ -81,10 +79,8 @@ export class VanPreSalesService {
   private get s5(): ConsolidatePreSalesOrdersSlice {
     if (!this.s5Instance) {
       // Same call-time-resolved forwarding arrow as S2 (see above).
-      this.s5Instance = new ConsolidatePreSalesOrdersSlice(
-        this.db,
-        (tenantId, preferredLocationId, productIds) =>
-          this.resolveDefaultWarehouseLocationId(tenantId, preferredLocationId, productIds),
+      this.s5Instance = new ConsolidatePreSalesOrdersSlice(this.db, (tenantId, preferredLocationId, productIds) =>
+        this.resolveDefaultWarehouseLocationId(tenantId, preferredLocationId, productIds),
       );
     }
     return this.s5Instance;
@@ -168,4 +164,3 @@ export class VanPreSalesService {
     return this.s6.convertPreSalesOrderToInvoice(orderId, auth, payload);
   }
 }
-

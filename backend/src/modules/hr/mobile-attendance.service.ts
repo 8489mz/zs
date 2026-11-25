@@ -37,21 +37,13 @@ export interface MobileAttendanceUser {
   geofenceRadiusMeters: number;
 }
 
-export function calculateDistanceMeters(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-): number {
+export function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000; // Earth radius in meters
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(R * c);
 }
@@ -114,8 +106,8 @@ export class MobileAttendanceService {
     const cleanNoCountry = cleanDigits.startsWith('20')
       ? cleanDigits.slice(2)
       : cleanDigits.startsWith('0')
-      ? cleanDigits.slice(1)
-      : cleanDigits;
+        ? cleanDigits.slice(1)
+        : cleanDigits;
     if (cleanNoCountry.length < 8) {
       throw new AppError('بيانات الدخول غير صحيحة', 'UNAUTHORIZED_EMPLOYEE', 401);
     }
@@ -123,7 +115,9 @@ export class MobileAttendanceService {
     // Search active employees with matching contact phone
     let employeesQuery = this.anyDb
       .selectFrom('hr_employees as e')
-      .leftJoin('branches as b', (join: any) => join.onRef('b.id', '=', 'e.branch_id').onRef('b.tenant_id', '=', 'e.tenant_id'))
+      .leftJoin('branches as b', (join: any) =>
+        join.onRef('b.id', '=', 'e.branch_id').onRef('b.tenant_id', '=', 'e.tenant_id'),
+      )
       .select([
         'e.id as employee_id',
         'e.employee_no',
@@ -169,11 +163,16 @@ export class MobileAttendanceService {
       .selectFrom('hr_employee_contacts')
       .select(['employee_id', 'value'])
       .where('contact_type', '=', 'phone')
-      .where(sql<boolean>`RIGHT(REGEXP_REPLACE(value, '[^0-9]', '', 'g'), ${cleanNoCountry.length}) = ${cleanNoCountry}`);
+      .where(
+        sql<boolean>`RIGHT(REGEXP_REPLACE(value, '[^0-9]', '', 'g'), ${cleanNoCountry.length}) = ${cleanNoCountry}`,
+      );
     if (resolvedTenantId) contactsQuery = contactsQuery.where('tenant_id', '=', resolvedTenantId);
     const contacts = await contactsQuery.execute();
-    const candidateEmployeeIds = [...new Set(contacts.map((contact: any) => Number(contact.employee_id)).filter((id: number) => id > 0))];
-    if (!candidateEmployeeIds.length) throw new AppError('بيانات الدخول غير صحيحة أو رمز الـ PIN غير مطابق', 'UNAUTHORIZED_EMPLOYEE', 401);
+    const candidateEmployeeIds = [
+      ...new Set(contacts.map((contact: any) => Number(contact.employee_id)).filter((id: number) => id > 0)),
+    ];
+    if (!candidateEmployeeIds.length)
+      throw new AppError('بيانات الدخول غير صحيحة أو رمز الـ PIN غير مطابق', 'UNAUTHORIZED_EMPLOYEE', 401);
     employeesQuery = employeesQuery.where('e.id', 'in', candidateEmployeeIds);
     const employees = await employeesQuery.execute();
 
@@ -195,8 +194,8 @@ export class MobileAttendanceService {
         const pNoCountry = pDigits.startsWith('20')
           ? pDigits.slice(2)
           : pDigits.startsWith('0')
-          ? pDigits.slice(1)
-          : pDigits;
+            ? pDigits.slice(1)
+            : pDigits;
         return pDigits === cleanDigits || pNoCountry === cleanNoCountry;
       });
     });
@@ -414,8 +413,14 @@ export class MobileAttendanceService {
     const lat = Number(payload.latitude);
     const lng = Number(payload.longitude);
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0
-      || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      lat === 0 ||
+      lng === 0 ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lng) > 180
+    ) {
       throw new AppError('إحداثيات الـ GPS غير صالحة، يرجى تفعيل الموقع الجغرافي بالهاتف', 'GPS_REQUIRED', 400);
     }
 
@@ -454,7 +459,7 @@ export class MobileAttendanceService {
     const today = todayTenantDate(tenantTimezone);
     const now = new Date();
 
-    return this.db.transaction().execute(async trx => {
+    return this.db.transaction().execute(async (trx) => {
       // Locking the employee row ensures double mobile punches cannot both
       // observe an empty attendance row before either inserts or checks out.
       // Do not tenant-serialize all mobile punches at peak check-in time.
@@ -475,112 +480,115 @@ export class MobileAttendanceService {
         LIMIT 1
       `.execute(trx);
       if (closedPayroll.rows.length) {
-        throw new AppError('لا يمكن تعديل بصمة يوم أُغلقت رواتبه؛ اطلب تسوية إدارية',
-          'HR_MOBILE_ATTENDANCE_APPROVED_PAYROLL', 409);
-      }
-      const db: any = trx;
-    const existing = await db
-      .selectFrom('hr_attendance_records')
-      .selectAll()
-      .where('employee_id', '=', user.employeeId)
-      .where('work_date', '=', today)
-      .where('tenant_id', '=', user.tenantId)
-      .executeTakeFirst();
-
-    if (punchType === 'check_in') {
-      if (existing?.check_in_at) {
         throw new AppError(
-          `تم تسجيل الحضور اليوم بالفعل في تمام الساعة: ${formatTimeInTimezone(existing.check_in_at, tenantTimezone)}`,
-          'ALREADY_CHECKED_IN',
-          400,
+          'لا يمكن تعديل بصمة يوم أُغلقت رواتبه؛ اطلب تسوية إدارية',
+          'HR_MOBILE_ATTENDANCE_APPROVED_PAYROLL',
+          409,
         );
       }
+      const db: any = trx;
+      const existing = await db
+        .selectFrom('hr_attendance_records')
+        .selectAll()
+        .where('employee_id', '=', user.employeeId)
+        .where('work_date', '=', today)
+        .where('tenant_id', '=', user.tenantId)
+        .executeTakeFirst();
 
-      if (existing) {
+      if (punchType === 'check_in') {
+        if (existing?.check_in_at) {
+          throw new AppError(
+            `تم تسجيل الحضور اليوم بالفعل في تمام الساعة: ${formatTimeInTimezone(existing.check_in_at, tenantTimezone)}`,
+            'ALREADY_CHECKED_IN',
+            400,
+          );
+        }
+
+        if (existing) {
+          await db
+            .updateTable('hr_attendance_records')
+            .set({
+              status: 'present',
+              check_in_at: now,
+              check_in_gps_lat: lat,
+              check_in_gps_lng: lng,
+              check_in_selfie_url: payload.selfieDataUrl || null,
+              branch_id: user.branchId,
+              distance_meters: distanceMeters,
+              source: 'mobile_gps',
+              is_geofence_verified: true,
+              notes: payload.notes || 'بصمة حضور ذكية عبر الموبايل',
+              updated_at: now,
+            })
+            .where('id', '=', existing.id)
+            .where('tenant_id', '=', user.tenantId)
+            .execute();
+        } else {
+          await db
+            .insertInto('hr_attendance_records')
+            .values({
+              employee_id: user.employeeId,
+              work_date: today,
+              status: 'present',
+              check_in_at: now,
+              check_in_gps_lat: lat,
+              check_in_gps_lng: lng,
+              check_in_selfie_url: payload.selfieDataUrl || null,
+              branch_id: user.branchId,
+              distance_meters: distanceMeters,
+              source: 'mobile_gps',
+              is_geofence_verified: true,
+              notes: payload.notes || 'بصمة حضور ذكية عبر الموبايل',
+              tenant_id: user.tenantId,
+              account_id: user.accountId,
+              created_at: now,
+              updated_at: now,
+            })
+            .execute();
+        }
+
+        return {
+          ok: true,
+          type: 'check_in',
+          time: formatTimeInTimezone(now, tenantTimezone),
+          distanceMeters,
+          message: 'تم تسجيل حضورك بنجاح داخل نطاق الفرع ✓',
+        };
+      } else {
+        // check_out
+        if (!existing?.check_in_at) {
+          throw new AppError('يجب تسجيل الحضور أولاً قبل تسجيل الانصراف', 'CHECK_IN_FIRST', 400);
+        }
+        if (existing?.check_out_at) {
+          throw new AppError(
+            `تم تسجيل الانصراف مسبقاً في تمام الساعة: ${formatTimeInTimezone(existing.check_out_at, tenantTimezone)}`,
+            'ALREADY_CHECKED_OUT',
+            400,
+          );
+        }
+
         await db
           .updateTable('hr_attendance_records')
           .set({
-            status: 'present',
-            check_in_at: now,
-            check_in_gps_lat: lat,
-            check_in_gps_lng: lng,
-            check_in_selfie_url: payload.selfieDataUrl || null,
-            branch_id: user.branchId,
+            check_out_at: now,
+            check_out_gps_lat: lat,
+            check_out_gps_lng: lng,
+            check_out_selfie_url: payload.selfieDataUrl || null,
             distance_meters: distanceMeters,
-            source: 'mobile_gps',
-            is_geofence_verified: true,
-            notes: payload.notes || 'بصمة حضور ذكية عبر الموبايل',
             updated_at: now,
           })
           .where('id', '=', existing.id)
           .where('tenant_id', '=', user.tenantId)
           .execute();
-      } else {
-        await db
-          .insertInto('hr_attendance_records')
-          .values({
-            employee_id: user.employeeId,
-            work_date: today,
-            status: 'present',
-            check_in_at: now,
-            check_in_gps_lat: lat,
-            check_in_gps_lng: lng,
-            check_in_selfie_url: payload.selfieDataUrl || null,
-            branch_id: user.branchId,
-            distance_meters: distanceMeters,
-            source: 'mobile_gps',
-            is_geofence_verified: true,
-            notes: payload.notes || 'بصمة حضور ذكية عبر الموبايل',
-            tenant_id: user.tenantId,
-            account_id: user.accountId,
-            created_at: now,
-            updated_at: now,
-          })
-          .execute();
-      }
 
-      return {
-        ok: true,
-        type: 'check_in',
-        time: formatTimeInTimezone(now, tenantTimezone),
-        distanceMeters,
-        message: 'تم تسجيل حضورك بنجاح داخل نطاق الفرع ✓',
-      };
-    } else {
-      // check_out
-      if (!existing?.check_in_at) {
-        throw new AppError('يجب تسجيل الحضور أولاً قبل تسجيل الانصراف', 'CHECK_IN_FIRST', 400);
+        return {
+          ok: true,
+          type: 'check_out',
+          time: formatTimeInTimezone(now, tenantTimezone),
+          distanceMeters,
+          message: 'تم تسجيل انصرافك بنجاح. يوم سعيد! ✓',
+        };
       }
-      if (existing?.check_out_at) {
-        throw new AppError(
-          `تم تسجيل الانصراف مسبقاً في تمام الساعة: ${formatTimeInTimezone(existing.check_out_at, tenantTimezone)}`,
-          'ALREADY_CHECKED_OUT',
-          400,
-        );
-      }
-
-      await db
-        .updateTable('hr_attendance_records')
-        .set({
-          check_out_at: now,
-          check_out_gps_lat: lat,
-          check_out_gps_lng: lng,
-          check_out_selfie_url: payload.selfieDataUrl || null,
-          distance_meters: distanceMeters,
-          updated_at: now,
-        })
-        .where('id', '=', existing.id)
-        .where('tenant_id', '=', user.tenantId)
-        .execute();
-
-      return {
-        ok: true,
-        type: 'check_out',
-        time: formatTimeInTimezone(now, tenantTimezone),
-        distanceMeters,
-        message: 'تم تسجيل انصرافك بنجاح. يوم سعيد! ✓',
-      };
-    }
     });
   }
 

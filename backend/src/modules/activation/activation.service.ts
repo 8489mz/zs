@@ -1,4 +1,11 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, createVerify } from 'crypto';
 import { Kysely, Transaction, sql } from '../../database/kysely';
@@ -51,7 +58,9 @@ export class ActivationService {
   }
 
   private get appMode(): string {
-    return String(this.configService.get<string>('APP_MODE') || '').trim().toUpperCase();
+    return String(this.configService.get<string>('APP_MODE') || '')
+      .trim()
+      .toUpperCase();
   }
 
   private get isCloudSaasMode(): boolean {
@@ -63,18 +72,16 @@ export class ActivationService {
   }
 
   private getPortableScope(): PortableScope {
-    const tenantId = String(
-      process.env.TENANT_ID
-      || this.configService.get<string>('TENANT_ID')
-      || process.env.PLATFORM_TENANT_ID
-      || this.configService.get<string>('PLATFORM_TENANT_ID')
-      || 'local-tenant',
-    ).trim() || 'local-tenant';
-    const accountId = String(
-      process.env.ACCOUNT_ID
-      || this.configService.get<string>('ACCOUNT_ID')
-      || tenantId,
-    ).trim() || tenantId;
+    const tenantId =
+      String(
+        process.env.TENANT_ID ||
+          this.configService.get<string>('TENANT_ID') ||
+          process.env.PLATFORM_TENANT_ID ||
+          this.configService.get<string>('PLATFORM_TENANT_ID') ||
+          'local-tenant',
+      ).trim() || 'local-tenant';
+    const accountId =
+      String(process.env.ACCOUNT_ID || this.configService.get<string>('ACCOUNT_ID') || tenantId).trim() || tenantId;
 
     return { tenantId, accountId };
   }
@@ -155,7 +162,10 @@ export class ActivationService {
   }
 
   private async getUserCount(executor: DbOrTx = this.db): Promise<number> {
-    const row = await executor.selectFrom('users').select((eb) => eb.fn.countAll<number>().as('count')).executeTakeFirstOrThrow();
+    const row = await executor
+      .selectFrom('users')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .executeTakeFirstOrThrow();
     return Number(row.count || 0);
   }
 
@@ -173,7 +183,9 @@ export class ActivationService {
   }
 
   private verifyCode(activationCode: string): ActivationRecord {
-    const [payloadBase64, signatureBase64] = String(activationCode || '').trim().split('.');
+    const [payloadBase64, signatureBase64] = String(activationCode || '')
+      .trim()
+      .split('.');
     if (!payloadBase64 || !signatureBase64) throw new BadRequestException('كود التفعيل غير صالح.');
     const publicKey = (this.configService.get<string>('ACTIVATION_PUBLIC_KEY') || '').trim();
     if (!publicKey) throw new BadRequestException('المفتاح العام للتفعيل غير مضبوط.');
@@ -264,7 +276,7 @@ export class ActivationService {
 
     try {
       await this.db.transaction().execute(async (trx) => {
-        if (await this.getUserCount(trx) > 0) {
+        if ((await this.getUserCount(trx)) > 0) {
           throw new ForbiddenException('تمت التهيئة الاولى مسبقا.');
         }
 
@@ -299,7 +311,7 @@ export class ActivationService {
         const now = new Date();
 
         const branchesScoped = await this.columnExists('branches', 'tenant_id', trx);
-        const branchesHaveAccountId = branchesScoped && await this.columnExists('branches', 'account_id', trx);
+        const branchesHaveAccountId = branchesScoped && (await this.columnExists('branches', 'account_id', trx));
         const branchName = dto.branchName?.trim() || 'الفرع الرئيسي';
         const branchValues: Record<string, unknown> = {
           name: branchName,
@@ -320,12 +332,14 @@ export class ActivationService {
           .executeTakeFirstOrThrow();
 
         const rawLocName = dto.locationName?.trim();
-        const locationName = (!rawLocName || rawLocName === 'المخزن الرئيسي' || rawLocName === 'المستودع الرئيسي')
-          ? formatBranchStockLocationName(branchName)
-          : rawLocName;
+        const locationName =
+          !rawLocName || rawLocName === 'المخزن الرئيسي' || rawLocName === 'المستودع الرئيسي'
+            ? formatBranchStockLocationName(branchName)
+            : rawLocName;
 
         const locationsScoped = await this.columnExists('stock_locations', 'tenant_id', trx);
-        const locationsHaveAccountId = locationsScoped && await this.columnExists('stock_locations', 'account_id', trx);
+        const locationsHaveAccountId =
+          locationsScoped && (await this.columnExists('stock_locations', 'account_id', trx));
         const locationValues: Record<string, unknown> = {
           branch_id: Number(branch.id),
           name: locationName,
@@ -343,7 +357,7 @@ export class ActivationService {
           .executeTakeFirstOrThrow();
 
         const usersScoped = await this.columnExists('users', 'tenant_id', trx);
-        const usersHaveAccountId = usersScoped && await this.columnExists('users', 'account_id', trx);
+        const usersHaveAccountId = usersScoped && (await this.columnExists('users', 'account_id', trx));
         const isPlatform = isPlatformTenantId(scope.tenantId);
         const userValues: Record<string, unknown> = {
           username: dto.adminUsername.trim(),
@@ -369,7 +383,8 @@ export class ActivationService {
           .executeTakeFirstOrThrow();
 
         const userBranchesScoped = await this.columnExists('user_branches', 'tenant_id', trx);
-        const userBranchesHaveAccountId = userBranchesScoped && await this.columnExists('user_branches', 'account_id', trx);
+        const userBranchesHaveAccountId =
+          userBranchesScoped && (await this.columnExists('user_branches', 'account_id', trx));
         const userBranchValues: Record<string, unknown> = {
           user_id: Number(user.id),
           branch_id: Number(branch.id),

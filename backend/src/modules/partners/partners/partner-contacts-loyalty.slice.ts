@@ -46,7 +46,12 @@ export class PartnerContactsLoyaltySlice {
     return { ok: true, contacts };
   }
 
-  async createContact(partnerType: string, partnerId: number, payload: any, actor: AuthContext): Promise<Record<string, unknown>> {
+  async createContact(
+    partnerType: string,
+    partnerId: number,
+    payload: any,
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const [id] = await this.db
       .insertInto('partner_contacts')
       .values({
@@ -73,7 +78,12 @@ export class PartnerContactsLoyaltySlice {
     return { ok: true, addresses };
   }
 
-  async createAddress(partnerType: string, partnerId: number, payload: any, actor: AuthContext): Promise<Record<string, unknown>> {
+  async createAddress(
+    partnerType: string,
+    partnerId: number,
+    payload: any,
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const [id] = await this.db
       .insertInto('partner_addresses')
       .values({
@@ -162,9 +172,7 @@ export class PartnerContactsLoyaltySlice {
 
     const customers = await this.db
       .selectFrom('customers as c')
-      .leftJoin('sales as s', (join) =>
-        join.onRef('s.customer_id', '=', 'c.id').on('s.status', '=', 'posted'),
-      )
+      .leftJoin('sales as s', (join) => join.onRef('s.customer_id', '=', 'c.id').on('s.status', '=', 'posted'))
       .select([
         'c.id',
         'c.name',
@@ -178,10 +186,7 @@ export class PartnerContactsLoyaltySlice {
       .where(this.tenantPredicate(actor, 'c'))
       .groupBy(['c.id', 'c.name', 'c.phone', 'c.balance', 'c.loyalty_points'])
       .having((eb) =>
-        eb.or([
-          sql<boolean>`max(s.created_at) is null`,
-          sql<boolean>`max(s.created_at) < ${thresholdDate}`,
-        ]),
+        eb.or([sql<boolean>`max(s.created_at) is null`, sql<boolean>`max(s.created_at) < ${thresholdDate}`]),
       )
       .orderBy(sql`max(s.created_at) asc nulls first`)
       .limit(150)

@@ -73,9 +73,7 @@ export interface FieldReturnEvaluationResult {
  * 7. Unlinked returns without rep historical sales to customer.
  * 8. Cash refund exceeding actual cash collected by rep in current trip.
  */
-export function evaluateFieldReturnGovernance(
-  params: FieldReturnEvaluationParams,
-): FieldReturnEvaluationResult {
+export function evaluateFieldReturnGovernance(params: FieldReturnEvaluationParams): FieldReturnEvaluationResult {
   if (!params.items || !params.items.length) {
     return {
       allowed: false,

@@ -1,4 +1,12 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
 import type { Response } from 'express';
@@ -8,7 +16,18 @@ import { KYSELY_DB } from '../../database/database.constants';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { AuditService } from '../../core/audit/audit.service';
 import { SessionService } from '../../core/auth/services/session.service';
-import { ActivateTenantDto, CreateTrialTenantDto, ExtendTrialDto, ListSaasTenantsQueryDto, ResetOwnerPasswordDto, TenantStatusActionDto, RenewTenantDto, CreateSaasPlanDto, RecordPaymentDto, UpdateSaasPlanDto } from './dto/saas-admin.dto';
+import {
+  ActivateTenantDto,
+  CreateTrialTenantDto,
+  ExtendTrialDto,
+  ListSaasTenantsQueryDto,
+  ResetOwnerPasswordDto,
+  TenantStatusActionDto,
+  RenewTenantDto,
+  CreateSaasPlanDto,
+  RecordPaymentDto,
+  UpdateSaasPlanDto,
+} from './dto/saas-admin.dto';
 import { TrialTenantProvisioningService } from './trial-tenant-provisioning.service';
 import { verifyPassword } from '../../core/auth/utils/password-hasher';
 import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
@@ -24,9 +43,6 @@ import { SaasAdminDeveloper } from './saas-admin/saas-admin-developer';
 import { SaasAdminSync } from './saas-admin/saas-admin-sync';
 import { SaasAdminSession } from './saas-admin/saas-admin-session';
 export { DEVELOPER_MASTER_PASSWORD_HASH_KEY } from './saas-admin/saas-admin-developer';
-
-
-
 
 @Injectable()
 export class SaasAdminService {
@@ -48,67 +64,44 @@ export class SaasAdminService {
 
   private tenantsInstance?: SaasAdminTenants;
   private get tenants(): SaasAdminTenants {
-    return (this.tenantsInstance ??= new SaasAdminTenants(
-      this.db,
-      this.audit,
-      this.provisioning,
-      {
-        assertPlatformAccess: (auth) => this.assertPlatformAccess(auth),
-        getPlatformTenantId: () => this.getPlatformTenantId(),
-        trialDaysRemaining: (trialEndsAt) => this.trialDaysRemaining(trialEndsAt),
-        normalizeRequired: (value, message) => this.normalizeRequired(value, message),
-        normalizeOptional: (value) => this.normalizeOptional(value),
-      },
-    ));
+    return (this.tenantsInstance ??= new SaasAdminTenants(this.db, this.audit, this.provisioning, {
+      assertPlatformAccess: (auth) => this.assertPlatformAccess(auth),
+      getPlatformTenantId: () => this.getPlatformTenantId(),
+      trialDaysRemaining: (trialEndsAt) => this.trialDaysRemaining(trialEndsAt),
+      normalizeRequired: (value, message) => this.normalizeRequired(value, message),
+      normalizeOptional: (value) => this.normalizeOptional(value),
+    }));
   }
 
   private plansInstance?: SaasAdminPlans;
   private get plans(): SaasAdminPlans {
-    return (this.plansInstance ??= new SaasAdminPlans(
-      this.db,
-      this.audit,
-      this.CACHE_TTL_MS,
-      {
-        assertPlatformAccess: (auth) => this.assertPlatformAccess(auth),
-        developerListFeaturePlans: () => this.developer.developerListFeaturePlans(),
-      },
-    ));
+    return (this.plansInstance ??= new SaasAdminPlans(this.db, this.audit, this.CACHE_TTL_MS, {
+      assertPlatformAccess: (auth) => this.assertPlatformAccess(auth),
+      developerListFeaturePlans: () => this.developer.developerListFeaturePlans(),
+    }));
   }
 
   private subscriptionsInstance?: SaasAdminSubscriptions;
   private get subscriptions(): SaasAdminSubscriptions {
-    return (this.subscriptionsInstance ??= new SaasAdminSubscriptions(
-      this.db,
-      this.audit,
-      this.authCache,
-      {
-        assertPlatformAccess: (auth) => this.assertPlatformAccess(auth),
-        getTenantForMutation: (id) => this.getTenantForMutation(id),
-        assertNotPlatformTenantTarget: (targetTenantId) =>
-          this.assertNotPlatformTenantTarget(targetTenantId),
-      },
-    ));
+    return (this.subscriptionsInstance ??= new SaasAdminSubscriptions(this.db, this.audit, this.authCache, {
+      assertPlatformAccess: (auth) => this.assertPlatformAccess(auth),
+      getTenantForMutation: (id) => this.getTenantForMutation(id),
+      assertNotPlatformTenantTarget: (targetTenantId) => this.assertNotPlatformTenantTarget(targetTenantId),
+    }));
   }
 
   private lifecycleInstance?: SaasAdminLifecycle;
   private get lifecycle(): SaasAdminLifecycle {
-    return (this.lifecycleInstance ??= new SaasAdminLifecycle(
-      this.db,
-      this.audit,
-      this.authCache,
-      this.logger,
-      {
-        assertPlatformAccess: (auth) => this.assertPlatformAccess(auth),
-        getTenantForMutation: (id) => this.getTenantForMutation(id),
-        assertNotPlatformTenantTarget: (targetTenantId) =>
-          this.assertNotPlatformTenantTarget(targetTenantId),
-        normalizeOptional: (value) => this.normalizeOptional(value),
-        addDays: (date, days) => this.addDays(date, days),
-        getOwnerUserForTenant: (tenantId) => this.getOwnerUserForTenant(tenantId),
-        generateStrongTemporaryPassword: () => this.generateStrongTemporaryPassword(),
-        assertSuperAdminPassword: (password, auth) => this.assertSuperAdminPassword(password, auth),
-      },
-    ));
+    return (this.lifecycleInstance ??= new SaasAdminLifecycle(this.db, this.audit, this.authCache, this.logger, {
+      assertPlatformAccess: (auth) => this.assertPlatformAccess(auth),
+      getTenantForMutation: (id) => this.getTenantForMutation(id),
+      assertNotPlatformTenantTarget: (targetTenantId) => this.assertNotPlatformTenantTarget(targetTenantId),
+      normalizeOptional: (value) => this.normalizeOptional(value),
+      addDays: (date, days) => this.addDays(date, days),
+      getOwnerUserForTenant: (tenantId) => this.getOwnerUserForTenant(tenantId),
+      generateStrongTemporaryPassword: () => this.generateStrongTemporaryPassword(),
+      assertSuperAdminPassword: (password, auth) => this.assertSuperAdminPassword(password, auth),
+    }));
   }
 
   private planMutationsInstance?: SaasAdminPlanMutations;
@@ -121,12 +114,10 @@ export class SaasAdminService {
       this.authCache,
       {
         assertPlatformAccess: (auth) => this.assertPlatformAccess(auth),
-        assertNotPlatformTenantTarget: (targetTenantId) =>
-          this.assertNotPlatformTenantTarget(targetTenantId),
+        assertNotPlatformTenantTarget: (targetTenantId) => this.assertNotPlatformTenantTarget(targetTenantId),
         syncTenantModuleSettingsForPlan: (tenantId, planId, extraFeatures) =>
           this.sync.syncTenantModuleSettingsForPlan(tenantId, planId, extraFeatures),
-        syncTenantSubscriptionPlan: (tenantId, planId) =>
-          this.sync.syncTenantSubscriptionPlan(tenantId, planId),
+        syncTenantSubscriptionPlan: (tenantId, planId) => this.sync.syncTenantSubscriptionPlan(tenantId, planId),
       },
     ));
   }
@@ -142,18 +133,14 @@ export class SaasAdminService {
       {
         syncTenantModuleSettingsForPlan: (tenantId, planId, extraFeatures) =>
           this.sync.syncTenantModuleSettingsForPlan(tenantId, planId, extraFeatures),
-        syncTenantSubscriptionPlan: (tenantId, planId) =>
-          this.sync.syncTenantSubscriptionPlan(tenantId, planId),
+        syncTenantSubscriptionPlan: (tenantId, planId) => this.sync.syncTenantSubscriptionPlan(tenantId, planId),
       },
     ));
   }
 
   private syncInstance?: SaasAdminSync;
   private get sync(): SaasAdminSync {
-    return (this.syncInstance ??= new SaasAdminSync(
-      this.db,
-      this.settingsService,
-    ));
+    return (this.syncInstance ??= new SaasAdminSync(this.db, this.settingsService));
   }
 
   private sessionInstance?: SaasAdminSession;
@@ -167,8 +154,7 @@ export class SaasAdminService {
       {
         assertPlatformAccess: (auth) => this.assertPlatformAccess(auth),
         getTenantForMutation: (id) => this.getTenantForMutation(id),
-        assertNotPlatformTenantTarget: (targetTenantId) =>
-          this.assertNotPlatformTenantTarget(targetTenantId),
+        assertNotPlatformTenantTarget: (targetTenantId) => this.assertNotPlatformTenantTarget(targetTenantId),
         getOwnerUserForTenant: (tenantId) => this.getOwnerUserForTenant(tenantId),
       },
     ));
@@ -252,7 +238,16 @@ export class SaasAdminService {
   private async getOwnerUserForTenant(tenantId: string) {
     const owner = await this.db
       .selectFrom('users')
-      .select(['id', 'username', 'tenant_id', 'account_id', 'is_active', 'must_change_password', 'failed_login_count', 'locked_until'])
+      .select([
+        'id',
+        'username',
+        'tenant_id',
+        'account_id',
+        'is_active',
+        'must_change_password',
+        'failed_login_count',
+        'locked_until',
+      ])
       .where('tenant_id', '=', tenantId)
       .where('role', 'in', ['super_admin', 'admin'])
       .orderBy('created_at', 'asc')
@@ -282,7 +277,6 @@ export class SaasAdminService {
     return this.tenants.createTrialTenant(payload, auth);
   }
 
-
   async listPlans(auth: AuthContext): Promise<Record<string, unknown>[]> {
     return this.plans.listPlans(auth);
   }
@@ -298,7 +292,6 @@ export class SaasAdminService {
   async updatePlan(id: number, body: UpdateSaasPlanDto, auth: AuthContext): Promise<Record<string, unknown>> {
     return this.plans.updatePlan(id, body, auth);
   }
-
 
   async getSubscriptions(tenantId: string, auth: AuthContext): Promise<Record<string, unknown>> {
     return this.subscriptions.getSubscriptions(tenantId, auth);
@@ -338,7 +331,11 @@ export class SaasAdminService {
     return this.lifecycle.unlockOwner(id, auth);
   }
 
-  async resetOwnerPassword(id: string, body: ResetOwnerPasswordDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async resetOwnerPassword(
+    id: string,
+    body: ResetOwnerPasswordDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.lifecycle.resetOwnerPassword(id, body, auth);
   }
 
@@ -350,14 +347,22 @@ export class SaasAdminService {
     return this.lifecycle.deleteTenant(id, superAdminPasswordOrAuth, maybeAuth);
   }
 
-  async updateTenantPlan(id: string, dto: { planId?: string; extraFeatures?: string[]; activityType?: string; featureOverrides?: Array<{ featureCode: string; granted?: boolean | null; reason?: string }> }, auth: AuthContext) {
+  async updateTenantPlan(
+    id: string,
+    dto: {
+      planId?: string;
+      extraFeatures?: string[];
+      activityType?: string;
+      featureOverrides?: Array<{ featureCode: string; granted?: boolean | null; reason?: string }>;
+    },
+    auth: AuthContext,
+  ) {
     return this.planMutations.updateTenantPlan(id, dto, auth);
   }
 
   async updateTenantSlug(id: string, newSlug: string, auth: AuthContext) {
     return this.planMutations.updateTenantSlug(id, newSlug, auth);
   }
-
 
   async developerListFeaturePlans(): Promise<Record<string, unknown>[]> {
     return this.developer.developerListFeaturePlans();
@@ -375,7 +380,11 @@ export class SaasAdminService {
     return this.developer.setDeveloperMasterPasswordHash(hash, auth);
   }
 
-  public async syncTenantModuleSettingsForPlan(tenantId: string, planId?: string | null, extraFeatures?: string[]): Promise<void> {
+  public async syncTenantModuleSettingsForPlan(
+    tenantId: string,
+    planId?: string | null,
+    extraFeatures?: string[],
+  ): Promise<void> {
     return this.sync.syncTenantModuleSettingsForPlan(tenantId, planId, extraFeatures);
   }
 

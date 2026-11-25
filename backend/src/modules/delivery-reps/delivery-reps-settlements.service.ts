@@ -41,7 +41,10 @@ export class DeliveryRepsSettlementsService {
   private readonly salesFinance: SalesFinanceService;
   private readonly tenantPredicate: (actor: AuthContext) => RawBuilder<boolean>;
   private readonly tenantFields: (actor: AuthContext) => { tenant_id: string; account_id: string };
-  private readonly getDeliveryFeeMode: (trx: Kysely<Database>, actor: AuthContext) => Promise<'freelance_courier' | 'store_fleet'>;
+  private readonly getDeliveryFeeMode: (
+    trx: Kysely<Database>,
+    actor: AuthContext,
+  ) => Promise<'freelance_courier' | 'store_fleet'>;
 
   constructor(deps: DeliveryRepsSettlementsDeps) {
     this.db = deps.db;
@@ -53,7 +56,10 @@ export class DeliveryRepsSettlementsService {
     this.getDeliveryFeeMode = deps.getDeliveryFeeMode;
   }
 
-  private async findOwnOpenShift(trx: Kysely<Database>, actor: AuthContext): Promise<{ id: number; branchId: number | null; locationId: number | null } | null> {
+  private async findOwnOpenShift(
+    trx: Kysely<Database>,
+    actor: AuthContext,
+  ): Promise<{ id: number; branchId: number | null; locationId: number | null } | null> {
     const shift = await trx
       .selectFrom('cashier_shifts')
       .select(['id', 'branch_id', 'location_id'])
@@ -64,19 +70,42 @@ export class DeliveryRepsSettlementsService {
       .executeTakeFirst();
 
     if (!shift || !shift.id) return null;
-    return { id: Number(shift.id), branchId: shift.branch_id ? Number(shift.branch_id) : null, locationId: shift.location_id ? Number(shift.location_id) : null };
+    return {
+      id: Number(shift.id),
+      branchId: shift.branch_id ? Number(shift.branch_id) : null,
+      locationId: shift.location_id ? Number(shift.location_id) : null,
+    };
   }
 
   async settleOrder(
     saleId: number,
     actor: AuthContext,
-    payload?: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string; countedCashAmount?: number }
+    payload?: {
+      signatureDataUrl?: string;
+      proofPhotoUrl?: string;
+      gpsLat?: number;
+      gpsLng?: number;
+      notes?: string;
+      countedCashAmount?: number;
+    },
   ): Promise<Record<string, unknown>> {
     let settlementSummary: { countedCash: number; expectedCash: number; variance: number } | null = null;
     await this.db.transaction().execute(async (trx) => {
       const sale = await trx
         .selectFrom('sales')
-        .select(['id', 'total', 'delivery_fee', 'delivery_fee_mode', 'delivery_status', 'delivery_rep_id', 'collection_status', 'customer_id', 'paid_amount', 'status', 'order_type'])
+        .select([
+          'id',
+          'total',
+          'delivery_fee',
+          'delivery_fee_mode',
+          'delivery_status',
+          'delivery_rep_id',
+          'collection_status',
+          'customer_id',
+          'paid_amount',
+          'status',
+          'order_type',
+        ])
         .where('id', '=', saleId)
         .where(this.tenantPredicate(actor))
         .forUpdate()
@@ -101,7 +130,11 @@ export class DeliveryRepsSettlementsService {
       if (isCourierCash && Number(sale.paid_amount || 0) > 0.009) {
         // The current GL posting contract expects the entire invoice as an
         // outstanding receivable. Refuse partially paid orders until reconciled.
-        throw new AppError('طلب الدليفري محصل جزئياً ويتطلب تسوية منفصلة قبل إقفال عهدة المندوب', 'DELIVERY_PARTIAL_PAYMENT_RECONCILIATION_REQUIRED', 409);
+        throw new AppError(
+          'طلب الدليفري محصل جزئياً ويتطلب تسوية منفصلة قبل إقفال عهدة المندوب',
+          'DELIVERY_PARTIAL_PAYMENT_RECONCILIATION_REQUIRED',
+          409,
+        );
       }
       // INV-SF-SINGLE-SETTLE-COUNTED-CASH (D-SF-01): a counted
       // cash amount is validated up front, before any write. It
@@ -118,7 +151,11 @@ export class DeliveryRepsSettlementsService {
           throw new AppError('Counted cash amount must be a non-negative number', 'SETTLEMENT_AMOUNT_INVALID', 400);
         }
         if (!isCourierCash && !isPrepaidByRep && rawCounted > 0) {
-          throw new AppError('Counted cash applies only to cash-on-delivery and rep-prepaid orders', 'DELIVERY_SETTLEMENT_COUNTED_CASH_NOT_APPLICABLE', 400);
+          throw new AppError(
+            'Counted cash applies only to cash-on-delivery and rep-prepaid orders',
+            'DELIVERY_SETTLEMENT_COUNTED_CASH_NOT_APPLICABLE',
+            400,
+          );
         }
       }
 
@@ -158,7 +195,7 @@ export class DeliveryRepsSettlementsService {
         // full total would over-credit 1130. The basis is the
         // single source of truth shared with the posting gate.
         const basis = await this.accountingPosting.deliverySettlementBasis(trx, saleId, actor);
-        const deliveryFeeMode = (sale as any).delivery_fee_mode || await this.getDeliveryFeeMode(trx, actor);
+        const deliveryFeeMode = (sale as any).delivery_fee_mode || (await this.getDeliveryFeeMode(trx, actor));
         const remainingFee = deliveryFeeMode === 'store_fleet' ? 0 : basis.remainingFee;
         const { tenantId: settleTenantId } = requireTenantScope(actor);
         const settleDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, settleTenantId));
@@ -178,32 +215,46 @@ export class DeliveryRepsSettlementsService {
         // and surfaces as drawer variance at close — no 7200/7100
         // leg is booked, because the GL booked the full cash at
         // creation (see the branch comment above).
-        const countedCash = payload?.countedCashAmount !== undefined && payload?.countedCashAmount !== null
-          ? roundMoney(Number(payload.countedCashAmount), settleDigits)
-          : null;
+        const countedCash =
+          payload?.countedCashAmount !== undefined && payload?.countedCashAmount !== null
+            ? roundMoney(Number(payload.countedCashAmount), settleDigits)
+            : null;
         const settledCashAmount = countedCash ?? cashDue;
         const settlementVariance = roundMoney(settledCashAmount - cashDue, settleDigits);
         settlementSummary = { countedCash: settledCashAmount, expectedCash: cashDue, variance: settlementVariance };
 
         if (settledCashAmount > 0) {
-          const repRow = sale.delivery_rep_id ? await trx.selectFrom('delivery_representatives').select(['name']).where('id', '=', Number(sale.delivery_rep_id)).where(this.tenantPredicate(actor)).executeTakeFirst() : null;
-          const repLabel = repRow?.name ? `${repRow.name} (#${sale.delivery_rep_id})` : `مندوب #${sale.delivery_rep_id}`;
-          const varianceNote = settlementVariance < 0
-            ? ` (عجز ${roundMoney(Math.abs(settlementVariance), settleDigits)} ج)`
-            : settlementVariance > 0
-              ? ` (زيادة ${settlementVariance} ج)`
-              : '';
-          await trx.insertInto('treasury_transactions').values({
-            txn_type: 'cash_in',
-            amount: settledCashAmount,
-            note: `تسوية أوردر دليفري رقم #${saleId} من ${repLabel}${remainingFee > 0 && deliveryFeeMode === 'freelance_courier' ? ` (مخصوماً منها ${remainingFee} ج رسوم المندوب)` : ''}${varianceNote}`,
-            reference_type: 'cashier_shift',
-            reference_id: shiftId,
-            branch_id: branchId,
-            location_id: locationId,
-            created_by: actor.userId,
-            ...this.tenantFields(actor)
-          }).execute();
+          const repRow = sale.delivery_rep_id
+            ? await trx
+                .selectFrom('delivery_representatives')
+                .select(['name'])
+                .where('id', '=', Number(sale.delivery_rep_id))
+                .where(this.tenantPredicate(actor))
+                .executeTakeFirst()
+            : null;
+          const repLabel = repRow?.name
+            ? `${repRow.name} (#${sale.delivery_rep_id})`
+            : `مندوب #${sale.delivery_rep_id}`;
+          const varianceNote =
+            settlementVariance < 0
+              ? ` (عجز ${roundMoney(Math.abs(settlementVariance), settleDigits)} ج)`
+              : settlementVariance > 0
+                ? ` (زيادة ${settlementVariance} ج)`
+                : '';
+          await trx
+            .insertInto('treasury_transactions')
+            .values({
+              txn_type: 'cash_in',
+              amount: settledCashAmount,
+              note: `تسوية أوردر دليفري رقم #${saleId} من ${repLabel}${remainingFee > 0 && deliveryFeeMode === 'freelance_courier' ? ` (مخصوماً منها ${remainingFee} ج رسوم المندوب)` : ''}${varianceNote}`,
+              reference_type: 'cashier_shift',
+              reference_id: shiftId,
+              branch_id: branchId,
+              location_id: locationId,
+              created_by: actor.userId,
+              ...this.tenantFields(actor),
+            })
+            .execute();
         }
 
         // D-SF-02 (INV-SF-COD-CUSTODY-GL): the receivable left the
@@ -214,12 +265,24 @@ export class DeliveryRepsSettlementsService {
         // sale has no receivable left to clear and no custody leg
         // to credit — its GL was fully posted at creation.
         if (isCourierCash) {
-          if (sale.customer_id && basis.remainingReceivable > 0
-            && !(await this.accountingPosting.hasDeliveryCustodyReclassification(trx, saleId, actor))) {
-            await this.salesFinance.createCustomerLedgerEntry(trx, sale.customer_id, -basis.remainingReceivable, `تسديد من مندوب للأوردر #${saleId}`, saleId, actor);
+          if (
+            sale.customer_id &&
+            basis.remainingReceivable > 0 &&
+            !(await this.accountingPosting.hasDeliveryCustodyReclassification(trx, saleId, actor))
+          ) {
+            await this.salesFinance.createCustomerLedgerEntry(
+              trx,
+              sale.customer_id,
+              -basis.remainingReceivable,
+              `تسديد من مندوب للأوردر #${saleId}`,
+              saleId,
+              actor,
+            );
           }
 
-          await this.accountingPosting.postDeliveryRepSettlement(trx, saleId, cashDue, branchId, locationId, actor, { countedCash: settledCashAmount });
+          await this.accountingPosting.postDeliveryRepSettlement(trx, saleId, cashDue, branchId, locationId, actor, {
+            countedCash: settledCashAmount,
+          });
         }
       }
 
@@ -278,13 +341,32 @@ export class DeliveryRepsSettlementsService {
   async settlePartialOrder(
     saleId: number,
     actor: AuthContext,
-    payload?: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string; countedCashAmount?: number }
+    payload?: {
+      signatureDataUrl?: string;
+      proofPhotoUrl?: string;
+      gpsLat?: number;
+      gpsLng?: number;
+      notes?: string;
+      countedCashAmount?: number;
+    },
   ): Promise<Record<string, unknown>> {
     let settlementSummary: { countedCash: number; expectedCash: number; variance: number } | null = null;
     await this.db.transaction().execute(async (trx) => {
       const sale = await trx
         .selectFrom('sales')
-        .select(['id', 'total', 'delivery_fee', 'delivery_fee_mode', 'delivery_status', 'delivery_rep_id', 'collection_status', 'customer_id', 'paid_amount', 'status', 'order_type'])
+        .select([
+          'id',
+          'total',
+          'delivery_fee',
+          'delivery_fee_mode',
+          'delivery_status',
+          'delivery_rep_id',
+          'collection_status',
+          'customer_id',
+          'paid_amount',
+          'status',
+          'order_type',
+        ])
         .where('id', '=', saleId)
         .where(this.tenantPredicate(actor))
         .forUpdate()
@@ -303,10 +385,18 @@ export class DeliveryRepsSettlementsService {
       // contracts disjoint instead of letting this one silently
       // become a second settleOrder.
       if (sale.collection_status !== 'cod') {
-        throw new AppError('Only partially-paid cash-on-delivery orders may be settled through the partial settlement', 'DELIVERY_PARTIAL_SETTLEMENT_NOT_APPLICABLE', 409);
+        throw new AppError(
+          'Only partially-paid cash-on-delivery orders may be settled through the partial settlement',
+          'DELIVERY_PARTIAL_SETTLEMENT_NOT_APPLICABLE',
+          409,
+        );
       }
       if (Number(sale.paid_amount || 0) <= 0.009) {
-        throw new AppError('Order has no partial payment; use the standard settlement', 'DELIVERY_PARTIAL_SETTLEMENT_NOT_APPLICABLE', 409);
+        throw new AppError(
+          'Order has no partial payment; use the standard settlement',
+          'DELIVERY_PARTIAL_SETTLEMENT_NOT_APPLICABLE',
+          409,
+        );
       }
       // Same counted-cash validation as the single-order path
       // (D-SF-01): a non-negative number, and it applies here
@@ -329,48 +419,72 @@ export class DeliveryRepsSettlementsService {
       // already subtracts the partial payment (and any prior
       // return relief) from the remaining receivable.
       const basis = await this.accountingPosting.deliverySettlementBasis(trx, saleId, actor);
-      const deliveryFeeMode = (sale as any).delivery_fee_mode || await this.getDeliveryFeeMode(trx, actor);
+      const deliveryFeeMode = (sale as any).delivery_fee_mode || (await this.getDeliveryFeeMode(trx, actor));
       const remainingFee = deliveryFeeMode === 'store_fleet' ? 0 : basis.remainingFee;
       const { tenantId: settleTenantId } = requireTenantScope(actor);
       const settleDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, settleTenantId));
       const cashDue = roundMoney(Math.max(0, basis.remainingReceivable - remainingFee), settleDigits);
-      const countedCash = payload?.countedCashAmount !== undefined && payload?.countedCashAmount !== null
-        ? roundMoney(Number(payload.countedCashAmount), settleDigits)
-        : null;
+      const countedCash =
+        payload?.countedCashAmount !== undefined && payload?.countedCashAmount !== null
+          ? roundMoney(Number(payload.countedCashAmount), settleDigits)
+          : null;
       const settledCashAmount = countedCash ?? cashDue;
       const settlementVariance = roundMoney(settledCashAmount - cashDue, settleDigits);
       settlementSummary = { countedCash: settledCashAmount, expectedCash: cashDue, variance: settlementVariance };
 
       if (settledCashAmount > 0) {
-        const repRow = sale.delivery_rep_id ? await trx.selectFrom('delivery_representatives').select(['name']).where('id', '=', Number(sale.delivery_rep_id)).where(this.tenantPredicate(actor)).executeTakeFirst() : null;
+        const repRow = sale.delivery_rep_id
+          ? await trx
+              .selectFrom('delivery_representatives')
+              .select(['name'])
+              .where('id', '=', Number(sale.delivery_rep_id))
+              .where(this.tenantPredicate(actor))
+              .executeTakeFirst()
+          : null;
         const repLabel = repRow?.name ? `${repRow.name} (#${sale.delivery_rep_id})` : `مندوب #${sale.delivery_rep_id}`;
-        const varianceNote = settlementVariance < 0
-          ? ` (عجز ${roundMoney(Math.abs(settlementVariance), settleDigits)} ج)`
-          : settlementVariance > 0
-            ? ` (زيادة ${settlementVariance} ج)`
-            : '';
-        await trx.insertInto('treasury_transactions').values({
-          txn_type: 'cash_in',
-          amount: settledCashAmount,
-          note: `تسوية جزئية لأوردر دليفري رقم #${saleId} من ${repLabel}${remainingFee > 0 && deliveryFeeMode === 'freelance_courier' ? ` (مخصوماً منها ${remainingFee} ج رسوم المندوب)` : ''}${varianceNote}`,
-          reference_type: 'cashier_shift',
-          reference_id: shiftId,
-          branch_id: branchId,
-          location_id: locationId,
-          created_by: actor.userId,
-          ...this.tenantFields(actor)
-        }).execute();
+        const varianceNote =
+          settlementVariance < 0
+            ? ` (عجز ${roundMoney(Math.abs(settlementVariance), settleDigits)} ج)`
+            : settlementVariance > 0
+              ? ` (زيادة ${settlementVariance} ج)`
+              : '';
+        await trx
+          .insertInto('treasury_transactions')
+          .values({
+            txn_type: 'cash_in',
+            amount: settledCashAmount,
+            note: `تسوية جزئية لأوردر دليفري رقم #${saleId} من ${repLabel}${remainingFee > 0 && deliveryFeeMode === 'freelance_courier' ? ` (مخصوماً منها ${remainingFee} ج رسوم المندوب)` : ''}${varianceNote}`,
+            reference_type: 'cashier_shift',
+            reference_id: shiftId,
+            branch_id: branchId,
+            location_id: locationId,
+            created_by: actor.userId,
+            ...this.tenantFields(actor),
+          })
+          .execute();
       }
 
       // D-SF-02 (INV-SF-COD-CUSTODY-GL): same as settleOrder —
       // the receivable left the customer's books at dispatch, so
       // the settle must not credit the customer ledger again.
-      if (sale.customer_id && basis.remainingReceivable > 0
-        && !(await this.accountingPosting.hasDeliveryCustodyReclassification(trx, saleId, actor))) {
-        await this.salesFinance.createCustomerLedgerEntry(trx, sale.customer_id, -basis.remainingReceivable, `تسديد من مندوب للأوردر #${saleId}`, saleId, actor);
+      if (
+        sale.customer_id &&
+        basis.remainingReceivable > 0 &&
+        !(await this.accountingPosting.hasDeliveryCustodyReclassification(trx, saleId, actor))
+      ) {
+        await this.salesFinance.createCustomerLedgerEntry(
+          trx,
+          sale.customer_id,
+          -basis.remainingReceivable,
+          `تسديد من مندوب للأوردر #${saleId}`,
+          saleId,
+          actor,
+        );
       }
 
-      await this.accountingPosting.postDeliveryRepSettlement(trx, saleId, cashDue, branchId, locationId, actor, { countedCash: settledCashAmount });
+      await this.accountingPosting.postDeliveryRepSettlement(trx, saleId, cashDue, branchId, locationId, actor, {
+        countedCash: settledCashAmount,
+      });
 
       const updateData: Record<string, any> = {
         delivery_status: 'settled',
@@ -403,11 +517,20 @@ export class DeliveryRepsSettlementsService {
         .execute();
     });
 
-    await this.audit.log('تسوية جزئية لطلب توصيل', `تمت التسوية الجزئية للطلب #${saleId} بواسطة ${actor.username}`, actor);
+    await this.audit.log(
+      'تسوية جزئية لطلب توصيل',
+      `تمت التسوية الجزئية للطلب #${saleId} بواسطة ${actor.username}`,
+      actor,
+    );
     return { ok: true, ...(settlementSummary ? settlementSummary : {}) };
   }
 
-  async settleAllOrders(repId: number, expectedAmount: number, actor: AuthContext, countedCashAmount?: number): Promise<Record<string, unknown>> {
+  async settleAllOrders(
+    repId: number,
+    expectedAmount: number,
+    actor: AuthContext,
+    countedCashAmount?: number,
+  ): Promise<Record<string, unknown>> {
     // INV-SETTLE-ALL-CONFIRMATION-COUNTED-CASH (B5): the
     // expectedAmount is the confirmation gate — the only proof the
     // cash handed over matches the books — so it must be present
@@ -444,10 +567,7 @@ export class DeliveryRepsSettlementsService {
         .where('collection_status', 'in', ['cod', 'prepaid_by_rep'])
         .where('order_type', '=', 'delivery')
         .where('status', '!=', 'cancelled')
-        .where((eb) => eb.or([
-          eb('delivery_status', '!=', 'settled'),
-          eb('delivery_status', 'is', null)
-        ]))
+        .where((eb) => eb.or([eb('delivery_status', '!=', 'settled'), eb('delivery_status', 'is', null)]))
         .where(this.tenantPredicate(actor))
         .orderBy('id', 'asc')
         .limit(201)
@@ -455,7 +575,11 @@ export class DeliveryRepsSettlementsService {
         .execute();
 
       if (unsettledOrders.length > 200) {
-        throw new AppError('Too many unsettled orders for one settlement; settle a smaller batch', 'SETTLEMENT_BATCH_TOO_LARGE', 409);
+        throw new AppError(
+          'Too many unsettled orders for one settlement; settle a smaller batch',
+          'SETTLEMENT_BATCH_TOO_LARGE',
+          409,
+        );
       }
 
       if (unsettledOrders.length === 0) {
@@ -467,8 +591,14 @@ export class DeliveryRepsSettlementsService {
       // outstanding receivable). A rep-prepaid order is paid by
       // definition — a positive paid_amount is its normal shape,
       // not a partial payment — so the gate must not fire on it.
-      if (unsettledOrders.some((order) => order.collection_status === 'cod' && Number(order.paid_amount || 0) > 0.009)) {
-        throw new AppError('بعض طلبات المندوب مدفوعة جزئياً وتتطلب تسوية منفصلة', 'DELIVERY_PARTIAL_PAYMENT_RECONCILIATION_REQUIRED', 409);
+      if (
+        unsettledOrders.some((order) => order.collection_status === 'cod' && Number(order.paid_amount || 0) > 0.009)
+      ) {
+        throw new AppError(
+          'بعض طلبات المندوب مدفوعة جزئياً وتتطلب تسوية منفصلة',
+          'DELIVERY_PARTIAL_PAYMENT_RECONCILIATION_REQUIRED',
+          409,
+        );
       }
       const defaultMode = await this.getDeliveryFeeMode(trx, actor);
       // Cash due is money: round at the tenant's book digits. Currency
@@ -486,9 +616,12 @@ export class DeliveryRepsSettlementsService {
       // posts below agree on the same numbers.
       const basisByOrderId = new Map<number, { remainingReceivable: number; remainingFee: number }>();
       for (const order of unsettledOrders) {
-        basisByOrderId.set(Number(order.id), await this.accountingPosting.deliverySettlementBasis(trx, Number(order.id), actor));
+        basisByOrderId.set(
+          Number(order.id),
+          await this.accountingPosting.deliverySettlementBasis(trx, Number(order.id), actor),
+        );
       }
-      const cashDue = (order: typeof unsettledOrders[number]) => {
+      const cashDue = (order: (typeof unsettledOrders)[number]) => {
         const basis = basisByOrderId.get(Number(order.id))!;
         if (String(order.collection_status || '') === 'prepaid_by_rep') {
           // INV-REP-PREPAID-SHIFT-TREASURY (M6/A7): the rep holds
@@ -501,7 +634,10 @@ export class DeliveryRepsSettlementsService {
           ? basis.remainingReceivable
           : Math.max(0, roundMoney(basis.remainingReceivable - basis.remainingFee, moneyDigits));
       };
-      const actualTotal = roundMoney(unsettledOrders.reduce((sum, order) => sum + cashDue(order), 0), moneyDigits);
+      const actualTotal = roundMoney(
+        unsettledOrders.reduce((sum, order) => sum + cashDue(order), 0),
+        moneyDigits,
+      );
 
       // B5 secondary: the tolerance is the tenant's book tolerance
       // (10^-moneyDigits — the same tolerance the posting service
@@ -509,7 +645,11 @@ export class DeliveryRepsSettlementsService {
       // 0.01 let a 0.005 mismatch through.
       const tolerance = 10 ** -moneyDigits;
       if (Math.abs(actualTotal - rawExpected) > tolerance) {
-        throw new AppError(`مبلغ التسوية (${rawExpected}) لا يتطابق مع إجمالي المطلوب من المندوب (${actualTotal}).`, 'AMOUNT_MISMATCH', 400);
+        throw new AppError(
+          `مبلغ التسوية (${rawExpected}) لا يتطابق مع إجمالي المطلوب من المندوب (${actualTotal}).`,
+          'AMOUNT_MISMATCH',
+          400,
+        );
       }
 
       // INV-SETTLE-ALL-CONFIRMATION-COUNTED-CASH (C7): the cash
@@ -527,9 +667,10 @@ export class DeliveryRepsSettlementsService {
       // due; any overage beyond every due lands on the last order),
       // so the per-order counted amounts always sum to the counted
       // total and no order is ever counted negative.
-      const totalCounted = countedCashAmount !== undefined && countedCashAmount !== null
-        ? roundMoney(Number(countedCashAmount), moneyDigits)
-        : actualTotal;
+      const totalCounted =
+        countedCashAmount !== undefined && countedCashAmount !== null
+          ? roundMoney(Number(countedCashAmount), moneyDigits)
+          : actualTotal;
       const totalVariance = roundMoney(totalCounted - actualTotal, moneyDigits);
       const countedByOrderId = new Map<number, number>();
       let remainingCounted = totalCounted;
@@ -544,32 +685,41 @@ export class DeliveryRepsSettlementsService {
         countedByOrderId.set(lastId, roundMoney((countedByOrderId.get(lastId) ?? 0) + remainingCounted, moneyDigits));
       }
 
-      const saleIds = unsettledOrders.map(o => o.id);
+      const saleIds = unsettledOrders.map((o) => o.id);
 
-      const repRow = await trx.selectFrom('delivery_representatives').select(['name']).where('id', '=', repId).where(this.tenantPredicate(actor)).executeTakeFirst();
+      const repRow = await trx
+        .selectFrom('delivery_representatives')
+        .select(['name'])
+        .where('id', '=', repId)
+        .where(this.tenantPredicate(actor))
+        .executeTakeFirst();
       const repLabel = repRow?.name ? `${repRow.name} (#${repId})` : `مندوب #${repId}`;
 
       // R7-A F2: no cash row when the batch hands over nothing
       // (every order fully returned) — a zero treasury row is noise.
       // The drawer rises by the cash actually counted, not the book
       // total: unreceived cash is never booked as received.
-      const varianceNote = totalVariance < 0
-        ? ` (عجز ${roundMoney(Math.abs(totalVariance), moneyDigits)} ج)`
-        : totalVariance > 0
-          ? ` (زيادة ${totalVariance} ج)`
-          : '';
+      const varianceNote =
+        totalVariance < 0
+          ? ` (عجز ${roundMoney(Math.abs(totalVariance), moneyDigits)} ج)`
+          : totalVariance > 0
+            ? ` (زيادة ${totalVariance} ج)`
+            : '';
       if (totalCounted > 0) {
-        await trx.insertInto('treasury_transactions').values({
-          txn_type: 'cash_in',
-          amount: totalCounted,
-          note: `تسوية أوردرات دليفري (${saleIds.length} أوردر) من ${repLabel}${varianceNote}`,
-          reference_type: 'cashier_shift',
-          reference_id: openShift.id,
-          branch_id: openShift.branchId,
-          location_id: openShift.locationId,
-          created_by: actor.userId,
-          ...this.tenantFields(actor)
-        }).execute();
+        await trx
+          .insertInto('treasury_transactions')
+          .values({
+            txn_type: 'cash_in',
+            amount: totalCounted,
+            note: `تسوية أوردرات دليفري (${saleIds.length} أوردر) من ${repLabel}${varianceNote}`,
+            reference_type: 'cashier_shift',
+            reference_id: openShift.id,
+            branch_id: openShift.branchId,
+            location_id: openShift.locationId,
+            created_by: actor.userId,
+            ...this.tenantFields(actor),
+          })
+          .execute();
       }
 
       for (const order of unsettledOrders) {
@@ -586,11 +736,29 @@ export class DeliveryRepsSettlementsService {
         // the receivable already left the customer's books at
         // dispatch, so the batch settle must not credit the
         // customer ledger again.
-        if (order.customer_id && basis.remainingReceivable > 0
-          && !(await this.accountingPosting.hasDeliveryCustodyReclassification(trx, Number(order.id), actor))) {
-          await this.salesFinance.createCustomerLedgerEntry(trx, order.customer_id, -basis.remainingReceivable, `تسديد من مندوب للأوردر #${order.id}`, order.id, actor);
+        if (
+          order.customer_id &&
+          basis.remainingReceivable > 0 &&
+          !(await this.accountingPosting.hasDeliveryCustodyReclassification(trx, Number(order.id), actor))
+        ) {
+          await this.salesFinance.createCustomerLedgerEntry(
+            trx,
+            order.customer_id,
+            -basis.remainingReceivable,
+            `تسديد من مندوب للأوردر #${order.id}`,
+            order.id,
+            actor,
+          );
         }
-        await this.accountingPosting.postDeliveryRepSettlement(trx, order.id, cashDue(order), openShift.branchId, openShift.locationId, actor, { countedCash: countedByOrderId.get(Number(order.id)) ?? cashDue(order) });
+        await this.accountingPosting.postDeliveryRepSettlement(
+          trx,
+          order.id,
+          cashDue(order),
+          openShift.branchId,
+          openShift.locationId,
+          actor,
+          { countedCash: countedByOrderId.get(Number(order.id)) ?? cashDue(order) },
+        );
       }
 
       await trx
@@ -616,10 +784,27 @@ export class DeliveryRepsSettlementsService {
         .where('status', '!=', 'cancelled')
         .execute();
 
-      return { settledCount: saleIds.length, totalAmount: actualTotal, countedCash: totalCounted, expectedCash: actualTotal, variance: totalVariance };
+      return {
+        settledCount: saleIds.length,
+        totalAmount: actualTotal,
+        countedCash: totalCounted,
+        expectedCash: actualTotal,
+        variance: totalVariance,
+      };
     });
 
-    await this.audit.log('تسوية كل الطلبات', `تمت تسوية ${result.settledCount} طلب للمندوب #${repId} بواسطة ${actor.username}`, actor);
-    return { ok: true, settledCount: result.settledCount, totalAmount: result.totalAmount, countedCash: result.countedCash, expectedCash: result.expectedCash, variance: result.variance };
+    await this.audit.log(
+      'تسوية كل الطلبات',
+      `تمت تسوية ${result.settledCount} طلب للمندوب #${repId} بواسطة ${actor.username}`,
+      actor,
+    );
+    return {
+      ok: true,
+      settledCount: result.settledCount,
+      totalAmount: result.totalAmount,
+      countedCash: result.countedCash,
+      expectedCash: result.expectedCash,
+      variance: result.variance,
+    };
   }
 }

@@ -4,7 +4,15 @@ import { resolveImportProductNames } from '../settings-import.utils';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
 import { stockMovementTotal } from '../../../catalog/engines/stock-movement-total.engine';
-import { MAX_IMPORT_ROWS_PER_REQUEST, cleanString, normalizeBarcodeText, toNumber, normalizeNumberText, type DbExecutor, type TenantScope } from './settings-import-shared';
+import {
+  MAX_IMPORT_ROWS_PER_REQUEST,
+  cleanString,
+  normalizeBarcodeText,
+  toNumber,
+  normalizeNumberText,
+  type DbExecutor,
+  type TenantScope,
+} from './settings-import-shared';
 import type { Database } from '../../../../database/database.types';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import type { AuditService } from '../../../../core/audit/audit.service';
@@ -19,9 +27,26 @@ export class SettingsImportProducts {
       pickCell: (lookup: Record<string, string>, aliases: string[]) => string;
       ensureCategory: (db: DbExecutor, name: string, actor: AuthContext) => Promise<number | null>;
       ensureSupplier: (db: DbExecutor, name: string, actor: AuthContext) => Promise<number | null>;
-      ensureLocation: (db: DbExecutor, name: string, actor: AuthContext, cache?: Map<string, { locationId: number; branchId: number | null }>) => Promise<{ locationId: number; branchId: number | null } | null>;
+      ensureLocation: (
+        db: DbExecutor,
+        name: string,
+        actor: AuthContext,
+        cache?: Map<string, { locationId: number; branchId: number | null }>,
+      ) => Promise<{ locationId: number; branchId: number | null } | null>;
       tenantFields: (actor: AuthContext) => Record<string, string>;
-      postImportedOpeningStock: (trx: DbExecutor, opts: { productId: number; signedQty: number; unitCost: number; locationId: number | null; branchId: number | null; sourceType: string; sourceId: number; actor: AuthContext }) => Promise<void>;
+      postImportedOpeningStock: (
+        trx: DbExecutor,
+        opts: {
+          productId: number;
+          signedQty: number;
+          unitCost: number;
+          locationId: number | null;
+          branchId: number | null;
+          sourceType: string;
+          sourceId: number;
+          actor: AuthContext;
+        },
+      ) => Promise<void>;
     },
   ) {}
 
@@ -40,19 +65,37 @@ export class SettingsImportProducts {
   private async ensureSupplier(db: DbExecutor, name: string, actor: AuthContext): Promise<number | null> {
     return this.bound.ensureSupplier(db, name, actor);
   }
-  private async ensureLocation(db: DbExecutor, name: string, actor: AuthContext, cache?: Map<string, { locationId: number; branchId: number | null }>): Promise<{ locationId: number; branchId: number | null } | null> {
+  private async ensureLocation(
+    db: DbExecutor,
+    name: string,
+    actor: AuthContext,
+    cache?: Map<string, { locationId: number; branchId: number | null }>,
+  ): Promise<{ locationId: number; branchId: number | null } | null> {
     return this.bound.ensureLocation(db, name, actor, cache);
   }
   private tenantFields(actor: AuthContext): Record<string, string> {
     return this.bound.tenantFields(actor);
   }
-  private async postImportedOpeningStock(trx: DbExecutor, opts: { productId: number; signedQty: number; unitCost: number; locationId: number | null; branchId: number | null; sourceType: string; sourceId: number; actor: AuthContext }): Promise<void> {
+  private async postImportedOpeningStock(
+    trx: DbExecutor,
+    opts: {
+      productId: number;
+      signedQty: number;
+      unitCost: number;
+      locationId: number | null;
+      branchId: number | null;
+      sourceType: string;
+      sourceId: number;
+      actor: AuthContext;
+    },
+  ): Promise<void> {
     return this.bound.postImportedOpeningStock(trx, opts);
   }
 
   async importProducts(rows: unknown[], actor: AuthContext): Promise<Record<string, unknown>> {
     if (!Array.isArray(rows)) throw new AppError('rows must be an array', 'IMPORT_ROWS_INVALID', 400);
-    if (rows.length > MAX_IMPORT_ROWS_PER_REQUEST) throw new AppError('rows exceed the 1000-row per-request limit', 'IMPORT_ROWS_TOO_MANY', 400);
+    if (rows.length > MAX_IMPORT_ROWS_PER_REQUEST)
+      throw new AppError('rows exceed the 1000-row per-request limit', 'IMPORT_ROWS_TOO_MANY', 400);
     const scope = this.scope(actor);
     const result = await this.db.transaction().execute(async (trx) => {
       let inserted = 0;
@@ -65,39 +108,99 @@ export class SettingsImportProducts {
         const row = rawRow as Record<string, unknown>;
         const lookup = this.buildRowLookup(row);
 
-        const arabicName = cleanString(row.name) || this.pickCell(lookup, ['اسم الصنف (إجباري)', 'اسم الصنف', 'name', 'اسم الخدمة', 'اسم البند']);
-        const englishName = cleanString(row.nameEn) || this.pickCell(lookup, ['اسم الصنف (إنجليزي)', 'الاسم الإنجليزي', 'English name', 'nameEn', 'name_en']);
+        const arabicName =
+          cleanString(row.name) ||
+          this.pickCell(lookup, ['اسم الصنف (إجباري)', 'اسم الصنف', 'name', 'اسم الخدمة', 'اسم البند']);
+        const englishName =
+          cleanString(row.nameEn) ||
+          this.pickCell(lookup, ['اسم الصنف (إنجليزي)', 'الاسم الإنجليزي', 'English name', 'nameEn', 'name_en']);
         const resolvedNames = resolveImportProductNames(arabicName, englishName);
-        if (!resolvedNames) { skipped += 1; continue; }
+        if (!resolvedNames) {
+          skipped += 1;
+          continue;
+        }
         const name = resolvedNames.name;
 
-        const categoryName = cleanString(row.categoryName || row.category || '') || this.pickCell(lookup, ['القسم', 'التصنيف', 'category', 'categoryName']);
+        const categoryName =
+          cleanString(row.categoryName || row.category || '') ||
+          this.pickCell(lookup, ['القسم', 'التصنيف', 'category', 'categoryName']);
         const categoryId = await this.ensureCategory(trx, categoryName, actor);
 
-        const supplierName = cleanString(row.supplierName || row.supplier || '') || this.pickCell(lookup, ['المورد', 'اسم المورد', 'supplier', 'supplierName']);
+        const supplierName =
+          cleanString(row.supplierName || row.supplier || '') ||
+          this.pickCell(lookup, ['المورد', 'اسم المورد', 'supplier', 'supplierName']);
         const supplierId = await this.ensureSupplier(trx, supplierName, actor);
 
-        const warehouseName = cleanString(row.warehouseName || row.warehouse || row.store || '') || this.pickCell(lookup, ['المخزن', 'warehouse', 'store', 'الميناء', 'موقع التشوين']);
+        const warehouseName =
+          cleanString(row.warehouseName || row.warehouse || row.store || '') ||
+          this.pickCell(lookup, ['المخزن', 'warehouse', 'store', 'الميناء', 'موقع التشوين']);
         const locInfo = await this.ensureLocation(trx, warehouseName, actor, locationsCache);
         const locationId = locInfo?.locationId ?? null;
         const locationBranchId = locInfo?.branchId ?? null;
 
-        const barcode = normalizeBarcodeText(row.barcode) || normalizeBarcodeText(this.pickCell(lookup, ['الباركود', 'باركود', 'barcode', 'كود', 'code'])) || null;
+        const barcode =
+          normalizeBarcodeText(row.barcode) ||
+          normalizeBarcodeText(this.pickCell(lookup, ['الباركود', 'باركود', 'barcode', 'كود', 'code'])) ||
+          null;
 
-        const rawType = cleanString(row.itemType || row.type || row['النوع'] || this.pickCell(lookup, ['النوع', 'تصنيف', 'type', 'itemType', 'item_type'])).toLowerCase();
-        const itemType = ((rawType.includes('خام') || rawType === 'raw_material') ? 'raw_material' : (rawType.includes('خدم') || rawType === 'service') ? 'service' : 'product') as 'raw_material' | 'service' | 'product';
+        const rawType = cleanString(
+          row.itemType ||
+            row.type ||
+            row['النوع'] ||
+            this.pickCell(lookup, ['النوع', 'تصنيف', 'type', 'itemType', 'item_type']),
+        ).toLowerCase();
+        const itemType = (
+          rawType.includes('خام') || rawType === 'raw_material'
+            ? 'raw_material'
+            : rawType.includes('خدم') || rawType === 'service'
+              ? 'service'
+              : 'product'
+        ) as 'raw_material' | 'service' | 'product';
 
-        const costPrice = toNumber((row.costPrice ?? row.cost ?? this.pickCell(lookup, ['سعر التكلفة', 'التكلفة', 'cost', 'costPrice', 'cost_price'])) || 0);
-        const retailPrice = toNumber((row.retailPrice ?? row.price ?? this.pickCell(lookup, ['سعر البيع', 'السعر', 'retailPrice', 'price', 'retail_price', 'تعريفة'])) || 0);
-        const rawWholesale = row.wholesalePrice ?? this.pickCell(lookup, ['سعر الجملة', 'الجملة', 'wholesalePrice', 'wholesale_price']);
-        const wholesalePrice = rawWholesale != null && String(rawWholesale).trim() !== '' ? toNumber(rawWholesale) : (retailPrice || 0);
-        const minStockQty = toNumber((row.minStockQty ?? row.minQty ?? this.pickCell(lookup, ['الحد الأدنى', 'حد الطلب', 'minStockQty', 'minQty', 'min_stock'])) || 0);
-        const notes = cleanString((row.notes ?? this.pickCell(lookup, ['ملاحظات', 'الوصف', 'notes', 'description'])));
-        const rawImageUrl = cleanString((row.imageUrl ?? row.image ?? this.pickCell(lookup, ['رابط الصورة', 'الصورة', 'image', 'imageUrl', 'image_url'])));
+        const costPrice = toNumber(
+          (row.costPrice ??
+            row.cost ??
+            this.pickCell(lookup, ['سعر التكلفة', 'التكلفة', 'cost', 'costPrice', 'cost_price'])) ||
+            0,
+        );
+        const retailPrice = toNumber(
+          (row.retailPrice ??
+            row.price ??
+            this.pickCell(lookup, ['سعر البيع', 'السعر', 'retailPrice', 'price', 'retail_price', 'تعريفة'])) ||
+            0,
+        );
+        const rawWholesale =
+          row.wholesalePrice ?? this.pickCell(lookup, ['سعر الجملة', 'الجملة', 'wholesalePrice', 'wholesale_price']);
+        const wholesalePrice =
+          rawWholesale != null && String(rawWholesale).trim() !== '' ? toNumber(rawWholesale) : retailPrice || 0;
+        const minStockQty = toNumber(
+          (row.minStockQty ??
+            row.minQty ??
+            this.pickCell(lookup, ['الحد الأدنى', 'حد الطلب', 'minStockQty', 'minQty', 'min_stock'])) ||
+            0,
+        );
+        const notes = cleanString(row.notes ?? this.pickCell(lookup, ['ملاحظات', 'الوصف', 'notes', 'description']));
+        const rawImageUrl = cleanString(
+          row.imageUrl ??
+            row.image ??
+            this.pickCell(lookup, ['رابط الصورة', 'الصورة', 'image', 'imageUrl', 'image_url']),
+        );
 
         const existing = barcode
-          ? await trx.selectFrom('products').select(['id', 'metadata']).where(sql<boolean>`tenant_id = ${scope.tenantId}`).where('barcode', '=', barcode).where('is_active', '=', true).executeTakeFirst()
-          : await trx.selectFrom('products').select(['id', 'metadata']).where(sql<boolean>`tenant_id = ${scope.tenantId}`).where(sql`LOWER(name)`, '=', name.toLowerCase()).where('is_active', '=', true).executeTakeFirst();
+          ? await trx
+              .selectFrom('products')
+              .select(['id', 'metadata'])
+              .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+              .where('barcode', '=', barcode)
+              .where('is_active', '=', true)
+              .executeTakeFirst()
+          : await trx
+              .selectFrom('products')
+              .select(['id', 'metadata'])
+              .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+              .where(sql`LOWER(name)`, '=', name.toLowerCase())
+              .where('is_active', '=', true)
+              .executeTakeFirst();
 
         const payload = {
           name,
@@ -122,7 +225,9 @@ export class SettingsImportProducts {
 
           let metaObj: Record<string, any> = {};
           if (typeof existing.metadata === 'string') {
-            try { metaObj = JSON.parse(existing.metadata); } catch {}
+            try {
+              metaObj = JSON.parse(existing.metadata);
+            } catch {}
           } else if (existing.metadata && typeof existing.metadata === 'object') {
             metaObj = { ...(existing.metadata as Record<string, any>) };
           }
@@ -131,16 +236,40 @@ export class SettingsImportProducts {
           }
           const metaPayload = rawImageUrl ? { metadata: JSON.stringify(metaObj) } : {};
 
-          await trx.updateTable('products').set({ ...payload, ...metaPayload, updated_at: sql`NOW()` }).where('id', '=', productId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+          await trx
+            .updateTable('products')
+            .set({ ...payload, ...metaPayload, updated_at: sql`NOW()` })
+            .where('id', '=', productId)
+            .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+            .execute();
           updated += 1;
         } else {
           const rawStock = row.stockQty ?? this.pickCell(lookup, ['الكمية', 'stock', 'stockQty', 'qty']);
           const initialStockQty = toNumber(rawStock);
           const metaInsert = rawImageUrl ? JSON.stringify({ imageUrl: rawImageUrl }) : null;
-          const insertedProduct = await trx.insertInto('products').values({ ...payload, metadata: metaInsert, stock_qty: initialStockQty, is_active: true, ...this.tenantFields(actor) }).returning('id').executeTakeFirstOrThrow();
+          const insertedProduct = await trx
+            .insertInto('products')
+            .values({
+              ...payload,
+              metadata: metaInsert,
+              stock_qty: initialStockQty,
+              is_active: true,
+              ...this.tenantFields(actor),
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow();
           productId = Number(insertedProduct.id);
           if (initialStockQty > 0 && locationId != null) {
-            await trx.insertInto('product_location_stock').values({ product_id: productId, branch_id: locationBranchId, location_id: locationId, qty: initialStockQty, ...this.tenantFields(actor) }).execute();
+            await trx
+              .insertInto('product_location_stock')
+              .values({
+                product_id: productId,
+                branch_id: locationBranchId,
+                location_id: locationId,
+                qty: initialStockQty,
+                ...this.tenantFields(actor),
+              })
+              .execute();
           }
           if (initialStockQty > 0) {
             // Opening stock must appear in the perpetual ledger, otherwise
@@ -149,27 +278,35 @@ export class SettingsImportProducts {
             // journal as the single-product create path.
             const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
             const openingTotal = stockMovementTotal(initialStockQty, costPrice, bookDigits);
-            await trx.insertInto('stock_movements').values({
-              product_id: productId,
-              movement_type: 'opening_balance',
-              qty: initialStockQty,
-              before_qty: 0,
-              after_qty: initialStockQty,
-              unit_cost: costPrice,
-              total_cost: openingTotal,
-              reason: 'opening_balance',
-              note: 'رصيد افتتاحي عند استيراد الصنف',
-              reference_type: 'product',
-              reference_id: productId,
-              branch_id: locationBranchId,
-              location_id: locationId,
-              created_by: actor.userId,
-              ...this.tenantFields(actor),
-            } as any).execute();
+            await trx
+              .insertInto('stock_movements')
+              .values({
+                product_id: productId,
+                movement_type: 'opening_balance',
+                qty: initialStockQty,
+                before_qty: 0,
+                after_qty: initialStockQty,
+                unit_cost: costPrice,
+                total_cost: openingTotal,
+                reason: 'opening_balance',
+                note: 'رصيد افتتاحي عند استيراد الصنف',
+                reference_type: 'product',
+                reference_id: productId,
+                branch_id: locationBranchId,
+                location_id: locationId,
+                created_by: actor.userId,
+                ...this.tenantFields(actor),
+              } as any)
+              .execute();
             await this.postImportedOpeningStock(trx, {
-              productId, signedQty: initialStockQty, unitCost: costPrice,
-              locationId, branchId: locationBranchId,
-              sourceType: 'catalog_opening_stock', sourceId: productId, actor,
+              productId,
+              signedQty: initialStockQty,
+              unitCost: costPrice,
+              locationId,
+              branchId: locationBranchId,
+              sourceType: 'catalog_opening_stock',
+              sourceId: productId,
+              actor,
             });
           }
           inserted += 1;
@@ -181,15 +318,33 @@ export class SettingsImportProducts {
       return { inserted, updated, skipped, stockQtyIgnoredOnUpdate };
     });
 
-    await this.audit.log('استيراد أصناف', `تم استيراد/تحديث ${result.inserted + result.updated} صنف على يد ${actor.username}`, actor);
-    return { ok: true, inserted: result.inserted, updated: result.updated, skipped: result.skipped, warnings: result.stockQtyIgnoredOnUpdate > 0 ? [`تم إهمال stockQty لعدد ${result.stockQtyIgnoredOnUpdate} من الأصناف الموجودة مسبقًا. استخدم إدخال الرصيد الأولي أو تعديل المخزون بدلًا من هذا.`] : [] };
+    await this.audit.log(
+      'استيراد أصناف',
+      `تم استيراد/تحديث ${result.inserted + result.updated} صنف على يد ${actor.username}`,
+      actor,
+    );
+    return {
+      ok: true,
+      inserted: result.inserted,
+      updated: result.updated,
+      skipped: result.skipped,
+      warnings:
+        result.stockQtyIgnoredOnUpdate > 0
+          ? [
+              `تم إهمال stockQty لعدد ${result.stockQtyIgnoredOnUpdate} من الأصناف الموجودة مسبقًا. استخدم إدخال الرصيد الأولي أو تعديل المخزون بدلًا من هذا.`,
+            ]
+          : [],
+    };
   }
 
   normalizeImportUnitName(name: unknown): string {
     const text = String(name || '').trim();
     if (!text) return '';
     const lower = text.toLowerCase();
-    if (['piece', 'pieces', 'pcs', 'pc', 'item', 'items', 'unit', 'units', 'قطعه', 'حبة', 'حبه', 'قطعة'].includes(lower)) return 'قطعة';
+    if (
+      ['piece', 'pieces', 'pcs', 'pc', 'item', 'items', 'unit', 'units', 'قطعه', 'حبة', 'حبه', 'قطعة'].includes(lower)
+    )
+      return 'قطعة';
     if (lower === 'kg' || lower === 'كجم' || lower === 'كيلو' || lower === 'كيلوجرام') return 'kg';
     if (lower === 'g' || lower === 'gm' || lower === 'gram' || lower === 'جرام') return 'g';
     if (['box', 'boxes', 'carton', 'cartons', 'كرتونه', 'كرتونة'].includes(lower)) return 'كرتونة';
@@ -221,18 +376,70 @@ export class SettingsImportProducts {
   ): Promise<void> {
     const scope = this.scope(actor);
 
-    const rawBaseUnit = cleanString(row.unitName || this.pickCell(lookup, ['وحدة القياس الأساسية', 'وحدة القياس', 'الوحدة الأساسية', 'الوحدة', 'unit', 'unitName', 'القياس']));
+    const rawBaseUnit = cleanString(
+      row.unitName ||
+        this.pickCell(lookup, [
+          'وحدة القياس الأساسية',
+          'وحدة القياس',
+          'الوحدة الأساسية',
+          'الوحدة',
+          'unit',
+          'unitName',
+          'القياس',
+        ]),
+    );
     const rawSaleUnit = cleanString(row.saleUnit || this.pickCell(lookup, ['وحدة البيع', 'saleUnit', 'sale_unit']));
-    const rawPurchaseUnit = cleanString(row.purchaseUnit || this.pickCell(lookup, ['وحدة الشراء', 'purchaseUnit', 'purchase_unit']));
-    const rawExtraUnit = cleanString(row.extraUnitName || this.pickCell(lookup, ['اسم وحدة إضافية', 'وحدة إضافية', 'الوحدة الكبرى', 'اسم الوحدة الكبرى', 'extraUnit', 'extraUnitName', 'extra_unit']));
-    const rawMultiplierStr = this.pickCell(lookup, ['معامل الوحدة الإضافية', 'معامل التحويل', 'معامل الوحدة', 'التحويل', 'المعامل', 'عدد القطع في الوحدة الكبرى', 'extraUnitMultiplier', 'multiplier', 'factor']);
-    const rawMultiplier = row.extraUnitMultiplier != null && String(row.extraUnitMultiplier).trim() !== ''
-      ? this.parseMultiplier(row.extraUnitMultiplier)
-      : rawMultiplierStr ? this.parseMultiplier(rawMultiplierStr) : null;
-    const rawExtraBarcode = normalizeBarcodeText(row.extraUnitBarcode || this.pickCell(lookup, ['باركود الوحدة الإضافية', 'باركود الوحدة', 'باركود الكرتونة', 'extraUnitBarcode', 'extra_barcode'])) || null;
+    const rawPurchaseUnit = cleanString(
+      row.purchaseUnit || this.pickCell(lookup, ['وحدة الشراء', 'purchaseUnit', 'purchase_unit']),
+    );
+    const rawExtraUnit = cleanString(
+      row.extraUnitName ||
+        this.pickCell(lookup, [
+          'اسم وحدة إضافية',
+          'وحدة إضافية',
+          'الوحدة الكبرى',
+          'اسم الوحدة الكبرى',
+          'extraUnit',
+          'extraUnitName',
+          'extra_unit',
+        ]),
+    );
+    const rawMultiplierStr = this.pickCell(lookup, [
+      'معامل الوحدة الإضافية',
+      'معامل التحويل',
+      'معامل الوحدة',
+      'التحويل',
+      'المعامل',
+      'عدد القطع في الوحدة الكبرى',
+      'extraUnitMultiplier',
+      'multiplier',
+      'factor',
+    ]);
+    const rawMultiplier =
+      row.extraUnitMultiplier != null && String(row.extraUnitMultiplier).trim() !== ''
+        ? this.parseMultiplier(row.extraUnitMultiplier)
+        : rawMultiplierStr
+          ? this.parseMultiplier(rawMultiplierStr)
+          : null;
+    const rawExtraBarcode =
+      normalizeBarcodeText(
+        row.extraUnitBarcode ||
+          this.pickCell(lookup, [
+            'باركود الوحدة الإضافية',
+            'باركود الوحدة',
+            'باركود الكرتونة',
+            'extraUnitBarcode',
+            'extra_barcode',
+          ]),
+      ) || null;
 
     const hasAnyUnitField = Boolean(
-      rawBaseUnit || rawSaleUnit || rawPurchaseUnit || rawExtraUnit || (rawMultiplier !== null && rawMultiplier > 0) || rawExtraBarcode
+      rawBaseUnit ||
+      rawSaleUnit ||
+      rawPurchaseUnit ||
+      rawExtraUnit ||
+      (rawMultiplier !== null && rawMultiplier > 0) ||
+      rawExtraBarcode,
     );
 
     // If existing product and no unit columns or data provided at all in this row, preserve existing units
@@ -246,24 +453,35 @@ export class SettingsImportProducts {
     const purchaseUnitName = this.normalizeImportUnitName(rawPurchaseUnit);
 
     // If extraUnitName was not set, but purchaseUnit differs from baseUnit and multiplier > 1, infer extraUnitName
-    if (!extraUnitName && purchaseUnitName && purchaseUnitName.toLowerCase() !== baseUnitName.toLowerCase() && rawMultiplier && rawMultiplier > 1) {
+    if (
+      !extraUnitName &&
+      purchaseUnitName &&
+      purchaseUnitName.toLowerCase() !== baseUnitName.toLowerCase() &&
+      rawMultiplier &&
+      rawMultiplier > 1
+    ) {
       extraUnitName = purchaseUnitName;
     }
     // Or if extraUnitName was not set, but saleUnit differs from baseUnit and multiplier > 1
-    if (!extraUnitName && saleUnitName && saleUnitName.toLowerCase() !== baseUnitName.toLowerCase() && rawMultiplier && rawMultiplier > 1) {
+    if (
+      !extraUnitName &&
+      saleUnitName &&
+      saleUnitName.toLowerCase() !== baseUnitName.toLowerCase() &&
+      rawMultiplier &&
+      rawMultiplier > 1
+    ) {
       extraUnitName = saleUnitName;
     }
 
     const hasValidExtraUnit = Boolean(
-      extraUnitName &&
-      extraUnitName.toLowerCase() !== baseUnitName.toLowerCase() &&
-      rawMultiplier && rawMultiplier > 0
+      extraUnitName && extraUnitName.toLowerCase() !== baseUnitName.toLowerCase() && rawMultiplier && rawMultiplier > 0,
     );
 
-    const extraMultiplier = hasValidExtraUnit ? (rawMultiplier || 1) : 1;
+    const extraMultiplier = hasValidExtraUnit ? rawMultiplier || 1 : 1;
 
     // Determine default flags
-    const isBaseSaleDefault = !hasValidExtraUnit || (saleUnitName ? saleUnitName.toLowerCase() !== extraUnitName.toLowerCase() : true);
+    const isBaseSaleDefault =
+      !hasValidExtraUnit || (saleUnitName ? saleUnitName.toLowerCase() !== extraUnitName.toLowerCase() : true);
     const isExtraSaleDefault = hasValidExtraUnit && !isBaseSaleDefault;
 
     // For purchase default: if purchaseUnitName matches extraUnitName, or if purchaseUnitName was not specified but extraUnit is created and purchase default wasn't explicitly set to base
@@ -317,7 +535,8 @@ export class SettingsImportProducts {
     }
 
     // Delete existing units for this product
-    await trx.deleteFrom('product_units')
+    await trx
+      .deleteFrom('product_units')
       .where('product_id', '=', productId)
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .execute();
@@ -327,7 +546,8 @@ export class SettingsImportProducts {
       // Barcode collision safety: if barcode is already claimed by another product in this tenant, null it out
       let safeBarcode = unit.barcode;
       if (safeBarcode) {
-        const existingBarcode = await trx.selectFrom('product_units')
+        const existingBarcode = await trx
+          .selectFrom('product_units')
           .select(['id', 'product_id'])
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .where(sql`LOWER(barcode)`, '=', safeBarcode.toLowerCase())
@@ -338,16 +558,19 @@ export class SettingsImportProducts {
         }
       }
 
-      await trx.insertInto('product_units').values({
-        product_id: productId,
-        name: unit.name,
-        multiplier: unit.multiplier,
-        barcode: safeBarcode,
-        is_base_unit: unit.is_base_unit,
-        is_sale_unit_default: unit.is_sale_unit_default,
-        is_purchase_unit_default: unit.is_purchase_unit_default,
-        ...this.tenantFields(actor),
-      }).execute();
+      await trx
+        .insertInto('product_units')
+        .values({
+          product_id: productId,
+          name: unit.name,
+          multiplier: unit.multiplier,
+          barcode: safeBarcode,
+          is_base_unit: unit.is_base_unit,
+          is_sale_unit_default: unit.is_sale_unit_default,
+          is_purchase_unit_default: unit.is_purchase_unit_default,
+          ...this.tenantFields(actor),
+        })
+        .execute();
     }
   }
 }

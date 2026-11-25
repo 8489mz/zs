@@ -1,7 +1,12 @@
 import { Injectable, Inject, Optional } from '@nestjs/common';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { Kysely, Transaction, Selectable } from 'kysely';
-import { Database, ImportInventoryReceiptTable, ImportShipmentTable, ImportShipmentItemTable } from '../../database/database.types';
+import {
+  Database,
+  ImportInventoryReceiptTable,
+  ImportShipmentTable,
+  ImportShipmentItemTable,
+} from '../../database/database.types';
 import { KYSELY_DB } from '../../database/database.constants';
 import {
   CreateShipmentDto,
@@ -217,24 +222,16 @@ export class ImportSalesService {
       | 'vat_receivable'
       | 'clearing'
       | 'equity',
-    preferredAccountId?: number | null
+    preferredAccountId?: number | null,
   ): Promise<number> {
     return this.accountResolvers.resolveTenantAccount(trx, tenantId, role, preferredAccountId);
   }
 
-  private async resolveImportReceiptSupplierId(
-    trx: any,
-    tenantId: string,
-    shipment: any,
-  ): Promise<number> {
+  private async resolveImportReceiptSupplierId(trx: any, tenantId: string, shipment: any): Promise<number> {
     return this.receiptHelpers.resolveImportReceiptSupplierId(trx, tenantId, shipment);
   }
 
-  private async resolveImportProjectCostCenter(
-    trx: any,
-    tenantId: string,
-    shipment: any,
-  ): Promise<number | null> {
+  private async resolveImportProjectCostCenter(trx: any, tenantId: string, shipment: any): Promise<number | null> {
     return this.receiptHelpers.resolveImportProjectCostCenter(trx, tenantId, shipment);
   }
 
@@ -244,9 +241,28 @@ export class ImportSalesService {
     actionType: string,
     referenceId: string,
     approvalRequestId?: string,
-    expectedDetails?: { amount?: number; projectId?: string; partnerId?: string; currency?: string; proformaInvoiceId?: string; supplierId?: string; paymentMethod?: string; shipmentId?: string; receiptId?: string; brokerExpenseId?: string; tripId?: string }
+    expectedDetails?: {
+      amount?: number;
+      projectId?: string;
+      partnerId?: string;
+      currency?: string;
+      proformaInvoiceId?: string;
+      supplierId?: string;
+      paymentMethod?: string;
+      shipmentId?: string;
+      receiptId?: string;
+      brokerExpenseId?: string;
+      tripId?: string;
+    },
   ): Promise<void> {
-    return this.approvalGate.verifyAndConsumeApprovalRequest(trx, tenantId, actionType, referenceId, approvalRequestId, expectedDetails);
+    return this.approvalGate.verifyAndConsumeApprovalRequest(
+      trx,
+      tenantId,
+      actionType,
+      referenceId,
+      approvalRequestId,
+      expectedDetails,
+    );
   }
 
   private costLine(item: Selectable<ImportShipmentItemTable>) {
@@ -263,16 +279,34 @@ export class ImportSalesService {
     amount: number,
     movementDate: Date,
     requestedCashAccountId: string,
-    note: string
+    note: string,
   ): Promise<number> {
-    return this.projectsPartnersService.postPartnerCapitalMovement(trx, tenantId, userId, partnerName, partnerId, type, amount, movementDate, requestedCashAccountId, note);
+    return this.projectsPartnersService.postPartnerCapitalMovement(
+      trx,
+      tenantId,
+      userId,
+      partnerName,
+      partnerId,
+      type,
+      amount,
+      movementDate,
+      requestedCashAccountId,
+      note,
+    );
   }
 
   async getPartners(tenantId: string) {
     return this.projectsPartnersService.getPartners(tenantId);
   }
 
-  async createPartner(tenantId: string, userId: number, name: string, percentage: number, capitalAmount: number = 0, accountId?: string) {
+  async createPartner(
+    tenantId: string,
+    userId: number,
+    name: string,
+    percentage: number,
+    capitalAmount: number = 0,
+    accountId?: string,
+  ) {
     return this.projectsPartnersService.createPartner(tenantId, userId, name, percentage, capitalAmount, accountId);
   }
 
@@ -324,12 +358,7 @@ export class ImportSalesService {
     return this.sourcingService.upsertSupplierImportMeta(tenantId, supplierId, dto);
   }
 
-  async verifySupplierBankDetails(
-    tenantId: string,
-    userId: number,
-    supplierId: string,
-    verificationNotes?: string
-  ) {
+  async verifySupplierBankDetails(tenantId: string, userId: number, supplierId: string, verificationNotes?: string) {
     return this.sourcingService.verifySupplierBankDetails(tenantId, userId, supplierId, verificationNotes);
   }
 
@@ -393,7 +422,7 @@ export class ImportSalesService {
     tenantId: string,
     hsCode: string,
     cifValueEgp: number,
-    overrides?: { overrideDutyRatePercent?: number; overrideVatRatePercent?: number }
+    overrides?: { overrideDutyRatePercent?: number; overrideVatRatePercent?: number },
   ) {
     return this.sourcingService.calculateCustomsTax(tenantId, hsCode, cifValueEgp, overrides);
   }
@@ -455,11 +484,21 @@ export class ImportSalesService {
     return this.shipmentsService.updateShipmentCosts(tenantId, userId, shipmentId, dto);
   }
 
-  private async assertForm4ClearanceGate(executor: Transaction<Database> | Kysely<Database>, tenantId: string, shipment: Selectable<ImportShipmentTable>): Promise<void> {
+  private async assertForm4ClearanceGate(
+    executor: Transaction<Database> | Kysely<Database>,
+    tenantId: string,
+    shipment: Selectable<ImportShipmentTable>,
+  ): Promise<void> {
     return this.form4Gates.assertForm4ClearanceGate(executor, tenantId, shipment);
   }
 
-  private async postShipmentToInventory(trx: Transaction<Database>, tenantId: string, shipmentId: string, userId: number, receiptLocationId?: number) {
+  private async postShipmentToInventory(
+    trx: Transaction<Database>,
+    tenantId: string,
+    shipmentId: string,
+    userId: number,
+    receiptLocationId?: number,
+  ) {
     return this.receiptPostingService.postShipmentToInventory(trx, tenantId, shipmentId, userId, receiptLocationId);
   }
 
@@ -477,7 +516,7 @@ export class ImportSalesService {
 
   private async calculateLandedCostInTransaction(
     trx: Transaction<Database>,
-    shipment: Selectable<ImportShipmentTable>
+    shipment: Selectable<ImportShipmentTable>,
   ) {
     return this.receiptPostingService.calculateLandedCostInTransaction(trx, shipment);
   }
@@ -495,7 +534,10 @@ export class ImportSalesService {
       idempotencyKey?: string;
       accountId?: number | null;
       payableAccountId?: number | null;
-      credit: { kind: 'payable'; supplierId: number } | { kind: 'broker_advance'; accountId: number } | { kind: 'clearing'; accountId: number; reason: string };
+      credit:
+        | { kind: 'payable'; supplierId: number }
+        | { kind: 'broker_advance'; accountId: number }
+        | { kind: 'clearing'; accountId: number; reason: string };
       /** Attribution recorded on the late-expense event row (INV-IMPORT-SUPPLIER-ATTRIBUTION). */
       supplierId?: number | null;
       unallocableReason?: string | null;
@@ -505,12 +547,7 @@ export class ImportSalesService {
     return this.costRevaluationService.applyImportCostRevaluation(trx, tenantId, userId, shipment, receipt, opts);
   }
 
-  async processLateShipmentExpense(
-    tenantId: string,
-    userId: number,
-    shipmentId: string,
-    dto: ProcessLateExpenseDto
-  ) {
+  async processLateShipmentExpense(tenantId: string, userId: number, shipmentId: string, dto: ProcessLateExpenseDto) {
     return this.costRevaluationService.processLateShipmentExpense(tenantId, userId, shipmentId, dto);
   }
 
@@ -542,7 +579,7 @@ export class ImportSalesService {
     startDate: string | Date,
     endDate: string | Date,
     projectId?: string,
-    executor?: any
+    executor?: any,
   ) {
     return this.profitReportService.generatePeriodProfitReport(tenantId, startDate, endDate, projectId, executor);
   }
@@ -562,9 +599,17 @@ export class ImportSalesService {
     amount: number,
     approvalRequestId?: string,
     projectId?: string,
-    treasuryAccountId?: string
+    treasuryAccountId?: string,
   ) {
-    return this.projectsPartnersService.recordPartnerPayout(tenantId, userId, partnerId, amount, approvalRequestId, projectId, treasuryAccountId);
+    return this.projectsPartnersService.recordPartnerPayout(
+      tenantId,
+      userId,
+      partnerId,
+      amount,
+      approvalRequestId,
+      projectId,
+      treasuryAccountId,
+    );
   }
 
   async getPartnerLedger(tenantId: string, partnerId: string) {
@@ -575,7 +620,14 @@ export class ImportSalesService {
     tenantId: string,
     userId: number,
     partnerId: string,
-    dto: { type: 'DEPOSIT' | 'WITHDRAWAL'; amount: number; date: string; note?: string; accountId?: string; idempotencyKey?: string }
+    dto: {
+      type: 'DEPOSIT' | 'WITHDRAWAL';
+      amount: number;
+      date: string;
+      note?: string;
+      accountId?: string;
+      idempotencyKey?: string;
+    },
   ) {
     return this.projectsPartnersService.recordCapitalTransaction(tenantId, userId, partnerId, dto);
   }
@@ -587,8 +639,6 @@ export class ImportSalesService {
   async applySuggestedPrices(tenantId: string, shipmentId: string) {
     return this.costRevaluationService.applySuggestedPrices(tenantId, shipmentId);
   }
-
-
 
   async getImportCommandCenterMetrics(tenantId: string) {
     return this.profitReportService.getImportCommandCenterMetrics(tenantId);
@@ -605,7 +655,7 @@ export class ImportSalesService {
   async setProjectPartners(
     tenantId: string,
     projectId: string,
-    partners: Array<{ partnerId: string; capitalShare?: number; profitPercentage: number }>
+    partners: Array<{ partnerId: string; capitalShare?: number; profitPercentage: number }>,
   ) {
     return this.closureAuditService.setProjectPartners(tenantId, projectId, partners);
   }
@@ -730,7 +780,7 @@ export class ImportSalesService {
     tenantId: string,
     userId: number,
     depositId: string,
-    dto: RecordContainerReturnRefundDto
+    dto: RecordContainerReturnRefundDto,
   ) {
     return this.containerDepositsService.recordContainerReturnAndRefund(tenantId, userId, depositId, dto);
   }
@@ -770,7 +820,7 @@ export class ImportSalesService {
   // -------------------------------------------------------------
   // SINGLE-CONTAINER EXECUTIVE AUTOPSY SHEET (كشف حساب وتشريح الحاوية P&L)
   // -------------------------------------------------------------
-  
+
   // -------------------------------------------------------------
   // CONVERT CONTAINER PRE-ORDER TO CONFIRMED SALE INVOICE
   // -------------------------------------------------------------
@@ -778,7 +828,7 @@ export class ImportSalesService {
     tenantId: string,
     userId: number,
     preorderId: string,
-    dto: ConvertPreorderToSaleDto = {}
+    dto: ConvertPreorderToSaleDto = {},
   ) {
     return this.containerPreordersService.convertPreorderToSale(tenantId, userId, preorderId, dto);
   }
@@ -860,7 +910,12 @@ export class ImportSalesService {
     return this.closureAuditService.listReconciliationExceptions(tenantId, status);
   }
 
-  async resolveReconciliationException(tenantId: string, userId: number, exceptionId: string, dto: ResolveExceptionDto) {
+  async resolveReconciliationException(
+    tenantId: string,
+    userId: number,
+    exceptionId: string,
+    dto: ResolveExceptionDto,
+  ) {
     return this.closureAuditService.resolveReconciliationException(tenantId, userId, exceptionId, dto);
   }
 }

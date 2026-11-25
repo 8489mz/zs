@@ -7,7 +7,11 @@ import { parseTenantExtraFeatures } from '../engines/storefront-entitlement.engi
 import { resolveOrderLinePrice, formatVariantLineName } from '../engines/online-order-pricing.engine';
 import { resolveBestStorefrontOffer, RawStorefrontOffer } from '../engines/storefront-offers.engine';
 import { roundMoney } from '../../accounting/engines/money-minor-units.engine';
-import { enforceRestaurantModifierContract, type ModifierGroupRule, type ModifierPriceTruth } from '../../sales/helpers/restaurant-modifier-contract.helper';
+import {
+  enforceRestaurantModifierContract,
+  type ModifierGroupRule,
+  type ModifierPriceTruth,
+} from '../../sales/helpers/restaurant-modifier-contract.helper';
 import { offerTimezone, storefrontMoneyDigits } from '../storefront-helpers';
 
 /**
@@ -154,41 +158,68 @@ export class StorefrontOrderQuoteService {
     }
     const tenantId = tenant.id;
     const optionRows = optionIds.size
-      ? await this.db.selectFrom('pos_modifier_options')
+      ? await this.db
+          .selectFrom('pos_modifier_options')
           .select(['id', 'price', 'group_id'])
-          .where(sql<boolean>`tenant_id = ${tenantId}`).where('id', 'in', [...optionIds]).execute()
+          .where(sql<boolean>`tenant_id = ${tenantId}`)
+          .where('id', 'in', [...optionIds])
+          .execute()
       : [];
     const truth: ModifierPriceTruth = {
-      options: new Map(optionRows.map((row) => [Number(row.id),
-        { price: Number(row.price), groupId: Number(row.group_id) }])),
+      options: new Map(
+        optionRows.map((row) => [Number(row.id), { price: Number(row.price), groupId: Number(row.group_id) }]),
+      ),
       products: new Map(),
       addons: new Map(),
     };
     if (modProductIds.size) {
-      const productRows = await this.db.selectFrom('products').select(['id', 'retail_price'])
-        .where(sql<boolean>`tenant_id = ${tenantId}`).where('id', 'in', [...modProductIds]).execute();
+      const productRows = await this.db
+        .selectFrom('products')
+        .select(['id', 'retail_price'])
+        .where(sql<boolean>`tenant_id = ${tenantId}`)
+        .where('id', 'in', [...modProductIds])
+        .execute();
       for (const row of productRows) truth.products.set(Number(row.id), Number(row.retail_price));
-      const addonRows = await this.db.selectFrom('addons').select(['id', 'price'])
-        .where(sql<boolean>`tenant_id = ${tenantId}`).where('id', 'in', [...modProductIds]).execute();
+      const addonRows = await this.db
+        .selectFrom('addons')
+        .select(['id', 'price'])
+        .where(sql<boolean>`tenant_id = ${tenantId}`)
+        .where('id', 'in', [...modProductIds])
+        .execute();
       for (const row of addonRows) truth.addons.set(Number(row.id), Number(row.price));
     }
     const linkedGroups = new Map<number, ModifierGroupRule[]>();
     if (lineProductIds.size) {
-      const links = await this.db.selectFrom('product_pos_modifiers')
+      const links = await this.db
+        .selectFrom('product_pos_modifiers')
         .select(['product_id', 'modifier_group_id'])
-        .where(sql<boolean>`tenant_id = ${tenantId}`).where('product_id', 'in', [...lineProductIds]).execute();
+        .where(sql<boolean>`tenant_id = ${tenantId}`)
+        .where('product_id', 'in', [...lineProductIds])
+        .execute();
       const groupIds = [...new Set(links.map((l) => Number(l.modifier_group_id)))];
       const groupRows = groupIds.length
-        ? await this.db.selectFrom('pos_modifier_groups')
+        ? await this.db
+            .selectFrom('pos_modifier_groups')
             .select(['id', 'name', 'selection_type', 'is_mandatory', 'min_selections', 'max_selections', 'is_active'])
-            .where(sql<boolean>`tenant_id = ${tenantId}`).where('id', 'in', groupIds)
-            .where('is_active', '=', true).execute()
+            .where(sql<boolean>`tenant_id = ${tenantId}`)
+            .where('id', 'in', groupIds)
+            .where('is_active', '=', true)
+            .execute()
         : [];
-      const groupsById = new Map(groupRows.map((g) => [Number(g.id), {
-        id: Number(g.id), name: String(g.name), selectionType: String(g.selection_type || 'multiple'),
-        isMandatory: Boolean(g.is_mandatory), minSelections: Number(g.min_selections || 0),
-        maxSelections: Number(g.max_selections || 10), isActive: Boolean(g.is_active),
-      }]));
+      const groupsById = new Map(
+        groupRows.map((g) => [
+          Number(g.id),
+          {
+            id: Number(g.id),
+            name: String(g.name),
+            selectionType: String(g.selection_type || 'multiple'),
+            isMandatory: Boolean(g.is_mandatory),
+            minSelections: Number(g.min_selections || 0),
+            maxSelections: Number(g.max_selections || 10),
+            isActive: Boolean(g.is_active),
+          },
+        ]),
+      );
       for (const link of links) {
         const group = groupsById.get(Number(link.modifier_group_id));
         if (!group) continue;
@@ -198,7 +229,9 @@ export class StorefrontOrderQuoteService {
       }
     }
     const repriced = enforceRestaurantModifierContract(items, truth, linkedGroups);
-    repriced.forEach((item, index) => { items[index].modifiers = item.modifiers; });
+    repriced.forEach((item, index) => {
+      items[index].modifiers = item.modifiers;
+    });
   }
 
   /**
@@ -232,7 +265,7 @@ export class StorefrontOrderQuoteService {
     couponId: number | null;
   }> {
     const { isDineIn, isPickup, subtotal } = params;
-    let deliveryFee = (isDineIn || isPickup) ? 0 : Number(settings.get('storefront_delivery_fee') || 0);
+    let deliveryFee = isDineIn || isPickup ? 0 : Number(settings.get('storefront_delivery_fee') || 0);
     let deliveryZoneId: number | null = null;
     let deliveryZoneName: string | null = null;
 
@@ -265,7 +298,9 @@ export class StorefrontOrderQuoteService {
     let appliedCouponCode: string | null = null;
     let couponId: number | null = null;
 
-    const codeUpper = String(params.couponCode || '').trim().toUpperCase();
+    const codeUpper = String(params.couponCode || '')
+      .trim()
+      .toUpperCase();
     if (codeUpper) {
       const coupon = await this.db
         .selectFrom('storefront_coupons')
@@ -276,7 +311,8 @@ export class StorefrontOrderQuoteService {
         .executeTakeFirst();
 
       if (coupon) {
-        const alreadyClaimed = String(params.alreadyClaimedCouponCode || '').toUpperCase() === coupon.code.toUpperCase();
+        const alreadyClaimed =
+          String(params.alreadyClaimedCouponCode || '').toUpperCase() === coupon.code.toUpperCase();
         // Coupon bounds are whole tenant days, never instants: a bound
         // stored as UTC midnight dies at 02:00 Cairo on its last day
         // under an instant comparison (NEW-I).
@@ -284,7 +320,8 @@ export class StorefrontOrderQuoteService {
         const couponTodayKey = todayTenantDate(couponTimezone);
         const couponUsable =
           couponDayState(coupon.start_date, coupon.end_date, couponTodayKey, couponTimezone) === 'active';
-        const hasRemainingUsage = alreadyClaimed || coupon.usage_limit === null || Number(coupon.times_used || 0) < coupon.usage_limit;
+        const hasRemainingUsage =
+          alreadyClaimed || coupon.usage_limit === null || Number(coupon.times_used || 0) < coupon.usage_limit;
         const meetsMinOrder = subtotal >= Number(coupon.min_order_amount || 0);
 
         if (couponUsable && hasRemainingUsage && meetsMinOrder) {
@@ -322,15 +359,18 @@ export class StorefrontOrderQuoteService {
    * Authoritative server-side pricing quote for cart & checkout preview.
    * Calculates exact line totals, volume/BOGO discounts, coupons, and delivery fees without creating records.
    */
-  async quoteOnlineOrder(slug: string, dto: {
-    items: Array<{ productId: number | string; quantity: number; variantName?: string | null }>;
-    couponCode?: string;
-    deliveryZoneId?: number;
-    deliveryZoneName?: string;
-    fulfillmentType?: 'delivery' | 'pickup';
-    orderType?: string;
-    tableNumber?: string;
-  }) {
+  async quoteOnlineOrder(
+    slug: string,
+    dto: {
+      items: Array<{ productId: number | string; quantity: number; variantName?: string | null }>;
+      couponCode?: string;
+      deliveryZoneId?: number;
+      deliveryZoneName?: string;
+      fulfillmentType?: 'delivery' | 'pickup';
+      orderType?: string;
+      tableNumber?: string;
+    },
+  ) {
     const tenant = await this.getTenantBySlug(slug);
     const settings = await this.getTenantSettingsMap(tenant.id);
     const isDineIn = dto.orderType === 'dine_in' || Boolean(dto.tableNumber);
@@ -393,7 +433,7 @@ export class StorefrontOrderQuoteService {
     ]);
 
     const offersByProductId = new Map<number, RawStorefrontOffer[]>();
-    for (const off of (activeOffers as RawStorefrontOffer[])) {
+    for (const off of activeOffers as RawStorefrontOffer[]) {
       const pid = Number(off.product_id);
       if (!offersByProductId.has(pid)) offersByProductId.set(pid, []);
       offersByProductId.get(pid)!.push(off);
@@ -417,15 +457,31 @@ export class StorefrontOrderQuoteService {
     const validatedItems = [];
 
     for (const item of dto.items) {
-      const prod = productMap.get(item.productId) ?? productMap.get(Number(item.productId)) ?? productMap.get(String(item.productId));
+      const prod =
+        productMap.get(item.productId) ??
+        productMap.get(Number(item.productId)) ??
+        productMap.get(String(item.productId));
       if (!prod) continue;
 
-      const priced = resolveOrderLinePrice(Number(prod.retail_price || 0), prod.metadata, item.variantName, moneyDigits);
+      const priced = resolveOrderLinePrice(
+        Number(prod.retail_price || 0),
+        prod.metadata,
+        item.variantName,
+        moneyDigits,
+      );
       const baseUnitPrice = priced.ok ? priced.unitPrice : Number(prod.retail_price || 0);
-      const resolvedVariantName = priced.ok ? priced.variantName : (item.variantName || null);
+      const resolvedVariantName = priced.ok ? priced.variantName : item.variantName || null;
       const quantity = Math.max(1, Number(item.quantity || 1));
       const pOffers = offersByProductId.get(Number(prod.id)) || [];
-      const bestOffer = resolveBestStorefrontOffer(baseUnitPrice, pOffers, quantity, undefined, new Date(), offerTimezone(settings), moneyDigits);
+      const bestOffer = resolveBestStorefrontOffer(
+        baseUnitPrice,
+        pOffers,
+        quantity,
+        undefined,
+        new Date(),
+        offerTimezone(settings),
+        moneyDigits,
+      );
       const unitPrice = bestOffer.hasDiscount ? bestOffer.price : baseUnitPrice;
       const lineTotal = roundMoney(unitPrice * quantity, moneyDigits);
       const originalLineTotal = roundMoney(baseUnitPrice * quantity, moneyDigits);
@@ -450,20 +506,15 @@ export class StorefrontOrderQuoteService {
       });
     }
 
-    const {
-      deliveryFee,
-      deliveryZoneId,
-      deliveryZoneName,
-      discountAmount,
-      appliedCouponCode,
-    } = await this.resolveOrderCharges(tenant.id, settings, {
-      isDineIn,
-      isPickup,
-      deliveryZoneId: dto.deliveryZoneId,
-      deliveryZoneName: dto.deliveryZoneName,
-      subtotal,
-      couponCode: dto.couponCode,
-    });
+    const { deliveryFee, deliveryZoneId, deliveryZoneName, discountAmount, appliedCouponCode } =
+      await this.resolveOrderCharges(tenant.id, settings, {
+        isDineIn,
+        isPickup,
+        deliveryZoneId: dto.deliveryZoneId,
+        deliveryZoneName: dto.deliveryZoneName,
+        subtotal,
+        couponCode: dto.couponCode,
+      });
 
     const bogoSavings = Math.max(0, roundMoney(originalSubtotal - subtotal, moneyDigits));
     const totalAmount = Math.max(0, subtotal - discountAmount) + deliveryFee;

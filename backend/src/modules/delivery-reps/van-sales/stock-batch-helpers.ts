@@ -99,7 +99,9 @@ export class StockBatchHelpersService {
     let moved = 0;
     for (const batch of batches) {
       if (remaining <= 0) break;
-      const exp = String(batch.expiry_date || '').trim().slice(0, 10);
+      const exp = String(batch.expiry_date || '')
+        .trim()
+        .slice(0, 10);
       if (!exp || (exp.length === 7 ? exp < currentMonthIso : exp < todayIso)) continue;
 
       const batchQty = Number(batch.quantity || 0);
@@ -117,7 +119,11 @@ export class StockBatchHelpersService {
         .forUpdate()
         .execute();
       if (destRows.length > 1) {
-        throw new AppError('تشغيلة وجهة مكررة تحتاج مصالحة قبل نقلها لسيارة التوزيع', 'VAN_BATCH_DESTINATION_DUPLICATE', 409);
+        throw new AppError(
+          'تشغيلة وجهة مكررة تحتاج مصالحة قبل نقلها لسيارة التوزيع',
+          'VAN_BATCH_DESTINATION_DUPLICATE',
+          409,
+        );
       }
       if (
         destRows.length === 1 &&
@@ -229,16 +235,16 @@ export class StockBatchHelpersService {
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .where('status', '=', 'active')
       .where('quantity', '>', 0)
-      .where((eb: any) =>
-        eb.or([eb('location_id', '=', vanLocationId), eb('location_id', 'is', null)]),
-      )
+      .where((eb: any) => eb.or([eb('location_id', '=', vanLocationId), eb('location_id', 'is', null)]))
       .orderBy('expiry_date', 'asc')
       .orderBy('id', 'asc')
       .forUpdate()
       .execute();
     for (const batch of batches) {
       if (remaining <= 0) break;
-      const exp = String(batch.expiry_date || '').trim().slice(0, 10);
+      const exp = String(batch.expiry_date || '')
+        .trim()
+        .slice(0, 10);
       if (!exp || (exp.length === 7 ? exp < currentMonthIso : exp < todayIso)) continue;
 
       const batchQty = Number(batch.quantity || 0);
@@ -292,7 +298,11 @@ export class StockBatchHelpersService {
     return deductVanSaleInventoryBatchesHelper(trx, productId, qty, scope, vanLocationId, failClosed);
   }
 
-  async getOrCreateVanLocation(repId: number, tenantId: string, accountId: string): Promise<{ id: number; name: string }> {
+  async getOrCreateVanLocation(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+  ): Promise<{ id: number; name: string }> {
     return getOrCreateVanLocation(this.db, repId, tenantId, accountId);
   }
 

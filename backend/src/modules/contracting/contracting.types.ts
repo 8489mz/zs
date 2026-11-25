@@ -33,16 +33,16 @@ export interface ContractingProjectSummary {
   updatedAt: string;
 
   // Real-time calculated KPIs:
-  totalBilledClient: number;      // Total approved IPCs
+  totalBilledClient: number; // Total approved IPCs
   totalBilledSubcontractors: number;
-  changeOrdersTotalCost: number;  // Net value of approved change orders
-  completionRatePercent: number;  // (executed work / revised contract value)
-  totalCostCommitted: number;     // Subcontracts + site purchase orders
-  actualCostIncurred: number;     // Direct costs booked against project cost center
-  grossMarginForecast: number;    // Revised Contract Value - (Committed + Incurred)
+  changeOrdersTotalCost: number; // Net value of approved change orders
+  completionRatePercent: number; // (executed work / revised contract value)
+  totalCostCommitted: number; // Subcontracts + site purchase orders
+  actualCostIncurred: number; // Direct costs booked against project cost center
+  grossMarginForecast: number; // Revised Contract Value - (Committed + Incurred)
 
   // Enterprise Intelligence & Health:
-  healthScore?: number;           // 0 - 100
+  healthScore?: number; // 0 - 100
   healthStatus?: 'green' | 'yellow' | 'red';
   activeLicensesCount?: number;
   expiringLicensesCount?: number;
@@ -213,7 +213,8 @@ export interface ContractingSupplierReturn {
   updatedAt: string;
 }
 
-export type LaborTrade = 'carpenter' | 'blacksmith' | 'mason' | 'helper' | 'operator' | 'surveyor' | 'electrician' | 'plumber';
+export type LaborTrade =
+  'carpenter' | 'blacksmith' | 'mason' | 'helper' | 'operator' | 'surveyor' | 'electrician' | 'plumber';
 
 export interface ContractingLaborAttendance {
   id: string;
@@ -291,7 +292,7 @@ export interface ProjectHealthScore {
   status: 'green' | 'yellow' | 'red';
   breakdown: {
     schedulePerformanceIndex: number; // SPI
-    costPerformanceIndex: number;     // CPI
+    costPerformanceIndex: number; // CPI
     budgetVariancePercent: number;
     licensesComplianceScore: number;
     retentionRiskScore: number;
@@ -302,7 +303,7 @@ export interface ProjectHealthScore {
 export interface CashForecastBucket {
   period: '30_days' | '60_days' | '90_days';
   label: string;
-  expectedInflows: number;  // Expected client IPC collections
+  expectedInflows: number; // Expected client IPC collections
   expectedOutflows: number; // Subcontractor payments, supplier cheques, payroll, licenses
   netCashFlow: number;
 }
@@ -605,8 +606,10 @@ export interface ContractingSubmittal {
 }
 
 // 13. Material Price Escalation & Fluctuation Claims
-export type MaterialEscalationType = 'rebar_steel' | 'portland_cement' | 'ready_mix' | 'bitumen' | 'sand_gravel' | 'other';
-export type MaterialEscalationStatus = 'draft' | 'submitted_to_client' | 'approved_by_consultant' | 'settled_in_ipc' | 'rejected';
+export type MaterialEscalationType =
+  'rebar_steel' | 'portland_cement' | 'ready_mix' | 'bitumen' | 'sand_gravel' | 'other';
+export type MaterialEscalationStatus =
+  'draft' | 'submitted_to_client' | 'approved_by_consultant' | 'settled_in_ipc' | 'rejected';
 
 export interface ContractingMaterialEscalation {
   id: string;
@@ -629,7 +632,8 @@ export interface ContractingMaterialEscalation {
 }
 
 // 14. Subcontractor Back-Charges & Penalties
-export type BackchargeCategory = 'damage_rework' | 'safety_fine' | 'equipment_usage' | 'material_supplied' | 'site_cleanup' | 'other';
+export type BackchargeCategory =
+  'damage_rework' | 'safety_fine' | 'equipment_usage' | 'material_supplied' | 'site_cleanup' | 'other';
 export type BackchargeStatus = 'pending_approval' | 'applied_to_deduction' | 'waived';
 
 export interface ContractingSubcontractorBackcharge {
@@ -675,14 +679,14 @@ export interface ContractingProjectEvmMetrics {
   projectId: string;
   projectCode: string;
   projectName: string;
-  plannedValue: number;         // PV
-  earnedValue: number;          // EV
-  actualCost: number;           // AC
-  budgetAtCompletion: number;   // BAC
-  costVariance: number;         // CV = EV - AC
-  scheduleVariance: number;     // SV = EV - PV
-  cpi: number;                  // Cost Performance Index = EV / AC
-  spi: number;                  // Schedule Performance Index = EV / PV
+  plannedValue: number; // PV
+  earnedValue: number; // EV
+  actualCost: number; // AC
+  budgetAtCompletion: number; // BAC
+  costVariance: number; // CV = EV - AC
+  scheduleVariance: number; // SV = EV - PV
+  cpi: number; // Cost Performance Index = EV / AC
+  spi: number; // Schedule Performance Index = EV / PV
   estimateAtCompletion: number; // EAC = BAC / CPI
   varianceAtCompletion: number; // VAC = BAC - EAC
   toCompletePerformanceIndex: number; // TCPI = (BAC - EV) / (BAC - AC)
@@ -694,6 +698,3 @@ export interface ContractingProjectEvmMetrics {
     actualCumulative: number;
   }[];
 }
-
-
-

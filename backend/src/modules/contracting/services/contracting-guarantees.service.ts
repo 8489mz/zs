@@ -81,12 +81,9 @@ export class ContractingGuaranteesService {
 
   async getGuaranteesRaw(
     tenantId: string,
-    filters: { projectId?: string; subcontractId?: string; status?: string } = {}
+    filters: { projectId?: string; subcontractId?: string; status?: string } = {},
   ): Promise<BankGuarantee[]> {
-    let query = (this.db as any)
-      .selectFrom('contracting_guarantees')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = (this.db as any).selectFrom('contracting_guarantees').selectAll().where('tenant_id', '=', tenantId);
 
     if (filters.projectId) {
       query = query.where('project_id', '=', String(filters.projectId));
@@ -113,7 +110,9 @@ export class ContractingGuaranteesService {
       issue_date: typeof r.issue_date === 'string' ? r.issue_date : formatLocalCalendarDay(new Date(r.issue_date)),
       expiry_date: typeof r.expiry_date === 'string' ? r.expiry_date : formatLocalCalendarDay(new Date(r.expiry_date)),
       claim_expiry_date: r.claim_expiry_date
-        ? (typeof r.claim_expiry_date === 'string' ? r.claim_expiry_date : formatLocalCalendarDay(new Date(r.claim_expiry_date)))
+        ? typeof r.claim_expiry_date === 'string'
+          ? r.claim_expiry_date
+          : formatLocalCalendarDay(new Date(r.claim_expiry_date))
         : null,
       reduction_schedule: r.reduction_schedule,
       status: r.status,
@@ -128,7 +127,7 @@ export class ContractingGuaranteesService {
       subcontractorId?: number;
       status?: string;
       guaranteeType?: string;
-    } = {}
+    } = {},
   ) {
     const { tenantId } = requireTenantScope(auth);
     let q = (this.db as any)
@@ -214,7 +213,9 @@ export class ContractingGuaranteesService {
         issueDate: typeof r.issue_date === 'string' ? r.issue_date : formatLocalCalendarDay(new Date(r.issue_date)),
         expiryDate: typeof r.expiry_date === 'string' ? r.expiry_date : formatLocalCalendarDay(new Date(r.expiry_date)),
         claimExpiryDate: r.claim_expiry_date
-          ? (typeof r.claim_expiry_date === 'string' ? r.claim_expiry_date : formatLocalCalendarDay(new Date(r.claim_expiry_date)))
+          ? typeof r.claim_expiry_date === 'string'
+            ? r.claim_expiry_date
+            : formatLocalCalendarDay(new Date(r.claim_expiry_date))
           : null,
         reductionSchedule: r.reduction_schedule,
         status: r.status,
@@ -322,7 +323,9 @@ export class ContractingGuaranteesService {
       throw new BadRequestException('تاريخ التمديد يجب أن يكون بعد تاريخ إصدار خطاب الضمان');
     }
 
-    const noteAppend = dto.notes ? ` | تمديد حتى ${dto.newExpiryDate}: ${dto.notes}` : ` | تمديد بنكي حتى ${dto.newExpiryDate}`;
+    const noteAppend = dto.notes
+      ? ` | تمديد حتى ${dto.newExpiryDate}: ${dto.notes}`
+      : ` | تمديد بنكي حتى ${dto.newExpiryDate}`;
     const combinedNotes = existing.notes ? `${existing.notes}${noteAppend}` : noteAppend.replace(/^ \| /, '');
 
     await (this.db as any)
@@ -345,7 +348,9 @@ export class ContractingGuaranteesService {
     const { tenantId } = requireTenantScope(auth);
     const existing = await this.getGuaranteeById(auth, id);
 
-    const noteAppend = dto.notes ? ` | إفراج بتاريخ ${dto.releaseDate}: ${dto.notes}` : ` | تم الإفراج ورد أصل الخطاب بتاريخ ${dto.releaseDate}`;
+    const noteAppend = dto.notes
+      ? ` | إفراج بتاريخ ${dto.releaseDate}: ${dto.notes}`
+      : ` | تم الإفراج ورد أصل الخطاب بتاريخ ${dto.releaseDate}`;
     const combinedNotes = existing.notes ? `${existing.notes}${noteAppend}` : noteAppend.replace(/^ \| /, '');
 
     await (this.db as any)
@@ -620,7 +625,11 @@ export class ContractingGuaranteesService {
     }));
   }
 
-  async previewBatchAllocation(auth: AuthContext, projectId: string, dto: CreateAllocationBatchDto): Promise<BatchAllocationSummary> {
+  async previewBatchAllocation(
+    auth: AuthContext,
+    projectId: string,
+    dto: CreateAllocationBatchDto,
+  ): Promise<BatchAllocationSummary> {
     const { tenantId } = requireTenantScope(auth);
     const pools = await this.getCostPools(auth, projectId);
     const boqItems = await this.getBoqItems(auth, projectId);
@@ -634,11 +643,8 @@ export class ContractingGuaranteesService {
       .where((eb: any) =>
         eb.or([
           eb('batch_id', 'is', null),
-          eb.and([
-            eb('expense_date', '>=', dto.periodStart),
-            eb('expense_date', '<=', dto.periodEnd),
-          ]),
-        ])
+          eb.and([eb('expense_date', '>=', dto.periodStart), eb('expense_date', '<=', dto.periodEnd)]),
+        ]),
       )
       .execute();
 

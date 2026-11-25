@@ -19,9 +19,7 @@ export class TicketListingSlice {
     },
   ) {
     const scope = requireTenantScope(auth);
-    let baseQuery = this.db
-      .selectFrom('maintenance_tickets')
-      .where('tenant_id', '=', scope.tenantId);
+    let baseQuery = this.db.selectFrom('maintenance_tickets').where('tenant_id', '=', scope.tenantId);
 
     if (filters?.status && filters.status !== 'all') {
       baseQuery = baseQuery.where('status', '=', filters.status as any);
@@ -38,21 +36,14 @@ export class TicketListingSlice {
       )`);
     }
 
-    const totalRes = await baseQuery
-      .select((eb) => eb.fn.count('id').as('count'))
-      .executeTakeFirst();
+    const totalRes = await baseQuery.select((eb) => eb.fn.count('id').as('count')).executeTakeFirst();
     const total = Number(totalRes?.count || 0);
 
     const page = Math.max(1, Number(filters?.page || 1));
     const pageSize = Math.min(100, Math.max(1, Number(filters?.pageSize || 25)));
     const offset = (page - 1) * pageSize;
 
-    const tickets = await baseQuery
-      .selectAll()
-      .orderBy('id', 'desc')
-      .limit(pageSize)
-      .offset(offset)
-      .execute();
+    const tickets = await baseQuery.selectAll().orderBy('id', 'desc').limit(pageSize).offset(offset).execute();
 
     return {
       tickets: tickets.map((t) => ({

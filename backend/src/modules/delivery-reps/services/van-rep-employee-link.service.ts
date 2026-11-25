@@ -31,11 +31,7 @@ export class VanRepEmployeeLinkService {
   /**
    * Link delivery representative to an HR employee.
    */
-  async linkRepToEmployee(
-    tenantId: string,
-    repId: number,
-    employeeId: number | null,
-  ) {
+  async linkRepToEmployee(tenantId: string, repId: number, employeeId: number | null) {
     await this.anyDb
       .updateTable('delivery_representatives')
       .set({ employee_id: employeeId, updated_at: sql`NOW()` })
@@ -51,13 +47,7 @@ export class VanRepEmployeeLinkService {
   async listCandidateEmployees(tenantId: string) {
     const rows = await this.anyDb
       .selectFrom('hr_employees')
-      .select([
-        'id',
-        'employee_no as employeeNo',
-        'display_name as displayName',
-        'national_id as nationalId',
-        'status',
-      ])
+      .select(['id', 'employee_no as employeeNo', 'display_name as displayName', 'national_id as nationalId', 'status'])
       .where('tenant_id', '=', tenantId)
       .where('status', '!=', 'terminated')
       .orderBy('display_name', 'asc')
@@ -75,12 +65,7 @@ export class VanRepEmployeeLinkService {
   /**
    * Automatically create an HR employee record for a delivery representative and link them.
    */
-  async autoCreateEmployeeForRep(
-    tenantId: string,
-    accountId: string,
-    repId: number,
-    authContext: AuthContext,
-  ) {
+  async autoCreateEmployeeForRep(tenantId: string, accountId: string, repId: number, authContext: AuthContext) {
     const rep = await this.anyDb
       .selectFrom('delivery_representatives')
       .selectAll()
@@ -108,7 +93,9 @@ export class VanRepEmployeeLinkService {
       }
     }
 
-    const nameParts = String(rep.name || 'مندوب توزيع').trim().split(/\s+/);
+    const nameParts = String(rep.name || 'مندوب توزيع')
+      .trim()
+      .split(/\s+/);
     const firstName = nameParts[0] || 'مندوب';
     const lastName = nameParts.slice(1).join(' ') || '.';
     const displayName = String(rep.name || 'مندوب توزيع').trim();

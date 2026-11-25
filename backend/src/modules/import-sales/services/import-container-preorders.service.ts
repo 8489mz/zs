@@ -1,10 +1,5 @@
 import { randomUUID } from 'crypto';
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../accounting/accounting-tenant-foundation.service';
 import { Kysely, sql } from 'kysely';
@@ -135,165 +130,182 @@ export class ImportContainerPreordersService {
       `preorder:${dto.shipmentId}:${dto.customerId}:${dto.productId}:${Number(dto.reservedQuantity)}:${Number(dto.unitPriceEgp)}:${Number(dto.depositAmountEgp || 0)}`;
     try {
       return await this.db.transaction().execute(async (trx) => {
-      const shipment = await trx
-        .selectFrom('import_shipments')
-        .selectAll()
-        .where('id', '=', dto.shipmentId)
-        .where('tenant_id', '=', tenantId)
-        .forUpdate()
-        .executeTakeFirstOrThrow();
+        const shipment = await trx
+          .selectFrom('import_shipments')
+          .selectAll()
+          .where('id', '=', dto.shipmentId)
+          .where('tenant_id', '=', tenantId)
+          .forUpdate()
+          .executeTakeFirstOrThrow();
 
-      // INV-IMPORT-FLOATING-RESERVATION: a floating-goods reservation is
-      // a PRE-RECEIPT allotment of B/L capacity. Once the container has
-      // arrived (status 'Arrived', which posts the receipt) or any
-      // inventory receipt row exists for it, the goods are stock, not
-      // floating goods: a new reservation is refused fail-closed.
-      // Existing reservations stay convertible to a sale through
-      // convertPreorderToSale, which is the post-arrival path.
-      if (shipment.status === 'Arrived') {
-        throw new BadRequestException('وصلت الحاوية وتم استلامها؛ لا يمكن تسجيل حجز بضاعة عايمة جديد بعد الوصول.');
-      }
-      const receiptRow = await trx
-        .selectFrom('import_inventory_receipts')
-        .select('id')
-        .where('tenant_id', '=', tenantId)
-        .where('shipment_id', '=', dto.shipmentId)
-        .executeTakeFirst();
-      if (receiptRow) {
-        throw new BadRequestException('تم ترحيل استلام الحاوية للمخزون؛ لا يمكن تسجيل حجز بضاعة عايمة جديد بعد الاستلام.');
-      }
+        // INV-IMPORT-FLOATING-RESERVATION: a floating-goods reservation is
+        // a PRE-RECEIPT allotment of B/L capacity. Once the container has
+        // arrived (status 'Arrived', which posts the receipt) or any
+        // inventory receipt row exists for it, the goods are stock, not
+        // floating goods: a new reservation is refused fail-closed.
+        // Existing reservations stay convertible to a sale through
+        // convertPreorderToSale, which is the post-arrival path.
+        if (shipment.status === 'Arrived') {
+          throw new BadRequestException('وصلت الحاوية وتم استلامها؛ لا يمكن تسجيل حجز بضاعة عايمة جديد بعد الوصول.');
+        }
+        const receiptRow = await trx
+          .selectFrom('import_inventory_receipts')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('shipment_id', '=', dto.shipmentId)
+          .executeTakeFirst();
+        if (receiptRow) {
+          throw new BadRequestException(
+            'تم ترحيل استلام الحاوية للمخزون؛ لا يمكن تسجيل حجز بضاعة عايمة جديد بعد الاستلام.',
+          );
+        }
 
-      const itemRows = await trx
-        .selectFrom('import_shipment_items')
-        .select(['quantity', 'received_quantity'])
-        .where('shipment_id', '=', dto.shipmentId)
-        .where('product_id', '=', Number(dto.productId))
-        .where('tenant_id', '=', tenantId)
-        .execute();
+        const itemRows = await trx
+          .selectFrom('import_shipment_items')
+          .select(['quantity', 'received_quantity'])
+          .where('shipment_id', '=', dto.shipmentId)
+          .where('product_id', '=', Number(dto.productId))
+          .where('tenant_id', '=', tenantId)
+          .execute();
 
-      if (!itemRows.length) {
-        throw new BadRequestException('هذا الصنف غير مدرج في هذه الشحنة.');
-      }
-      // The same SKU can be represented by several distinct shipment lines.
-      const customer = await trx.selectFrom('customers').select('id')
-        .where('tenant_id', '=', tenantId).where('id', '=', Number(dto.customerId)).executeTakeFirst();
-      if (!customer) throw new BadRequestException('العميل المحدد لا ينتمي لهذه المنشأة.');
-      if (dto.projectId && shipment.project_id && dto.projectId !== shipment.project_id) {
-        throw new BadRequestException('مشروع الحجز لا يطابق مشروع الشحنة.');
-      }
-      const blQuantity = itemRows.reduce((sum, row) => sum + Number(row.received_quantity ?? row.quantity), 0);
+        if (!itemRows.length) {
+          throw new BadRequestException('هذا الصنف غير مدرج في هذه الشحنة.');
+        }
+        // The same SKU can be represented by several distinct shipment lines.
+        const customer = await trx
+          .selectFrom('customers')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', Number(dto.customerId))
+          .executeTakeFirst();
+        if (!customer) throw new BadRequestException('العميل المحدد لا ينتمي لهذه المنشأة.');
+        if (dto.projectId && shipment.project_id && dto.projectId !== shipment.project_id) {
+          throw new BadRequestException('مشروع الحجز لا يطابق مشروع الشحنة.');
+        }
+        const blQuantity = itemRows.reduce((sum, row) => sum + Number(row.received_quantity ?? row.quantity), 0);
 
-      const existingOrders = await trx
-        .selectFrom('import_container_preorders')
-        .select('reserved_quantity')
-        .where('shipment_id', '=', dto.shipmentId)
-        .where('product_id', '=', Number(dto.productId))
-        .where('tenant_id', '=', tenantId)
-        .where('status', 'in', ['reserved', 'allocated', 'invoiced'])
-        .execute();
+        const existingOrders = await trx
+          .selectFrom('import_container_preorders')
+          .select('reserved_quantity')
+          .where('shipment_id', '=', dto.shipmentId)
+          .where('product_id', '=', Number(dto.productId))
+          .where('tenant_id', '=', tenantId)
+          .where('status', 'in', ['reserved', 'allocated', 'invoiced'])
+          .execute();
 
-      const alreadyReserved = existingOrders.reduce((acc, o) => acc + Number(o.reserved_quantity), 0);
-      const requested = Number(dto.reservedQuantity);
+        const alreadyReserved = existingOrders.reduce((acc, o) => acc + Number(o.reserved_quantity), 0);
+        const requested = Number(dto.reservedQuantity);
 
-      // Validate BEFORE the insert: the deposit rule used to be checked
-      // after the insert (the throw rolled the transaction back, so no
-      // row survived — but a fail-closed check belongs before the write).
-      if (!Number.isFinite(requested) || requested <= 0) {
-        throw new BadRequestException('الكمية المحجوزة يجب أن تكون أكبر من صفر.');
-      }
-      const totalPrice = Number((requested * Number(dto.unitPriceEgp)).toFixed(2));
-      const depositAmount = Number(dto.depositAmountEgp || 0);
-      if (!Number.isFinite(depositAmount) || depositAmount < 0 || depositAmount > totalPrice) {
-        throw new BadRequestException('قيمة العربون يجب أن تكون موجبة ولا تتجاوز إجمالي قيمة الحجز.');
-      }
+        // Validate BEFORE the insert: the deposit rule used to be checked
+        // after the insert (the throw rolled the transaction back, so no
+        // row survived — but a fail-closed check belongs before the write).
+        if (!Number.isFinite(requested) || requested <= 0) {
+          throw new BadRequestException('الكمية المحجوزة يجب أن تكون أكبر من صفر.');
+        }
+        const totalPrice = Number((requested * Number(dto.unitPriceEgp)).toFixed(2));
+        const depositAmount = Number(dto.depositAmountEgp || 0);
+        if (!Number.isFinite(depositAmount) || depositAmount < 0 || depositAmount > totalPrice) {
+          throw new BadRequestException('قيمة العربون يجب أن تكون موجبة ولا تتجاوز إجمالي قيمة الحجز.');
+        }
 
-      if (alreadyReserved + requested > blQuantity) {
-        const freeToReserve = Math.max(0, blQuantity - alreadyReserved);
-        throw new BadRequestException(
-          `لا يمكن تجاوز كمية البوليصة: المتاح للحجز فقط (${freeToReserve}) وحدة من إجمالي (${blQuantity})، والمطلوب (${requested}).`
-        );
-      }
+        if (alreadyReserved + requested > blQuantity) {
+          const freeToReserve = Math.max(0, blQuantity - alreadyReserved);
+          throw new BadRequestException(
+            `لا يمكن تجاوز كمية البوليصة: المتاح للحجز فقط (${freeToReserve}) وحدة من إجمالي (${blQuantity})، والمطلوب (${requested}).`,
+          );
+        }
 
-      const preorder = await trx
-        .insertInto('import_container_preorders')
-        .values({
-          tenant_id: tenantId,
-          preorder_no: `PRE-${randomUUID()}`,
-          project_id: shipment.project_id ?? dto.projectId ?? null,
-          shipment_id: dto.shipmentId,
-          customer_id: Number(dto.customerId),
-          product_id: Number(dto.productId),
-          reserved_quantity: requested,
-          unit_price_egp: dto.unitPriceEgp,
-          total_price_egp: totalPrice,
-          deposit_amount_egp: depositAmount,
-          deposit_treasury_account_id: dto.depositTreasuryAccountId ? Number(dto.depositTreasuryAccountId) : null,
-          status: 'reserved',
-          expected_delivery_date: dto.expectedDeliveryDate || null,
-          notes: dto.notes || null,
-          created_by: userId,
-          idempotency_key: effectiveKey,
-        })
-        .returningAll()
-        .executeTakeFirstOrThrow();
+        const preorder = await trx
+          .insertInto('import_container_preorders')
+          .values({
+            tenant_id: tenantId,
+            preorder_no: `PRE-${randomUUID()}`,
+            project_id: shipment.project_id ?? dto.projectId ?? null,
+            shipment_id: dto.shipmentId,
+            customer_id: Number(dto.customerId),
+            product_id: Number(dto.productId),
+            reserved_quantity: requested,
+            unit_price_egp: dto.unitPriceEgp,
+            total_price_egp: totalPrice,
+            deposit_amount_egp: depositAmount,
+            deposit_treasury_account_id: dto.depositTreasuryAccountId ? Number(dto.depositTreasuryAccountId) : null,
+            status: 'reserved',
+            expected_delivery_date: dto.expectedDeliveryDate || null,
+            notes: dto.notes || null,
+            created_by: userId,
+            idempotency_key: effectiveKey,
+          })
+          .returningAll()
+          .executeTakeFirstOrThrow();
 
-      if (depositAmount > 0) {
-        const bankAccId = await this.resolveTenantAccount(
-          trx,
-          tenantId,
-          'bank',
-          dto.depositTreasuryAccountId ? Number(dto.depositTreasuryAccountId) : null
-        );
-        const unearnedRevAccId = await this.resolveTenantAccount(trx, tenantId, 'customer_advance');
+        if (depositAmount > 0) {
+          const bankAccId = await this.resolveTenantAccount(
+            trx,
+            tenantId,
+            'bank',
+            dto.depositTreasuryAccountId ? Number(dto.depositTreasuryAccountId) : null,
+          );
+          const unearnedRevAccId = await this.resolveTenantAccount(trx, tenantId, 'customer_advance');
 
-        const scope = await trx.selectFrom('accounting_accounts').select('account_id')
-          .where('tenant_id', '=', tenantId).where('id', '=', bankAccId).executeTakeFirstOrThrow();
-        await trx.insertInto('treasury_transactions').values({
-          tenant_id: tenantId, account_id: scope.account_id,
-          txn_type: 'import_customer_advance', amount: depositAmount,
-          note: `عربون حجز حاوية #${preorder.preorder_no}`,
-          reference_type: 'import_container_preorder',
-          reference_id: Number(preorder.serial_id), created_by: userId,
-        }).execute();
-        const postingService = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
-        await postingService.postDomainJournal(trx, {
-          sourceType: 'import_container_preorder',
-          sourceId: Number(preorder.serial_id),
-          tenantId,
-          accountId: tenantId,
-          entryDate: new Date(),
-          description: `عربون حجز بضاعة عايمة للعميل #${dto.customerId} - حجز #${preorder.preorder_no}`,
-          branchId: null,
-          locationId: null,
-          createdBy: userId,
-          postedBy: userId,
-          lines: [
-            {
-              accountId: bankAccId,
-              debit: depositAmount,
-              credit: 0,
-              description: `تحصيل عربون حجز بضاعة شحنة #${dto.shipmentId}`,
-              partnerType: 'customer',
-              partnerId: Number(dto.customerId),
-              branchId: null,
-              locationId: null,
-            },
-            {
-              accountId: unearnedRevAccId,
-              debit: 0,
-              credit: depositAmount,
-              description: `أمانات/عربونات عملاء غير محققة - حجز #${preorder.preorder_no}`,
-              partnerType: 'customer',
-              partnerId: Number(dto.customerId),
-              branchId: null,
-              locationId: null,
-            },
-          ],
-        });
-      }
+          const scope = await trx
+            .selectFrom('accounting_accounts')
+            .select('account_id')
+            .where('tenant_id', '=', tenantId)
+            .where('id', '=', bankAccId)
+            .executeTakeFirstOrThrow();
+          await trx
+            .insertInto('treasury_transactions')
+            .values({
+              tenant_id: tenantId,
+              account_id: scope.account_id,
+              txn_type: 'import_customer_advance',
+              amount: depositAmount,
+              note: `عربون حجز حاوية #${preorder.preorder_no}`,
+              reference_type: 'import_container_preorder',
+              reference_id: Number(preorder.serial_id),
+              created_by: userId,
+            })
+            .execute();
+          const postingService =
+            this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
+          await postingService.postDomainJournal(trx, {
+            sourceType: 'import_container_preorder',
+            sourceId: Number(preorder.serial_id),
+            tenantId,
+            accountId: tenantId,
+            entryDate: new Date(),
+            description: `عربون حجز بضاعة عايمة للعميل #${dto.customerId} - حجز #${preorder.preorder_no}`,
+            branchId: null,
+            locationId: null,
+            createdBy: userId,
+            postedBy: userId,
+            lines: [
+              {
+                accountId: bankAccId,
+                debit: depositAmount,
+                credit: 0,
+                description: `تحصيل عربون حجز بضاعة شحنة #${dto.shipmentId}`,
+                partnerType: 'customer',
+                partnerId: Number(dto.customerId),
+                branchId: null,
+                locationId: null,
+              },
+              {
+                accountId: unearnedRevAccId,
+                debit: 0,
+                credit: depositAmount,
+                description: `أمانات/عربونات عملاء غير محققة - حجز #${preorder.preorder_no}`,
+                partnerType: 'customer',
+                partnerId: Number(dto.customerId),
+                branchId: null,
+                locationId: null,
+              },
+            ],
+          });
+        }
 
-      return preorder;
-    });
+        return preorder;
+      });
     } catch (err: any) {
       if (this.isUniqueViolation(err)) {
         return await this.replayContainerPreorderOrThrow(tenantId, dto, effectiveKey, err);
@@ -318,58 +330,123 @@ export class ImportContainerPreordersService {
   /** Refunds are append-only GL source events; original deposits remain immutable. */
   async refundContainerPreorder(tenantId: string, userId: number, preorderId: string, dto: RefundImportPreorderDto) {
     return this.db.transaction().execute(async (trx) => {
-      const preorder = await trx.selectFrom('import_container_preorders').selectAll()
-        .where('tenant_id', '=', tenantId).where('id', '=', preorderId).forUpdate().executeTakeFirstOrThrow();
+      const preorder = await trx
+        .selectFrom('import_container_preorders')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', preorderId)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
       if (preorder.status === 'invoiced' || preorder.status === 'cancelled') {
         throw new BadRequestException('لا يجوز رد عربون حجز مفوتر أو ملغى.');
       }
       const requestKey = String(dto.idempotencyKey || '').trim();
       if (!requestKey || requestKey.length > 128) throw new BadRequestException('مفتاح عدم تكرار الرد إلزامي.');
-      const existing = await trx.selectFrom('import_preorder_refund_events').select('id')
-        .where('tenant_id', '=', tenantId).where('preorder_id', '=', preorderId)
-        .where('idempotency_key', '=', requestKey).executeTakeFirst();
+      const existing = await trx
+        .selectFrom('import_preorder_refund_events')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('preorder_id', '=', preorderId)
+        .where('idempotency_key', '=', requestKey)
+        .executeTakeFirst();
       if (existing) throw new ConflictException('رد العربون بنفس المفتاح مسجل بالفعل.');
       const amount = Number(dto.amountEgp);
-      const remaining = Number((Number(preorder.deposit_amount_egp || 0) - Number(preorder.refunded_amount_egp || 0)).toFixed(2));
-      if (!Number.isFinite(amount) || amount <= 0 || Number(amount.toFixed(2)) !== amount || amount > remaining + 0.001) {
+      const remaining = Number(
+        (Number(preorder.deposit_amount_egp || 0) - Number(preorder.refunded_amount_egp || 0)).toFixed(2),
+      );
+      if (
+        !Number.isFinite(amount) ||
+        amount <= 0 ||
+        Number(amount.toFixed(2)) !== amount ||
+        amount > remaining + 0.001
+      ) {
         throw new BadRequestException('مبلغ الرد أكبر من العربون المتبقي أو غير صالح.');
       }
       const preferred = Number(dto.treasuryAccountId || preorder.deposit_treasury_account_id || 0);
       const bankAccountId = await this.resolveTenantAccount(trx, tenantId, 'bank', preferred || undefined);
       const liabilityAccountId = await this.resolveTenantAccount(trx, tenantId, 'customer_advance');
-      const bankScope = await trx.selectFrom('accounting_accounts').select('account_id')
-        .where('tenant_id', '=', tenantId).where('id', '=', bankAccountId).executeTakeFirstOrThrow();
-      const event = await trx.insertInto('import_preorder_refund_events').values({
-        tenant_id: tenantId, preorder_id: preorderId, idempotency_key: requestKey,
-        amount_egp: amount, treasury_account_id: bankAccountId, created_by: userId,
-      }).returning(['id', 'serial_id']).executeTakeFirstOrThrow();
-      await trx.insertInto('treasury_transactions').values({
-        tenant_id: tenantId, account_id: bankScope.account_id,
-        txn_type: 'import_customer_advance_refund', amount: -amount,
-        note: `رد عربون حجز ${preorder.preorder_no}`,
-        reference_type: 'import_preorder_refund', reference_id: Number(event.serial_id), created_by: userId,
-      }).execute();
+      const bankScope = await trx
+        .selectFrom('accounting_accounts')
+        .select('account_id')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', bankAccountId)
+        .executeTakeFirstOrThrow();
+      const event = await trx
+        .insertInto('import_preorder_refund_events')
+        .values({
+          tenant_id: tenantId,
+          preorder_id: preorderId,
+          idempotency_key: requestKey,
+          amount_egp: amount,
+          treasury_account_id: bankAccountId,
+          created_by: userId,
+        })
+        .returning(['id', 'serial_id'])
+        .executeTakeFirstOrThrow();
+      await trx
+        .insertInto('treasury_transactions')
+        .values({
+          tenant_id: tenantId,
+          account_id: bankScope.account_id,
+          txn_type: 'import_customer_advance_refund',
+          amount: -amount,
+          note: `رد عربون حجز ${preorder.preorder_no}`,
+          reference_type: 'import_preorder_refund',
+          reference_id: Number(event.serial_id),
+          created_by: userId,
+        })
+        .execute();
       const posting = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
       const journalId = await posting.postDomainJournal(trx, {
-        sourceType: 'import_preorder_refund', sourceId: Number(event.serial_id),
-        tenantId, accountId: bankScope.account_id,
-        entryDate: new Date(), description: `رد عربون حجز ${preorder.preorder_no}`,
-        branchId: null, locationId: null, createdBy: userId, postedBy: userId,
+        sourceType: 'import_preorder_refund',
+        sourceId: Number(event.serial_id),
+        tenantId,
+        accountId: bankScope.account_id,
+        entryDate: new Date(),
+        description: `رد عربون حجز ${preorder.preorder_no}`,
+        branchId: null,
+        locationId: null,
+        createdBy: userId,
+        postedBy: userId,
         lines: [
-          { accountId: liabilityAccountId, debit: amount, credit: 0,
-            description: 'تخفيض التزام العربون المسترد', partnerType: 'customer',
-            partnerId: Number(preorder.customer_id), branchId: null, locationId: null },
-          { accountId: bankAccountId, debit: 0, credit: amount,
-            description: 'صرف رد عربون للعميل', partnerType: 'customer',
-            partnerId: Number(preorder.customer_id), branchId: null, locationId: null },
+          {
+            accountId: liabilityAccountId,
+            debit: amount,
+            credit: 0,
+            description: 'تخفيض التزام العربون المسترد',
+            partnerType: 'customer',
+            partnerId: Number(preorder.customer_id),
+            branchId: null,
+            locationId: null,
+          },
+          {
+            accountId: bankAccountId,
+            debit: 0,
+            credit: amount,
+            description: 'صرف رد عربون للعميل',
+            partnerType: 'customer',
+            partnerId: Number(preorder.customer_id),
+            branchId: null,
+            locationId: null,
+          },
         ],
       });
-      await trx.updateTable('import_preorder_refund_events').set({ journal_entry_id: journalId })
-        .where('tenant_id', '=', tenantId).where('id', '=', event.id).execute();
-      const updated = await trx.updateTable('import_container_preorders').set({
-        refunded_amount_egp: Number((Number(preorder.refunded_amount_egp || 0) + amount).toFixed(2)),
-        updated_at: sql`NOW()`,
-      }).where('tenant_id', '=', tenantId).where('id', '=', preorderId).returningAll().executeTakeFirstOrThrow();
+      await trx
+        .updateTable('import_preorder_refund_events')
+        .set({ journal_entry_id: journalId })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', event.id)
+        .execute();
+      const updated = await trx
+        .updateTable('import_container_preorders')
+        .set({
+          refunded_amount_egp: Number((Number(preorder.refunded_amount_egp || 0) + amount).toFixed(2)),
+          updated_at: sql`NOW()`,
+        })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', preorderId)
+        .returningAll()
+        .executeTakeFirstOrThrow();
       return { success: true, preorder: updated, refundEventId: event.id, journalEntryId: journalId };
     });
   }
@@ -409,7 +486,7 @@ export class ImportContainerPreordersService {
     tenantId: string,
     userId: number,
     preorderId: string,
-    dto: ConvertPreorderToSaleDto = {}
+    dto: ConvertPreorderToSaleDto = {},
   ) {
     return await this.db.transaction().execute(async (trx) => {
       const preorder = await trx
@@ -439,13 +516,13 @@ export class ImportContainerPreordersService {
         .executeTakeFirst();
 
       const qty = Number(preorder.reserved_quantity);
-      const unitPrice = Number(
-        (preorder as any).unit_price_egp ?? (preorder as any).agreed_unit_price_egp ?? 0,
-      );
+      const unitPrice = Number((preorder as any).unit_price_egp ?? (preorder as any).agreed_unit_price_egp ?? 0);
       const total = Number((qty * unitPrice).toFixed(2));
       const depositAmount = Math.max(
         0,
-        Number((Number(preorder.deposit_amount_egp || 0) - Number((preorder as any).refunded_amount_egp || 0)).toFixed(2)),
+        Number(
+          (Number(preorder.deposit_amount_egp || 0) - Number((preorder as any).refunded_amount_egp || 0)).toFixed(2),
+        ),
       );
       const appliedDeposit = Math.min(depositAmount, total);
       const balanceDue = Math.max(0, Number((total - appliedDeposit).toFixed(2)));
@@ -486,10 +563,7 @@ export class ImportContainerPreordersService {
         .forUpdate()
         .orderBy('id')
         .execute();
-      const allocatedQty = coveringLots.reduce(
-        (sum, l) => sum + Number((l as any).remaining_quantity || 0),
-        0,
-      );
+      const allocatedQty = coveringLots.reduce((sum, l) => sum + Number((l as any).remaining_quantity || 0), 0);
       if (allocatedQty + 0.0001 < qty) {
         throw new BadRequestException(
           `لا يمكن تحويل الحجز إلى بيع: الحصص المخصصة للشحنة (${allocatedQty}) أقل من كمية الحجز (${qty}). [IMPORT_PREORDER_CONVERSION_NOT_ALLOCATED]`,
@@ -532,7 +606,7 @@ export class ImportContainerPreordersService {
           customer_id: preorder.customer_id,
           customer_name: customer?.name || 'عميل حجز حاوية',
           customer_phone: customer?.phone || null,
-          payment_type: appliedDeposit >= total ? 'cash' : (appliedDeposit > 0 ? 'split' : 'credit'),
+          payment_type: appliedDeposit >= total ? 'cash' : appliedDeposit > 0 ? 'split' : 'credit',
           payment_channel: 'cash',
           subtotal: total,
           discount: 0,
@@ -612,7 +686,9 @@ export class ImportContainerPreordersService {
       // built from two different pictures of the same allocation.
       const coverage = lotAllocation.items[0];
       if (!coverage) {
-        throw new BadRequestException('IMPORT_SALE_ALLOCATION_MISSING: lot allocation returned no coverage for the converted sale item.');
+        throw new BadRequestException(
+          'IMPORT_SALE_ALLOCATION_MISSING: lot allocation returned no coverage for the converted sale item.',
+        );
       }
       const dbAllocatedQty = Number(saleAllocs.reduce((sum, a) => sum + Number(a.quantity || 0), 0).toFixed(4));
       if (Math.abs(dbAllocatedQty - coverage.allocatedQty) > 0.0001) {
@@ -654,8 +730,8 @@ export class ImportContainerPreordersService {
       if (qty > 0 && totalCostEgp <= 0) {
         throw new BadRequestException(
           `IMPORT_SALE_ZERO_COST: cannot convert preorder ${preorder.id} — sale quantity ${qty} has no knowable cost ` +
-          `(allocated ${coverage.allocatedQty} via lots, shortfall ${saleCost.shortfallQty}, ` +
-          `fallback unit cost ${fallbackUnitCostEgp}). Set the lot landed cost or the product cost_price and retry.`,
+            `(allocated ${coverage.allocatedQty} via lots, shortfall ${saleCost.shortfallQty}, ` +
+            `fallback unit cost ${fallbackUnitCostEgp}). Set the lot landed cost or the product cost_price and retry.`,
         );
       }
 

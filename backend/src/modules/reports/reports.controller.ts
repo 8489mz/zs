@@ -20,7 +20,10 @@ export class ReportsController {
 
   @Get('dashboard/overview')
   @RequirePermissions('dashboard')
-  dashboardOverview(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  dashboardOverview(
+    @Query() query: ReportRangeQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.reportsService.dashboardOverview(query, req.authContext!);
   }
 
@@ -42,7 +45,10 @@ export class ReportsController {
   // purchases-per-supplier report, one response, one tenant-day range.
   @Get('reports/rep-supplier-summary')
   @RequirePermissions('reports')
-  repSupplierSummary(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  repSupplierSummary(
+    @Query() query: ReportRangeQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.reportsService.repSupplierSummary(query, req.authContext!);
   }
 
@@ -60,19 +66,28 @@ export class ReportsController {
 
   @Get('reports/customers/rfm')
   @RequirePermissions('reports')
-  customerRfmReport(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  customerRfmReport(
+    @Query() query: ReportRangeQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.reportsService.customerRfmReport(query, req.authContext!);
   }
 
   @Get('reports/restaurant/food-cost-variance')
   @RequirePermissions('reports')
-  foodCostVarianceReport(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  foodCostVarianceReport(
+    @Query() query: ReportRangeQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.reportsService.foodCostVarianceReport(query, req.authContext!);
   }
 
   @Get('reports/restaurant/menu-engineering')
   @RequirePermissions('reports')
-  menuEngineeringReport(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  menuEngineeringReport(
+    @Query() query: ReportRangeQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.reportsService.menuEngineeringReport(query, req.authContext!);
   }
 
@@ -90,13 +105,21 @@ export class ReportsController {
 
   @Get('reports/customers/:id/ledger')
   @RequireAnyPermission('reports', 'accounts')
-  customerLedger(@Param('id', ParseIntPipe) id: number, @Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  customerLedger(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: ReportRangeQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.reportsService.customerLedger(id, query, req.authContext!);
   }
 
   @Get('reports/suppliers/:id/ledger')
   @RequireAnyPermission('reports', 'accounts', 'suppliers')
-  supplierLedger(@Param('id', ParseIntPipe) id: number, @Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  supplierLedger(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: ReportRangeQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.reportsService.supplierLedger(id, query, req.authContext!);
   }
 
@@ -106,7 +129,6 @@ export class ReportsController {
     return this.reportsService.treasuryTransactions(query, req.authContext!);
   }
 
-
   @Get('reports/employees')
   @RequirePermissions('reports')
   employeeSummary(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
@@ -115,7 +137,11 @@ export class ReportsController {
 
   @Get('reports/employees/:id/details')
   @RequirePermissions('reports')
-  employeeDetails(@Param('id', ParseIntPipe) id: number, @Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  employeeDetails(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: ReportRangeQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.reportsService.employeeDetails(id, query, req.authContext!);
   }
 
@@ -139,37 +165,25 @@ export class ReportsController {
 
   @Post('reports/pivot/execute')
   @RequireAnyPermission('reports', 'dashboard', 'sales', 'accounting')
-  executePivot(
-    @Body() dto: ExecuteDynamicPivotDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  executePivot(@Body() dto: ExecuteDynamicPivotDto, @Req() req: RequestWithAuth) {
     return this.pivotService.executePivot(req.authContext!, dto);
   }
 
   @Get('reports/pivot/templates')
   @RequireAnyPermission('reports', 'dashboard', 'sales', 'accounting')
-  getSavedTemplates(
-    @Query('dataset') dataset: string,
-    @Req() req: RequestWithAuth,
-  ) {
+  getSavedTemplates(@Query('dataset') dataset: string, @Req() req: RequestWithAuth) {
     return this.pivotService.getSavedTemplates(req.authContext!, dataset);
   }
 
   @Post('reports/pivot/templates')
   @RequireAnyPermission('reports', 'dashboard', 'sales', 'accounting')
-  savePivotTemplate(
-    @Body() dto: SavePivotTemplateDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  savePivotTemplate(@Body() dto: SavePivotTemplateDto, @Req() req: RequestWithAuth) {
     return this.pivotService.saveTemplate(req.authContext!, dto);
   }
 
   @Delete('reports/pivot/templates/:id')
   @RequireAnyPermission('reports', 'dashboard', 'sales', 'accounting')
-  deletePivotTemplate(
-    @Param('id') id: string,
-    @Req() req: RequestWithAuth,
-  ) {
+  deletePivotTemplate(@Param('id') id: string, @Req() req: RequestWithAuth) {
     return this.pivotService.deleteTemplate(req.authContext!, id);
   }
 
@@ -191,11 +205,7 @@ export class ReportsController {
 
   @Post('reports/rollups/compute-day')
   @RequirePermissions('reports')
-  computeDayRollup(
-    @Body('date') date: string,
-    @Body('branchId') branchId: number,
-    @Req() req: RequestWithAuth,
-  ) {
+  computeDayRollup(@Body('date') date: string, @Body('branchId') branchId: number, @Req() req: RequestWithAuth) {
     // No date supplied: the rollup service owns the default (it holds
     // the tenant's db handle and resolves the tenant-local day). Passing
     // an empty string lets it default instead of stamping the UTC day,

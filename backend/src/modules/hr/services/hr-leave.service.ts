@@ -7,13 +7,12 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
+import { CreateLeaveRequestDto, DecideLeaveRequestDto, UpsertLeaveTypeDto, UpsertHrMasterDataDto } from '../dto/hr.dto';
 import {
-  CreateLeaveRequestDto,
-  DecideLeaveRequestDto,
-  UpsertLeaveTypeDto,
-  UpsertHrMasterDataDto,
-} from '../dto/hr.dto';
-import { deductibleApprovedLeaveDays, shouldDeductLeaveFromBalance, type ApprovedLeaveDeductionRow } from '../engines/leave-balance.engine';
+  deductibleApprovedLeaveDays,
+  shouldDeductLeaveFromBalance,
+  type ApprovedLeaveDeductionRow,
+} from '../engines/leave-balance.engine';
 import { type RawBuilder } from 'kysely';
 import { clean, toId, normalizeDateOnly, inclusiveDaysBetween, masterConfig, type MasterKind } from '../hr-helpers';
 
@@ -60,7 +59,11 @@ export class HrLeaveService {
     this.tenantPredicate = deps.tenantPredicate;
   }
 
-  async listMasterData(kind: MasterKind, query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
+  async listMasterData(
+    kind: MasterKind,
+    query: Record<string, unknown>,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
     const config = masterConfig[kind];
     const search = clean(query.search).toLowerCase();
@@ -70,8 +73,9 @@ export class HrLeaveService {
     // always '' for non-positions rows, so only the positions branch
     // searches them). The page and the COUNT read the same base query;
     // internal callers (upsert/deactivate) still see page 1 of 50.
-    const base = kind === 'positions'
-      ? sql<Record<string, unknown>>`
+    const base =
+      kind === 'positions'
+        ? sql<Record<string, unknown>>`
           SELECT m.*, d.name AS department_name, j.name AS job_title_name, b.name AS branch_name, l.name AS location_name
           FROM hr_positions m
           LEFT JOIN hr_departments d ON d.id = m.department_id AND d.tenant_id = m.tenant_id
@@ -81,7 +85,7 @@ export class HrLeaveService {
           WHERE ${this.tenantPredicate(auth, 'm')}
             AND (${search} = '' OR strpos(lower(btrim(COALESCE(m.name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(m.code, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(m.description, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(d.name, ''))), ${search}) > 0 OR strpos(lower(btrim(COALESCE(j.name, ''))), ${search}) > 0)
         `
-      : sql<Record<string, unknown>>`
+        : sql<Record<string, unknown>>`
           SELECT m.*
           FROM ${sql.table(config.table)} m
           WHERE ${this.tenantPredicate(auth, 'm')}
@@ -123,7 +127,12 @@ export class HrLeaveService {
     return { rows, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary: { totalItems } };
   }
 
-  async upsertMasterData(kind: MasterKind, id: number | null, payload: UpsertHrMasterDataDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertMasterData(
+    kind: MasterKind,
+    id: number | null,
+    payload: UpsertHrMasterDataDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const config = masterConfig[kind];
     let insertedId: number | string | undefined;
     await this.tx.runInTransaction(this.db, async (trx) => {
@@ -164,7 +173,11 @@ export class HrLeaveService {
         }
       }
     });
-    await this.audit.log(`${id ? 'Update' : 'Create'} ${config.auditName}`, `${config.auditName} saved by ${auth.username}`, auth);
+    await this.audit.log(
+      `${id ? 'Update' : 'Create'} ${config.auditName}`,
+      `${config.auditName} saved by ${auth.username}`,
+      auth,
+    );
     const list = await this.listMasterData(kind, {}, auth);
     const finalId = String(insertedId || id || '');
     const rows = (list && Array.isArray((list as any).rows) ? (list as any).rows : []) as any[];
@@ -174,7 +187,9 @@ export class HrLeaveService {
 
   async deactivateMasterData(kind: MasterKind, id: number, auth: AuthContext): Promise<Record<string, unknown>> {
     const config = masterConfig[kind];
-    await sql`UPDATE ${sql.table(config.table)} SET is_active = FALSE, updated_by = ${auth.userId}, updated_at = NOW() WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(this.db);
+    await sql`UPDATE ${sql.table(config.table)} SET is_active = FALSE, updated_by = ${auth.userId}, updated_at = NOW() WHERE id = ${id} AND tenant_id = ${auth.tenantId}`.execute(
+      this.db,
+    );
     await this.audit.log(`Deactivate ${config.auditName}`, `${config.auditName} deactivated by ${auth.username}`, auth);
     return { ok: true, ...(await this.listMasterData(kind, {}, auth)) };
   }
@@ -292,7 +307,11 @@ export class HrLeaveService {
     };
   }
 
-  async upsertLeaveType(id: number | null, payload: UpsertLeaveTypeDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async upsertLeaveType(
+    id: number | null,
+    payload: UpsertLeaveTypeDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
     const name = clean(payload.name);
     if (!name) throw new AppError('Leave type name is required', 'HR_LEAVE_TYPE_NAME_REQUIRED', 400);
@@ -300,7 +319,8 @@ export class HrLeaveService {
     const description = clean(payload.description);
     const isPaid = payload.isPaid !== false;
     const isActive = payload.isActive !== false;
-    const deductsFromBalance = (payload as any).deductsFromBalance === true || (payload as any).deducts_from_balance === true;
+    const deductsFromBalance =
+      (payload as any).deductsFromBalance === true || (payload as any).deducts_from_balance === true;
     if (id) {
       await sql`
         UPDATE hr_leave_types
@@ -313,7 +333,11 @@ export class HrLeaveService {
         VALUES (${auth.tenantId}, ${auth.accountId}, ${name}, ${deductsFromBalance}, ${code || null}, ${description || null}, ${isPaid}, ${isActive}, ${auth.userId}, ${auth.userId}, NOW(), NOW())
       `.execute(this.db);
     }
-    await this.audit.log(`${id ? 'Update' : 'Create'} HR leave type`, `Leave type ${name} saved by ${auth.username}`, auth);
+    await this.audit.log(
+      `${id ? 'Update' : 'Create'} HR leave type`,
+      `Leave type ${name} saved by ${auth.username}`,
+      auth,
+    );
     return this.listLeaveTypes({}, auth);
   }
 
@@ -464,10 +488,7 @@ export class HrLeaveService {
     return deductibleApprovedLeaveDays(rows);
   }
 
-  async deductibleApprovedLeaveDaysByEmployee(
-    employeeIds: number[],
-    tenantId: string,
-  ): Promise<Map<number, number>> {
+  async deductibleApprovedLeaveDaysByEmployee(employeeIds: number[], tenantId: string): Promise<Map<number, number>> {
     const totals = new Map<number, number>();
     if (!employeeIds.length) return totals;
     const result = await sql<{
@@ -538,7 +559,11 @@ export class HrLeaveService {
     const computedDays = inclusiveDaysBetween(startDate, endDate);
     const daysCount = payload.daysCount == null ? computedDays : Number(payload.daysCount);
     if (!Number.isFinite(daysCount) || daysCount <= 0 || daysCount > computedDays) {
-      throw new AppError('عدد أيام الإجازة يجب أن يكون موجباً ولا يتجاوز الفترة المحددة', 'HR_LEAVE_DAYS_COUNT_INVALID', 400);
+      throw new AppError(
+        'عدد أيام الإجازة يجب أن يكون موجباً ولا يتجاوز الفترة المحددة',
+        'HR_LEAVE_DAYS_COUNT_INVALID',
+        400,
+      );
     }
     const leaveTypeId = toId(payload.leaveTypeId);
     const leaveType = clean(payload.leaveType);
@@ -554,8 +579,10 @@ export class HrLeaveService {
       `.execute(trx);
       const activeService = employee.rows[0];
       if (!activeService) throw new AppError('Employee not found', 'HR_LEAVE_EMPLOYEE_REQUIRED', 404);
-      if ((activeService.hire_date && startDate < activeService.hire_date)
-        || (activeService.end_date && endDate > activeService.end_date)) {
+      if (
+        (activeService.hire_date && startDate < activeService.hire_date) ||
+        (activeService.end_date && endDate > activeService.end_date)
+      ) {
         throw new AppError('تواريخ الإجازة خارج مدة خدمة الموظف المعتمدة', 'HR_LEAVE_OUTSIDE_EMPLOYMENT', 409);
       }
       if (leaveTypeId) {
@@ -572,7 +599,11 @@ export class HrLeaveService {
         LIMIT 1
       `.execute(trx);
       if (overlap.rows.length) {
-        throw new AppError('يوجد طلب إجازة قائم يغطي يومًا أو أكثر من الفترة المحددة', 'HR_LEAVE_OVERLAPPING_REQUEST', 409);
+        throw new AppError(
+          'يوجد طلب إجازة قائم يغطي يومًا أو أكثر من الفترة المحددة',
+          'HR_LEAVE_OVERLAPPING_REQUEST',
+          409,
+        );
       }
       await sql`
         INSERT INTO hr_leave_requests (
@@ -587,11 +618,19 @@ export class HrLeaveService {
         )
       `.execute(trx);
     });
-    await this.audit.log('Create HR leave request', `Leave request created for employee #${employeeId} by ${auth.username}`, auth);
+    await this.audit.log(
+      'Create HR leave request',
+      `Leave request created for employee #${employeeId} by ${auth.username}`,
+      auth,
+    );
     return this.listLeaveRequests({}, auth);
   }
 
-  async approveLeaveRequest(id: number, payload: DecideLeaveRequestDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async approveLeaveRequest(
+    id: number,
+    payload: DecideLeaveRequestDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
     await this.tx.runInTransaction(this.db, async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
@@ -636,7 +675,8 @@ export class HrLeaveService {
       if (!row) throw new AppError('Leave request not found', 'HR_LEAVE_REQUEST_NOT_FOUND', 404);
       const status = clean(row.status);
       if (status === 'approved') return;
-      if (['cancelled', 'rejected'].includes(status)) throw new AppError('Cannot approve this leave request', 'HR_LEAVE_APPROVE_LOCKED', 400);
+      if (['cancelled', 'rejected'].includes(status))
+        throw new AppError('Cannot approve this leave request', 'HR_LEAVE_APPROVE_LOCKED', 400);
 
       const booked = await sql<{ id: number }>`
         SELECT r.id FROM hr_payroll_runs r
@@ -647,8 +687,11 @@ export class HrLeaveService {
         LIMIT 1
       `.execute(trx);
       if (booked.rows.length) {
-        throw new AppError('إجازة تقع ضمن مسير مرتبات معتمد؛ يلزم تسوية مالية مستقلة',
-          'HR_LEAVE_POSTED_PAYROLL_LOCKED', 409);
+        throw new AppError(
+          'إجازة تقع ضمن مسير مرتبات معتمد؛ يلزم تسوية مالية مستقلة',
+          'HR_LEAVE_POSTED_PAYROLL_LOCKED',
+          409,
+        );
       }
       // INV-LEAVE-BALANCE-DEDUCTION: one shared rule (leave-balance.engine)
       // decides whether the approval moves the stored balance, so the
@@ -710,9 +753,13 @@ export class HrLeaveService {
     return this.listLeaveRequests({}, auth);
   }
 
-  async rejectLeaveRequest(id: number, payload: DecideLeaveRequestDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async rejectLeaveRequest(
+    id: number,
+    payload: DecideLeaveRequestDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const { tenantId } = requireTenantScope(auth);
-    await this.tx.runInTransaction(this.db, async trx => {
+    await this.tx.runInTransaction(this.db, async (trx) => {
       // Approval/cancellation and rejection must serialize over the same leave
       // row AND payroll lock. The old unguarded UPDATE could reject an already
       // approved leave without releasing its annual-leave balance.
@@ -738,7 +785,11 @@ export class HrLeaveService {
     return this.listLeaveRequests({}, auth);
   }
 
-  async cancelLeaveRequest(id: number, payload: DecideLeaveRequestDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async cancelLeaveRequest(
+    id: number,
+    payload: DecideLeaveRequestDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
     await this.tx.runInTransaction(this.db, async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
@@ -790,8 +841,11 @@ export class HrLeaveService {
           LIMIT 1
         `.execute(trx);
         if (booked.rows.length) {
-          throw new AppError('إجازة تقع ضمن مسير مرتبات معتمد؛ يلزم تسوية مالية مستقلة',
-            'HR_LEAVE_POSTED_PAYROLL_LOCKED', 409);
+          throw new AppError(
+            'إجازة تقع ضمن مسير مرتبات معتمد؛ يلزم تسوية مالية مستقلة',
+            'HR_LEAVE_POSTED_PAYROLL_LOCKED',
+            409,
+          );
         }
       }
       // INV-LEAVE-BALANCE-DEDUCTION: the same shared rule as approval,

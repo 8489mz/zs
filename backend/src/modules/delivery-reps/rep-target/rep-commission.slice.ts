@@ -35,20 +35,25 @@ export function calculateRepCommissionMetrics(input: RepCommissionInput): RepCom
   const actualCollections = Math.max(0, Number(input.actualCollections || 0));
   const salesTarget = Math.max(0, Number(input.salesTarget || 0));
 
-  const salesRate = input.salesCommissionRatePercent !== undefined && input.salesCommissionRatePercent !== null
-    ? Math.max(0, Number(input.salesCommissionRatePercent))
-    : 1.0;
-  const collectionRate = input.collectionCommissionRatePercent !== undefined && input.collectionCommissionRatePercent !== null
-    ? Math.max(0, Number(input.collectionCommissionRatePercent))
-    : 0.5;
-  const bonusRate = input.targetBonusRatePercent !== undefined && input.targetBonusRatePercent !== null
-    ? Math.max(0, Number(input.targetBonusRatePercent))
-    : 0.5;
+  const salesRate =
+    input.salesCommissionRatePercent !== undefined && input.salesCommissionRatePercent !== null
+      ? Math.max(0, Number(input.salesCommissionRatePercent))
+      : 1.0;
+  const collectionRate =
+    input.collectionCommissionRatePercent !== undefined && input.collectionCommissionRatePercent !== null
+      ? Math.max(0, Number(input.collectionCommissionRatePercent))
+      : 0.5;
+  const bonusRate =
+    input.targetBonusRatePercent !== undefined && input.targetBonusRatePercent !== null
+      ? Math.max(0, Number(input.targetBonusRatePercent))
+      : 0.5;
 
   const salesCommissionAmount = roundBookMoney((actualSales * salesRate) / 100, input.moneyDigits);
   const collectionCommissionAmount = roundBookMoney((actualCollections * collectionRate) / 100, input.moneyDigits);
   const isTargetBonusEligible = salesTarget > 0 && actualSales >= salesTarget;
-  const targetBonusAmount = isTargetBonusEligible ? roundBookMoney((actualSales * bonusRate) / 100, input.moneyDigits) : 0;
+  const targetBonusAmount = isTargetBonusEligible
+    ? roundBookMoney((actualSales * bonusRate) / 100, input.moneyDigits)
+    : 0;
 
   const totalEarnedCommission = roundBookMoney(
     salesCommissionAmount + collectionCommissionAmount + targetBonusAmount,

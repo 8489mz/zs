@@ -142,10 +142,7 @@ export async function fetchTodayWindowTotals(args: {
   const windowQuery = (table: 'sales' | 'purchases') =>
     args.db
       .selectFrom(table)
-      .select([
-        sql<number>`coalesce(sum(total), 0)`.as('total'),
-        sql<number>`count(*)`.as('invoice_count'),
-      ])
+      .select([sql<number>`coalesce(sum(total), 0)`.as('total'), sql<number>`count(*)`.as('invoice_count')])
       .where('status', '=', 'posted')
       .where('created_at', '>=', args.start)
       .where('created_at', '<=', args.end)
@@ -153,10 +150,7 @@ export async function fetchTodayWindowTotals(args: {
       .$if(args.branchId != null, (qb) => qb.where('branch_id', '=', Number(args.branchId)))
       .$if(args.locationId != null, (qb) => qb.where('location_id', '=', Number(args.locationId)))
       .executeTakeFirstOrThrow();
-  const [salesWindowRow, purchasesWindowRow] = await Promise.all([
-    windowQuery('sales'),
-    windowQuery('purchases'),
-  ]);
+  const [salesWindowRow, purchasesWindowRow] = await Promise.all([windowQuery('sales'), windowQuery('purchases')]);
   return {
     salesCount: Number(salesWindowRow.invoice_count || 0),
     salesAmount: Number(salesWindowRow.total || 0),
@@ -174,10 +168,24 @@ export function buildDashboardComputedState(args: {
   moneyDigits?: MoneyDigits;
   todayWindowTotals?: TodayWindowTotals;
 }) {
-  const todaySalesRows = args.recentSalesRows.filter((row) => dateKey(row.created_at, args.businessTimezone) === args.todayKey);
-  const todayPurchasesRows = args.recentPurchasesRows.filter((row) => dateKey(row.created_at, args.businessTimezone) === args.todayKey);
-  const todayOperations = buildTodayOperationsSnapshot(todaySalesRows, todayPurchasesRows, args.topTodayRows, args.todayWindowTotals);
-  const trends = buildSevenDayTrends(args.recentSalesRows, args.recentPurchasesRows, args.businessTimezone, args.moneyDigits);
+  const todaySalesRows = args.recentSalesRows.filter(
+    (row) => dateKey(row.created_at, args.businessTimezone) === args.todayKey,
+  );
+  const todayPurchasesRows = args.recentPurchasesRows.filter(
+    (row) => dateKey(row.created_at, args.businessTimezone) === args.todayKey,
+  );
+  const todayOperations = buildTodayOperationsSnapshot(
+    todaySalesRows,
+    todayPurchasesRows,
+    args.topTodayRows,
+    args.todayWindowTotals,
+  );
+  const trends = buildSevenDayTrends(
+    args.recentSalesRows,
+    args.recentPurchasesRows,
+    args.businessTimezone,
+    args.moneyDigits,
+  );
 
   return {
     todayOperations,
@@ -267,8 +275,10 @@ export function buildTodayOperationsSnapshot(
 ) {
   // When pre-aggregated by day, invoice_count holds the real invoice count.
   // Fallback to 1 per row for backwards compat with raw row format.
-  const todaySalesCount = windowTotals?.salesCount ?? todaySalesRows.reduce((sum, r) => sum + Number(r.invoice_count ?? 1), 0);
-  const todayPurchasesCount = windowTotals?.purchasesCount ?? todayPurchasesRows.reduce((sum, r) => sum + Number(r.invoice_count ?? 1), 0);
+  const todaySalesCount =
+    windowTotals?.salesCount ?? todaySalesRows.reduce((sum, r) => sum + Number(r.invoice_count ?? 1), 0);
+  const todayPurchasesCount =
+    windowTotals?.purchasesCount ?? todayPurchasesRows.reduce((sum, r) => sum + Number(r.invoice_count ?? 1), 0);
   return {
     todaySalesCount,
     todaySalesAmount: windowTotals?.salesAmount ?? sumMoney(todaySalesRows, (row) => row.total),
@@ -293,11 +303,22 @@ export function buildSevenDayTrends(
   moneyDigits: MoneyDigits = 2,
 ): { sales: TrendPoint[]; purchases: TrendPoint[] } {
   const dayKeys = buildLastNDays(30, businessTimezone, new Date());
-  const sales: TrendPoint[] = buildTrendMap(recentSalesRows, dayKeys, (row) => dateKey(row.created_at, businessTimezone), (row) => row.total, moneyDigits);
-  const purchases: TrendPoint[] = buildTrendMap(recentPurchasesRows, dayKeys, (row) => dateKey(row.created_at, businessTimezone), (row) => row.total, moneyDigits);
+  const sales: TrendPoint[] = buildTrendMap(
+    recentSalesRows,
+    dayKeys,
+    (row) => dateKey(row.created_at, businessTimezone),
+    (row) => row.total,
+    moneyDigits,
+  );
+  const purchases: TrendPoint[] = buildTrendMap(
+    recentPurchasesRows,
+    dayKeys,
+    (row) => dateKey(row.created_at, businessTimezone),
+    (row) => row.total,
+    moneyDigits,
+  );
   return { sales, purchases };
 }
-
 
 type DashboardSummaryInput = {
   summary: Record<string, unknown>;

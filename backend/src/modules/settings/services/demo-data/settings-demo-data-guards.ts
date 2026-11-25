@@ -80,7 +80,13 @@ export class SettingsDemoDataGuards {
 
   /** Clear daily-split allocation rows before deleting sales/payments (ON DELETE SET NULL + CHECK constraint). */
   async clearVanSettlementRows(trx: any, tenantId: string): Promise<void> {
-    await trx.deleteFrom('settlement_allocations').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
-    await trx.deleteFrom('van_rep_financial_settlements').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
+    await trx
+      .deleteFrom('settlement_allocations')
+      .where(sql<boolean>`tenant_id = ${tenantId}`)
+      .execute();
+    await trx
+      .deleteFrom('van_rep_financial_settlements')
+      .where(sql<boolean>`tenant_id = ${tenantId}`)
+      .execute();
   }
 }

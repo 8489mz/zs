@@ -5,7 +5,12 @@ import type { AuthCacheService } from '../../../core/auth/services/auth-cache.se
 import { type Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { createPasswordRecord } from '../../../core/auth/utils/password-hasher';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
-import type { ActivateTenantDto, ExtendTrialDto, ResetOwnerPasswordDto, TenantStatusActionDto } from '../dto/saas-admin.dto';
+import type {
+  ActivateTenantDto,
+  ExtendTrialDto,
+  ResetOwnerPasswordDto,
+  TenantStatusActionDto,
+} from '../dto/saas-admin.dto';
 
 type OwnerUserRow = Pick<
   Selectable<Database['users']>,
@@ -90,43 +95,56 @@ export class SaasAdminLifecycle {
         const plan = await trx.selectFrom('saas_plans').selectAll().where('id', '=', body.planId).executeTakeFirst();
         if (!plan) throw new NotFoundException('الخطة غير موجودة');
 
-        const activeSub = await trx.selectFrom('tenant_subscriptions').selectAll()
+        const activeSub = await trx
+          .selectFrom('tenant_subscriptions')
+          .selectAll()
           .where('tenant_id', '=', tenant.id)
           .where('status', 'in', ['active', 'past_due'])
           .orderBy('created_at', 'desc')
           .executeTakeFirst();
 
         if (activeSub) {
-          await trx.updateTable('tenant_subscriptions').set({ status: 'expired', updated_at: now }).where('id', '=', activeSub.id).execute();
+          await trx
+            .updateTable('tenant_subscriptions')
+            .set({ status: 'expired', updated_at: now })
+            .where('id', '=', activeSub.id)
+            .execute();
         }
 
         const duration = body.durationMonths || plan.billing_period_months;
         const endDate = new Date(now);
         endDate.setMonth(endDate.getMonth() + duration);
 
-        const newSub = await trx.insertInto('tenant_subscriptions').values({
-          tenant_id: tenant.id,
-          plan_id: plan.id,
-          status: 'active',
-          starts_at: now,
-          ends_at: endDate,
-          grace_ends_at: null,
-          auto_renew: false,
-          created_at: now,
-          updated_at: now,
-        } as any).returning('id').executeTakeFirstOrThrow();
+        const newSub = await trx
+          .insertInto('tenant_subscriptions')
+          .values({
+            tenant_id: tenant.id,
+            plan_id: plan.id,
+            status: 'active',
+            starts_at: now,
+            ends_at: endDate,
+            grace_ends_at: null,
+            auto_renew: false,
+            created_at: now,
+            updated_at: now,
+          } as any)
+          .returning('id')
+          .executeTakeFirstOrThrow();
 
         if (body.paymentAmount) {
-          await trx.insertInto('tenant_subscription_payments').values({
-            tenant_id: tenant.id,
-            subscription_id: newSub.id,
-            amount: body.paymentAmount,
-            currency: plan.currency,
-            method: body.paymentMethod || 'manual',
-            reference: body.paymentReference || null,
-            paid_at: now,
-            created_at: now,
-          } as any).execute();
+          await trx
+            .insertInto('tenant_subscription_payments')
+            .values({
+              tenant_id: tenant.id,
+              subscription_id: newSub.id,
+              amount: body.paymentAmount,
+              currency: plan.currency,
+              method: body.paymentMethod || 'manual',
+              reference: body.paymentReference || null,
+              paid_at: now,
+              created_at: now,
+            } as any)
+            .execute();
         }
 
         if (plan.feature_plan_id) {
@@ -136,10 +154,15 @@ export class SaasAdminLifecycle {
     });
 
     this.authCache.invalidateTenant(tenant.id);
-    await this.audit.log('تفعيل نسخة', `تم تفعيل/ترقية النسخة: ${tenant.slug} (${tenant.id}) ${body.planId ? `بخطة ${body.planId}` : ''}`, auth, {
-      targetTenantId: tenant.id,
-      eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_ACTIVATED,
-    });
+    await this.audit.log(
+      'تفعيل نسخة',
+      `تم تفعيل/ترقية النسخة: ${tenant.slug} (${tenant.id}) ${body.planId ? `بخطة ${body.planId}` : ''}`,
+      auth,
+      {
+        targetTenantId: tenant.id,
+        eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_ACTIVATED,
+      },
+    );
     return { ok: true };
   }
 
@@ -148,13 +171,22 @@ export class SaasAdminLifecycle {
     const tenant = await this.getTenantForMutation(id);
     this.assertNotPlatformTenantTarget(tenant.id);
     const now = new Date();
-    await this.db.updateTable('tenants').set({ status: 'suspended', updated_at: now }).where('id', '=', tenant.id).execute();
+    await this.db
+      .updateTable('tenants')
+      .set({ status: 'suspended', updated_at: now })
+      .where('id', '=', tenant.id)
+      .execute();
     this.authCache.invalidateTenant(tenant.id);
     const note = [this.normalizeOptional(body.reason), this.normalizeOptional(body.notes)].filter(Boolean).join(' - ');
-    await this.audit.log('إيقاف نسخة', `تم إيقاف النسخة: ${tenant.slug} (${tenant.id})${note ? ` | ${note}` : ''}`, auth, {
-      targetTenantId: tenant.id,
-      eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_SUSPENDED,
-    });
+    await this.audit.log(
+      'إيقاف نسخة',
+      `تم إيقاف النسخة: ${tenant.slug} (${tenant.id})${note ? ` | ${note}` : ''}`,
+      auth,
+      {
+        targetTenantId: tenant.id,
+        eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_SUSPENDED,
+      },
+    );
     return { ok: true };
   }
 
@@ -172,10 +204,15 @@ export class SaasAdminLifecycle {
       .execute();
     this.authCache.invalidateTenant(tenant.id);
     const note = [this.normalizeOptional(body.reason), this.normalizeOptional(body.notes)].filter(Boolean).join(' - ');
-    await this.audit.log('إنهاء نسخة', `تم إنهاء النسخة: ${tenant.slug} (${tenant.id})${note ? ` | ${note}` : ''}`, auth, {
-      targetTenantId: tenant.id,
-      eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_EXPIRED,
-    });
+    await this.audit.log(
+      'إنهاء نسخة',
+      `تم إنهاء النسخة: ${tenant.slug} (${tenant.id})${note ? ` | ${note}` : ''}`,
+      auth,
+      {
+        targetTenantId: tenant.id,
+        eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_EXPIRED,
+      },
+    );
     return { ok: true };
   }
 
@@ -189,7 +226,8 @@ export class SaasAdminLifecycle {
     }
 
     const now = new Date();
-    const baseline = tenant.trial_ends_at && new Date(tenant.trial_ends_at) > now ? new Date(tenant.trial_ends_at) : now;
+    const baseline =
+      tenant.trial_ends_at && new Date(tenant.trial_ends_at) > now ? new Date(tenant.trial_ends_at) : now;
     const nextTrialEnd = this.addDays(baseline, days);
     await this.db
       .updateTable('tenants')
@@ -225,14 +263,23 @@ export class SaasAdminLifecycle {
       .where('id', '=', owner.id)
       .execute();
 
-    await this.audit.log('فك قفل مالك النسخة', `تم فك قفل مالك النسخة ${tenant.slug} (${tenant.id}) - المستخدم: ${owner.username}`, auth, {
-      targetTenantId: tenant.id,
-      eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_OWNER_UNLOCKED,
-    });
+    await this.audit.log(
+      'فك قفل مالك النسخة',
+      `تم فك قفل مالك النسخة ${tenant.slug} (${tenant.id}) - المستخدم: ${owner.username}`,
+      auth,
+      {
+        targetTenantId: tenant.id,
+        eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_OWNER_UNLOCKED,
+      },
+    );
     return { ok: true };
   }
 
-  async resetOwnerPassword(id: string, body: ResetOwnerPasswordDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async resetOwnerPassword(
+    id: string,
+    body: ResetOwnerPasswordDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     this.assertPlatformAccess(auth);
     const tenant = await this.getTenantForMutation(id);
     this.assertNotPlatformTenantTarget(tenant.id);
@@ -266,10 +313,15 @@ export class SaasAdminLifecycle {
 
     this.authCache.invalidateUserSessions(owner.id);
 
-    await this.audit.log('إعادة كلمة مرور مالك النسخة', `تمت إعادة كلمة مرور مالك النسخة ${tenant.slug} (${tenant.id}) - المستخدم: ${owner.username}`, auth, {
-      targetTenantId: tenant.id,
-      eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_PASSWORD_RESET,
-    });
+    await this.audit.log(
+      'إعادة كلمة مرور مالك النسخة',
+      `تمت إعادة كلمة مرور مالك النسخة ${tenant.slug} (${tenant.id}) - المستخدم: ${owner.username}`,
+      auth,
+      {
+        targetTenantId: tenant.id,
+        eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_PASSWORD_RESET,
+      },
+    );
     return {
       ok: true,
       password: finalPassword,
@@ -307,7 +359,10 @@ export class SaasAdminLifecycle {
       WHERE column_name = 'tenant_id' AND table_schema = 'public'
     `.execute(this.db);
 
-    const allTables = tablesQuery.rows.map(r => r.table_name).filter(t => t !== 'tenants').sort((a, b) => (a === 'settlement_allocations' ? -1 : b === 'settlement_allocations' ? 1 : 0));
+    const allTables = tablesQuery.rows
+      .map((r) => r.table_name)
+      .filter((t) => t !== 'tenants')
+      .sort((a, b) => (a === 'settlement_allocations' ? -1 : b === 'settlement_allocations' ? 1 : 0));
 
     // One transaction for the whole purge. Each table used to be deleted on its own
     // connection, so a foreign key we could not resolve - or any unexpected error - left
@@ -339,7 +394,8 @@ export class SaasAdminLifecycle {
           } catch (e: any) {
             await sql`ROLLBACK TO SAVEPOINT ${sql.raw(savepoint)}`.execute(trx);
             const code = e.code || e.cause?.code || e.originalError?.code || e.error?.code;
-            if (code === '23503' || code === '23001') { // foreign_key_violation or restrict_violation
+            if (code === '23503' || code === '23001') {
+              // foreign_key_violation or restrict_violation
               nextTables.push(table);
             } else if (table === 'tamper_audit_logs' && code === 'P0001') {
               this.logger.warn(`deleteTenant: tamper_audit_logs immutable trigger encountered for tenant ${tenant.id}`);
@@ -362,14 +418,18 @@ export class SaasAdminLifecycle {
 
     this.authCache.invalidateTenant(tenant.id);
 
-    await this.audit.log('حذف نسخة', `تم حذف النسخة ${tenant.slug} (${tenant.id}) نهائياً من النظام بواسطة ${auth.username}`, auth, {
-      targetTenantId: tenant.id,
-      eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_DELETED,
-    });
+    await this.audit.log(
+      'حذف نسخة',
+      `تم حذف النسخة ${tenant.slug} (${tenant.id}) نهائياً من النظام بواسطة ${auth.username}`,
+      auth,
+      {
+        targetTenantId: tenant.id,
+        eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_DELETED,
+      },
+    );
     return {
       ok: true,
       message: `تم حذف النسخة (${tenant.business_name || tenant.slug}) وجميع قواعد بياناتها وسجلاتها نهائياً بنجاح.`,
-
     };
   }
 }

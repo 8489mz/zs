@@ -39,7 +39,12 @@ export interface DeliveryRepsReadsDeps {
   // delegates — S6 is generated later; the merge owns the binding.
   getDeliveryFeeMode: (trx: Kysely<Database>, actor: AuthContext) => Promise<'freelance_courier' | 'store_fleet'>;
   repOrderCashDue: (
-    order: { id: number; delivery_fee_mode: string | null; collection_status?: string | null; paid_amount?: number | string | null },
+    order: {
+      id: number;
+      delivery_fee_mode: string | null;
+      collection_status?: string | null;
+      paid_amount?: number | string | null;
+    },
     defaultMode: 'freelance_courier' | 'store_fleet',
     moneyDigits: MoneyDigits,
     actor: AuthContext,
@@ -50,9 +55,17 @@ export interface DeliveryRepsReadsDeps {
 export class DeliveryRepsReadsService {
   private readonly db: Kysely<Database>;
   private readonly tenantPredicate: (actor: AuthContext) => RawBuilder<boolean>;
-  private readonly getDeliveryFeeMode: (trx: Kysely<Database>, actor: AuthContext) => Promise<'freelance_courier' | 'store_fleet'>;
+  private readonly getDeliveryFeeMode: (
+    trx: Kysely<Database>,
+    actor: AuthContext,
+  ) => Promise<'freelance_courier' | 'store_fleet'>;
   private readonly repOrderCashDue: (
-    order: { id: number; delivery_fee_mode: string | null; collection_status?: string | null; paid_amount?: number | string | null },
+    order: {
+      id: number;
+      delivery_fee_mode: string | null;
+      collection_status?: string | null;
+      paid_amount?: number | string | null;
+    },
     defaultMode: 'freelance_courier' | 'store_fleet',
     moneyDigits: MoneyDigits,
     actor: AuthContext,
@@ -65,14 +78,31 @@ export class DeliveryRepsReadsService {
     this.repOrderCashDue = deps.repOrderCashDue;
   }
 
-  async listOrders(repId: number, actor: AuthContext, filters?: { dateFrom?: string; dateTo?: string; status?: string; discountedOnly?: boolean; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {
+  async listOrders(
+    repId: number,
+    actor: AuthContext,
+    filters?: {
+      dateFrom?: string;
+      dateTo?: string;
+      status?: string;
+      discountedOnly?: boolean;
+      page?: number;
+      pageSize?: number;
+    },
+  ): Promise<Record<string, unknown>> {
     const { tenantId } = requireTenantScope(actor);
     const { page, pageSize, offset } = boundedPage(filters?.page, filters?.pageSize);
     let query = this.db
       .selectFrom('sales')
-      .leftJoin('customers', (join) => join.onRef('customers.id', '=', 'sales.customer_id').onRef('customers.tenant_id', '=', 'sales.tenant_id'))
-      .leftJoin('users as settled_user', (join) => join.onRef('settled_user.id', '=', 'sales.settled_by').onRef('settled_user.tenant_id', '=', 'sales.tenant_id'))
-      .leftJoin('users as created_user', (join) => join.onRef('created_user.id', '=', 'sales.created_by').onRef('created_user.tenant_id', '=', 'sales.tenant_id'))
+      .leftJoin('customers', (join) =>
+        join.onRef('customers.id', '=', 'sales.customer_id').onRef('customers.tenant_id', '=', 'sales.tenant_id'),
+      )
+      .leftJoin('users as settled_user', (join) =>
+        join.onRef('settled_user.id', '=', 'sales.settled_by').onRef('settled_user.tenant_id', '=', 'sales.tenant_id'),
+      )
+      .leftJoin('users as created_user', (join) =>
+        join.onRef('created_user.id', '=', 'sales.created_by').onRef('created_user.tenant_id', '=', 'sales.tenant_id'),
+      )
       .select([
         'sales.id',
         'sales.doc_no as docNo',
@@ -94,17 +124,16 @@ export class DeliveryRepsReadsService {
         'sales.settled_at as settledAt',
         'sales.created_at as createdAt',
         'settled_user.username as settledByName',
-        'created_user.username as createdByName'
+        'created_user.username as createdByName',
       ])
       .where('sales.delivery_rep_id', '=', repId)
       .where('sales.tenant_id', '=', tenantId);
 
     if (filters?.status) {
       if (filters.status === 'unsettled') {
-        query = query.where((eb) => eb.or([
-          eb('sales.delivery_status', '!=', 'settled'),
-          eb('sales.delivery_status', 'is', null)
-        ]));
+        query = query.where((eb) =>
+          eb.or([eb('sales.delivery_status', '!=', 'settled'), eb('sales.delivery_status', 'is', null)]),
+        );
       } else {
         query = query.where('sales.delivery_status', '=', filters.status as any);
       }
@@ -126,7 +155,12 @@ export class DeliveryRepsReadsService {
       query = query.where(discountedSaleSql('sales'));
     }
 
-    const orders = await query.orderBy('sales.created_at', 'desc').orderBy('sales.id', 'desc').limit(pageSize + 1).offset(offset).execute();
+    const orders = await query
+      .orderBy('sales.created_at', 'desc')
+      .orderBy('sales.id', 'desc')
+      .limit(pageSize + 1)
+      .offset(offset)
+      .execute();
     // INV-SF-REP-CUSTODY-NET-RETURNS (D-SF-10): each row carries
     // its remaining cash due from deliverySettlementBasis, so the
     // row and the badge agree with the settle gate. `total` stays
@@ -150,13 +184,21 @@ export class DeliveryRepsReadsService {
     return { ok: true, orders: ordersWithRemaining, pagination: { page, pageSize, hasMore: orders.length > pageSize } };
   }
 
-  async listSettlements(repId: number, actor: AuthContext, filters?: { dateFrom?: string; dateTo?: string; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {
+  async listSettlements(
+    repId: number,
+    actor: AuthContext,
+    filters?: { dateFrom?: string; dateTo?: string; page?: number; pageSize?: number },
+  ): Promise<Record<string, unknown>> {
     const { tenantId } = requireTenantScope(actor);
     const { page, pageSize, offset } = boundedPage(filters?.page, filters?.pageSize);
     let query = this.db
       .selectFrom('sales as s')
-      .leftJoin('users as u', (join) => join.onRef('u.id', '=', 's.settled_by').onRef('u.tenant_id', '=', 's.tenant_id'))
-      .leftJoin('users as cu', (join) => join.onRef('cu.id', '=', 's.created_by').onRef('cu.tenant_id', '=', 's.tenant_id'))
+      .leftJoin('users as u', (join) =>
+        join.onRef('u.id', '=', 's.settled_by').onRef('u.tenant_id', '=', 's.tenant_id'),
+      )
+      .leftJoin('users as cu', (join) =>
+        join.onRef('cu.id', '=', 's.created_by').onRef('cu.tenant_id', '=', 's.tenant_id'),
+      )
       .select([
         's.id',
         's.doc_no as docNo',
@@ -166,7 +208,7 @@ export class DeliveryRepsReadsService {
         's.created_at as orderDate',
         's.settled_at as createdAt',
         'u.username as settledByName',
-        'cu.username as createdByName'
+        'cu.username as createdByName',
       ])
       .where('s.tenant_id', '=', tenantId)
       .where('s.delivery_rep_id', '=', repId)
@@ -182,8 +224,17 @@ export class DeliveryRepsReadsService {
       query = query.where('s.settled_at', '<=', dateTo);
     }
 
-    const settlements = await query.orderBy('s.settled_at', 'desc').orderBy('s.id', 'desc').limit(pageSize + 1).offset(offset).execute();
-    return { ok: true, settlements: settlements.slice(0, pageSize), pagination: { page, pageSize, hasMore: settlements.length > pageSize } };
+    const settlements = await query
+      .orderBy('s.settled_at', 'desc')
+      .orderBy('s.id', 'desc')
+      .limit(pageSize + 1)
+      .offset(offset)
+      .execute();
+    return {
+      ok: true,
+      settlements: settlements.slice(0, pageSize),
+      pagination: { page, pageSize, hasMore: settlements.length > pageSize },
+    };
   }
 
   async getRepKPIs(repId: number, actor: AuthContext): Promise<Record<string, unknown>> {
@@ -194,9 +245,13 @@ export class DeliveryRepsReadsService {
       .select([
         sql<number>`count(*)::int`.as('total_orders'),
         sql<number>`count(*) filter (where status = 'returned')::int`.as('returned_orders'),
-        sql<number>`count(*) filter (where status is distinct from 'returned' and delivery_status = 'settled')::int`.as('successful_orders'),
+        sql<number>`count(*) filter (where status is distinct from 'returned' and delivery_status = 'settled')::int`.as(
+          'successful_orders',
+        ),
         sql<number>`coalesce(avg(extract(epoch from (settled_at - created_at)) * 1000)
-          filter (where status is distinct from 'returned' and delivery_status = 'settled' and settled_at > created_at), 0)`.as('average_delay_ms'),
+          filter (where status is distinct from 'returned' and delivery_status = 'settled' and settled_at > created_at), 0)`.as(
+          'average_delay_ms',
+        ),
       ])
       .where('delivery_rep_id', '=', repId)
       .where('tenant_id', '=', tenantId)
@@ -234,8 +289,8 @@ export class DeliveryRepsReadsService {
         successRate: Number(successRate.toFixed(1)),
         averageDelayHours: Number(averageDelayHours.toFixed(1)),
         averageDelayMins,
-        rating
-      }
+        rating,
+      },
     };
   }
 
@@ -272,8 +327,15 @@ export class DeliveryRepsReadsService {
     let pendingAmount = 0;
     for (const order of orders) {
       const cashDue = await this.repOrderCashDue(
-        { id: Number(order.id), delivery_fee_mode: order.delivery_fee_mode ?? null, collection_status: order.collection_status ?? null, paid_amount: order.paid_amount ?? null },
-        defaultMode, moneyDigits, actor,
+        {
+          id: Number(order.id),
+          delivery_fee_mode: order.delivery_fee_mode ?? null,
+          collection_status: order.collection_status ?? null,
+          paid_amount: order.paid_amount ?? null,
+        },
+        defaultMode,
+        moneyDigits,
+        actor,
       );
       if (order.delivery_status === 'settled') {
         collectedAmount += cashDue;
@@ -293,7 +355,7 @@ export class DeliveryRepsReadsService {
         totalOrders: orders.length,
         collectedAmount: roundMoney(collectedAmount, moneyDigits),
         pendingAmount: roundMoney(pendingAmount, moneyDigits),
-      }
+      },
     };
   }
 
@@ -351,10 +413,7 @@ export class DeliveryRepsReadsService {
         ])
         .executeTakeFirst(),
       salesBase()
-        .select([
-          sql<number>`count(*)::int`.as('sales_count'),
-          sql<number>`coalesce(sum(total), 0)`.as('sales_total'),
-        ])
+        .select([sql<number>`count(*)::int`.as('sales_count'), sql<number>`coalesce(sum(total), 0)`.as('sales_total')])
         .where('created_at', '>=', todayBounds.start)
         .where('created_at', '<=', todayBounds.end)
         .executeTakeFirst(),
@@ -382,10 +441,7 @@ export class DeliveryRepsReadsService {
       .executeTakeFirst();
 
     const collectionsBase = () =>
-      this.db
-        .selectFrom('customer_payments')
-        .where('rep_id', '=', repId)
-        .where('tenant_id', '=', tenantId);
+      this.db.selectFrom('customer_payments').where('rep_id', '=', repId).where('tenant_id', '=', tenantId);
     const [collectionsRow, todayCollectionsRow, mtdCollectionsRow] = await Promise.all([
       collectionsBase()
         .select([
@@ -456,7 +512,11 @@ export class DeliveryRepsReadsService {
       .orderBy('id', 'asc')
       .execute();
     const splitIds = (dueSales as Array<Record<string, unknown>>)
-      .filter((s) => String(s.payment_type || '').toLowerCase() === 'split' || String(s.payment_channel || '').toLowerCase() === 'mixed')
+      .filter(
+        (s) =>
+          String(s.payment_type || '').toLowerCase() === 'split' ||
+          String(s.payment_channel || '').toLowerCase() === 'mixed',
+      )
       .map((s) => Number(s.id));
     const creditOwedBySale = new Map<number, number>();
     if (splitIds.length > 0) {
@@ -492,7 +552,12 @@ export class DeliveryRepsReadsService {
         .orderBy('id', 'asc')
         .execute(),
     ]);
-    const dueRows: Array<{ kind: 'sale' | 'collection' | 'refund'; id: number; createdAt: Date | string; cashAmount: number }> = [];
+    const dueRows: Array<{
+      kind: 'sale' | 'collection' | 'refund';
+      id: number;
+      createdAt: Date | string;
+      cashAmount: number;
+    }> = [];
     for (const s of dueSales as Array<Record<string, unknown>>) {
       dueRows.push({
         kind: 'sale',
@@ -510,10 +575,20 @@ export class DeliveryRepsReadsService {
       });
     }
     for (const p of duePayments as Array<Record<string, unknown>>) {
-      dueRows.push({ kind: 'collection', id: Number(p.id), createdAt: p.created_at as Date | string, cashAmount: Number(p.amount || 0) });
+      dueRows.push({
+        kind: 'collection',
+        id: Number(p.id),
+        createdAt: p.created_at as Date | string,
+        cashAmount: Number(p.amount || 0),
+      });
     }
     for (const r of dueRefunds as Array<Record<string, unknown>>) {
-      dueRows.push({ kind: 'refund', id: Number(r.id), createdAt: r.created_at as Date | string, cashAmount: Number(r.total_amount || 0) });
+      dueRows.push({
+        kind: 'refund',
+        id: Number(r.id),
+        createdAt: r.created_at as Date | string,
+        cashAmount: Number(r.total_amount || 0),
+      });
     }
     dueRows.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id - b.id);
     const dueByDay: DayBucket[] = bucketTripCashByDay(dueRows, timezone, bookDigits);
@@ -552,8 +627,12 @@ export class DeliveryRepsReadsService {
         ? {
             periodMonth: (currentTargetRow as any).period_month,
             targetAmount: money((currentTargetRow as any).target_amount),
-            collectionTarget: (currentTargetRow as any).collection_target == null ? null : money((currentTargetRow as any).collection_target),
-            visitsTarget: (currentTargetRow as any).visits_target == null ? null : Number((currentTargetRow as any).visits_target),
+            collectionTarget:
+              (currentTargetRow as any).collection_target == null
+                ? null
+                : money((currentTargetRow as any).collection_target),
+            visitsTarget:
+              (currentTargetRow as any).visits_target == null ? null : Number((currentTargetRow as any).visits_target),
             actualSalesMtd,
             actualCollectionsMtd,
           }
@@ -565,7 +644,10 @@ export class DeliveryRepsReadsService {
         visitsTarget: t.visits_target == null ? null : Number(t.visits_target),
       })),
       dueByDay,
-      totalDue: roundMoney(dueByDay.reduce((s, d) => s + d.due, 0), bookDigits),
+      totalDue: roundMoney(
+        dueByDay.reduce((s, d) => s + d.due, 0),
+        bookDigits,
+      ),
     };
   }
 }

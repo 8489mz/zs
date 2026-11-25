@@ -1,6 +1,9 @@
 import { sql } from '../../../../database/kysely';
 import { AppError } from '../../../../common/errors/app-error';
-import { assertRepRouteForSale as assertRepRouteForSaleShared, listCustomerServingRepIds as listCustomerServingRepIdsShared } from './rep-route-gate';
+import {
+  assertRepRouteForSale as assertRepRouteForSaleShared,
+  listCustomerServingRepIds as listCustomerServingRepIdsShared,
+} from './rep-route-gate';
 import type { VanCollectionsAndSwapsDeps } from './van-collections-and-swaps.types';
 
 export class RepScopedReadsSlice {

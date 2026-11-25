@@ -43,13 +43,19 @@ export interface ContractingIpcInvoicesDeps {
   // Facade signature (L7340-7343): async getGuaranteesRaw(tenantId:
   // string, filters: { projectId?: string; subcontractId?: string;
   // status?: string } = {}): Promise<BankGuarantee[]>
-  getGuaranteesRaw: (tenantId: string, filters?: { projectId?: string; subcontractId?: string; status?: string }) => Promise<BankGuarantee[]>;
+  getGuaranteesRaw: (
+    tenantId: string,
+    filters?: { projectId?: string; subcontractId?: string; status?: string },
+  ) => Promise<BankGuarantee[]>;
 }
 
 @Injectable()
 export class ContractingIpcInvoicesService {
   private readonly db: Kysely<Database>;
-  private readonly getGuaranteesRaw: (tenantId: string, filters?: { projectId?: string; subcontractId?: string; status?: string }) => Promise<BankGuarantee[]>;
+  private readonly getGuaranteesRaw: (
+    tenantId: string,
+    filters?: { projectId?: string; subcontractId?: string; status?: string },
+  ) => Promise<BankGuarantee[]>;
 
   constructor(deps: ContractingIpcInvoicesDeps) {
     this.db = deps.db;
@@ -271,26 +277,28 @@ export class ContractingIpcInvoicesService {
 
     if (ipcType === 'subcontractor' && subcontract) {
       contractValue = Number(subcontract.total_amount || 0);
-      advanceTotal = Number(subcontract.advance_amount || (contractValue * (Number(subcontract.advance_pct || 0) / 100)));
+      advanceTotal = Number(subcontract.advance_amount || contractValue * (Number(subcontract.advance_pct || 0) / 100));
       recoveryStartPct = Number(subcontract.advance_recovery_start_pct ?? 10);
       recoveryEndPct = Number(subcontract.advance_recovery_end_pct ?? 80);
-      retentionRate = dto.retentionPercent !== undefined
-        ? Number(dto.retentionPercent) / 100
-        : Number(subcontract.retention_percent ?? 5) / 100;
+      retentionRate =
+        dto.retentionPercent !== undefined
+          ? Number(dto.retentionPercent) / 100
+          : Number(subcontract.retention_percent ?? 5) / 100;
       if (Number(subcontract.retention_limit_pct) > 0) {
         retentionCap = (contractValue * Number(subcontract.retention_limit_pct)) / 100;
       } else {
-        retentionCap = (contractValue * retentionRate);
+        retentionCap = contractValue * retentionRate;
       }
     } else {
       contractValue = Number(project.contract_value || 0);
       advanceTotal = Number(project.down_payment_amount || 0);
       recoveryStartPct = 10;
       recoveryEndPct = 80;
-      retentionRate = dto.retentionPercent !== undefined
-        ? Number(dto.retentionPercent) / 100
-        : Number(project.retention_percent ?? 5) / 100;
-      retentionCap = Number((project as any).retention_limit || (contractValue * retentionRate));
+      retentionRate =
+        dto.retentionPercent !== undefined
+          ? Number(dto.retentionPercent) / 100
+          : Number(project.retention_percent ?? 5) / 100;
+      retentionCap = Number((project as any).retention_limit || contractValue * retentionRate);
     }
 
     // Execute Central FIDIC 4-Layer IPC Calculation Engine (Single Source of Truth)
@@ -319,7 +327,8 @@ export class ContractingIpcInvoicesService {
       },
       {
         advanceRecoveryOverride: dto.advanceRecoveryOverride,
-        advanceRecoveryPercent: dto.advanceRecoveryPercent !== undefined ? Number(dto.advanceRecoveryPercent) : undefined,
+        advanceRecoveryPercent:
+          dto.advanceRecoveryPercent !== undefined ? Number(dto.advanceRecoveryPercent) : undefined,
         backchargeAmount: dto.backchargeAmount !== undefined ? Number(dto.backchargeAmount) : undefined,
         ldAmount: dto.ldAmount !== undefined ? Number(dto.ldAmount) : undefined,
         materialExcessAmount: dto.materialExcessAmount !== undefined ? Number(dto.materialExcessAmount) : undefined,
@@ -329,7 +338,7 @@ export class ContractingIpcInvoicesService {
         whtAmount: dto.whtAmount !== undefined ? Number(dto.whtAmount) : undefined,
         otherDeductions: dto.otherDeductions !== undefined ? Number(dto.otherDeductions) : undefined,
         itemizedDeductions: dto.itemizedDeductions,
-      }
+      },
     );
 
     // IPC GUARANTEE INTERLOCKING ENFORCEMENT:
@@ -415,7 +424,7 @@ export class ContractingIpcInvoicesService {
             ...pi,
             tenant_id: tenantId,
             invoice_id: invoice.id,
-          }))
+          })),
         )
         .execute();
     }
@@ -438,7 +447,7 @@ export class ContractingIpcInvoicesService {
             approved_by: auth.userId ? String(auth.userId) : null,
             approved_at: new Date(),
             description: ded.description || '',
-          }))
+          })),
         )
         .execute();
     }
@@ -493,7 +502,11 @@ export class ContractingIpcInvoicesService {
             subcontractId: String(invoice.subcontract_id),
             projectId: String(invoice.project_id),
             unrecoveredAdvanceBalance: unrecBalance,
-            invoiceDate: invoice.period_end ? (typeof invoice.period_end === 'string' ? invoice.period_end : formatLocalCalendarDay(new Date(invoice.period_end))) : (await resolveBusinessDateKey(this.db, tenantId, new Date())),
+            invoiceDate: invoice.period_end
+              ? typeof invoice.period_end === 'string'
+                ? invoice.period_end
+                : formatLocalCalendarDay(new Date(invoice.period_end))
+              : await resolveBusinessDateKey(this.db, tenantId, new Date()),
             activeGuarantees,
           });
           if (interlocking.isBlocked) {

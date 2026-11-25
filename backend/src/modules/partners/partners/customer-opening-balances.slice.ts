@@ -44,7 +44,11 @@ export class CustomerOpeningBalancesSlice {
     return Boolean(row && (!excludeId || Number(row.id) !== excludeId));
   }
 
-  async findCustomerByPhone(phone: string, actor: AuthContext, excludeId?: number): Promise<{ id: number; name: string; phone: string } | null> {
+  async findCustomerByPhone(
+    phone: string,
+    actor: AuthContext,
+    excludeId?: number,
+  ): Promise<{ id: number; name: string; phone: string } | null> {
     const trimmed = String(phone || '').trim();
     if (!trimmed) return null;
     const variants = generatePhoneSearchVariants(trimmed);
@@ -79,50 +83,76 @@ export class CustomerOpeningBalancesSlice {
     return Boolean(row && (!excludeId || Number(row.id) !== excludeId));
   }
 
-  async addCustomerOpeningBalance(customerId: number, amount: number, actor: AuthContext, db: Kysely<Database>): Promise<void> {
+  async addCustomerOpeningBalance(
+    customerId: number,
+    amount: number,
+    actor: AuthContext,
+    db: Kysely<Database>,
+  ): Promise<void> {
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(db, this.tenantId(actor)));
     const openingBalance = roundMoney(Number(amount || 0), moneyDigits);
     if (Math.abs(openingBalance) <= 0.0001) return;
 
-    await db.insertInto('customer_ledger').values({
-      customer_id: customerId,
-      entry_type: 'opening_balance',
-      amount: openingBalance,
-      balance_after: openingBalance,
-      note: 'رصيد افتتاحي',
-      reference_type: 'customer',
-      reference_id: customerId,
-      created_by: actor.userId,
-      branch_id: null,
-      location_id: null,
-      ...this.tenantFields(actor),
-    }).execute();
+    await db
+      .insertInto('customer_ledger')
+      .values({
+        customer_id: customerId,
+        entry_type: 'opening_balance',
+        amount: openingBalance,
+        balance_after: openingBalance,
+        note: 'رصيد افتتاحي',
+        reference_type: 'customer',
+        reference_id: customerId,
+        created_by: actor.userId,
+        branch_id: null,
+        location_id: null,
+        ...this.tenantFields(actor),
+      })
+      .execute();
 
-    await db.updateTable('customers').set({ balance: openingBalance, updated_at: sql`NOW()` }).where('id', '=', customerId).where(this.tenantPredicate(actor)).execute();
+    await db
+      .updateTable('customers')
+      .set({ balance: openingBalance, updated_at: sql`NOW()` })
+      .where('id', '=', customerId)
+      .where(this.tenantPredicate(actor))
+      .execute();
 
     await this.accountingPosting.postCustomerOpeningBalance(db, customerId, openingBalance, actor);
   }
 
-  async addSupplierOpeningBalance(supplierId: number, amount: number, actor: AuthContext, db: Kysely<Database>): Promise<void> {
+  async addSupplierOpeningBalance(
+    supplierId: number,
+    amount: number,
+    actor: AuthContext,
+    db: Kysely<Database>,
+  ): Promise<void> {
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(db, this.tenantId(actor)));
     const openingBalance = roundMoney(Number(amount || 0), moneyDigits);
     if (Math.abs(openingBalance) <= 0.0001) return;
 
-    await db.insertInto('supplier_ledger').values({
-      supplier_id: supplierId,
-      entry_type: 'opening_balance',
-      amount: openingBalance,
-      balance_after: openingBalance,
-      note: 'رصيد افتتاحي',
-      reference_type: 'supplier',
-      reference_id: supplierId,
-      created_by: actor.userId,
-      branch_id: null,
-      location_id: null,
-      ...this.tenantFields(actor),
-    }).execute();
+    await db
+      .insertInto('supplier_ledger')
+      .values({
+        supplier_id: supplierId,
+        entry_type: 'opening_balance',
+        amount: openingBalance,
+        balance_after: openingBalance,
+        note: 'رصيد افتتاحي',
+        reference_type: 'supplier',
+        reference_id: supplierId,
+        created_by: actor.userId,
+        branch_id: null,
+        location_id: null,
+        ...this.tenantFields(actor),
+      })
+      .execute();
 
-    await db.updateTable('suppliers').set({ balance: openingBalance, updated_at: sql`NOW()` }).where('id', '=', supplierId).where(this.tenantPredicate(actor)).execute();
+    await db
+      .updateTable('suppliers')
+      .set({ balance: openingBalance, updated_at: sql`NOW()` })
+      .where('id', '=', supplierId)
+      .where(this.tenantPredicate(actor))
+      .execute();
 
     await this.accountingPosting.postSupplierOpeningBalance(db, supplierId, openingBalance, actor);
   }

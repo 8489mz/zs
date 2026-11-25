@@ -87,11 +87,7 @@ export class ContractingFinanceController {
   }
 
   @Post('retentions/:id/release')
-  async releaseRetentionRecord(
-    @Param('id') id: string,
-    @Body() dto: ReleaseRetentionDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async releaseRetentionRecord(@Param('id') id: string, @Body() dto: ReleaseRetentionDto, @Req() req: RequestWithAuth) {
     return this.contractingService.releaseRetentionRecord(req.authContext!, id, dto);
   }
 
@@ -119,11 +115,7 @@ export class ContractingFinanceController {
   }
 
   @Post('payment-holds/:id/release')
-  async releasePaymentHold(
-    @Param('id') id: string,
-    @Body() dto: ReleasePaymentHoldDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async releasePaymentHold(@Param('id') id: string, @Body() dto: ReleasePaymentHoldDto, @Req() req: RequestWithAuth) {
     return this.contractingService.releasePaymentHold(req.authContext!, id, dto);
   }
 
@@ -190,11 +182,7 @@ export class ContractingFinanceController {
   }
 
   @Post('petty-cash/:id/settle')
-  async settlePettyCash(
-    @Param('id') id: string,
-    @Body() dto: SettlePettyCashDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async settlePettyCash(@Param('id') id: string, @Body() dto: SettlePettyCashDto, @Req() req: RequestWithAuth) {
     return this.contractingService.settlePettyCash(req.authContext!, id, dto);
   }
 
@@ -219,5 +207,4 @@ export class ContractingFinanceController {
   ) {
     return this.contractingService.createGovernmentLicense(req.authContext!, projectId, dto);
   }
-
 }

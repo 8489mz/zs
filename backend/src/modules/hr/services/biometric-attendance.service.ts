@@ -133,7 +133,9 @@ export class BiometricAttendanceService {
     requireTenantScope(auth);
     await this.ensureBiometricSchema();
     const deviceName = String(payload.deviceName || '').trim();
-    const serialNumber = String(payload.serialNumber || '').trim().toUpperCase();
+    const serialNumber = String(payload.serialNumber || '')
+      .trim()
+      .toUpperCase();
 
     if (!deviceName) {
       throw new AppError('اسم جهاز البصمة مطلوب', 'HR_BIOMETRIC_NAME_REQUIRED', 400);
@@ -212,7 +214,11 @@ export class BiometricAttendanceService {
         })
         .execute();
 
-      await this.audit.log('Create biometric device', `Registered biometric device ${deviceName} (${serialNumber})`, auth);
+      await this.audit.log(
+        'Create biometric device',
+        `Registered biometric device ${deviceName} (${serialNumber})`,
+        auth,
+      );
     }
 
     return this.listDevices(auth);
@@ -355,7 +361,15 @@ export class BiometricAttendanceService {
       const pulled =
         brand === 'hikvision'
           ? await fetchHikvisionLanAttendance(ip, port, creds.username, creds.password, openMonthStart, todayKey)
-          : await fetchDahuaLanAttendance(ip, port, creds.username, creds.password, openMonthStart, todayKey, tenantTimezone);
+          : await fetchDahuaLanAttendance(
+              ip,
+              port,
+              creds.username,
+              creds.password,
+              openMonthStart,
+              todayKey,
+              tenantTimezone,
+            );
       rawAttlogLines = pulled.rawAttlogLines;
     } else {
       const commKey = Number(device.comm_key || 0) || 0;
@@ -451,8 +465,7 @@ export class BiometricAttendanceService {
       const isoRx = /^\d{4}-\d{2}-\d{2}$/;
       const effectiveFrom =
         isoRx.test(cleanFrom) && cleanFrom >= openMonthStart && cleanFrom <= todayKey ? cleanFrom : openMonthStart;
-      const effectiveTo =
-        isoRx.test(cleanTo) && cleanTo >= effectiveFrom && cleanTo <= todayKey ? cleanTo : todayKey;
+      const effectiveTo = isoRx.test(cleanTo) && cleanTo >= effectiveFrom && cleanTo <= todayKey ? cleanTo : todayKey;
       return { appliedSyncScope: scope, lastImportedDate, effectiveFrom, effectiveTo };
     }
 
@@ -770,7 +783,9 @@ export class BiometricAttendanceService {
 
   async handleAdmsHandshake(serialNumber: string): Promise<string> {
     await this.ensureBiometricSchema();
-    const cleanSn = String(serialNumber || '').trim().toUpperCase();
+    const cleanSn = String(serialNumber || '')
+      .trim()
+      .toUpperCase();
     if (!cleanSn) return 'ERROR: SN REQUIRED';
 
     const device = await this.db
@@ -807,7 +822,9 @@ export class BiometricAttendanceService {
 
   async handleAdmsPush(serialNumber: string, table: string, rawBody: string): Promise<string> {
     await this.ensureBiometricSchema();
-    const cleanSn = String(serialNumber || '').trim().toUpperCase();
+    const cleanSn = String(serialNumber || '')
+      .trim()
+      .toUpperCase();
     if (!cleanSn) return 'ERROR: SN REQUIRED';
 
     const device = await this.db
@@ -821,7 +838,9 @@ export class BiometricAttendanceService {
       return 'ERROR: UNREGISTERED DEVICE';
     }
 
-    const upperTable = String(table || 'ATTLOG').trim().toUpperCase();
+    const upperTable = String(table || 'ATTLOG')
+      .trim()
+      .toUpperCase();
     if (upperTable !== 'ATTLOG') {
       await this.db
         .updateTable('hr_biometric_devices')

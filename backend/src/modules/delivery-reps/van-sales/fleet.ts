@@ -17,20 +17,11 @@ export class FleetService {
     return this.vanFleetService.listFleetVehicles(tenantId);
   }
 
-  async createFleetVehicle(
-    tenantId: string,
-    accountId: string,
-    payload: CreateFleetVehiclePayload,
-  ) {
+  async createFleetVehicle(tenantId: string, accountId: string, payload: CreateFleetVehiclePayload) {
     return this.vanFleetService.createFleetVehicle(tenantId, accountId, payload);
   }
 
-  async updateFleetVehicle(
-    tenantId: string,
-    accountId: string,
-    id: number,
-    payload: UpdateFleetVehiclePayload,
-  ) {
+  async updateFleetVehicle(tenantId: string, accountId: string, id: number, payload: UpdateFleetVehiclePayload) {
     return this.vanFleetService.updateFleetVehicle(tenantId, accountId, id, payload);
   }
 
@@ -38,12 +29,7 @@ export class FleetService {
     return this.vanFleetService.assignVehicleRep(tenantId, vehicleId, repId, shiftName);
   }
 
-  async recordFuelLog(
-    tenantId: string,
-    accountId: string,
-    repId: number | null,
-    payload: RecordFuelLogPayload,
-  ) {
+  async recordFuelLog(tenantId: string, accountId: string, repId: number | null, payload: RecordFuelLogPayload) {
     return this.vanFleetService.recordFuelLog(tenantId, accountId, repId, payload);
   }
 
@@ -54,12 +40,7 @@ export class FleetService {
     return this.vanFleetService.listFuelLogs(tenantId, filters);
   }
 
-  async recordOilChange(
-    tenantId: string,
-    accountId: string,
-    repId: number | null,
-    payload: RecordOilChangePayload,
-  ) {
+  async recordOilChange(tenantId: string, accountId: string, repId: number | null, payload: RecordOilChangePayload) {
     return this.vanFleetService.recordOilChange(tenantId, accountId, repId, payload);
   }
 
@@ -75,11 +56,7 @@ export class FleetService {
     return this.vanFleetService.listVehicleDrivers(tenantId, vehicleId);
   }
 
-  async assignVehicleDriver(
-    tenantId: string,
-    accountId: string,
-    payload: AssignVehicleDriverPayload,
-  ) {
+  async assignVehicleDriver(tenantId: string, accountId: string, payload: AssignVehicleDriverPayload) {
     return this.vanFleetService.assignVehicleDriver(tenantId, accountId, payload);
   }
 

@@ -19,7 +19,9 @@ export interface VanSalesDriverFieldDeps {
   vanFieldExecutionService: VanFieldExecutionService;
   // Bound kernel helper (stays in the facade; passed bound so the moved
   // bodies stay byte-identical).
-  verifyDriver: (authHeader: string) => Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string }>;
+  verifyDriver: (
+    authHeader: string,
+  ) => Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string }>;
 }
 
 @Injectable()
@@ -41,7 +43,13 @@ export class VanSalesDriverFieldSlice {
   async recordTripExpense(
     authHeader: string,
     tripId: number,
-    body: { expenseType: string; amount: number; notes?: string; receiptPhotoUrl?: string; supervisorOverridePin?: string },
+    body: {
+      expenseType: string;
+      amount: number;
+      notes?: string;
+      receiptPhotoUrl?: string;
+      supervisorOverridePin?: string;
+    },
   ) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.recordTripExpense(driver.repId, driver.tenantId, driver.accountId, {
@@ -50,10 +58,7 @@ export class VanSalesDriverFieldSlice {
     });
   }
 
-  async getTripExpenses(
-    authHeader: string,
-    tripId: number,
-  ) {
+  async getTripExpenses(authHeader: string, tripId: number) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getTripExpenses(tripId, driver.tenantId, driver.repId);
   }
@@ -74,42 +79,27 @@ export class VanSalesDriverFieldSlice {
     });
   }
 
-  async getTripPackagingMovements(
-    authHeader: string,
-    tripId: number,
-  ) {
+  async getTripPackagingMovements(authHeader: string, tripId: number) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getTripPackagingMovements(tripId, driver.tenantId, driver.repId);
   }
 
-  async getCustomerPackagingBalance(
-    authHeader: string,
-    customerId: number,
-  ) {
+  async getCustomerPackagingBalance(authHeader: string, customerId: number) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getCustomerPackagingBalance(customerId, driver.tenantId, driver.repId);
   }
 
-  async getCustomerSuggestedOrder(
-    authHeader: string,
-    customerId: number,
-  ) {
+  async getCustomerSuggestedOrder(authHeader: string, customerId: number) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getCustomerSuggestedOrder(driver.tenantId, driver.accountId, driver.repId, customerId);
   }
 
-  async getCustomerLastSoldPrices(
-    authHeader: string,
-    customerId: number,
-  ) {
+  async getCustomerLastSoldPrices(authHeader: string, customerId: number) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getCustomerLastSoldPrices(driver.tenantId, customerId, driver.repId);
   }
 
-  async getCustomerFieldStatement(
-    authHeader: string,
-    customerId: number,
-  ) {
+  async getCustomerFieldStatement(authHeader: string, customerId: number) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getCustomerFieldStatement(driver.tenantId, customerId, driver.repId);
   }
@@ -154,23 +144,20 @@ export class VanSalesDriverFieldSlice {
     body: { tripId?: number; customerId: number; customerName?: string; latitude?: number; longitude?: number },
   ) {
     const driver = await this.verifyDriver(authHeader);
-    return this.vanFieldExecutionService.checkInVisit(driver.tenantId, Number(driver.accountId || 0), driver.repId, body);
+    return this.vanFieldExecutionService.checkInVisit(
+      driver.tenantId,
+      Number(driver.accountId || 0),
+      driver.repId,
+      body,
+    );
   }
 
-  async recordVisitInventory(
-    authHeader: string,
-    id: number,
-    body: { items: any[] },
-  ) {
+  async recordVisitInventory(authHeader: string, id: number, body: { items: any[] }) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanFieldExecutionService.recordVisitInventory(driver.tenantId, id, body, driver.repId);
   }
 
-  async recordVisitNoSale(
-    authHeader: string,
-    id: number,
-    body: { noSaleReason: string; noSaleNotes?: string },
-  ) {
+  async recordVisitNoSale(authHeader: string, id: number, body: { noSaleReason: string; noSaleNotes?: string }) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanFieldExecutionService.recordVisitNoSale(driver.tenantId, id, body, driver.repId);
   }
@@ -178,18 +165,26 @@ export class VanSalesDriverFieldSlice {
   async checkOutStoreVisit(
     authHeader: string,
     id: number,
-    body: { hasSale?: boolean; saleId?: number; saleAmount?: number; hasCollection?: boolean; collectionAmount?: number },
+    body: {
+      hasSale?: boolean;
+      saleId?: number;
+      saleAmount?: number;
+      hasCollection?: boolean;
+      collectionAmount?: number;
+    },
   ) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanFieldExecutionService.checkOutVisit(driver.tenantId, id, body, driver.repId);
   }
 
-  async recordTradeSurvey(
-    authHeader: string,
-    body: any,
-  ) {
+  async recordTradeSurvey(authHeader: string, body: any) {
     const driver = await this.verifyDriver(authHeader);
-    return this.vanFieldExecutionService.recordTradeSurvey(driver.tenantId, Number(driver.accountId || 0), driver.repId, body);
+    return this.vanFieldExecutionService.recordTradeSurvey(
+      driver.tenantId,
+      Number(driver.accountId || 0),
+      driver.repId,
+      body,
+    );
   }
 
   async recordBreadcrumb(
@@ -197,6 +192,11 @@ export class VanSalesDriverFieldSlice {
     body: { tripId: number; latitude: number; longitude: number; speedKmh?: number; batteryLevel?: number },
   ) {
     const driver = await this.verifyDriver(authHeader);
-    return this.vanFieldExecutionService.recordLiveBreadcrumb(driver.tenantId, Number(driver.accountId || 0), driver.repId, body);
+    return this.vanFieldExecutionService.recordLiveBreadcrumb(
+      driver.tenantId,
+      Number(driver.accountId || 0),
+      driver.repId,
+      body,
+    );
   }
 }

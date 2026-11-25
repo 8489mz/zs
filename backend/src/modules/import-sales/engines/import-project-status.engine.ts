@@ -49,13 +49,7 @@ export interface ImportProjectLifecycleSignals {
   hasArrivedShipment: boolean;
 }
 
-const KNOWN_PROJECT_STATUSES = new Set([
-  'feasibility',
-  'sourcing',
-  'warehousing',
-  'selling',
-  'closed',
-]);
+const KNOWN_PROJECT_STATUSES = new Set(['feasibility', 'sourcing', 'warehousing', 'selling', 'closed']);
 
 export function resolveImportProjectDisplayStatus(
   storedStatus: string | null | undefined,
@@ -74,11 +68,7 @@ export function resolveImportProjectDisplayStatus(
   // A stored forward state is never downgraded by this derivation.
   if (stored === 'selling' || stored === 'warehousing') return stored;
   // Approved / in-flight work means sourcing is under way.
-  if (
-    signals.feasibilityConvertedAt ||
-    signals.hasApprovedProforma ||
-    signals.hasShipment
-  ) {
+  if (signals.feasibilityConvertedAt || signals.hasApprovedProforma || signals.hasShipment) {
     return 'sourcing';
   }
   if (stored === 'sourcing') return 'sourcing';

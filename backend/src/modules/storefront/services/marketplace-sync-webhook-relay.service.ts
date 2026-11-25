@@ -51,7 +51,12 @@ export class MarketplaceSyncWebhookRelayService {
   private readonly marketplaceWebhookHandlers = new Map<string, MarketplaceWebhookHandler>();
   private readonly logger = new Logger(MarketplaceSyncWebhookRelayService.name);
   private readonly db: Kysely<Database>;
-  private readonly getSettingJson: <T>(key: string, tenantId: string, defaultValue: T, executor?: Kysely<Database>) => Promise<T>;
+  private readonly getSettingJson: <T>(
+    key: string,
+    tenantId: string,
+    defaultValue: T,
+    executor?: Kysely<Database>,
+  ) => Promise<T>;
 
   constructor(deps: MarketplaceSyncWebhookRelayDeps) {
     this.db = deps.db;

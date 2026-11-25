@@ -1,10 +1,10 @@
 import { IsString, IsNotEmpty, IsOptional, IsNumber, IsIn, Min } from 'class-validator';
 
 export const VALID_SETTLEMENT_TYPES = ['debit_note', 'credit_note', 'profit_share', 'offset_clearing'] as const;
-export type AgentSettlementType = typeof VALID_SETTLEMENT_TYPES[number];
+export type AgentSettlementType = (typeof VALID_SETTLEMENT_TYPES)[number];
 
 export const VALID_SETTLEMENT_STATUSES = ['pending', 'approved', 'cleared', 'disputed'] as const;
-export type AgentSettlementStatus = typeof VALID_SETTLEMENT_STATUSES[number];
+export type AgentSettlementStatus = (typeof VALID_SETTLEMENT_STATUSES)[number];
 
 export class CreateAgentSettlementDto {
   @IsString()

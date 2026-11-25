@@ -22,18 +22,34 @@ function readWindowsMachineGuid(): string {
 
 function readWindowsCsProductUuid(): string {
   const wmic = safeExec('wmic', ['csproduct', 'get', 'uuid']);
-  const val = wmic.split(/\r?\n/).map((x) => x.trim()).find((x) => x && x.toLowerCase() !== 'uuid');
+  const val = wmic
+    .split(/\r?\n/)
+    .map((x) => x.trim())
+    .find((x) => x && x.toLowerCase() !== 'uuid');
   if (val) return val;
   const ps = safeExec('powershell', ['-NoProfile', '-Command', '(Get-CimInstance Win32_ComputerSystemProduct).UUID']);
-  return ps ? ps.split(/\r?\n/).map((x) => x.trim()).find(Boolean) || '' : '';
+  return ps
+    ? ps
+        .split(/\r?\n/)
+        .map((x) => x.trim())
+        .find(Boolean) || ''
+    : '';
 }
 
 function readWindowsBiosSerial(): string {
   const wmic = safeExec('wmic', ['bios', 'get', 'serialnumber']);
-  const val = wmic.split(/\r?\n/).map((x) => x.trim()).find((x) => x && x.toLowerCase() !== 'serialnumber');
+  const val = wmic
+    .split(/\r?\n/)
+    .map((x) => x.trim())
+    .find((x) => x && x.toLowerCase() !== 'serialnumber');
   if (val) return val;
   const ps = safeExec('powershell', ['-NoProfile', '-Command', '(Get-CimInstance Win32_BIOS).SerialNumber']);
-  return ps ? ps.split(/\r?\n/).map((x) => x.trim()).find(Boolean) || '' : '';
+  return ps
+    ? ps
+        .split(/\r?\n/)
+        .map((x) => x.trim())
+        .find(Boolean) || ''
+    : '';
 }
 
 function readLinuxFile(path: string): string {
@@ -78,7 +94,11 @@ export function getMachineFingerprint(): MachineFingerprint {
   const rawParts = collectParts();
   const raw = rawParts.join('|');
   const digest = createHash('sha256').update(raw).digest('hex').toUpperCase();
-  const short = digest.slice(0, 24).match(/.{1,4}/g)?.join('-') || digest.slice(0, 24);
+  const short =
+    digest
+      .slice(0, 24)
+      .match(/.{1,4}/g)
+      ?.join('-') || digest.slice(0, 24);
   cachedFingerprint = { machineId: short, fingerprintHash: digest, rawParts };
   return cachedFingerprint;
 }

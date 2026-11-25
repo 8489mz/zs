@@ -53,14 +53,10 @@ function hasValue(value: string | null | undefined): boolean {
 }
 
 export function evaluateForm4Gate(input: Form4GateInput): Form4GateDecision {
-  const methods = input.fundingMethods.filter(
-    (m): m is string => typeof m === 'string' && m.trim().length > 0,
-  );
+  const methods = input.fundingMethods.filter((m): m is string => typeof m === 'string' && m.trim().length > 0);
   const allCashCarried = methods.length > 0 && methods.every((m) => m === 'cash_carried');
   const required =
-    Number(input.shipmentUsdValue) > FORM4_REQUIRED_THRESHOLD_USD &&
-    methods.length > 0 &&
-    !allCashCarried;
+    Number(input.shipmentUsdValue) > FORM4_REQUIRED_THRESHOLD_USD && methods.length > 0 && !allCashCarried;
   if (!required) {
     return {
       required: false,
@@ -72,9 +68,7 @@ export function evaluateForm4Gate(input: Form4GateInput): Form4GateDecision {
           : 'Shipment value is at or below the Form 4 threshold.',
     };
   }
-  const satisfied =
-    hasValue(input.shipmentForm4Number) ||
-    input.transferForm4Numbers.some((n) => hasValue(n));
+  const satisfied = hasValue(input.shipmentForm4Number) || input.transferForm4Numbers.some((n) => hasValue(n));
   return {
     required: true,
     satisfied,

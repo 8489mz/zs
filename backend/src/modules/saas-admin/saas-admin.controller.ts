@@ -3,14 +3,26 @@ import type { Response } from 'express';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { SuperAdminRoleGuard } from '../../core/auth/guards/super-admin-role.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
-import { ActivateTenantDto, CreateTrialTenantDto, ExtendTrialDto, ListSaasTenantsQueryDto, ResetOwnerPasswordDto, TenantStatusActionDto, RenewTenantDto, CreateSaasPlanDto, UpdateSaasPlanDto, RecordPaymentDto, UpdateTenantPlanDto, UpdateTenantSlugDto } from './dto/saas-admin.dto';
+import {
+  ActivateTenantDto,
+  CreateTrialTenantDto,
+  ExtendTrialDto,
+  ListSaasTenantsQueryDto,
+  ResetOwnerPasswordDto,
+  TenantStatusActionDto,
+  RenewTenantDto,
+  CreateSaasPlanDto,
+  UpdateSaasPlanDto,
+  RecordPaymentDto,
+  UpdateTenantPlanDto,
+  UpdateTenantSlugDto,
+} from './dto/saas-admin.dto';
 import { SaasAdminService } from './saas-admin.service';
 
 @Controller('api/saas-admin')
 @UseGuards(SessionAuthGuard, SuperAdminRoleGuard)
 export class SaasAdminController {
   constructor(private readonly service: SaasAdminService) {}
-
 
   @Get('plans')
   listPlans(@Req() req: RequestWithAuth) {
@@ -48,7 +60,6 @@ export class SaasAdminController {
   }
 
   @Get('tenants')
-
   listTenants(@Query() query: ListSaasTenantsQueryDto, @Req() req: RequestWithAuth) {
     return this.service.listTenants(query, req.authContext!);
   }
@@ -99,11 +110,7 @@ export class SaasAdminController {
   }
 
   @Post('tenants/:id/delete')
-  deleteTenant(
-    @Param('id') id: string,
-    @Body() body: { superAdminPassword?: string },
-    @Req() req: RequestWithAuth,
-  ) {
+  deleteTenant(@Param('id') id: string, @Body() body: { superAdminPassword?: string }, @Req() req: RequestWithAuth) {
     return this.service.deleteTenant(id, body?.superAdminPassword || '', req.authContext!);
   }
 
@@ -161,11 +168,7 @@ export class SaasAdminController {
   }
 
   @Post('tenants/:id/wipe-data')
-  wipeTenantData(
-    @Param('id') id: string,
-    @Body() body: { superAdminPassword?: string },
-    @Req() req: RequestWithAuth,
-  ) {
+  wipeTenantData(@Param('id') id: string, @Body() body: { superAdminPassword?: string }, @Req() req: RequestWithAuth) {
     return this.service.wipeTenantData(id, body?.superAdminPassword || '', req.authContext!);
   }
 }

@@ -145,9 +145,10 @@ export class ConvertPreSalesOrderSlice {
       }
       throw new AppError('يجب اعتماد طلب الحجز أولاً قبل تحويله إلى فاتورة مبيعات', 'ORDER_NOT_APPROVED', 400);
     }
-    const conversionRelease = releaseItems.length > 0
-      ? { salesOrderId: orderId, branchId, locationId: whLocId, items: releaseItems }
-      : undefined;
+    const conversionRelease =
+      releaseItems.length > 0
+        ? { salesOrderId: orderId, branchId, locationId: whLocId, items: releaseItems }
+        : undefined;
 
     const paymentType: 'cash' | 'credit' =
       payload?.paymentType || (order.payment_terms === 'credit' ? 'credit' : 'cash');
@@ -208,10 +209,15 @@ export class ConvertPreSalesOrderSlice {
 
     let saleResult: any;
     try {
-      saleResult = await this.salesService.createSale(salePayload, auth, {
-        approvedDiscount: Number(order.discount_amount || 0),
-        approvedUnitPrices,
-      }, conversionRelease);
+      saleResult = await this.salesService.createSale(
+        salePayload,
+        auth,
+        {
+          approvedDiscount: Number(order.discount_amount || 0),
+          approvedUnitPrices,
+        },
+        conversionRelease,
+      );
     } catch (err) {
       // Revert the 'converting' claim to 'approved'. No re-reserve:
       // the reservation was only ever released inside the sale
@@ -249,7 +255,11 @@ export class ConvertPreSalesOrderSlice {
         .returning('id')
         .execute();
       if (updated.length !== 1) {
-        throw new AppError('تعذر تأكيد تحويل طلب الحجز بعد إنشاء الفاتورة؛ يلزم تدخل يدوي', 'ORDER_CONVERSION_MARK_FAILED', 500);
+        throw new AppError(
+          'تعذر تأكيد تحويل طلب الحجز بعد إنشاء الفاتورة؛ يلزم تدخل يدوي',
+          'ORDER_CONVERSION_MARK_FAILED',
+          500,
+        );
       }
 
       await trxAny

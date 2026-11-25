@@ -36,10 +36,7 @@ export class EmployeePortalController {
   }
 
   @Get('attendance')
-  async getAttendance(
-    @Headers('authorization') authHeader: string,
-    @Query('month') month?: string,
-  ) {
+  async getAttendance(@Headers('authorization') authHeader: string, @Query('month') month?: string) {
     const user = await this.service.verifyToken(authHeader);
     this.service.assertPinChanged(user);
     return this.service.getAttendance(user.employeeId, user.tenantId, month);

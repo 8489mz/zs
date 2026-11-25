@@ -13,11 +13,7 @@ export class VanSalesAdminPromotionsLedgerSlice {
     private readonly vanFieldExecutionService: VanFieldExecutionService,
   ) {}
 
-  async listAdminPromotions(
-    req: RequestWithAuth,
-    isActive?: string,
-    promoType?: string,
-  ) {
+  async listAdminPromotions(req: RequestWithAuth, isActive?: string, promoType?: string) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const promotions = await this.vanPromotionsService.listPromotions(tenantId, {
       isActive: isActive !== undefined ? isActive === 'true' : undefined,
@@ -26,39 +22,25 @@ export class VanSalesAdminPromotionsLedgerSlice {
     return { ok: true, promotions };
   }
 
-  async createPromotion(
-    req: RequestWithAuth,
-    body: any,
-  ) {
+  async createPromotion(req: RequestWithAuth, body: any) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const promo = await this.vanPromotionsService.createPromotion(tenantId, body);
     return { ok: true, promotion: promo };
   }
 
-  async updatePromotion(
-    req: RequestWithAuth,
-    id: number,
-    body: any,
-  ) {
+  async updatePromotion(req: RequestWithAuth, id: number, body: any) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const promo = await this.vanPromotionsService.updatePromotion(tenantId, id, body);
     return { ok: true, promotion: promo };
   }
 
-  async deletePromotion(
-    req: RequestWithAuth,
-    id: number,
-  ) {
+  async deletePromotion(req: RequestWithAuth, id: number) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const res = await this.vanPromotionsService.deletePromotion(tenantId, id);
     return res;
   }
 
-  async togglePromotionActive(
-    req: RequestWithAuth,
-    id: number,
-    body: { isActive: boolean },
-  ) {
+  async togglePromotionActive(req: RequestWithAuth, id: number, body: { isActive: boolean }) {
     const { tenantId } = requireTenantScope(req.authContext!);
     const promo = await this.vanPromotionsService.toggleActive(tenantId, id, Boolean(body.isActive));
     return { ok: true, promotion: promo };
@@ -106,12 +88,7 @@ export class VanSalesAdminPromotionsLedgerSlice {
     });
   }
 
-  async listTradeSurveys(
-    req: RequestWithAuth,
-    tripId?: string,
-    customerId?: string,
-    surveyType?: string,
-  ) {
+  async listTradeSurveys(req: RequestWithAuth, tripId?: string, customerId?: string, surveyType?: string) {
     const { tenantId } = requireTenantScope(req.authContext!);
     return this.vanFieldExecutionService.getTradeSurveys(tenantId, {
       tripId: tripId ? Number(tripId) : undefined,
@@ -120,10 +97,7 @@ export class VanSalesAdminPromotionsLedgerSlice {
     });
   }
 
-  async getLiveTripBreadcrumbs(
-    req: RequestWithAuth,
-    tripId: number,
-  ) {
+  async getLiveTripBreadcrumbs(req: RequestWithAuth, tripId: number) {
     const { tenantId } = requireTenantScope(req.authContext!);
     return this.vanFieldExecutionService.getLiveTripBreadcrumbs(tenantId, tripId);
   }
@@ -153,10 +127,7 @@ export class VanSalesAdminPromotionsLedgerSlice {
     return this.vanSalesService.settleRepFinancialItem(tenantId, accountId, id, body, req.authContext!);
   }
 
-  async pushRepShortagesToPayroll(
-    req: RequestWithAuth,
-    body: { settlementIds: number[]; targetMonth?: string },
-  ) {
+  async pushRepShortagesToPayroll(req: RequestWithAuth, body: { settlementIds: number[]; targetMonth?: string }) {
     const { tenantId, accountId } = requireTenantScope(req.authContext!);
     return this.vanSalesService.pushRepShortagesToPayroll(tenantId, accountId, body, req.authContext!);
   }
@@ -169,25 +140,17 @@ export class VanSalesAdminPromotionsLedgerSlice {
     return this.vanSalesService.addRepBonusOrCommission(tenantId, accountId, body, req.authContext!);
   }
 
-  async linkRepToEmployee(
-    req: RequestWithAuth,
-    body: { repId: number; employeeId: number | null },
-  ) {
+  async linkRepToEmployee(req: RequestWithAuth, body: { repId: number; employeeId: number | null }) {
     const { tenantId } = requireTenantScope(req.authContext!);
     return this.vanSalesService.linkRepToEmployee(tenantId, body.repId, body.employeeId);
   }
 
-  async listCandidateEmployees(
-    req: RequestWithAuth,
-  ) {
+  async listCandidateEmployees(req: RequestWithAuth) {
     const { tenantId } = requireTenantScope(req.authContext!);
     return this.vanSalesService.listCandidateEmployees(tenantId);
   }
 
-  async autoCreateEmployee(
-    req: RequestWithAuth,
-    body: { repId: number },
-  ) {
+  async autoCreateEmployee(req: RequestWithAuth, body: { repId: number }) {
     const { tenantId, accountId } = requireTenantScope(req.authContext!);
     return this.vanSalesService.autoCreateEmployeeForRep(tenantId, accountId, body.repId, req.authContext!);
   }

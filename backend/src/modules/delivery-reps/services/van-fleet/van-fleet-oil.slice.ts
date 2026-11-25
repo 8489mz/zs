@@ -3,7 +3,12 @@ import { Database } from '../../../../database/database.types';
 import { AppError } from '../../../../common/errors/app-error';
 
 export interface VanFleetOilSliceBoundDeps {
-  assertVehicleUsableByRep: (tenantId: string, vehicleId: number, repId: number, tripId?: number | null) => Promise<void>;
+  assertVehicleUsableByRep: (
+    tenantId: string,
+    vehicleId: number,
+    repId: number,
+    tripId?: number | null,
+  ) => Promise<void>;
 }
 
 export class VanFleetOilSlice {

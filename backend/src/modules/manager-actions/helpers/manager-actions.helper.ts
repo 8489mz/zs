@@ -151,7 +151,11 @@ function productName(row: ManagerActionProductRow): string {
   return row.name?.trim() || `#${row.id}`;
 }
 
-function saleName(row: { doc_no?: string | null; sale_id?: number | string | null; id?: number | string | null }): string {
+function saleName(row: {
+  doc_no?: string | null;
+  sale_id?: number | string | null;
+  id?: number | string | null;
+}): string {
   return row.doc_no?.trim() || `#${row.sale_id ?? row.id ?? ''}`;
 }
 
@@ -201,79 +205,96 @@ export function buildManagerActionInsights({
     const inventoryValue = stockQty * costPrice;
 
     if (costPrice > 0 && retailPrice > 0 && retailPrice < costPrice) {
-      insights.push(buildInsight({
-        id: `product-below-cost-${id}`,
-        domain: 'products',
-        severity: 'danger',
-        title: 'صنف يُباع بخسارة',
-        message: `${name}: سعر البيع أقل من التكلفة.`,
-        actionLabel: 'راجع التسعير',
-        actionHref: `/products/${id}/edit`,
-        metrics: { productId: id, retailPrice, costPrice, lossPerUnit: round(costPrice - retailPrice) },
-        rank: 92 + (costPrice - retailPrice),
-      }));
+      insights.push(
+        buildInsight({
+          id: `product-below-cost-${id}`,
+          domain: 'products',
+          severity: 'danger',
+          title: 'صنف يُباع بخسارة',
+          message: `${name}: سعر البيع أقل من التكلفة.`,
+          actionLabel: 'راجع التسعير',
+          actionHref: `/products/${id}/edit`,
+          metrics: { productId: id, retailPrice, costPrice, lossPerUnit: round(costPrice - retailPrice) },
+          rank: 92 + (costPrice - retailPrice),
+        }),
+      );
     } else if (costPrice > 0 && retailPrice > 0) {
       const marginRate = (retailPrice - costPrice) / retailPrice;
       if (marginRate < 0.15) {
-        insights.push(buildInsight({
-          id: `product-weak-margin-${id}`,
-          domain: 'products',
-          severity: 'warning',
-          title: 'هامش ربح ضعيف',
-          message: `${name}: هامش الربح أقل من 15%.`,
-          actionLabel: 'راجع التسعير',
-          actionHref: `/products/${id}/edit`,
-          metrics: { productId: id, marginRate: round(marginRate * 100), retailPrice, costPrice },
-          rank: 65 + ((0.15 - marginRate) * 100),
-        }));
+        insights.push(
+          buildInsight({
+            id: `product-weak-margin-${id}`,
+            domain: 'products',
+            severity: 'warning',
+            title: 'هامش ربح ضعيف',
+            message: `${name}: هامش الربح أقل من 15%.`,
+            actionLabel: 'راجع التسعير',
+            actionHref: `/products/${id}/edit`,
+            metrics: { productId: id, marginRate: round(marginRate * 100), retailPrice, costPrice },
+            rank: 65 + (0.15 - marginRate) * 100,
+          }),
+        );
       }
     }
 
     if (stockQty <= 0) {
-      insights.push(buildInsight({
-        id: `product-out-of-stock-${id}`,
-        domain: 'inventory',
-        severity: 'danger',
-        title: 'نفد المخزون',
-        message: `${name}: الكمية الحالية صفر أو أقل.`,
-        actionLabel: 'راجع المخزون',
-        actionHref: `/inventory?productId=${id}`,
-        metrics: { productId: id, stockQty, minStockQty },
-        rank: 88 + Math.abs(stockQty),
-      }));
+      insights.push(
+        buildInsight({
+          id: `product-out-of-stock-${id}`,
+          domain: 'inventory',
+          severity: 'danger',
+          title: 'نفد المخزون',
+          message: `${name}: الكمية الحالية صفر أو أقل.`,
+          actionLabel: 'راجع المخزون',
+          actionHref: `/inventory?productId=${id}`,
+          metrics: { productId: id, stockQty, minStockQty },
+          rank: 88 + Math.abs(stockQty),
+        }),
+      );
     } else if (minStockQty > 0 && stockQty <= minStockQty) {
-      insights.push(buildInsight({
-        id: `product-low-stock-${id}`,
-        domain: 'inventory',
-        severity: 'warning',
-        title: 'مخزون منخفض',
-        message: `${name}: الكمية ${stockQty} والحد الأدنى ${minStockQty}.`,
-        actionLabel: 'راجع المخزون',
-        actionHref: `/inventory?productId=${id}`,
-        metrics: { productId: id, stockQty, minStockQty },
-        rank: 62 + Math.max(0, minStockQty - stockQty),
-      }));
+      insights.push(
+        buildInsight({
+          id: `product-low-stock-${id}`,
+          domain: 'inventory',
+          severity: 'warning',
+          title: 'مخزون منخفض',
+          message: `${name}: الكمية ${stockQty} والحد الأدنى ${minStockQty}.`,
+          actionLabel: 'راجع المخزون',
+          actionHref: `/inventory?productId=${id}`,
+          metrics: { productId: id, stockQty, minStockQty },
+          rank: 62 + Math.max(0, minStockQty - stockQty),
+        }),
+      );
     }
 
     if (inventoryValue >= 1000) {
-      insights.push(buildInsight({
-        id: `product-high-inventory-value-${id}`,
-        domain: 'inventory',
-        severity: 'info',
-        title: 'قيمة مخزون مرتفعة',
-        message: `${name}: قيمة المخزون بالتكلفة مرتفعة وتحتاج متابعة حركة البيع.`,
-        actionLabel: 'افتح الأصناف',
-        actionHref: '/products',
-        metrics: { productId: id, stockQty, costPrice, inventoryValue: round(inventoryValue) },
-        rank: 30 + Math.min(30, inventoryValue / 1000),
-      }));
+      insights.push(
+        buildInsight({
+          id: `product-high-inventory-value-${id}`,
+          domain: 'inventory',
+          severity: 'info',
+          title: 'قيمة مخزون مرتفعة',
+          message: `${name}: قيمة المخزون بالتكلفة مرتفعة وتحتاج متابعة حركة البيع.`,
+          actionLabel: 'افتح الأصناف',
+          actionHref: '/products',
+          metrics: { productId: id, stockQty, costPrice, inventoryValue: round(inventoryValue) },
+          rank: 30 + Math.min(30, inventoryValue / 1000),
+        }),
+      );
     }
 
-    const metadata = product.metadata && typeof product.metadata === 'object'
-      ? (product.metadata as Record<string, any>)
-      : typeof product.metadata === 'string'
-      ? (() => { try { return JSON.parse(product.metadata as string); } catch { return {}; } })()
-      : {};
+    const metadata =
+      product.metadata && typeof product.metadata === 'object'
+        ? (product.metadata as Record<string, any>)
+        : typeof product.metadata === 'string'
+          ? (() => {
+              try {
+                return JSON.parse(product.metadata as string);
+              } catch {
+                return {};
+              }
+            })()
+          : {};
 
     const expiryDateStr = metadata?.expiryDate ? String(metadata.expiryDate).trim().slice(0, 10) : '';
     if (expiryDateStr && stockQty > 0) {
@@ -282,29 +303,33 @@ export function buildManagerActionInsights({
         const daysRemaining = daysBetween(now, expDate);
         const configuredExpiryDays = Number(expiryAlertDays) > 0 ? Number(expiryAlertDays) : 60;
         if (daysRemaining <= 0) {
-          insights.push(buildInsight({
-            id: `product-expired-${id}`,
-            domain: 'inventory',
-            severity: 'danger',
-            title: 'صنف منتهي الصلاحية',
-            message: `${name}: انتهت صلاحيته بتاريخ ${expiryDateStr} (يوجد رصيد: ${stockQty}).`,
-            actionLabel: 'راجع المخزون',
-            actionHref: `/inventory?productId=${id}`,
-            metrics: { productId: id, expiryDate: expiryDateStr, daysRemaining, stockQty },
-            rank: 98 + Math.abs(daysRemaining),
-          }));
+          insights.push(
+            buildInsight({
+              id: `product-expired-${id}`,
+              domain: 'inventory',
+              severity: 'danger',
+              title: 'صنف منتهي الصلاحية',
+              message: `${name}: انتهت صلاحيته بتاريخ ${expiryDateStr} (يوجد رصيد: ${stockQty}).`,
+              actionLabel: 'راجع المخزون',
+              actionHref: `/inventory?productId=${id}`,
+              metrics: { productId: id, expiryDate: expiryDateStr, daysRemaining, stockQty },
+              rank: 98 + Math.abs(daysRemaining),
+            }),
+          );
         } else if (daysRemaining <= configuredExpiryDays) {
-          insights.push(buildInsight({
-            id: `product-near-expiry-${id}`,
-            domain: 'inventory',
-            severity: daysRemaining <= 7 ? 'danger' : 'warning',
-            title: 'صنف وشيك الانتهاء',
-            message: `${name}: تنتهي صلاحيته خلال ${daysRemaining} يوم (${expiryDateStr}).`,
-            actionLabel: 'راجع المخزون',
-            actionHref: `/inventory?productId=${id}`,
-            metrics: { productId: id, expiryDate: expiryDateStr, daysRemaining, stockQty },
-            rank: 75 + Math.max(0, configuredExpiryDays - daysRemaining),
-          }));
+          insights.push(
+            buildInsight({
+              id: `product-near-expiry-${id}`,
+              domain: 'inventory',
+              severity: daysRemaining <= 7 ? 'danger' : 'warning',
+              title: 'صنف وشيك الانتهاء',
+              message: `${name}: تنتهي صلاحيته خلال ${daysRemaining} يوم (${expiryDateStr}).`,
+              actionLabel: 'راجع المخزون',
+              actionHref: `/inventory?productId=${id}`,
+              metrics: { productId: id, expiryDate: expiryDateStr, daysRemaining, stockQty },
+              rank: 75 + Math.max(0, configuredExpiryDays - daysRemaining),
+            }),
+          );
         }
       }
     }
@@ -318,29 +343,33 @@ export function buildManagerActionInsights({
         const stagnantDangerDays = Math.max(90, stagnantDays * 2);
 
         if (daysWithoutSales >= stagnantDangerDays) {
-          insights.push(buildInsight({
-            id: `product-stagnant-danger-${id}`,
-            domain: 'products',
-            severity: 'danger',
-            title: 'صنف شديد الركود',
-            message: `${name}: لا توجد مبيعات منذ ${daysWithoutSales} يوم (الحد: ${stagnantDays} يوم).`,
-            actionLabel: 'افتح الأصناف',
-            actionHref: '/products',
-            metrics: { productId: id, daysWithoutSales, thresholdDays: stagnantDays },
-            rank: 82 + Math.min(30, daysWithoutSales / 10),
-          }));
+          insights.push(
+            buildInsight({
+              id: `product-stagnant-danger-${id}`,
+              domain: 'products',
+              severity: 'danger',
+              title: 'صنف شديد الركود',
+              message: `${name}: لا توجد مبيعات منذ ${daysWithoutSales} يوم (الحد: ${stagnantDays} يوم).`,
+              actionLabel: 'افتح الأصناف',
+              actionHref: '/products',
+              metrics: { productId: id, daysWithoutSales, thresholdDays: stagnantDays },
+              rank: 82 + Math.min(30, daysWithoutSales / 10),
+            }),
+          );
         } else if (daysWithoutSales >= stagnantDays) {
-          insights.push(buildInsight({
-            id: `product-stagnant-warning-${id}`,
-            domain: 'products',
-            severity: 'warning',
-            title: 'صنف راكد',
-            message: `${name}: لا توجد مبيعات منذ ${daysWithoutSales} يوم.`,
-            actionLabel: 'افتح الأصناف',
-            actionHref: '/products',
-            metrics: { productId: id, daysWithoutSales, thresholdDays: stagnantDays },
-            rank: 58 + Math.min(20, daysWithoutSales / 10),
-          }));
+          insights.push(
+            buildInsight({
+              id: `product-stagnant-warning-${id}`,
+              domain: 'products',
+              severity: 'warning',
+              title: 'صنف راكد',
+              message: `${name}: لا توجد مبيعات منذ ${daysWithoutSales} يوم.`,
+              actionLabel: 'افتح الأصناف',
+              actionHref: '/products',
+              metrics: { productId: id, daysWithoutSales, thresholdDays: stagnantDays },
+              rank: 58 + Math.min(20, daysWithoutSales / 10),
+            }),
+          );
         }
       }
     }
@@ -351,17 +380,19 @@ export function buildManagerActionInsights({
     const discount = toNumber(sale.discount);
     const discountRate = subtotal > 0 ? discount / subtotal : 0;
     if (discountRate >= 0.2) {
-      insights.push(buildInsight({
-        id: `sale-high-discount-${sale.id}`,
-        domain: 'sales',
-        severity: 'warning',
-        title: 'فاتورة بخصم مرتفع',
-        message: `${saleName(sale)}: الخصم ${round(discountRate * 100)}% من قيمة الفاتورة.`,
-        actionLabel: 'راجع الفواتير',
-        actionHref: '/sales',
-        metrics: { saleId: String(sale.id), subtotal, discount, discountRate: round(discountRate * 100) },
-        rank: 64 + (discountRate * 100),
-      }));
+      insights.push(
+        buildInsight({
+          id: `sale-high-discount-${sale.id}`,
+          domain: 'sales',
+          severity: 'warning',
+          title: 'فاتورة بخصم مرتفع',
+          message: `${saleName(sale)}: الخصم ${round(discountRate * 100)}% من قيمة الفاتورة.`,
+          actionLabel: 'راجع الفواتير',
+          actionHref: '/sales',
+          metrics: { saleId: String(sale.id), subtotal, discount, discountRate: round(discountRate * 100) },
+          rank: 64 + discountRate * 100,
+        }),
+      );
     }
   }
 
@@ -373,29 +404,33 @@ export function buildManagerActionInsights({
     const marginRate = revenue > 0 ? (revenue - cost) / revenue : 0;
 
     if (belowCostLines > 0) {
-      insights.push(buildInsight({
-        id: `sale-below-cost-lines-${saleId}`,
-        domain: 'sales',
-        severity: 'danger',
-        title: 'فاتورة بها بيع بخسارة',
-        message: `${saleName(sale)}: تحتوي على ${belowCostLines} سطر أقل من التكلفة.`,
-        actionLabel: 'راجع الفواتير',
-        actionHref: '/sales',
-        metrics: { saleId, belowCostLines, revenue: round(revenue), cost: round(cost) },
-        rank: 86 + belowCostLines,
-      }));
+      insights.push(
+        buildInsight({
+          id: `sale-below-cost-lines-${saleId}`,
+          domain: 'sales',
+          severity: 'danger',
+          title: 'فاتورة بها بيع بخسارة',
+          message: `${saleName(sale)}: تحتوي على ${belowCostLines} سطر أقل من التكلفة.`,
+          actionLabel: 'راجع الفواتير',
+          actionHref: '/sales',
+          metrics: { saleId, belowCostLines, revenue: round(revenue), cost: round(cost) },
+          rank: 86 + belowCostLines,
+        }),
+      );
     } else if (revenue > 0 && cost > 0 && marginRate < 0.15) {
-      insights.push(buildInsight({
-        id: `sale-weak-margin-${saleId}`,
-        domain: 'sales',
-        severity: 'warning',
-        title: 'هامش فاتورة ضعيف',
-        message: `${saleName(sale)}: هامش الربح أقل من 15%.`,
-        actionLabel: 'راجع الفواتير',
-        actionHref: '/sales',
-        metrics: { saleId, marginRate: round(marginRate * 100), revenue: round(revenue), cost: round(cost) },
-        rank: 66 + ((0.15 - marginRate) * 100),
-      }));
+      insights.push(
+        buildInsight({
+          id: `sale-weak-margin-${saleId}`,
+          domain: 'sales',
+          severity: 'warning',
+          title: 'هامش فاتورة ضعيف',
+          message: `${saleName(sale)}: هامش الربح أقل من 15%.`,
+          actionLabel: 'راجع الفواتير',
+          actionHref: '/sales',
+          metrics: { saleId, marginRate: round(marginRate * 100), revenue: round(revenue), cost: round(cost) },
+          rank: 66 + (0.15 - marginRate) * 100,
+        }),
+      );
     }
   }
 
@@ -405,29 +440,33 @@ export function buildManagerActionInsights({
     const balance = customerBalanceById.get(id) ?? toNumber(customer.balance);
     const creditLimit = toNumber(customer.credit_limit);
     if (creditLimit > 0 && balance > creditLimit) {
-      insights.push(buildInsight({
-        id: `customer-over-credit-${id}`,
-        domain: 'customers',
-        severity: 'danger',
-        title: 'عميل متجاوز حد الائتمان',
-        message: `${name}: الرصيد تجاوز حد الائتمان.`,
-        actionLabel: 'افتح الحسابات',
-        actionHref: `/accounts?customerId=${id}`,
-        metrics: { customerId: id, balance: round(balance), creditLimit: round(creditLimit) },
-        rank: 90 + Math.min(30, (balance - creditLimit) / Math.max(1, creditLimit) * 100),
-      }));
+      insights.push(
+        buildInsight({
+          id: `customer-over-credit-${id}`,
+          domain: 'customers',
+          severity: 'danger',
+          title: 'عميل متجاوز حد الائتمان',
+          message: `${name}: الرصيد تجاوز حد الائتمان.`,
+          actionLabel: 'افتح الحسابات',
+          actionHref: `/accounts?customerId=${id}`,
+          metrics: { customerId: id, balance: round(balance), creditLimit: round(creditLimit) },
+          rank: 90 + Math.min(30, ((balance - creditLimit) / Math.max(1, creditLimit)) * 100),
+        }),
+      );
     } else if (creditLimit > 0 && balance >= creditLimit * 0.8) {
-      insights.push(buildInsight({
-        id: `customer-near-credit-${id}`,
-        domain: 'customers',
-        severity: 'warning',
-        title: 'عميل قريب من حد الائتمان',
-        message: `${name}: استخدم ${round((balance / creditLimit) * 100)}% من حد الائتمان.`,
-        actionLabel: 'افتح الحسابات',
-        actionHref: `/accounts?customerId=${id}`,
-        metrics: { customerId: id, balance: round(balance), creditLimit: round(creditLimit) },
-        rank: 68 + ((balance / creditLimit) * 10),
-      }));
+      insights.push(
+        buildInsight({
+          id: `customer-near-credit-${id}`,
+          domain: 'customers',
+          severity: 'warning',
+          title: 'عميل قريب من حد الائتمان',
+          message: `${name}: استخدم ${round((balance / creditLimit) * 100)}% من حد الائتمان.`,
+          actionLabel: 'افتح الحسابات',
+          actionHref: `/accounts?customerId=${id}`,
+          metrics: { customerId: id, balance: round(balance), creditLimit: round(creditLimit) },
+          rank: 68 + (balance / creditLimit) * 10,
+        }),
+      );
     }
   }
 
@@ -441,17 +480,19 @@ export function buildManagerActionInsights({
     .sort((a, b) => b.balance - a.balance)[0];
 
   if (topDebtCustomer) {
-    insights.push(buildInsight({
-      id: `customer-top-debt-${topDebtCustomer.id}`,
-      domain: 'accounts',
-      severity: 'info',
-      title: 'أعلى مديونية عميل',
-      message: `${topDebtCustomer.name}: أعلى رصيد مستحق على العملاء.`,
-      actionLabel: 'افتح الحسابات',
-      actionHref: `/accounts?customerId=${topDebtCustomer.id}`,
-      metrics: { customerId: topDebtCustomer.id, balance: round(topDebtCustomer.balance) },
-      rank: 42 + Math.min(25, topDebtCustomer.balance / 1000),
-    }));
+    insights.push(
+      buildInsight({
+        id: `customer-top-debt-${topDebtCustomer.id}`,
+        domain: 'accounts',
+        severity: 'info',
+        title: 'أعلى مديونية عميل',
+        message: `${topDebtCustomer.name}: أعلى رصيد مستحق على العملاء.`,
+        actionLabel: 'افتح الحسابات',
+        actionHref: `/accounts?customerId=${topDebtCustomer.id}`,
+        metrics: { customerId: topDebtCustomer.id, balance: round(topDebtCustomer.balance) },
+        rank: 42 + Math.min(25, topDebtCustomer.balance / 1000),
+      }),
+    );
   }
 
   if (pharmacyBatches && pharmacyBatches.length > 0) {
@@ -465,29 +506,33 @@ export function buildManagerActionInsights({
       if (expDate && qty > 0) {
         const daysRemaining = daysBetween(now, expDate);
         if (daysRemaining <= 0) {
-          insights.push(buildInsight({
-            id: `pharmacy-batch-expired-${id}`,
-            domain: 'pharmacy_expiry',
-            severity: 'danger',
-            title: 'تشغيلة دواء منتهية الصلاحية',
-            message: `${prodName} (تشغيلة: ${batchNo}): انتهت بتاريخ ${batch.expiry_date} (متبقي: ${qty} عبوة).`,
-            actionLabel: 'دليل الصيدلية',
-            actionHref: '/pharmacy/batches-expiry',
-            metrics: { batchId: id, batchNo, expiryDate: batch.expiry_date, daysRemaining, qty },
-            rank: 99 + Math.abs(daysRemaining),
-          }));
+          insights.push(
+            buildInsight({
+              id: `pharmacy-batch-expired-${id}`,
+              domain: 'pharmacy_expiry',
+              severity: 'danger',
+              title: 'تشغيلة دواء منتهية الصلاحية',
+              message: `${prodName} (تشغيلة: ${batchNo}): انتهت بتاريخ ${batch.expiry_date} (متبقي: ${qty} عبوة).`,
+              actionLabel: 'دليل الصيدلية',
+              actionHref: '/pharmacy/batches-expiry',
+              metrics: { batchId: id, batchNo, expiryDate: batch.expiry_date, daysRemaining, qty },
+              rank: 99 + Math.abs(daysRemaining),
+            }),
+          );
         } else if (daysRemaining <= configuredExpiryDays) {
-          insights.push(buildInsight({
-            id: `pharmacy-batch-near-expiry-${id}`,
-            domain: 'pharmacy_expiry',
-            severity: daysRemaining <= 15 ? 'danger' : 'warning',
-            title: 'تشغيلة دواء وشيكة الانتهاء',
-            message: `${prodName} (تشغيلة: ${batchNo}): تنتهي خلال ${daysRemaining} يوم (${batch.expiry_date}).`,
-            actionLabel: 'دليل الصيدلية',
-            actionHref: '/pharmacy/batches-expiry',
-            metrics: { batchId: id, batchNo, expiryDate: batch.expiry_date, daysRemaining, qty },
-            rank: 78 + Math.max(0, configuredExpiryDays - daysRemaining),
-          }));
+          insights.push(
+            buildInsight({
+              id: `pharmacy-batch-near-expiry-${id}`,
+              domain: 'pharmacy_expiry',
+              severity: daysRemaining <= 15 ? 'danger' : 'warning',
+              title: 'تشغيلة دواء وشيكة الانتهاء',
+              message: `${prodName} (تشغيلة: ${batchNo}): تنتهي خلال ${daysRemaining} يوم (${batch.expiry_date}).`,
+              actionLabel: 'دليل الصيدلية',
+              actionHref: '/pharmacy/batches-expiry',
+              metrics: { batchId: id, batchNo, expiryDate: batch.expiry_date, daysRemaining, qty },
+              rank: 78 + Math.max(0, configuredExpiryDays - daysRemaining),
+            }),
+          );
         }
       }
     }
@@ -504,17 +549,24 @@ export function buildManagerActionInsights({
         const daysDiff = daysBetween(dueDate, now);
         if (daysDiff >= 0) {
           const isOverdue = daysDiff > 0;
-          insights.push(buildInsight({
-            id: `installment-due-${id}`,
-            domain: 'installments',
-            severity: isOverdue ? 'danger' : 'warning',
-            title: isOverdue ? 'قسط عميل متأخر' : 'قسط عميل مستحق اليوم',
-            message: `${custName}: قسط #${instNo} بقيمة ${round(amount)} ج.م ${isOverdue ? `متأخر منذ ${daysDiff} يوم` : 'مستحق اليوم'}.`,
-            actionLabel: 'تحصيل / تذكير واتساب',
-            actionHref: '/sales/installments',
-            metrics: { installmentId: id, customerId: inst.customer_id, amount: round(amount), daysOverdue: Math.max(0, daysDiff) },
-            rank: 85 + Math.min(20, daysDiff * 2),
-          }));
+          insights.push(
+            buildInsight({
+              id: `installment-due-${id}`,
+              domain: 'installments',
+              severity: isOverdue ? 'danger' : 'warning',
+              title: isOverdue ? 'قسط عميل متأخر' : 'قسط عميل مستحق اليوم',
+              message: `${custName}: قسط #${instNo} بقيمة ${round(amount)} ج.م ${isOverdue ? `متأخر منذ ${daysDiff} يوم` : 'مستحق اليوم'}.`,
+              actionLabel: 'تحصيل / تذكير واتساب',
+              actionHref: '/sales/installments',
+              metrics: {
+                installmentId: id,
+                customerId: inst.customer_id,
+                amount: round(amount),
+                daysOverdue: Math.max(0, daysDiff),
+              },
+              rank: 85 + Math.min(20, daysDiff * 2),
+            }),
+          );
         }
       }
     }
@@ -526,17 +578,19 @@ export function buildManagerActionInsights({
       const orderNo = order.order_number?.trim() || id;
       const custName = order.customer_name?.trim() || 'عميل المتجر';
       const total = toNumber(order.total);
-      insights.push(buildInsight({
-        id: `online-order-pending-${id}`,
-        domain: 'online_orders',
-        severity: 'warning',
-        title: 'طلب متجر إلكتروني جديد',
-        message: `طلب #${orderNo} من ${custName} بإجمالي ${round(total)} ج.م بانتظار التأكيد والتحضير.`,
-        actionLabel: 'مراجعة الطلبات',
-        actionHref: '/sales/online-orders',
-        metrics: { orderId: id, total: round(total) },
-        rank: 95,
-      }));
+      insights.push(
+        buildInsight({
+          id: `online-order-pending-${id}`,
+          domain: 'online_orders',
+          severity: 'warning',
+          title: 'طلب متجر إلكتروني جديد',
+          message: `طلب #${orderNo} من ${custName} بإجمالي ${round(total)} ج.م بانتظار التأكيد والتحضير.`,
+          actionLabel: 'مراجعة الطلبات',
+          actionHref: '/sales/online-orders',
+          metrics: { orderId: id, total: round(total) },
+          rank: 95,
+        }),
+      );
     }
   }
 
@@ -545,7 +599,7 @@ export function buildManagerActionInsights({
       const id = String(alert.id);
       let parsed: Record<string, any> = {};
       try {
-        parsed = typeof alert.details === 'string' ? JSON.parse(alert.details) : (alert.details || {});
+        parsed = typeof alert.details === 'string' ? JSON.parse(alert.details) : alert.details || {};
       } catch {
         parsed = {};
       }
@@ -559,29 +613,31 @@ export function buildManagerActionInsights({
         ? createdAtDate.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
         : '';
 
-      insights.push(buildInsight({
-        id: `van-suspicion-${id}`,
-        domain: 'van_suspicion',
-        severity,
-        title: `شبهة تلاعب مندوب: ${repName}`,
-        message: `المندوب ${repName}${timeStr ? ` (${timeStr})` : ''}: ${titleAr}`,
-        actionLabel: 'فتح رادار الشبهات',
-        actionHref: '/van-sales/management?tab=radar',
-        metrics: {
-          auditLogId: id,
-          repId: parsed.repId,
-          repName,
-          eventCode: alert.event_code,
-          detailsAr,
-          amountInvolved: parsed.amountInvolved,
-        },
-        rank: 120,
-      }));
+      insights.push(
+        buildInsight({
+          id: `van-suspicion-${id}`,
+          domain: 'van_suspicion',
+          severity,
+          title: `شبهة تلاعب مندوب: ${repName}`,
+          message: `المندوب ${repName}${timeStr ? ` (${timeStr})` : ''}: ${titleAr}`,
+          actionLabel: 'فتح رادار الشبهات',
+          actionHref: '/van-sales/management?tab=radar',
+          metrics: {
+            auditLogId: id,
+            repId: parsed.repId,
+            repName,
+            eventCode: alert.event_code,
+            detailsAr,
+            amountInvolved: parsed.amountInvolved,
+          },
+          rank: 120,
+        }),
+      );
     }
   }
 
   return insights
-    .sort((a, b) => (severityRank[b.severity] - severityRank[a.severity]) || (b.rank - a.rank) || a.id.localeCompare(b.id))
+    .sort((a, b) => severityRank[b.severity] - severityRank[a.severity] || b.rank - a.rank || a.id.localeCompare(b.id))
     .slice(0, Math.max(1, Math.min(25, limit)))
     .map(({ rank: _rank, ...insight }) => insight);
 }

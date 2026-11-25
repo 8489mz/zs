@@ -9,11 +9,7 @@ export class OfflineReleasesAdmin {
   // ─── Admin ────────────────────────────────────────────────────────────────
 
   async listReleases(_auth: AuthContext) {
-    const rows = await this.db
-      .selectFrom('offline_releases')
-      .selectAll()
-      .orderBy('created_at', 'desc')
-      .execute();
+    const rows = await this.db.selectFrom('offline_releases').selectAll().orderBy('created_at', 'desc').execute();
 
     return rows.map((r) => ({
       id: r.id,
@@ -30,11 +26,7 @@ export class OfflineReleasesAdmin {
   }
 
   async getReleasePasscode(_auth: AuthContext, id: number) {
-    const release = await this.db
-      .selectFrom('offline_releases')
-      .selectAll()
-      .where('id', '=', id)
-      .executeTakeFirst();
+    const release = await this.db.selectFrom('offline_releases').selectAll().where('id', '=', id).executeTakeFirst();
 
     if (!release) throw new NotFoundException('الإصدار غير موجود');
 
@@ -65,11 +57,7 @@ export class OfflineReleasesAdmin {
     if (!release) throw new NotFoundException('الإصدار غير موجود');
 
     const normalized = passcode.trim();
-    await this.db
-      .updateTable('offline_releases')
-      .set({ passcode: normalized })
-      .where('id', '=', id)
-      .execute();
+    await this.db.updateTable('offline_releases').set({ passcode: normalized }).where('id', '=', id).execute();
 
     return {
       ok: true,
@@ -146,20 +134,12 @@ export class OfflineReleasesAdmin {
   }
 
   async promoteRelease(auth: AuthContext, id: number) {
-    const release = await this.db
-      .selectFrom('offline_releases')
-      .selectAll()
-      .where('id', '=', id)
-      .executeTakeFirst();
+    const release = await this.db.selectFrom('offline_releases').selectAll().where('id', '=', id).executeTakeFirst();
 
     if (!release) throw new NotFoundException(`الإصدار غير موجود`);
 
     // Deactivate all other releases first
-    await this.db
-      .updateTable('offline_releases')
-      .set({ is_active: false })
-      .where('id', '!=', id)
-      .execute();
+    await this.db.updateTable('offline_releases').set({ is_active: false }).where('id', '!=', id).execute();
 
     // Activate this one
     await this.db
@@ -184,11 +164,7 @@ export class OfflineReleasesAdmin {
 
     if (!release) throw new NotFoundException(`الإصدار غير موجود`);
 
-    await this.db
-      .updateTable('offline_releases')
-      .set({ is_active: false })
-      .where('id', '=', id)
-      .execute();
+    await this.db.updateTable('offline_releases').set({ is_active: false }).where('id', '=', id).execute();
 
     return { ok: true, message: `تم إلغاء تفعيل الإصدار ${release.version}` };
   }

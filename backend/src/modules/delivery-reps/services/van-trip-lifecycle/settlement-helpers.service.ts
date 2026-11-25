@@ -33,7 +33,11 @@ export class SettlementHelpersService {
       .orderBy('id', 'asc')
       .execute();
     const splitIds = (sales as Array<Record<string, unknown>>)
-      .filter((s) => String(s.payment_type || '').toLowerCase() === 'split' || String(s.payment_channel || '').toLowerCase() === 'mixed')
+      .filter(
+        (s) =>
+          String(s.payment_type || '').toLowerCase() === 'split' ||
+          String(s.payment_channel || '').toLowerCase() === 'mixed',
+      )
       .map((s) => Number(s.id));
     const creditOwedBySale = new Map<number, number>();
     if (splitIds.length > 0) {
@@ -67,7 +71,12 @@ export class SettlementHelpersService {
       .orderBy('created_at', 'asc')
       .orderBy('id', 'asc')
       .execute();
-    const rows: Array<{ kind: 'sale' | 'collection' | 'refund'; id: number; createdAt: Date | string; cashAmount: number }> = [];
+    const rows: Array<{
+      kind: 'sale' | 'collection' | 'refund';
+      id: number;
+      createdAt: Date | string;
+      cashAmount: number;
+    }> = [];
     for (const s of sales as Array<Record<string, unknown>>) {
       rows.push({
         kind: 'sale',
@@ -85,10 +94,20 @@ export class SettlementHelpersService {
       });
     }
     for (const p of payments as Array<Record<string, unknown>>) {
-      rows.push({ kind: 'collection', id: Number(p.id), createdAt: p.created_at as Date | string, cashAmount: Number(p.amount || 0) });
+      rows.push({
+        kind: 'collection',
+        id: Number(p.id),
+        createdAt: p.created_at as Date | string,
+        cashAmount: Number(p.amount || 0),
+      });
     }
     for (const r of refunds as Array<Record<string, unknown>>) {
-      rows.push({ kind: 'refund', id: Number(r.id), createdAt: r.created_at as Date | string, cashAmount: Number(r.total_amount || 0) });
+      rows.push({
+        kind: 'refund',
+        id: Number(r.id),
+        createdAt: r.created_at as Date | string,
+        cashAmount: Number(r.total_amount || 0),
+      });
     }
     rows.sort((a, b) => {
       const ta = new Date(a.createdAt).getTime();
@@ -98,7 +117,7 @@ export class SettlementHelpersService {
     return bucketTripCashByDay(rows, timezone, bookDigits);
   }
 
-/**
+  /**
    * INV-REP-CASH-REMITTANCE-SHIFT: links a settled trip's counted cash
    * to the receiving shift with a single treasury row — no GL journal.
    * The rep's custody is discharged by the same transaction that
@@ -137,8 +156,7 @@ export class SettlementHelpersService {
     },
   ): Promise<void> {
     const { tenantId, accountId, tripId, amount, branchId } = params;
-    const branchMatch = (eb: any) =>
-      branchId == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', branchId);
+    const branchMatch = (eb: any) => (branchId == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', branchId));
     type ShiftRow = { id: number; branch_id: number | null; location_id: number | null };
     let shift: ShiftRow | undefined;
     if (params.actorUserId > 0) {

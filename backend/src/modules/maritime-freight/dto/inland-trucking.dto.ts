@@ -1,7 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, IsNumber, IsIn, Min } from 'class-validator';
 
 export const VALID_TRUCKING_STATUSES = ['assigned', 'loading', 'in_transit', 'delivered', 'empty_returned'] as const;
-export type TruckingTripStatus = typeof VALID_TRUCKING_STATUSES[number];
+export type TruckingTripStatus = (typeof VALID_TRUCKING_STATUSES)[number];
 
 export class CreateInlandTruckingTripDto {
   @IsString()

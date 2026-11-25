@@ -14,7 +14,18 @@ export class SettingsDemoDataTenant {
     private readonly bound: {
       assertSuperAdminAndPassword: (password: string, actor: AuthContext) => Promise<void>;
       takeAutoBackup: (actor: AuthContext, reason: string) => Promise<void>;
-      seedComprehensiveDemoData: (dtoOrPassword: string | SeedDemoDataDto, actor: AuthContext) => Promise<{ ok: boolean; message: string; activity?: string; productsCount?: number; salesCount?: number; onlineOrdersCount?: number; demoCredentials?: DemoCredential[] }>;
+      seedComprehensiveDemoData: (
+        dtoOrPassword: string | SeedDemoDataDto,
+        actor: AuthContext,
+      ) => Promise<{
+        ok: boolean;
+        message: string;
+        activity?: string;
+        productsCount?: number;
+        salesCount?: number;
+        onlineOrdersCount?: number;
+        demoCredentials?: DemoCredential[];
+      }>;
     },
   ) {}
 
@@ -26,7 +37,18 @@ export class SettingsDemoDataTenant {
     return this.bound.takeAutoBackup(actor, reason);
   }
 
-  private async seedComprehensiveDemoData(dtoOrPassword: string | SeedDemoDataDto, actor: AuthContext): Promise<{ ok: boolean; message: string; activity?: string; productsCount?: number; salesCount?: number; onlineOrdersCount?: number; demoCredentials?: DemoCredential[] }> {
+  private async seedComprehensiveDemoData(
+    dtoOrPassword: string | SeedDemoDataDto,
+    actor: AuthContext,
+  ): Promise<{
+    ok: boolean;
+    message: string;
+    activity?: string;
+    productsCount?: number;
+    salesCount?: number;
+    onlineOrdersCount?: number;
+    demoCredentials?: DemoCredential[];
+  }> {
     return this.bound.seedComprehensiveDemoData(dtoOrPassword, actor);
   }
 
@@ -71,12 +93,14 @@ export class SettingsDemoDataTenant {
       await executeWipeTables(trx, tenantId, preservedUserId);
     });
 
-    await this.audit.log(
-      'تصفير بيانات مشترك',
-      `تم تصفير ومسح كافة بيانات المشترك (${tenantId}) وإعادتها بيضاء بواسطة ${platformActor.username}`,
-      platformActor,
-      { targetTenantId: tenantId },
-    ).catch(() => undefined);
+    await this.audit
+      .log(
+        'تصفير بيانات مشترك',
+        `تم تصفير ومسح كافة بيانات المشترك (${tenantId}) وإعادتها بيضاء بواسطة ${platformActor.username}`,
+        platformActor,
+        { targetTenantId: tenantId },
+      )
+      .catch(() => undefined);
 
     return {
       ok: true,
@@ -88,7 +112,15 @@ export class SettingsDemoDataTenant {
     tenantId: string,
     options: { activityType?: string; wipeExisting?: boolean; seedSales?: boolean; seedOnlineOrders?: boolean },
     platformActor: AuthContext,
-  ): Promise<{ ok: boolean; message: string; activity?: string; productsCount?: number; salesCount?: number; onlineOrdersCount?: number; demoCredentials?: DemoCredential[] }> {
+  ): Promise<{
+    ok: boolean;
+    message: string;
+    activity?: string;
+    productsCount?: number;
+    salesCount?: number;
+    onlineOrdersCount?: number;
+    demoCredentials?: DemoCredential[];
+  }> {
     if (platformActor.role !== 'super_admin') {
       throw new AppError('فقط السوبر أدمن هو المخول بتنفيذ هذه العملية', 'SUPER_ADMIN_REQUIRED', 403);
     }
@@ -113,11 +145,14 @@ export class SettingsDemoDataTenant {
       await this.wipeTenantData(tenantId, '', platformActor, true);
     }
 
-    return this.seedComprehensiveDemoData({
-      activityType: options.activityType || 'supermarket',
-      wipeExisting: false,
-      seedSales: options.seedSales ?? true,
-      seedOnlineOrders: options.seedOnlineOrders ?? true,
-    }, targetActor);
+    return this.seedComprehensiveDemoData(
+      {
+        activityType: options.activityType || 'supermarket',
+        wipeExisting: false,
+        seedSales: options.seedSales ?? true,
+        seedOnlineOrders: options.seedOnlineOrders ?? true,
+      },
+      targetActor,
+    );
   }
 }

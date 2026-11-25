@@ -7,7 +7,11 @@ import { StorefrontPaymentHelpersService } from './storefront-payment-helpers.se
 import { StorefrontPaymentSessionService } from './storefront-payment-session.service';
 import { StorefrontPaymentWebhooksService } from './storefront-payment-webhooks.service';
 import { StorefrontPaymentWebhooks2Service } from './storefront-payment-webhooks-2.service';
-import { type LockedOnlineOrder, type StorefrontWebhookResult, type TenantPaymentConfig } from './storefront-payment.types';
+import {
+  type LockedOnlineOrder,
+  type StorefrontWebhookResult,
+  type TenantPaymentConfig,
+} from './storefront-payment.types';
 
 @Injectable()
 export class StorefrontPaymentService {
@@ -55,20 +59,33 @@ export class StorefrontPaymentService {
     });
   }
 
-  private async expectedPaymentCurrency(trx: Transaction<Database>, tenantId: string, provider: string): Promise<string> {
+  private async expectedPaymentCurrency(
+    trx: Transaction<Database>,
+    tenantId: string,
+    provider: string,
+  ): Promise<string> {
     return this.helpers.expectedPaymentCurrency(trx, tenantId, provider);
   }
 
   private paymentReviewReason(
-    order: LockedOnlineOrder, provider: string, sessionId: string,
-    amountMinor: unknown, currency: unknown, expectedCurrency: string,
+    order: LockedOnlineOrder,
+    provider: string,
+    sessionId: string,
+    amountMinor: unknown,
+    currency: unknown,
+    expectedCurrency: string,
   ): string | null {
     return this.helpers.paymentReviewReason(order, provider, sessionId, amountMinor, currency, expectedCurrency);
   }
 
   private async markPaymentForReview(
-    trx: Transaction<Database>, order: LockedOnlineOrder, provider: string,
-    transactionId: string, sessionId: string, response: unknown, reason: string,
+    trx: Transaction<Database>,
+    order: LockedOnlineOrder,
+    provider: string,
+    transactionId: string,
+    sessionId: string,
+    response: unknown,
+    reason: string,
   ): Promise<StorefrontWebhookResult> {
     return this.helpers.markPaymentForReview(trx, order, provider, transactionId, sessionId, response, reason);
   }
@@ -77,7 +94,12 @@ export class StorefrontPaymentService {
     return this.helpers.isCurrentPaymentSession(order, provider, sessionId);
   }
 
-  private isRepeatedPaidWebhook(order: LockedOnlineOrder, provider: string, transactionId: string, sessionId: string): boolean {
+  private isRepeatedPaidWebhook(
+    order: LockedOnlineOrder,
+    provider: string,
+    transactionId: string,
+    sessionId: string,
+  ): boolean {
     return this.helpers.isRepeatedPaidWebhook(order, provider, transactionId, sessionId);
   }
 
@@ -118,11 +140,19 @@ export class StorefrontPaymentService {
     return this.webhooks.compensateFailedOrderPayment(trx, order, gatewayResponse);
   }
 
-  async processPaymobWebhook(headers: Record<string, any>, body: any, rawBody?: Buffer): Promise<StorefrontWebhookResult> {
+  async processPaymobWebhook(
+    headers: Record<string, any>,
+    body: any,
+    rawBody?: Buffer,
+  ): Promise<StorefrontWebhookResult> {
     return this.webhooks.processPaymobWebhook(headers, body, rawBody);
   }
 
-  async processXPayWebhook(headers: Record<string, any>, body: any, rawBody?: Buffer): Promise<StorefrontWebhookResult> {
+  async processXPayWebhook(
+    headers: Record<string, any>,
+    body: any,
+    rawBody?: Buffer,
+  ): Promise<StorefrontWebhookResult> {
     return this.webhooks.processXPayWebhook(headers, body, rawBody);
   }
 
@@ -143,7 +173,11 @@ export class StorefrontPaymentService {
     return this.webhooks2.processTapWebhook(headers, body, rawBody);
   }
 
-  async processStripeWebhook(headers: Record<string, any>, body: any, rawBody?: Buffer): Promise<StorefrontWebhookResult> {
+  async processStripeWebhook(
+    headers: Record<string, any>,
+    body: any,
+    rawBody?: Buffer,
+  ): Promise<StorefrontWebhookResult> {
     return this.webhooks2.processStripeWebhook(headers, body, rawBody);
   }
 }

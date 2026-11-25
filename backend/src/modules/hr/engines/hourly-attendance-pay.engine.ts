@@ -70,7 +70,10 @@ export function summarizeHourlyAttendance(punches: WorkPunch[], hourlyRate: numb
   }
   const rate = Number(hourlyRate);
   return {
-    workedMinutes, completedDays, incompleteCount, invalidCount,
+    workedMinutes,
+    completedDays,
+    incompleteCount,
+    invalidCount,
     baseWage: money((workedMinutes / 60) * (Number.isFinite(rate) ? Math.max(0, rate) : 0), minorUnits),
   };
 }
@@ -138,9 +141,11 @@ export function calculateEffectiveContractPay(
       throw new RangeError('Employment contract must have a valid positive monthly salary');
     }
     if (begin !== nextUncoveredDay) {
-      throw new RangeError(begin < nextUncoveredDay
-        ? 'Overlapping salary contracts in payroll period'
-        : 'Uncovered employment days between salary contracts');
+      throw new RangeError(
+        begin < nextUncoveredDay
+          ? 'Overlapping salary contracts in payroll period'
+          : 'Uncovered employment days between salary contracts',
+      );
     }
     earned += prorateMonthlyWage(contract.baseSalary, begin, end, minorUnits);
     latestContractId = contract.id;
@@ -174,12 +179,13 @@ export interface EffectiveCompensationPackage {
 }
 
 export function calculateEffectiveCompensationPay(
-  packages: EffectiveCompensationPackage[], from: string, to: string, minorUnits: MoneyDigits,
+  packages: EffectiveCompensationPackage[],
+  from: string,
+  to: string,
+  minorUnits: MoneyDigits,
 ): { allowance: number; deduction: number } {
   if (from > to) return { allowance: 0, deduction: 0 };
-  const sorted = [...packages].sort(
-    (a, b) => (a.startDate || '').localeCompare(b.startDate || '') || a.id - b.id,
-  );
+  const sorted = [...packages].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || '') || a.id - b.id);
   let lastEnd = '';
   let allowance = 0;
   let deduction = 0;
@@ -188,8 +194,12 @@ export function calculateEffectiveCompensationPay(
     const end = [to, item.endDate || to].sort()[0];
     if (begin > end) continue;
     if (lastEnd && begin <= lastEnd) throw new RangeError('Overlapping compensation packages in payroll period');
-    if (!Number.isFinite(item.allowanceAmount) || item.allowanceAmount < 0
-      || !Number.isFinite(item.deductionAmount) || item.deductionAmount < 0) {
+    if (
+      !Number.isFinite(item.allowanceAmount) ||
+      item.allowanceAmount < 0 ||
+      !Number.isFinite(item.deductionAmount) ||
+      item.deductionAmount < 0
+    ) {
       throw new RangeError('Invalid compensation package amounts');
     }
     allowance += prorateMonthlyWage(item.allowanceAmount, begin, end, minorUnits);
@@ -229,7 +239,7 @@ export function calculateDatedPayrollAdjustment(params: {
     if (!Number.isFinite(hourlyRate) || hourlyRate <= 0) throw new RangeError('Invalid hourly salary');
     dailyWage = hourlyRate * expectedDailyHours;
   } else {
-    const effective = contracts.filter(c => c.startDate <= date && (!c.endDate || c.endDate >= date));
+    const effective = contracts.filter((c) => c.startDate <= date && (!c.endDate || c.endDate >= date));
     if (effective.length !== 1 || !Number.isFinite(effective[0].baseSalary) || effective[0].baseSalary <= 0) {
       throw new RangeError('Adjustment date must match exactly one salary contract');
     }
@@ -251,18 +261,28 @@ export function calculateHistoricalOvertimePay(
   multiplier: number,
   minorUnits: MoneyDigits,
 ): number {
-  if (!Number.isFinite(expectedDailyHours) || expectedDailyHours <= 0 || expectedDailyHours > 24
-    || !Number.isFinite(multiplier) || multiplier < 1 || multiplier > 5) {
+  if (
+    !Number.isFinite(expectedDailyHours) ||
+    expectedDailyHours <= 0 ||
+    expectedDailyHours > 24 ||
+    !Number.isFinite(multiplier) ||
+    multiplier < 1 ||
+    multiplier > 5
+  ) {
     throw new RangeError('Invalid overtime rate or daily schedule');
   }
   let total = 0;
   for (const day of days) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(day.date) || !Number.isFinite(day.minutes)
-      || day.minutes < 0 || day.minutes > 1440) {
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(day.date) ||
+      !Number.isFinite(day.minutes) ||
+      day.minutes < 0 ||
+      day.minutes > 1440
+    ) {
       throw new RangeError('Invalid approved overtime attendance record');
     }
     if (day.minutes === 0) continue;
-    const matches = contracts.filter(c => c.startDate <= day.date && (!c.endDate || c.endDate >= day.date));
+    const matches = contracts.filter((c) => c.startDate <= day.date && (!c.endDate || c.endDate >= day.date));
     if (matches.length !== 1 || !Number.isFinite(matches[0].baseSalary) || matches[0].baseSalary <= 0) {
       throw new RangeError('Overtime date must match exactly one valid salary contract');
     }
@@ -290,9 +310,7 @@ export function resolveExpectedDailyMinutes(params: {
     const [ih, im] = inTime.slice(0, 5).split(':').map(Number);
     const [oh, om] = outTime.slice(0, 5).split(':').map(Number);
     if ([ih, im, oh, om].every(Number.isFinite)) {
-      const shift = (oh * 60 + om) <= (ih * 60 + im)
-        ? (oh * 60 + om) + 1440 - (ih * 60 + im)
-        : (oh * 60 + om) - (ih * 60 + im);
+      const shift = oh * 60 + om <= ih * 60 + im ? oh * 60 + om + 1440 - (ih * 60 + im) : oh * 60 + om - (ih * 60 + im);
       if (shift > 0 && shift <= 1440) return shift;
     }
   }
@@ -313,9 +331,15 @@ export function calculatePayableMinutes(params: {
 } {
   const actual = Math.max(0, Math.floor(Number(params.actualMinutes || 0)));
   if (actual === 0) {
-    return { payableMinutes: 0, baseMinutes: 0, approvedOvertimeMinutes: 0, unapprovedOvertimeMinutes: 0, isCapped: false };
+    return {
+      payableMinutes: 0,
+      baseMinutes: 0,
+      approvedOvertimeMinutes: 0,
+      unapprovedOvertimeMinutes: 0,
+      isCapped: false,
+    };
   }
-  const expected = Math.max(1, Math.floor(Number(params.expectedDailyMinutes || (8 * 60))));
+  const expected = Math.max(1, Math.floor(Number(params.expectedDailyMinutes || 8 * 60)));
   const policy = String(params.overtimePolicy || 'review_only').toLowerCase();
   const approved = Math.max(0, Math.floor(Number(params.approvedOvertimeMinutes || 0)));
 
@@ -363,4 +387,3 @@ export function calculatePayableMinutes(params: {
     isCapped: unapproved > 0,
   };
 }
-

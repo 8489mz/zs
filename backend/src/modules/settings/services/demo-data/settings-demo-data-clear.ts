@@ -27,7 +27,10 @@ export class SettingsDemoDataClear {
     return this.bound.takeAutoBackup(actor, reason);
   }
 
-  async clearDemoData(password: string, actor: AuthContext): Promise<{ ok: boolean; message: string; deletedProductsCount: number }> {
+  async clearDemoData(
+    password: string,
+    actor: AuthContext,
+  ): Promise<{ ok: boolean; message: string; deletedProductsCount: number }> {
     const scope = this.scope(actor);
 
     if (actor.role === 'super_admin' && password) {
@@ -52,12 +55,14 @@ export class SettingsDemoDataClear {
       deletedCount = demoProductIds.length;
 
       if (demoProductIds.length > 0) {
-        await trx.deleteFrom('product_location_stock')
+        await trx
+          .deleteFrom('product_location_stock')
           .where('product_id', 'in', demoProductIds)
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .execute();
 
-        await trx.deleteFrom('sale_line_stock_allocations')
+        await trx
+          .deleteFrom('sale_line_stock_allocations')
           .where('product_id', 'in', demoProductIds)
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .execute()
@@ -73,10 +78,26 @@ export class SettingsDemoDataClear {
 
         const demoSaleIds = demoSales.map((s) => Number(s.sale_id)).filter(Boolean);
         if (demoSaleIds.length > 0) {
-          await (trx as any).deleteFrom('settlement_allocations').where('sale_id', 'in', demoSaleIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
-          await trx.deleteFrom('sale_items').where('sale_id', 'in', demoSaleIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
-          await trx.deleteFrom('sale_payments').where('sale_id', 'in', demoSaleIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
-          await trx.deleteFrom('sales').where('id', 'in', demoSaleIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+          await (trx as any)
+            .deleteFrom('settlement_allocations')
+            .where('sale_id', 'in', demoSaleIds)
+            .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+            .execute();
+          await trx
+            .deleteFrom('sale_items')
+            .where('sale_id', 'in', demoSaleIds)
+            .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+            .execute();
+          await trx
+            .deleteFrom('sale_payments')
+            .where('sale_id', 'in', demoSaleIds)
+            .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+            .execute();
+          await trx
+            .deleteFrom('sales')
+            .where('id', 'in', demoSaleIds)
+            .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+            .execute();
         }
 
         const demoPurchases = await trx
@@ -89,39 +110,61 @@ export class SettingsDemoDataClear {
 
         const demoPurchaseIds = demoPurchases.map((p) => Number(p.purchase_id)).filter(Boolean);
         if (demoPurchaseIds.length > 0) {
-          await trx.deleteFrom('purchase_items').where('purchase_id', 'in', demoPurchaseIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
-          await trx.deleteFrom('purchases').where('id', 'in', demoPurchaseIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+          await trx
+            .deleteFrom('purchase_items')
+            .where('purchase_id', 'in', demoPurchaseIds)
+            .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+            .execute();
+          await trx
+            .deleteFrom('purchases')
+            .where('id', 'in', demoPurchaseIds)
+            .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+            .execute();
         }
 
-        await trx.deleteFrom('products').where('id', 'in', demoProductIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+        await trx
+          .deleteFrom('products')
+          .where('id', 'in', demoProductIds)
+          .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+          .execute();
       }
 
-      await trx.deleteFrom('online_orders')
+      await trx
+        .deleteFrom('online_orders')
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .where(sql<boolean>`order_number LIKE 'ON-DEMO-%'`)
         .execute()
         .catch(() => undefined);
 
-      await trx.deleteFrom('suppliers')
+      await trx
+        .deleteFrom('suppliers')
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .where(sql<boolean>`(metadata::text LIKE '%"is_demo":true%' OR metadata::text LIKE '%"is_demo": true%')`)
         .execute()
         .catch(() => undefined);
 
-      await trx.deleteFrom('customers')
+      await trx
+        .deleteFrom('customers')
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .where(sql<boolean>`(metadata::text LIKE '%"is_demo":true%' OR metadata::text LIKE '%"is_demo": true%')`)
         .execute()
         .catch(() => undefined);
 
-      await trx.deleteFrom('held_sales')
+      await trx
+        .deleteFrom('held_sales')
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .where(sql<boolean>`note LIKE '%تجريب%'`)
         .execute()
         .catch(() => undefined);
     });
 
-    await this.audit.log('تفريغ البيانات التجريبية', `تم تفريغ ومسح ${deletedCount} صنفاً وبيانات تجريبية بواسطة ${actor.username}`, actor).catch(() => undefined);
+    await this.audit
+      .log(
+        'تفريغ البيانات التجريبية',
+        `تم تفريغ ومسح ${deletedCount} صنفاً وبيانات تجريبية بواسطة ${actor.username}`,
+        actor,
+      )
+      .catch(() => undefined);
 
     return {
       ok: true,

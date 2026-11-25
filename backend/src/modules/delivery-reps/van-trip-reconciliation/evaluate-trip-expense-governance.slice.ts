@@ -13,7 +13,9 @@ export function evaluateTripExpenseGovernance(params: TripExpenseGovernanceParam
   const maxSingle = params.maxSinglePettyExpense ?? 250;
   const maxCumulative = params.maxCumulativePettyExpenses ?? 400;
   const trimmedNotes = String(params.notes || '').trim();
-  const normalizedType = String(params.expenseType || '').trim().toLowerCase();
+  const normalizedType = String(params.expenseType || '')
+    .trim()
+    .toLowerCase();
 
   if (amount <= 0) {
     return {

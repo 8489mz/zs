@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { IPaymentGateway, PaymentInitiateInput, PaymentInitiateResult, WebhookValidationResult } from './payment-gateway.interface';
+import {
+  IPaymentGateway,
+  PaymentInitiateInput,
+  PaymentInitiateResult,
+  WebhookValidationResult,
+} from './payment-gateway.interface';
 import * as crypto from 'crypto';
 import { platformNoReplyEmail } from '../../storefront/engines/store-public-url.engine';
 import { assertSubscriptionSandboxAllowed } from './subscription-sandbox-policy';
@@ -186,7 +191,7 @@ export class PaymobGatewayService implements IPaymentGateway {
 
     const isSuccessful = obj.success === true && obj.pending === false;
     const merchantOrderId = String(obj?.order?.merchant_order_id || '');
-    
+
     return {
       isValid,
       isSuccessful,

@@ -68,7 +68,10 @@ export interface ImportTreasuryDeps {
     trx: Transaction<Database>,
     tenantId: string,
     shipmentId: string,
-  ) => Promise<{ shipment: Selectable<ImportShipmentTable>; receipt: Selectable<ImportInventoryReceiptTable> | undefined }>;
+  ) => Promise<{
+    shipment: Selectable<ImportShipmentTable>;
+    receipt: Selectable<ImportInventoryReceiptTable> | undefined;
+  }>;
   verifyAndConsumeApprovalRequest: (...args: any[]) => any;
   applyImportCostRevaluation: (...args: any[]) => any;
 }
@@ -82,7 +85,10 @@ export class ImportTreasuryService {
     trx: Transaction<Database>,
     tenantId: string,
     shipmentId: string,
-  ) => Promise<{ shipment: Selectable<ImportShipmentTable>; receipt: Selectable<ImportInventoryReceiptTable> | undefined }>;
+  ) => Promise<{
+    shipment: Selectable<ImportShipmentTable>;
+    receipt: Selectable<ImportInventoryReceiptTable> | undefined;
+  }>;
   private readonly verifyAndConsumeApprovalRequest: (...args: any[]) => any;
   private readonly applyImportCostRevaluation: (...args: any[]) => any;
 
@@ -189,17 +195,27 @@ export class ImportTreasuryService {
     // Broker payment method (INV-IMPORT-PAYMENT-METHODS): closed
     // enum, defaulting to bank transfer as before when absent.
     if (dto.paymentMethod !== undefined && dto.paymentMethod !== null && !isPaymentMethod(dto.paymentMethod)) {
-      throw new BadRequestException(`طريقة دفع العهدة '${dto.paymentMethod}' غير مدعومة. [IMPORT_PAYMENT_METHOD_UNKNOWN]`);
+      throw new BadRequestException(
+        `طريقة دفع العهدة '${dto.paymentMethod}' غير مدعومة. [IMPORT_PAYMENT_METHOD_UNKNOWN]`,
+      );
     }
     return await this.db.transaction().execute(async (trx) => {
       if (dto.projectId) {
-        const project = await trx.selectFrom('import_projects').select('id')
-          .where('tenant_id', '=', tenantId).where('id', '=', dto.projectId).executeTakeFirst();
+        const project = await trx
+          .selectFrom('import_projects')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', dto.projectId)
+          .executeTakeFirst();
         if (!project) throw new BadRequestException('مشروع عهدة المخلص غير تابع للمنشأة.');
       }
       if (dto.shipmentId) {
-        const shipment = await trx.selectFrom('import_shipments').select('project_id')
-          .where('tenant_id', '=', tenantId).where('id', '=', dto.shipmentId).executeTakeFirst();
+        const shipment = await trx
+          .selectFrom('import_shipments')
+          .select('project_id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', dto.shipmentId)
+          .executeTakeFirst();
         if (!shipment || (dto.projectId && shipment.project_id && shipment.project_id !== dto.projectId)) {
           throw new BadRequestException('شحنة عهدة المخلص لا تطابق مشروع الاستيراد.');
         }
@@ -220,7 +236,8 @@ export class ImportTreasuryService {
           shipment_id: dto.shipmentId ?? null,
           advance_no: dto.advanceNo,
           amount_egp: dto.amountEgp,
-          disbursement_date: dto.disbursementDate || await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),
+          disbursement_date:
+            dto.disbursementDate || (await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date())),
           payment_method: dto.paymentMethod || 'bank_transfer',
           treasury_account_id: dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null,
           status: 'active',
@@ -238,18 +255,28 @@ export class ImportTreasuryService {
           trx,
           tenantId,
           'bank',
-          dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null
+          dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null,
         );
 
-        const bankScope = await trx.selectFrom('accounting_accounts').select('account_id')
-          .where('tenant_id', '=', tenantId).where('id', '=', bankAccId).executeTakeFirstOrThrow();
-        await trx.insertInto('treasury_transactions').values({
-          tenant_id: tenantId, account_id: bankScope.account_id,
-          txn_type: 'import_broker_advance', amount: -Number(dto.amountEgp),
-          note: `عهدة مخلص جمركي ${broker.name} - #${dto.advanceNo}`,
-          reference_type: 'import_broker_advance', reference_id: Number(advance.serial_id),
-          created_by: userId,
-        }).execute();
+        const bankScope = await trx
+          .selectFrom('accounting_accounts')
+          .select('account_id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', bankAccId)
+          .executeTakeFirstOrThrow();
+        await trx
+          .insertInto('treasury_transactions')
+          .values({
+            tenant_id: tenantId,
+            account_id: bankScope.account_id,
+            txn_type: 'import_broker_advance',
+            amount: -Number(dto.amountEgp),
+            note: `عهدة مخلص جمركي ${broker.name} - #${dto.advanceNo}`,
+            reference_type: 'import_broker_advance',
+            reference_id: Number(advance.serial_id),
+            created_by: userId,
+          })
+          .execute();
         const posting = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
         await posting.postDomainJournal(trx, {
           sourceType: 'import_broker_advance',
@@ -298,20 +325,34 @@ export class ImportTreasuryService {
     }
     return await this.db.transaction().execute(async (trx) => {
       // Serialize receipts for a single broker and reject duplicate evidence.
-      const broker = await trx.selectFrom('import_customs_brokers').select('id')
-        .where('tenant_id', '=', tenantId).where('id', '=', dto.brokerId)
-        .forUpdate().executeTakeFirst();
+      const broker = await trx
+        .selectFrom('import_customs_brokers')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', dto.brokerId)
+        .forUpdate()
+        .executeTakeFirst();
       if (!broker) throw new BadRequestException('المخلص الجمركي غير تابع للمنشأة.');
-      const repeatedReceipt = await trx.selectFrom('import_broker_expenses').select('id')
-        .where('tenant_id', '=', tenantId).where('broker_id', '=', dto.brokerId)
-        .where('receipt_no', '=', dto.receiptNo).executeTakeFirst();
+      const repeatedReceipt = await trx
+        .selectFrom('import_broker_expenses')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('broker_id', '=', dto.brokerId)
+        .where('receipt_no', '=', dto.receiptNo)
+        .executeTakeFirst();
       if (repeatedReceipt) throw new ConflictException('تم تسجيل رقم إيصال المخلص مسبقًا.');
-      const advanceForValidation = await trx.selectFrom('import_broker_advances').selectAll()
-        .where('tenant_id', '=', tenantId).where('id', '=', dto.advanceId)
-        .forUpdate().executeTakeFirstOrThrow();
-      if (advanceForValidation.broker_id !== dto.brokerId ||
-          (advanceForValidation.project_id && dto.projectId && advanceForValidation.project_id !== dto.projectId) ||
-          (advanceForValidation.shipment_id && dto.shipmentId && advanceForValidation.shipment_id !== dto.shipmentId)) {
+      const advanceForValidation = await trx
+        .selectFrom('import_broker_advances')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', dto.advanceId)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      if (
+        advanceForValidation.broker_id !== dto.brokerId ||
+        (advanceForValidation.project_id && dto.projectId && advanceForValidation.project_id !== dto.projectId) ||
+        (advanceForValidation.shipment_id && dto.shipmentId && advanceForValidation.shipment_id !== dto.shipmentId)
+      ) {
         throw new BadRequestException('العهدة لا تتبع نفس المخلص أو مشروع / شحنة الإيصال.');
       }
       if (Number(dto.amountEgp) > Number(advanceForValidation.remaining_amount_egp || 0) + 0.001) {
@@ -330,18 +371,25 @@ export class ImportTreasuryService {
       const vatAsset = dto.isRefundableVat ?? false;
       const effectiveShipmentId: string | null = dto.shipmentId ?? advanceForValidation.shipment_id ?? null;
       let capitalizationState: 'folded' | 'revalued' | 'expensed' | 'vat_asset';
-      let lockedShipment: { shipment: Selectable<ImportShipmentTable>; receipt: Selectable<ImportInventoryReceiptTable> | undefined } | null = null;
+      let lockedShipment: {
+        shipment: Selectable<ImportShipmentTable>;
+        receipt: Selectable<ImportInventoryReceiptTable> | undefined;
+      } | null = null;
       if (vatAsset) {
         capitalizationState = 'vat_asset';
       } else if (!wantsCapitalize) {
         capitalizationState = 'expensed';
       } else {
         if (!effectiveShipmentId) {
-          throw new BadRequestException('مصروف مخلص مرسمل يتطلب شحنة مرتبطة (من الإيصال أو من العهدة)؛ بلا شحنة لا يوجد مكان ترسمل فيه التكلفة. [IMPORT_BROKER_EXPENSE_NO_SHIPMENT]');
+          throw new BadRequestException(
+            'مصروف مخلص مرسمل يتطلب شحنة مرتبطة (من الإيصال أو من العهدة)؛ بلا شحنة لا يوجد مكان ترسمل فيه التكلفة. [IMPORT_BROKER_EXPENSE_NO_SHIPMENT]',
+          );
         }
         lockedShipment = await this.lockShipment(trx, tenantId, effectiveShipmentId);
         if (lockedShipment.receipt && lockedShipment.receipt.state === 'legacy_review_required') {
-          throw new BadRequestException('لا يمكن تسوية مصروف مخلص مرسمل على شحنة استلامها مجمد للمراجعة؛ سوِّ المراجعة المعتمدة أولاً ثم أعد التسوية. [IMPORT_BROKER_EXPENSE_LEGACY_RECEIPT]');
+          throw new BadRequestException(
+            'لا يمكن تسوية مصروف مخلص مرسمل على شحنة استلامها مجمد للمراجعة؛ سوِّ المراجعة المعتمدة أولاً ثم أعد التسوية. [IMPORT_BROKER_EXPENSE_LEGACY_RECEIPT]',
+          );
         }
         capitalizationState = lockedShipment.receipt?.state === 'posted' ? 'revalued' : 'folded';
       }
@@ -354,7 +402,8 @@ export class ImportTreasuryService {
           project_id: dto.projectId ?? advanceForValidation.project_id ?? null,
           shipment_id: dto.shipmentId ?? advanceForValidation.shipment_id ?? null,
           receipt_no: dto.receiptNo,
-          expense_date: dto.expenseDate || await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),
+          expense_date:
+            dto.expenseDate || (await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date())),
           // P9 (RC-9): payment_date had NO writer — the DB CURRENT_DATE
           // default filled the database server's day. The default is
           // dropped by migration 0328, so the app supplies the tenant
@@ -418,33 +467,42 @@ export class ImportTreasuryService {
       if (capitalizationState === 'folded') {
         const bucketDecision = resolveBrokerCapitalizationBucket(dto.category, vatAsset);
         if (!bucketDecision.bucket) {
-          throw new BadRequestException(`فئة مصروف المخلص (${dto.category}) بلا بند تكلفة شحنة قبل الاستلام؛ سجّلها بعد ترحيل الاستلام لتُرسمل عبر التسوية، أو كأصل ضريبي إن كانت ضريبة مستردة. [IMPORT_BROKER_EXPENSE_NO_BUCKET]`);
+          throw new BadRequestException(
+            `فئة مصروف المخلص (${dto.category}) بلا بند تكلفة شحنة قبل الاستلام؛ سجّلها بعد ترحيل الاستلام لتُرسمل عبر التسوية، أو كأصل ضريبي إن كانت ضريبة مستردة. [IMPORT_BROKER_EXPENSE_NO_BUCKET]`,
+          );
         }
         const bucket = bucketDecision.bucket;
-        await trx.insertInto('import_broker_capitalizations').values({
-          tenant_id: tenantId,
-          broker_expense_id: expense.id,
-          shipment_id: effectiveShipmentId as string,
-          cost_bucket: bucket,
-          amount_egp: Number(dto.amountEgp),
-          state: 'folded',
-          late_expense_event_id: null,
-          created_by: userId,
-        }).execute();
+        await trx
+          .insertInto('import_broker_capitalizations')
+          .values({
+            tenant_id: tenantId,
+            broker_expense_id: expense.id,
+            shipment_id: effectiveShipmentId as string,
+            cost_bucket: bucket,
+            amount_egp: Number(dto.amountEgp),
+            state: 'folded',
+            late_expense_event_id: null,
+            created_by: userId,
+          })
+          .execute();
         // Fold the amount into the bucket itself: the receipt
         // journal will carry it into landed cost, and the bucket
         // floor in updateShipmentCosts prevents removing it
         // afterwards. The fold creates no expenses row and no
         // journal: the cost reaches the GL once, at receipt.
-        await trx.updateTable('import_shipments')
+        await trx
+          .updateTable('import_shipments')
           .set((eb) => ({ [bucket]: sql`coalesce(${eb.ref(bucket)}, 0) + ${Number(dto.amountEgp)}` }))
           .where('tenant_id', '=', tenantId)
           .where('id', '=', effectiveShipmentId as string)
           .execute();
       } else if (capitalizationState === 'revalued') {
         const revaluation = await this.applyImportCostRevaluation(
-          trx, tenantId, userId,
-          lockedShipment!.shipment, lockedShipment!.receipt,
+          trx,
+          tenantId,
+          userId,
+          lockedShipment!.shipment,
+          lockedShipment!.receipt,
           {
             amount: Number(dto.amountEgp),
             title: `تسوية مخلص (${dto.category}) - إيصال #${dto.receiptNo}`,
@@ -453,17 +511,21 @@ export class ImportTreasuryService {
             brokerExpenseId: expense.id,
           },
         );
-        await trx.insertInto('import_broker_capitalizations').values({
-          tenant_id: tenantId,
-          broker_expense_id: expense.id,
-          shipment_id: effectiveShipmentId as string,
-          cost_bucket: null,
-          amount_egp: Number(dto.amountEgp),
-          state: 'revalued',
-          late_expense_event_id: revaluation.lateExpenseEventId,
-          created_by: userId,
-        }).execute();
-        await trx.updateTable('import_broker_expenses')
+        await trx
+          .insertInto('import_broker_capitalizations')
+          .values({
+            tenant_id: tenantId,
+            broker_expense_id: expense.id,
+            shipment_id: effectiveShipmentId as string,
+            cost_bucket: null,
+            amount_egp: Number(dto.amountEgp),
+            state: 'revalued',
+            late_expense_event_id: revaluation.lateExpenseEventId,
+            created_by: userId,
+          })
+          .execute();
+        await trx
+          .updateTable('import_broker_expenses')
           .set({ late_expense_event_id: revaluation.lateExpenseEventId })
           .where('tenant_id', '=', tenantId)
           .where('id', '=', expense.id)
@@ -533,9 +595,13 @@ export class ImportTreasuryService {
       throw new BadRequestException('التحقق من مصروف مخلص يتطلب موافقة Maker-Checker معتمدة.');
     }
     return await this.db.transaction().execute(async (trx) => {
-      const expense = await trx.selectFrom('import_broker_expenses').selectAll()
-        .where('tenant_id', '=', tenantId).where('id', '=', expenseId)
-        .forUpdate().executeTakeFirst();
+      const expense = await trx
+        .selectFrom('import_broker_expenses')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', expenseId)
+        .forUpdate()
+        .executeTakeFirst();
       if (!expense) throw new BadRequestException('مصروف المخلص غير تابع للمنشأة.');
       if (expense.is_verified) {
         throw new ConflictException('تم التحقق من مصروف المخلص مسبقاً.');
@@ -584,22 +650,33 @@ export class ImportTreasuryService {
           role: verifier?.role,
         } as AuthContext);
         if (!soloOverride) {
-          throw new BadRequestException('مبدأ الرقابة الثنائية (Maker-Checker): لا يجوز لمن سوّى المصروف التحقق منه بنفسه. [IMPORT_BROKER_EXPENSE_SELF_VERIFICATION]');
+          throw new BadRequestException(
+            'مبدأ الرقابة الثنائية (Maker-Checker): لا يجوز لمن سوّى المصروف التحقق منه بنفسه. [IMPORT_BROKER_EXPENSE_SELF_VERIFICATION]',
+          );
         }
       }
-      await this.verifyAndConsumeApprovalRequest(trx, tenantId, 'broker_expense_verification', expenseId, dto.approvalRequestId, {
-        brokerExpenseId: expenseId,
-        amount: Number(expense.amount_egp),
-      });
+      await this.verifyAndConsumeApprovalRequest(
+        trx,
+        tenantId,
+        'broker_expense_verification',
+        expenseId,
+        dto.approvalRequestId,
+        {
+          brokerExpenseId: expenseId,
+          amount: Number(expense.amount_egp),
+        },
+      );
       const soloStamp = `تحقق منفرد بقرار إداري — من سوّى المصروف ${userId} تحقق منه بنفسه — لا يوجد مدير ثانٍ متاح`;
-      return await trx.updateTable('import_broker_expenses')
+      return await trx
+        .updateTable('import_broker_expenses')
         .set({
           is_verified: true,
           verified_by: userId,
           verified_at: new Date(),
           ...(soloOverride ? { notes: expense.notes ? `${expense.notes} — ${soloStamp}` : soloStamp } : {}),
         })
-        .where('tenant_id', '=', tenantId).where('id', '=', expenseId)
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', expenseId)
         .returningAll()
         .executeTakeFirstOrThrow();
     });
@@ -656,11 +733,15 @@ export class ImportTreasuryService {
     }
     // Currency is stored normalised: 'usd' and 'USD' are one
     // currency, never two portfolio buckets.
-    const currency = String(dto.currency || '').trim().toUpperCase();
+    const currency = String(dto.currency || '')
+      .trim()
+      .toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) {
-      throw new BadRequestException('عملة تدبير العملة يجب أن تكون رمزاً من ثلاثة أحرف (مثال: USD). [IMPORT_FX_CURRENCY_INVALID]');
+      throw new BadRequestException(
+        'عملة تدبير العملة يجب أن تكون رمزاً من ثلاثة أحرف (مثال: USD). [IMPORT_FX_CURRENCY_INVALID]',
+      );
     }
-    const acquisitionDate = dto.acquisitionDate || await resolveBusinessDateKey(this.db, tenantId, new Date());
+    const acquisitionDate = dto.acquisitionDate || (await resolveBusinessDateKey(this.db, tenantId, new Date()));
     return await this.db.transaction().execute(async (trx) => {
       // INV-IMPORT-FX-TREASURY-LIVE-RATE (I4-D7): the rate is NEVER
       // derived from the user-entered amounts — it resolves live
@@ -675,7 +756,9 @@ export class ImportTreasuryService {
       if (dto.exchangeRate !== undefined && dto.exchangeRate !== null) {
         const supplied = Number(dto.exchangeRate);
         if (!Number.isFinite(supplied) || supplied <= 0 || Math.abs(supplied - liveRate4dp) > 0.0001) {
-          throw new BadRequestException(`سعر الصرف المرسل (${supplied}) لا يطابق سعر الصرف الحي المسجل (${liveRate4dp})؛ حدّث السعر المسجل أولاً أو صحح السعر. [IMPORT_FX_RATE_MISMATCH]`);
+          throw new BadRequestException(
+            `سعر الصرف المرسل (${supplied}) لا يطابق سعر الصرف الحي المسجل (${liveRate4dp})؛ حدّث السعر المسجل أولاً أو صحح السعر. [IMPORT_FX_RATE_MISMATCH]`,
+          );
         }
       }
       const expectedEgpCost = roundMoney(foreignAmount * liveRate, currencyMoneyDigits('EGP'));
@@ -683,7 +766,9 @@ export class ImportTreasuryService {
       if (dto.egpCost !== undefined && dto.egpCost !== null) {
         const suppliedCost = Number(dto.egpCost);
         if (Math.abs(suppliedCost - expectedEgpCost) > 0.01) {
-          throw new BadRequestException(`تكلفة الجنيه المرسلة (${suppliedCost}) لا تطابق السعر الحي المسجل (${liveRate4dp} × ${foreignAmount} = ${expectedEgpCost})؛ صحح المبالغ أو حدّث السعر المسجل. [IMPORT_FX_RATE_MISMATCH]`);
+          throw new BadRequestException(
+            `تكلفة الجنيه المرسلة (${suppliedCost}) لا تطابق السعر الحي المسجل (${liveRate4dp} × ${foreignAmount} = ${expectedEgpCost})؛ صحح المبالغ أو حدّث السعر المسجل. [IMPORT_FX_RATE_MISMATCH]`,
+          );
         }
       }
       // Optional transfer link: the transfer must belong to this
@@ -695,21 +780,43 @@ export class ImportTreasuryService {
         if (!Number.isSafeInteger(transferId) || transferId <= 0) {
           throw new BadRequestException('معرف الحوالة المرتبطة بتدبير العملة غير صالح.');
         }
-        const payment: any = await trx.selectFrom('supplier_payments').select(['id', 'currency'])
-          .where('tenant_id', '=', tenantId).where('id', '=', transferId).executeTakeFirst();
+        const payment: any = await trx
+          .selectFrom('supplier_payments')
+          .select(['id', 'currency'])
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', transferId)
+          .executeTakeFirst();
         if (!payment) throw new BadRequestException('الحوالة المرتبطة بتدبير العملة غير تابعة للمنشأة.');
-        if (String(payment.currency || '').trim().toUpperCase() !== currency) {
-          throw new BadRequestException(`عملة الحوالة المرتبطة (${payment.currency}) لا تطابق عملة التدبير (${currency}). [IMPORT_FX_TRANSFER_CURRENCY_MISMATCH]`);
+        if (
+          String(payment.currency || '')
+            .trim()
+            .toUpperCase() !== currency
+        ) {
+          throw new BadRequestException(
+            `عملة الحوالة المرتبطة (${payment.currency}) لا تطابق عملة التدبير (${currency}). [IMPORT_FX_TRANSFER_CURRENCY_MISMATCH]`,
+          );
         }
       }
       // Destination: the cash/bank account receiving the foreign
       // currency. Source: the EGP account paid from. Both resolve
       // through the bank role (never a silent default account),
       // and moving money from an account to itself is meaningless.
-      const destinationAccountId = await this.resolveTenantAccount(trx, tenantId, 'bank', dto.bankAccountId ? Number(dto.bankAccountId) : null);
-      const sourceAccountId = await this.resolveTenantAccount(trx, tenantId, 'bank', dto.sourceAccountId ? Number(dto.sourceAccountId) : null);
+      const destinationAccountId = await this.resolveTenantAccount(
+        trx,
+        tenantId,
+        'bank',
+        dto.bankAccountId ? Number(dto.bankAccountId) : null,
+      );
+      const sourceAccountId = await this.resolveTenantAccount(
+        trx,
+        tenantId,
+        'bank',
+        dto.sourceAccountId ? Number(dto.sourceAccountId) : null,
+      );
       if (sourceAccountId === destinationAccountId) {
-        throw new BadRequestException('حساب مصدر تدبير العملة يجب أن يختلف عن حساب الوجهة؛ حدد حساب المصدر (sourceAccountId) صراحة. [IMPORT_FX_SAME_ACCOUNT]');
+        throw new BadRequestException(
+          'حساب مصدر تدبير العملة يجب أن يختلف عن حساب الوجهة؛ حدد حساب المصدر (sourceAccountId) صراحة. [IMPORT_FX_SAME_ACCOUNT]',
+        );
       }
       const acquisition: any = await trx
         .insertInto('import_fx_acquisitions')
@@ -729,7 +836,9 @@ export class ImportTreasuryService {
         .executeTakeFirstOrThrow();
       const serialId = Number(acquisition.serial_id);
       if (!Number.isSafeInteger(serialId)) {
-        throw new BadRequestException('تدبير العملة يتطلب تشغيل الترحيل 0287 أولاً (الرقم المسلسل لربط القيد). [IMPORT_FX_SERIAL_MISSING]');
+        throw new BadRequestException(
+          'تدبير العملة يتطلب تشغيل الترحيل 0287 أولاً (الرقم المسلسل لربط القيد). [IMPORT_FX_SERIAL_MISSING]',
+        );
       }
       // Balanced treasury movement: the EGP value leaves the
       // source account and enters the destination account, in
@@ -771,25 +880,44 @@ export class ImportTreasuryService {
       });
       // Treasury legs mirror the journal in EGP book value, so
       // the cash/bank balances and the GL agree.
-      const scopes = await trx.selectFrom('accounting_accounts').select(['id', 'account_id'])
-        .where('tenant_id', '=', tenantId).where('id', 'in', [sourceAccountId, destinationAccountId]).execute();
+      const scopes = await trx
+        .selectFrom('accounting_accounts')
+        .select(['id', 'account_id'])
+        .where('tenant_id', '=', tenantId)
+        .where('id', 'in', [sourceAccountId, destinationAccountId])
+        .execute();
       const scopeById = new Map(scopes.map((s) => [Number(s.id), s.account_id]));
-      await trx.insertInto('treasury_transactions').values([
-        {
-          tenant_id: tenantId, account_id: scopeById.get(destinationAccountId) || tenantId,
-          txn_type: 'import_fx_acquisition', amount: egpCost,
-          note: `تدبير عملة: استلام ${foreignAmount} ${currency}`,
-          reference_type: 'import_fx_acquisition', reference_id: serialId, created_by: userId,
-        },
-        {
-          tenant_id: tenantId, account_id: scopeById.get(sourceAccountId) || tenantId,
-          txn_type: 'import_fx_acquisition', amount: -egpCost,
-          note: `تدبير عملة: سداد ${egpCost} ج.م مقابل ${foreignAmount} ${currency}`,
-          reference_type: 'import_fx_acquisition', reference_id: serialId, created_by: userId,
-        },
-      ]).execute();
-      await trx.updateTable('import_fx_acquisitions').set({ journal_entry_id: journalEntryId })
-        .where('tenant_id', '=', tenantId).where('id', '=', acquisition.id).execute();
+      await trx
+        .insertInto('treasury_transactions')
+        .values([
+          {
+            tenant_id: tenantId,
+            account_id: scopeById.get(destinationAccountId) || tenantId,
+            txn_type: 'import_fx_acquisition',
+            amount: egpCost,
+            note: `تدبير عملة: استلام ${foreignAmount} ${currency}`,
+            reference_type: 'import_fx_acquisition',
+            reference_id: serialId,
+            created_by: userId,
+          },
+          {
+            tenant_id: tenantId,
+            account_id: scopeById.get(sourceAccountId) || tenantId,
+            txn_type: 'import_fx_acquisition',
+            amount: -egpCost,
+            note: `تدبير عملة: سداد ${egpCost} ج.م مقابل ${foreignAmount} ${currency}`,
+            reference_type: 'import_fx_acquisition',
+            reference_id: serialId,
+            created_by: userId,
+          },
+        ])
+        .execute();
+      await trx
+        .updateTable('import_fx_acquisitions')
+        .set({ journal_entry_id: journalEntryId })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', acquisition.id)
+        .execute();
       return { ...acquisition, journal_entry_id: journalEntryId };
     });
   }
@@ -806,7 +934,9 @@ export class ImportTreasuryService {
     for (const r of records) {
       // Legacy rows may store 'usd' where new rows store 'USD':
       // group case-insensitively so one currency is one bucket.
-      const key = String(r.currency || '').trim().toUpperCase();
+      const key = String(r.currency || '')
+        .trim()
+        .toUpperCase();
       if (!byCurrency[key]) {
         byCurrency[key] = { totalForeign: 0, totalEgp: 0, weightedAvgRate: 0 };
       }

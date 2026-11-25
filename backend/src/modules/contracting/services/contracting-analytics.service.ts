@@ -113,26 +113,24 @@ export class ContractingAnalyticsService {
     const retentionRisk = holdsTotal > 0 ? 80 : 100;
 
     // Composite Score calculation (0 to 100)
-    let finalScore = Math.round(
-      spi * 30 +
-      cpi * 30 +
-      (complianceScore / 100) * 20 +
-      (retentionRisk / 100) * 20
-    );
+    let finalScore = Math.round(spi * 30 + cpi * 30 + (complianceScore / 100) * 20 + (retentionRisk / 100) * 20);
     finalScore = Math.min(100, Math.max(0, finalScore));
 
-    const healthStatus: 'green' | 'yellow' | 'red' =
-      finalScore >= 80 ? 'green' : finalScore >= 60 ? 'yellow' : 'red';
+    const healthStatus: 'green' | 'yellow' | 'red' = finalScore >= 80 ? 'green' : finalScore >= 60 ? 'yellow' : 'red';
 
     const recommendations: string[] = [];
     if (expiredLicenses > 0) {
-      recommendations.push(`يوجد ${expiredLicenses} تراخيص حكومية منتهية للمشروع يجب تجديدها فوراً لتجنب الغرامات وتوقف الأعمال.`);
+      recommendations.push(
+        `يوجد ${expiredLicenses} تراخيص حكومية منتهية للمشروع يجب تجديدها فوراً لتجنب الغرامات وتوقف الأعمال.`,
+      );
     }
     if (expiringLicenses > 0) {
       recommendations.push(`يوجد ${expiringLicenses} تصاريح تقترب من موعد الانتهاء خلال 30 يوماً.`);
     }
     if (holdsTotal > 0) {
-      recommendations.push(`توجد دفعات محتجزة بقيمة ${holdsTotal.toLocaleString()} ر.س بسبب ملاحظات فنية أو عيوب استلام.`);
+      recommendations.push(
+        `توجد دفعات محتجزة بقيمة ${holdsTotal.toLocaleString()} ر.س بسبب ملاحظات فنية أو عيوب استلام.`,
+      );
     }
     if (project.grossMarginForecast < 0) {
       recommendations.push(`توقعات هامش الربح سالبة، يلزم مراجعة تكاليف مقاولي الباطن والمواد.`);
@@ -150,7 +148,9 @@ export class ContractingAnalyticsService {
       breakdown: {
         schedulePerformanceIndex: spi,
         costPerformanceIndex: cpi,
-        budgetVariancePercent: Math.round(((project.revisedContractValue - project.actualCostIncurred) / (project.revisedContractValue || 1)) * 100),
+        budgetVariancePercent: Math.round(
+          ((project.revisedContractValue - project.actualCostIncurred) / (project.revisedContractValue || 1)) * 100,
+        ),
         licensesComplianceScore: complianceScore,
         retentionRiskScore: retentionRisk,
       },
@@ -211,7 +211,10 @@ export class ContractingAnalyticsService {
     const pendingClientIpcs = await clientIpcsQuery.execute();
     const totalExpectedInflow = pendingClientIpcs.reduce((acc: number, r: any) => acc + Number(r.net_payable || 0), 0);
     const inflowBuckets = this.bucketByDueDate(
-      pendingClientIpcs.map((r: any) => ({ amount: Number(r.net_payable || 0), dueDate: r.payment_due_date || r.certification_due_date || null })),
+      pendingClientIpcs.map((r: any) => ({
+        amount: Number(r.net_payable || 0),
+        dueDate: r.payment_due_date || r.certification_due_date || null,
+      })),
       today,
     );
 
@@ -256,10 +259,22 @@ export class ContractingAnalyticsService {
         buildBucket('30_days', 'خلال 30 يوماً', inflowBuckets.d30, subIpcOutflowBuckets.d30, licenseBuckets.d30),
         buildBucket('60_days', 'من 31 إلى 60 يوماً', inflowBuckets.d60, subIpcOutflowBuckets.d60, licenseBuckets.d60),
         buildBucket('90_days', 'من 61 إلى 90 يوماً', inflowBuckets.d90, subIpcOutflowBuckets.d90, licenseBuckets.d90),
-        buildBucket('beyond_90_days', 'بعد 90 يوماً', inflowBuckets.beyond, subIpcOutflowBuckets.beyond, licenseBuckets.beyond),
+        buildBucket(
+          'beyond_90_days',
+          'بعد 90 يوماً',
+          inflowBuckets.beyond,
+          subIpcOutflowBuckets.beyond,
+          licenseBuckets.beyond,
+        ),
       ],
       // Amounts with no recorded due date — shown separately rather than guessed into a bucket.
-      undated: buildBucket('undated', 'بلا تاريخ استحقاق مسجل', inflowBuckets.undated, subIpcOutflowBuckets.undated, licenseBuckets.undated),
+      undated: buildBucket(
+        'undated',
+        'بلا تاريخ استحقاق مسجل',
+        inflowBuckets.undated,
+        subIpcOutflowBuckets.undated,
+        licenseBuckets.undated,
+      ),
       upcomingCommitmentsSummary: {
         pendingSubcontractorIpcs: totalPendingSubIpcs,
         // Supplier payables (purchases module) and payroll are not yet linked to a specific
@@ -281,16 +296,19 @@ export class ContractingAnalyticsService {
     const constMap = new Map<string, any>(constants.map((c: any) => [c.itemCode, c]));
 
     // Aggregator for all project materials
-    const materialTotals = new Map<string, {
-      code: string;
-      name: string;
-      unit: string;
-      type: string;
-      requiredQuantity: number;
-      dispatchedQuantity: number;
-      unitRate: number;
-      totalEstimatedCost: number;
-    }>();
+    const materialTotals = new Map<
+      string,
+      {
+        code: string;
+        name: string;
+        unit: string;
+        type: string;
+        requiredQuantity: number;
+        dispatchedQuantity: number;
+        unitRate: number;
+        totalEstimatedCost: number;
+      }
+    >();
 
     for (const item of boqItems as any[]) {
       const qty = Number(item.revised_qty || item.contract_qty || item.revisedQty || item.contractQty || 0);
@@ -300,7 +318,7 @@ export class ContractingAnalyticsService {
       if (constant && Array.isArray(constant.components)) {
         for (const comp of constant.components) {
           const compCode = comp.componentCode || comp.code || comp.name;
-          const wasteFactor = 1 + (Number(constant.wastePercent || 5) / 100);
+          const wasteFactor = 1 + Number(constant.wastePercent || 5) / 100;
           const reqQty = Number(comp.qtyPerUnit || 0) * qty * wasteFactor;
           const rate = Number(comp.unitRate || 0);
 
@@ -343,7 +361,11 @@ export class ContractingAnalyticsService {
     for (const req of requisitions as any[]) {
       const itemName = (req.item_name || req.itemName || '').trim();
       for (const [key, val] of materialTotals.entries()) {
-        if (val.name.includes(itemName) || itemName.includes(val.name) || key.includes(req.boq_item_id || req.boqItemId || '')) {
+        if (
+          val.name.includes(itemName) ||
+          itemName.includes(val.name) ||
+          key.includes(req.boq_item_id || req.boqItemId || '')
+        ) {
           val.dispatchedQuantity += Number(req.quantity || 0);
         }
       }
@@ -351,7 +373,8 @@ export class ContractingAnalyticsService {
 
     const items = Array.from(materialTotals.values()).map((m) => {
       const remaining = Math.max(0, m.requiredQuantity - m.dispatchedQuantity);
-      const fulfillmentPercent = m.requiredQuantity > 0 ? Math.min(100, Math.round((m.dispatchedQuantity / m.requiredQuantity) * 100)) : 0;
+      const fulfillmentPercent =
+        m.requiredQuantity > 0 ? Math.min(100, Math.round((m.dispatchedQuantity / m.requiredQuantity) * 100)) : 0;
       return {
         ...m,
         requiredQuantity: Math.round(m.requiredQuantity * 100) / 100,
@@ -409,13 +432,14 @@ export class ContractingAnalyticsService {
       // True operational actual costs (Direct Labor + Direct Material + Direct Equipment + Allocated Site Indirects)
       const allocatedIndirect = Number(it.allocated_indirect_cost || it.allocatedIndirectCost || 0);
       const directLabor = Number(it.direct_labor_cost || it.directLaborCost || 0);
-      const directMaterial = actualMatCostByBoq.get(String(it.id)) || Number(it.direct_material_cost || it.directMaterialCost || 0);
+      const directMaterial =
+        actualMatCostByBoq.get(String(it.id)) || Number(it.direct_material_cost || it.directMaterialCost || 0);
       const directEquipment = Number(it.direct_equipment_cost || it.directEquipmentCost || 0);
 
-      const hasTrueActuals = (allocatedIndirect + directLabor + directMaterial + directEquipment) > 0;
+      const hasTrueActuals = allocatedIndirect + directLabor + directMaterial + directEquipment > 0;
       const actualCost = hasTrueActuals
         ? Math.round((allocatedIndirect + directLabor + directMaterial + directEquipment) * 1000) / 1000
-        : (executedQty * estimatedUnitCost);
+        : executedQty * estimatedUnitCost;
 
       const earnedRevenue = executedQty * unitPrice;
 
@@ -460,7 +484,8 @@ export class ContractingAnalyticsService {
     });
 
     const totalProjectProfit = totalProjectRevenue - totalProjectEstimatedCost;
-    const overallMarginPercent = totalProjectRevenue > 0 ? Math.round((totalProjectProfit / totalProjectRevenue) * 100) : 0;
+    const overallMarginPercent =
+      totalProjectRevenue > 0 ? Math.round((totalProjectProfit / totalProjectRevenue) * 100) : 0;
 
     return {
       projectId,
@@ -480,7 +505,7 @@ export class ContractingAnalyticsService {
     await this.getProjectById(auth, projectId);
 
     const boqItems = await this.getBoqItems(auth, projectId);
-    
+
     // Fetch materials tagged with boq_item_id
     const materials = await (this.db as any)
       .selectFrom('contracting_material_requisitions')
@@ -517,7 +542,7 @@ export class ContractingAnalyticsService {
       const laborCost = itemLabor.reduce((sum: number, l: any) => sum + Number(l.total_payable || 0), 0);
 
       const subcontractsCost = 0; // Linked via subcontractor subcontracts if assigned
-      const allocatedMobCost = (item.isSectionHeader || item.is_section_header) ? 0 : mobilizationPerItem;
+      const allocatedMobCost = item.isSectionHeader || item.is_section_header ? 0 : mobilizationPerItem;
       const totalActualCost = materialsCost + laborCost + subcontractsCost + allocatedMobCost;
 
       const grossProfit = totalRevenue - totalActualCost;
@@ -650,7 +675,8 @@ export class ContractingAnalyticsService {
       .executeTakeFirst();
     const pettyCashCost = Number(pettyCashRes?.sum || 0);
 
-    const totalActualCost = Math.round((materialsCost + laborCost + subcontractsCost + mobilizationCost + pettyCashCost) * 100) / 100;
+    const totalActualCost =
+      Math.round((materialsCost + laborCost + subcontractsCost + mobilizationCost + pettyCashCost) * 100) / 100;
     const costVariance = Math.round((totalActualCost - costBaseline) * 100) / 100;
     const revenueBasis = totalBilledClient > 0 ? totalBilledClient : Number(project.contract_value);
     const actualGrossProfit = Math.round((revenueBasis - totalActualCost) * 100) / 100;
@@ -693,9 +719,9 @@ export class ContractingAnalyticsService {
 
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const bac = project.revisedContractValue || project.contractValue || 1;
-    const ev = Number(project.totalBilledClient || (bac * (project.completionRatePercent / 100)) || 0);
+    const ev = Number(project.totalBilledClient || bac * (project.completionRatePercent / 100) || 0);
     const ac = Number(breakdown.totalActualCost || 0);
-    
+
     // Calculate Planned Value from Schedule Tasks scheduled till today
     const tasks = await this.getScheduleTasks(auth, projectId);
     let pv = 0;
@@ -713,7 +739,7 @@ export class ContractingAnalyticsService {
     const spi = pv > 0 ? Number((ev / pv).toFixed(2)) : 1.0;
     const eac = cpi > 0 ? roundMoney(bac / cpi, moneyDigits) : bac;
     const vac = roundMoney(bac - eac, moneyDigits);
-    const tcpi = (bac - ac) > 0 ? Number(((bac - ev) / (bac - ac)).toFixed(2)) : 1.0;
+    const tcpi = bac - ac > 0 ? Number(((bac - ev) / (bac - ac)).toFixed(2)) : 1.0;
 
     let healthIndicator: 'excellent' | 'good' | 'at_risk' | 'critical' = 'good';
     if (cpi >= 1.05 && spi >= 1.0) healthIndicator = 'excellent';
@@ -723,12 +749,42 @@ export class ContractingAnalyticsService {
 
     // Generate S-Curve Data points (6 monthly points)
     const sCurvePoints = [
-      { periodName: 'الشهر 1', plannedCumulative: Number((bac * 0.10).toFixed(0)), earnedCumulative: Number((ev * 0.15).toFixed(0)), actualCumulative: Number((ac * 0.12).toFixed(0)) },
-      { periodName: 'الشهر 2', plannedCumulative: Number((bac * 0.25).toFixed(0)), earnedCumulative: Number((ev * 0.30).toFixed(0)), actualCumulative: Number((ac * 0.28).toFixed(0)) },
-      { periodName: 'الشهر 3', plannedCumulative: Number((bac * 0.45).toFixed(0)), earnedCumulative: Number((ev * 0.50).toFixed(0)), actualCumulative: Number((ac * 0.48).toFixed(0)) },
-      { periodName: 'الشهر 4', plannedCumulative: Number((bac * 0.70).toFixed(0)), earnedCumulative: Number((ev * 0.72).toFixed(0)), actualCumulative: Number((ac * 0.75).toFixed(0)) },
-      { periodName: 'الشهر 5', plannedCumulative: Number((bac * 0.90).toFixed(0)), earnedCumulative: Number((ev * 0.88).toFixed(0)), actualCumulative: Number((ac * 0.92).toFixed(0)) },
-      { periodName: 'الشهر 6 (الختامي)', plannedCumulative: Number(bac.toFixed(0)), earnedCumulative: Number(ev.toFixed(0)), actualCumulative: Number(ac.toFixed(0)) },
+      {
+        periodName: 'الشهر 1',
+        plannedCumulative: Number((bac * 0.1).toFixed(0)),
+        earnedCumulative: Number((ev * 0.15).toFixed(0)),
+        actualCumulative: Number((ac * 0.12).toFixed(0)),
+      },
+      {
+        periodName: 'الشهر 2',
+        plannedCumulative: Number((bac * 0.25).toFixed(0)),
+        earnedCumulative: Number((ev * 0.3).toFixed(0)),
+        actualCumulative: Number((ac * 0.28).toFixed(0)),
+      },
+      {
+        periodName: 'الشهر 3',
+        plannedCumulative: Number((bac * 0.45).toFixed(0)),
+        earnedCumulative: Number((ev * 0.5).toFixed(0)),
+        actualCumulative: Number((ac * 0.48).toFixed(0)),
+      },
+      {
+        periodName: 'الشهر 4',
+        plannedCumulative: Number((bac * 0.7).toFixed(0)),
+        earnedCumulative: Number((ev * 0.72).toFixed(0)),
+        actualCumulative: Number((ac * 0.75).toFixed(0)),
+      },
+      {
+        periodName: 'الشهر 5',
+        plannedCumulative: Number((bac * 0.9).toFixed(0)),
+        earnedCumulative: Number((ev * 0.88).toFixed(0)),
+        actualCumulative: Number((ac * 0.92).toFixed(0)),
+      },
+      {
+        periodName: 'الشهر 6 (الختامي)',
+        plannedCumulative: Number(bac.toFixed(0)),
+        earnedCumulative: Number(ev.toFixed(0)),
+        actualCumulative: Number(ac.toFixed(0)),
+      },
     ];
 
     return {

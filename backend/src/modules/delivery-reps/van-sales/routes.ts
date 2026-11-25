@@ -16,12 +16,7 @@ export class RoutesService {
     return this.vanRoutesService.getDriverTodayItinerary(tenantId, repId, tripId);
   }
 
-  async recordFieldVisit(
-    arg1: string | number,
-    arg2: string,
-    arg3: string | number,
-    payload: RecordFieldVisitPayload,
-  ) {
+  async recordFieldVisit(arg1: string | number, arg2: string, arg3: string | number, payload: RecordFieldVisitPayload) {
     return this.vanRoutesService.recordFieldVisit(arg1, arg2, arg3, payload);
   }
 
@@ -36,25 +31,15 @@ export class RoutesService {
     return this.vanRoutesService.getSupervisorRouteKpis(tenantId, dateFrom, dateTo);
   }
 
-  async setCustomerRouteSchedule(
-    tenantId: string,
-    customerId: number,
-    payload: SetCustomerRouteSchedulePayload,
-  ) {
+  async setCustomerRouteSchedule(tenantId: string, customerId: number, payload: SetCustomerRouteSchedulePayload) {
     return this.vanRoutesService.setCustomerRouteSchedule(tenantId, customerId, payload);
   }
 
-  async bulkAssignCustomerRoutes(
-    tenantId: string,
-    payload: BulkAssignCustomerRoutesPayload,
-  ) {
+  async bulkAssignCustomerRoutes(tenantId: string, payload: BulkAssignCustomerRoutesPayload) {
     return this.vanRoutesService.bulkAssignCustomerRoutes(tenantId, payload);
   }
 
-  async getSupervisorCustomerRoutes(
-    tenantId: string,
-    filters?: GetSupervisorCustomerRoutesFilters,
-  ) {
+  async getSupervisorCustomerRoutes(tenantId: string, filters?: GetSupervisorCustomerRoutesFilters) {
     return this.vanRoutesService.getSupervisorCustomerRoutes(tenantId, filters);
   }
 }

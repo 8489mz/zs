@@ -220,7 +220,10 @@ export class VanFraudRadarService {
       // the old 2-decimal cut dropped it before the event was persisted).
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, params.tenantId));
       const amountInvolved = Number.isFinite(Number(rawAmount)) ? roundMoney(Number(rawAmount), moneyDigits) : 0;
-      const wasBlocked = params.wasBlocked !== undefined ? params.wasBlocked : params.eventCode !== AUDIT_EVENT_CODES.VAN_SUSPICION_SETTLEMENT_SHORTAGE;
+      const wasBlocked =
+        params.wasBlocked !== undefined
+          ? params.wasBlocked
+          : params.eventCode !== AUDIT_EVENT_CODES.VAN_SUSPICION_SETTLEMENT_SHORTAGE;
 
       const payloadJson = {
         repId: repIdNum,
@@ -317,7 +320,7 @@ export class VanFraudRadarService {
   private parseAuditLogRow(row: any): VanFraudRadarEvent {
     let parsed: Record<string, any> = {};
     try {
-      parsed = typeof row.details === 'string' ? JSON.parse(row.details) : (row.details || {});
+      parsed = typeof row.details === 'string' ? JSON.parse(row.details) : row.details || {};
     } catch {
       parsed = { detailsAr: String(row.details || '') };
     }

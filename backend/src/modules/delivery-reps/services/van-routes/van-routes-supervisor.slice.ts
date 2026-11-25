@@ -4,7 +4,11 @@ import { AppError } from '../../../../common/errors/app-error';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
 import { normalizeCustomerCode, getCustomerRepBalancesMap } from '../van-common.util';
-import { extractCoordinatesFromCustomerLocation, evaluateGeofenceCompliance, extractAssignedRepIds } from '../../rep-target.engine';
+import {
+  extractCoordinatesFromCustomerLocation,
+  evaluateGeofenceCompliance,
+  extractAssignedRepIds,
+} from '../../rep-target.engine';
 import { extractCustomerVisitDays, normalizeDayKey, DAY_KEY_TO_ARABIC } from '../../van-routes-schedule.util';
 import { VanFleetService } from '../van-fleet.service';
 
@@ -40,12 +44,16 @@ export class VanRoutesSupervisorSlice {
     const visits = await visitQuery.execute();
 
     // Fetch unlinked direct van sales to include in KPI strike rate & total visits
-    const linkedSaleIds = (await this.anyDb
-      .selectFrom('van_field_visits')
-      .select(['sale_id'])
-      .where('tenant_id', '=', tenantId)
-      .where('sale_id', 'is not', null)
-      .execute()).map((r: any) => r.sale_id).filter(Boolean);
+    const linkedSaleIds = (
+      await this.anyDb
+        .selectFrom('van_field_visits')
+        .select(['sale_id'])
+        .where('tenant_id', '=', tenantId)
+        .where('sale_id', 'is not', null)
+        .execute()
+    )
+      .map((r: any) => r.sale_id)
+      .filter(Boolean);
 
     let sq = this.anyDb
       .selectFrom('sales as s')
@@ -118,9 +126,8 @@ export class VanRoutesSupervisorSlice {
     const totalFuelLiters = fuelLogs.reduce((sum: number, f: any) => sum + Number(f.liters || 0), 0);
     const totalFuelCost = fuelLogs.reduce((sum: number, f: any) => sum + Number(f.totalCost || 0), 0);
     const totalKmDriven = fuelLogs.reduce((sum: number, f: any) => sum + Number(f.kmSinceLastFuel || 0), 0);
-    const avgConsumptionRate = totalFuelLiters > 0 && totalKmDriven > 0
-      ? Number((totalKmDriven / totalFuelLiters).toFixed(2))
-      : 0;
+    const avgConsumptionRate =
+      totalFuelLiters > 0 && totalKmDriven > 0 ? Number((totalKmDriven / totalFuelLiters).toFixed(2)) : 0;
 
     const alertsRes = await this.vanFleetService.getFleetMaintenanceAlerts(tenantId);
     const alerts = alertsRes.alerts || [];
@@ -169,7 +176,11 @@ export class VanRoutesSupervisorSlice {
 
     let existingMeta: any = {};
     if (typeof cust.metadata === 'string') {
-      try { existingMeta = JSON.parse(cust.metadata); } catch { existingMeta = {}; }
+      try {
+        existingMeta = JSON.parse(cust.metadata);
+      } catch {
+        existingMeta = {};
+      }
     } else if (cust.metadata && typeof cust.metadata === 'object') {
       existingMeta = { ...cust.metadata };
     }
@@ -177,11 +188,7 @@ export class VanRoutesSupervisorSlice {
     let targetRepIds: number[] | undefined;
     if (Array.isArray(payload.assignedRepIds)) {
       targetRepIds = Array.from(
-        new Set(
-          payload.assignedRepIds
-            .map((id) => Number(id))
-            .filter((id) => Number.isInteger(id) && id > 0),
-        ),
+        new Set(payload.assignedRepIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)),
       );
     } else if (payload.assignedRepId !== undefined) {
       if (payload.assignedRepId === null) {
@@ -217,15 +224,14 @@ export class VanRoutesSupervisorSlice {
       }
     }
 
-    const parsedCoords = payload.locationUrl !== undefined
-      ? extractCoordinatesFromCustomerLocation({ locationUrl: payload.locationUrl })
-      : null;
+    const parsedCoords =
+      payload.locationUrl !== undefined
+        ? extractCoordinatesFromCustomerLocation({ locationUrl: payload.locationUrl })
+        : null;
 
     let scheduleDaysUpdate: any = {};
     if (payload.visitDays !== undefined) {
-      const normalizedDays = payload.visitDays
-        .map((d) => DAY_KEY_TO_ARABIC[normalizeDayKey(d)] || d)
-        .filter(Boolean);
+      const normalizedDays = payload.visitDays.map((d) => DAY_KEY_TO_ARABIC[normalizeDayKey(d)] || d).filter(Boolean);
       scheduleDaysUpdate = {
         visit_days: normalizedDays,
         visit_day: normalizedDays[0] || '',
@@ -313,7 +319,11 @@ export class VanRoutesSupervisorSlice {
     for (const c of customers) {
       let meta: any = {};
       if (typeof c.metadata === 'string') {
-        try { meta = JSON.parse(c.metadata); } catch { meta = {}; }
+        try {
+          meta = JSON.parse(c.metadata);
+        } catch {
+          meta = {};
+        }
       } else if (c.metadata && typeof c.metadata === 'object') {
         meta = { ...c.metadata };
       }
@@ -353,9 +363,7 @@ export class VanRoutesSupervisorSlice {
         meta.route = payload.route.trim();
       }
       if (payload.visitDays !== undefined) {
-        const normalizedDays = payload.visitDays
-          .map((d) => DAY_KEY_TO_ARABIC[normalizeDayKey(d)] || d)
-          .filter(Boolean);
+        const normalizedDays = payload.visitDays.map((d) => DAY_KEY_TO_ARABIC[normalizeDayKey(d)] || d).filter(Boolean);
         meta.visit_days = normalizedDays;
         meta.visit_day = normalizedDays[0] || '';
       }
@@ -455,7 +463,11 @@ export class VanRoutesSupervisorSlice {
       const cid = Number(r.id);
       let meta: any = {};
       if (typeof r.metadata === 'string') {
-        try { meta = JSON.parse(r.metadata); } catch { meta = {}; }
+        try {
+          meta = JSON.parse(r.metadata);
+        } catch {
+          meta = {};
+        }
       } else if (r.metadata && typeof r.metadata === 'object') {
         meta = r.metadata;
       }
@@ -470,11 +482,11 @@ export class VanRoutesSupervisorSlice {
       );
       const primaryRepId = meta.assigned_rep_id
         ? Number(meta.assigned_rep_id)
-        : (assignedRepIds.length > 0 ? assignedRepIds[0] : null);
+        : assignedRepIds.length > 0
+          ? assignedRepIds[0]
+          : null;
       const displayRepName =
-        assignedRepNames.length > 0
-          ? assignedRepNames.join(' ، ')
-          : (meta.assigned_rep_name || null);
+        assignedRepNames.length > 0 ? assignedRepNames.join(' ، ') : meta.assigned_rep_name || null;
 
       const { visitDays, visitDay } = extractCustomerVisitDays(meta);
 
@@ -493,7 +505,9 @@ export class VanRoutesSupervisorSlice {
         assignedRepIds,
         assignedRepNames,
         assignedRepName: displayRepName,
-        locationUrl: meta.location_url || (meta.gps_lat && meta.gps_lng ? `https://maps.google.com/?q=${meta.gps_lat},${meta.gps_lng}` : ''),
+        locationUrl:
+          meta.location_url ||
+          (meta.gps_lat && meta.gps_lng ? `https://maps.google.com/?q=${meta.gps_lat},${meta.gps_lng}` : ''),
         balance: Number(r.balance || 0),
         repBalances,
         unassignedBalance: breakdown?.unassignedBalance || 0,
@@ -509,7 +523,8 @@ export class VanRoutesSupervisorSlice {
         (c: any) =>
           c.assignedRepId === targetRepId ||
           (Array.isArray(c.assignedRepIds) && c.assignedRepIds.includes(targetRepId)) ||
-          (Array.isArray(c.repBalances) && c.repBalances.some((rb: any) => Number(rb.repId) === targetRepId && rb.balance !== 0)),
+          (Array.isArray(c.repBalances) &&
+            c.repBalances.some((rb: any) => Number(rb.repId) === targetRepId && rb.balance !== 0)),
       );
     }
 

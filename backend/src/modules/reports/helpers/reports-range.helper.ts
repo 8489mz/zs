@@ -108,7 +108,10 @@ function zonedDateTimeToUtc(
   return new Date(corrected);
 }
 
-export function getBusinessDayBounds(value: Date | string = new Date(), timezone = getDefaultBusinessTimezone()): { start: Date; end: Date; key: string } {
+export function getBusinessDayBounds(
+  value: Date | string = new Date(),
+  timezone = getDefaultBusinessTimezone(),
+): { start: Date; end: Date; key: string } {
   const source = value instanceof Date ? value : new Date(value);
   const zoned = getZonedParts(source, timezone);
   const start = zonedDateTimeToUtc(timezone, zoned.year, zoned.month, zoned.day, 0, 0, 0, 0);
@@ -189,7 +192,10 @@ export function dateKey(value: Date | string | null | undefined, timezone = getD
   return `${zoned.year}-${pad2(zoned.month)}-${pad2(zoned.day)}`;
 }
 
-export function getPagination(query: ReportRangeQueryDto, defaultSize = 25): { page: number; pageSize: number; offset: number } {
+export function getPagination(
+  query: ReportRangeQueryDto,
+  defaultSize = 25,
+): { page: number; pageSize: number; offset: number } {
   const page = Math.max(1, Number(query.page || 1));
   const pageSize = Math.min(200, Math.max(1, Number(query.pageSize || defaultSize)));
   return {
@@ -210,10 +216,15 @@ export interface ReportPagination {
   [key: string]: unknown;
 }
 
-export function buildPagination(page: number, pageSize: number, totalItems: number, nextCursor?: string | null): ReportPagination {
+export function buildPagination(
+  page: number,
+  pageSize: number,
+  totalItems: number,
+  nextCursor?: string | null,
+): ReportPagination {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safePage = Math.min(page, totalPages);
-  const rangeStart = totalItems ? ((safePage - 1) * pageSize) + 1 : 0;
+  const rangeStart = totalItems ? (safePage - 1) * pageSize + 1 : 0;
   const rangeEnd = totalItems ? Math.min(totalItems, rangeStart + pageSize - 1) : 0;
   return {
     page: safePage,
@@ -226,7 +237,11 @@ export function buildPagination(page: number, pageSize: number, totalItems: numb
   };
 }
 
-export function paginate<T>(rows: T[], query: ReportRangeQueryDto, defaultSize = 25): { rows: T[]; pagination: Record<string, any> } {
+export function paginate<T>(
+  rows: T[],
+  query: ReportRangeQueryDto,
+  defaultSize = 25,
+): { rows: T[]; pagination: Record<string, any> } {
   const { page, pageSize } = getPagination(query, defaultSize);
   const totalItems = rows.length;
   const pagination = buildPagination(page, pageSize, totalItems);
@@ -237,7 +252,9 @@ export function paginate<T>(rows: T[], query: ReportRangeQueryDto, defaultSize =
   };
 }
 
-export function filterScope<T extends { branch_id?: number | null; location_id?: number | null; created_by?: number | null }>(rows: T[], query: ReportRangeQueryDto): T[] {
+export function filterScope<
+  T extends { branch_id?: number | null; location_id?: number | null; created_by?: number | null },
+>(rows: T[], query: ReportRangeQueryDto): T[] {
   return rows.filter((row) => {
     if (query.branchId && Number(row.branch_id || 0) !== Number(query.branchId)) return false;
     if (query.locationId && Number(row.location_id || 0) !== Number(query.locationId)) return false;

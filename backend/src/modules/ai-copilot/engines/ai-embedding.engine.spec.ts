@@ -32,6 +32,9 @@ const emb1 = AiEmbeddingEngine.generateLocalEmbedding(text, 64);
 const emb2 = AiEmbeddingEngine.generateLocalEmbedding(text, 64);
 
 assert.equal(emb1.length, 64);
-assert.ok(Math.abs(AiEmbeddingEngine.cosineSimilarity(emb1, emb2) - 1.0) < 0.0001, 'Same text should yield identical embedding');
+assert.ok(
+  Math.abs(AiEmbeddingEngine.cosineSimilarity(emb1, emb2) - 1.0) < 0.0001,
+  'Same text should yield identical embedding',
+);
 
 console.log('ai-embedding.engine.spec: ok');

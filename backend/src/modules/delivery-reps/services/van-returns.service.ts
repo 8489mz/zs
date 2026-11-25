@@ -50,14 +50,19 @@ export class VanReturnsService {
 
   private submitFieldReturnInstance?: SubmitFieldReturnSlice;
   private get submitFieldReturnSlice(): SubmitFieldReturnSlice {
-    return (this.submitFieldReturnInstance ??= new SubmitFieldReturnSlice(this.db, {
-      computeAlreadyReturnedQtyBySaleItem: (tenantId, saleIds) =>
-        this.computeAlreadyReturnedQtyBySaleItemSlice.computeAlreadyReturnedQtyBySaleItem(tenantId, saleIds),
-      resolveSaleRefundLegs: (q, tenantId, sale, moneyDigits, opts) =>
-        this.refundLegsClusterSlice.resolveSaleRefundLegs(q, tenantId, sale, moneyDigits, opts),
-      assertRefundMethodCoveredByLegs: (legs, refundMethod, totalAmount, moneyDigits) =>
-        this.refundLegsClusterSlice.assertRefundMethodCoveredByLegs(legs, refundMethod, totalAmount, moneyDigits),
-    }, this.fraudRadar, this.audit));
+    return (this.submitFieldReturnInstance ??= new SubmitFieldReturnSlice(
+      this.db,
+      {
+        computeAlreadyReturnedQtyBySaleItem: (tenantId, saleIds) =>
+          this.computeAlreadyReturnedQtyBySaleItemSlice.computeAlreadyReturnedQtyBySaleItem(tenantId, saleIds),
+        resolveSaleRefundLegs: (q, tenantId, sale, moneyDigits, opts) =>
+          this.refundLegsClusterSlice.resolveSaleRefundLegs(q, tenantId, sale, moneyDigits, opts),
+        assertRefundMethodCoveredByLegs: (legs, refundMethod, totalAmount, moneyDigits) =>
+          this.refundLegsClusterSlice.assertRefundMethodCoveredByLegs(legs, refundMethod, totalAmount, moneyDigits),
+      },
+      this.fraudRadar,
+      this.audit,
+    ));
   }
 
   private listFieldReturnsInstance?: ListFieldReturnsSlice;
@@ -83,8 +88,6 @@ export class VanReturnsService {
   async computeAlreadyReturnedQtyBySaleItem(tenantId: string, saleIds: number[]): Promise<Map<number, number>> {
     return this.computeAlreadyReturnedQtyBySaleItemSlice.computeAlreadyReturnedQtyBySaleItem(tenantId, saleIds);
   }
-
-
 
   async getCustomerEligibleSales(tenantId: string, customerId: number, repId?: number) {
     return this.getCustomerEligibleSalesSlice.getCustomerEligibleSales(tenantId, customerId, repId);

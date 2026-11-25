@@ -94,7 +94,7 @@ export class MarketplaceSyncFeesListingService {
     if (marketplace === 'jumia') referralRatePercent += 1;
     if (marketplace === 'trendyol') referralRatePercent = Math.max(referralRatePercent, 14);
 
-    const referralFee = Math.round((sellingPrice * (referralRatePercent / 100)) * 100) / 100;
+    const referralFee = Math.round(sellingPrice * (referralRatePercent / 100) * 100) / 100;
 
     // 2. Fulfillment / Handling fee
     let fulfillmentFee = 0;
@@ -107,27 +107,57 @@ export class MarketplaceSyncFeesListingService {
     if (isFbaOrFbn) {
       if (region === 'eg') {
         switch (weightTier) {
-          case 'small': fulfillmentFee = 25; break;
-          case 'standard': fulfillmentFee = 35; break;
-          case 'medium': fulfillmentFee = 48; break;
-          case 'large': fulfillmentFee = 65; break;
-          case 'heavy': fulfillmentFee = 85; break;
+          case 'small':
+            fulfillmentFee = 25;
+            break;
+          case 'standard':
+            fulfillmentFee = 35;
+            break;
+          case 'medium':
+            fulfillmentFee = 48;
+            break;
+          case 'large':
+            fulfillmentFee = 65;
+            break;
+          case 'heavy':
+            fulfillmentFee = 85;
+            break;
         }
       } else if (region === 'sa') {
         switch (weightTier) {
-          case 'small': fulfillmentFee = 9.5; break;
-          case 'standard': fulfillmentFee = 13.5; break;
-          case 'medium': fulfillmentFee = 18.5; break;
-          case 'large': fulfillmentFee = 25.0; break;
-          case 'heavy': fulfillmentFee = 35.0; break;
+          case 'small':
+            fulfillmentFee = 9.5;
+            break;
+          case 'standard':
+            fulfillmentFee = 13.5;
+            break;
+          case 'medium':
+            fulfillmentFee = 18.5;
+            break;
+          case 'large':
+            fulfillmentFee = 25.0;
+            break;
+          case 'heavy':
+            fulfillmentFee = 35.0;
+            break;
         }
       } else {
         switch (weightTier) {
-          case 'small': fulfillmentFee = 9.0; break;
-          case 'standard': fulfillmentFee = 13.0; break;
-          case 'medium': fulfillmentFee = 17.5; break;
-          case 'large': fulfillmentFee = 24.0; break;
-          case 'heavy': fulfillmentFee = 32.0; break;
+          case 'small':
+            fulfillmentFee = 9.0;
+            break;
+          case 'standard':
+            fulfillmentFee = 13.0;
+            break;
+          case 'medium':
+            fulfillmentFee = 17.5;
+            break;
+          case 'large':
+            fulfillmentFee = 24.0;
+            break;
+          case 'heavy':
+            fulfillmentFee = 32.0;
+            break;
         }
       }
     } else {
@@ -157,20 +187,19 @@ export class MarketplaceSyncFeesListingService {
       currency = 'د.إ';
     }
 
-    const vatOnFees = Math.round((totalMarketplaceFeesBeforeVat * (vatRatePercent / 100)) * 100) / 100;
+    const vatOnFees = Math.round(totalMarketplaceFeesBeforeVat * (vatRatePercent / 100) * 100) / 100;
     const totalMarketplaceDeductions = Math.round((totalMarketplaceFeesBeforeVat + vatOnFees) * 100) / 100;
 
     const netPayoutToMerchant = Math.round((sellingPrice - totalMarketplaceDeductions) * 100) / 100;
     const totalMerchantCost = itemCost + inboundShippingCost + packagingCost;
     const netProfit = Math.round((netPayoutToMerchant - totalMerchantCost) * 100) / 100;
-    const netMarginPercent = sellingPrice > 0 ? Math.round(((netProfit / sellingPrice) * 100) * 10) / 10 : 0;
-    const roiPercent = totalMerchantCost > 0 ? Math.round(((netProfit / totalMerchantCost) * 100) * 10) / 10 : 0;
+    const netMarginPercent = sellingPrice > 0 ? Math.round((netProfit / sellingPrice) * 100 * 10) / 10 : 0;
+    const roiPercent = totalMerchantCost > 0 ? Math.round((netProfit / totalMerchantCost) * 100 * 10) / 10 : 0;
 
     const fixedFees = (fulfillmentFee + closingFee) * (1 + vatRatePercent / 100);
     const variableMultiplier = 1 - (referralRatePercent / 100) * (1 + vatRatePercent / 100);
-    const breakEvenPrice = variableMultiplier > 0
-      ? Math.round(((totalMerchantCost + fixedFees) / variableMultiplier) * 100) / 100
-      : 0;
+    const breakEvenPrice =
+      variableMultiplier > 0 ? Math.round(((totalMerchantCost + fixedFees) / variableMultiplier) * 100) / 100 : 0;
 
     let ratingStatus: 'exceptional' | 'healthy' | 'tight' | 'loss' = 'loss';
     if (netMarginPercent >= 25) ratingStatus = 'exceptional';
@@ -254,8 +283,15 @@ export class MarketplaceSyncFeesListingService {
       '100% Genuine & Quality Assured: Rigorously inspected and backed by dependable after-sales customer service.',
     ];
 
-    const keywordsAr = `${cleanName} أصلي جودة ممتازة تسوق اونلاين شحن سريع أفضل سعر ماركت بليس أصلي مضمون`.replace(/[,.-]/g, '');
-    const keywordsEn = `${cleanName} premium authentic durable bestseller fast shipping high performance official store`.replace(/[,.-]/g, '');
+    const keywordsAr = `${cleanName} أصلي جودة ممتازة تسوق اونلاين شحن سريع أفضل سعر ماركت بليس أصلي مضمون`.replace(
+      /[,.-]/g,
+      '',
+    );
+    const keywordsEn =
+      `${cleanName} premium authentic durable bestseller fast shipping high performance official store`.replace(
+        /[,.-]/g,
+        '',
+      );
     const metaDescription = `احصل على ${cleanName} بأفضل سعر وجودة مضمونة. شحن سريع ومواصفات قياسية أصلية تناسب احتياجاتك اليومية.`;
 
     return {

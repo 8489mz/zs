@@ -32,7 +32,12 @@ export interface DeliveryRepsDriverOrdersDeps {
   tenantPredicate: (actor: AuthContext) => RawBuilder<boolean>;
   getDeliveryFeeMode: (trx: Kysely<Database>, actor: AuthContext) => Promise<'freelance_courier' | 'store_fleet'>;
   repOrderCashDue: (
-    order: { id: number; delivery_fee_mode: string | null; collection_status?: string | null; paid_amount?: number | string | null },
+    order: {
+      id: number;
+      delivery_fee_mode: string | null;
+      collection_status?: string | null;
+      paid_amount?: number | string | null;
+    },
     defaultMode: 'freelance_courier' | 'store_fleet',
     moneyDigits: MoneyDigits,
     actor: AuthContext,
@@ -46,9 +51,17 @@ export class DeliveryRepsDriverOrdersService {
   private readonly accountingPosting: AccountingPostingService;
   private readonly salesFinance: SalesFinanceService;
   private readonly tenantPredicate: (actor: AuthContext) => RawBuilder<boolean>;
-  private readonly getDeliveryFeeMode: (trx: Kysely<Database>, actor: AuthContext) => Promise<'freelance_courier' | 'store_fleet'>;
+  private readonly getDeliveryFeeMode: (
+    trx: Kysely<Database>,
+    actor: AuthContext,
+  ) => Promise<'freelance_courier' | 'store_fleet'>;
   private readonly repOrderCashDue: (
-    order: { id: number; delivery_fee_mode: string | null; collection_status?: string | null; paid_amount?: number | string | null },
+    order: {
+      id: number;
+      delivery_fee_mode: string | null;
+      collection_status?: string | null;
+      paid_amount?: number | string | null;
+    },
     defaultMode: 'freelance_courier' | 'store_fleet',
     moneyDigits: MoneyDigits,
     actor: AuthContext,
@@ -64,11 +77,18 @@ export class DeliveryRepsDriverOrdersService {
     this.repOrderCashDue = deps.repOrderCashDue;
   }
 
-  async driverListOrders(repId: number, tenantId: string, accountId: string, filters?: { dateFrom?: string; dateTo?: string; status?: string; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {
+  async driverListOrders(
+    repId: number,
+    tenantId: string,
+    accountId: string,
+    filters?: { dateFrom?: string; dateTo?: string; status?: string; page?: number; pageSize?: number },
+  ): Promise<Record<string, unknown>> {
     const { page, pageSize, offset } = boundedPage(filters?.page, filters?.pageSize);
     let query = this.db
       .selectFrom('sales')
-      .leftJoin('customers', (join) => join.onRef('customers.id', '=', 'sales.customer_id').onRef('customers.tenant_id', '=', 'sales.tenant_id'))
+      .leftJoin('customers', (join) =>
+        join.onRef('customers.id', '=', 'sales.customer_id').onRef('customers.tenant_id', '=', 'sales.tenant_id'),
+      )
       .select([
         'sales.id',
         'sales.doc_no as docNo',
@@ -95,16 +115,20 @@ export class DeliveryRepsDriverOrdersService {
 
     if (filters?.status) {
       if (filters.status === 'pending') {
-        query = query.where((eb) => eb.or([
-          eb('sales.delivery_status', '!=', 'settled'),
-          eb('sales.delivery_status', 'is', null),
-        ]));
+        query = query.where((eb) =>
+          eb.or([eb('sales.delivery_status', '!=', 'settled'), eb('sales.delivery_status', 'is', null)]),
+        );
       } else if (filters.status === 'settled') {
         query = query.where('sales.delivery_status', '=', 'settled');
       }
     }
 
-    const orders = await query.orderBy('sales.created_at', 'desc').orderBy('sales.id', 'desc').limit(pageSize + 1).offset(offset).execute();
+    const orders = await query
+      .orderBy('sales.created_at', 'desc')
+      .orderBy('sales.id', 'desc')
+      .limit(pageSize + 1)
+      .offset(offset)
+      .execute();
     // INV-DRIVER-PORTAL-REMAINING-AMOUNT (M15): the driver portal
     // showed the raw invoice total per row (and summed it into the
     // pending badge) although the rep owes only the remaining cash
@@ -139,7 +163,7 @@ export class DeliveryRepsDriverOrdersService {
     saleId: number,
     repId: number,
     tenantId: string,
-    payload?: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string }
+    payload?: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string },
   ): Promise<Record<string, unknown>> {
     await this.db.transaction().execute(async (trx) => {
       const sale = await trx
@@ -167,7 +191,11 @@ export class DeliveryRepsDriverOrdersService {
       // any rep, so marking it delivered would skip dispatch/custody
       // entirely (pending -> delivered directly).
       if (sale.delivery_status !== 'out_for_delivery') {
-        throw new AppError('لا يمكن إثبات توصيل طلب لم يُصرف بعد؛ اصرف الطلب إلى المندوب أولاً', 'DELIVERY_NOT_DISPATCHED', 409);
+        throw new AppError(
+          'لا يمكن إثبات توصيل طلب لم يُصرف بعد؛ اصرف الطلب إلى المندوب أولاً',
+          'DELIVERY_NOT_DISPATCHED',
+          409,
+        );
       }
 
       const updateData: Record<string, any> = {
@@ -207,13 +235,16 @@ export class DeliveryRepsDriverOrdersService {
    */
   async dispatchOrders(
     actor: AuthContext,
-    payload: { repId: number; saleIds?: number[]; onlineOrderIds?: number[]; notes?: string }
+    payload: { repId: number; saleIds?: number[]; onlineOrderIds?: number[]; notes?: string },
   ) {
     const validateIds = (ids: number[] | undefined): number[] => {
       const values = ids || [];
-      if (!Array.isArray(values) || values.length > 200 ||
-          values.some(id => !Number.isSafeInteger(id) || id <= 0) ||
-          new Set(values).size !== values.length) {
+      if (
+        !Array.isArray(values) ||
+        values.length > 200 ||
+        values.some((id) => !Number.isSafeInteger(id) || id <= 0) ||
+        new Set(values).size !== values.length
+      ) {
         throw new AppError('معرفات الطلبات غير صالحة أو مكررة', 'DELIVERY_DISPATCH_INVALID_IDS', 400);
       }
       return values;
@@ -225,9 +256,11 @@ export class DeliveryRepsDriverOrdersService {
     }
 
     const result = await this.db.transaction().execute(async (trx) => {
-      const rep = await trx.selectFrom('delivery_representatives')
+      const rep = await trx
+        .selectFrom('delivery_representatives')
         .select(['id', 'name', 'phone', 'is_active'])
-        .where('id', '=', payload.repId).where(this.tenantPredicate(actor))
+        .where('id', '=', payload.repId)
+        .where(this.tenantPredicate(actor))
         .executeTakeFirst();
       if (!rep || !rep.is_active) {
         throw new AppError('مندوب التوصيل غير موجود أو غير نشط', 'DELIVERY_REP_NOT_FOUND', 404);
@@ -246,76 +279,121 @@ export class DeliveryRepsDriverOrdersService {
       const auditEntries: Array<{ orderLabel: string; oldRepId: number | null }> = [];
 
       if (saleIds.length) {
-        const sales = await trx.selectFrom('sales')
-          .select(['id','doc_no','customer_phone','order_type','status','delivery_status','delivery_rep_id'])
-          .where('id', 'in', saleIds).where(this.tenantPredicate(actor))
-          .orderBy('id', 'asc').forUpdate().execute();
-        if (sales.length !== saleIds.length ||
-            sales.some(s => s.status === 'cancelled' ||
+        const sales = await trx
+          .selectFrom('sales')
+          .select(['id', 'doc_no', 'customer_phone', 'order_type', 'status', 'delivery_status', 'delivery_rep_id'])
+          .where('id', 'in', saleIds)
+          .where(this.tenantPredicate(actor))
+          .orderBy('id', 'asc')
+          .forUpdate()
+          .execute();
+        if (
+          sales.length !== saleIds.length ||
+          sales.some(
+            (s) =>
+              s.status === 'cancelled' ||
               ['delivered', 'settled'].includes(String(s.delivery_status)) ||
-              (s.delivery_rep_id && Number(s.delivery_rep_id) !== Number(rep.id) &&
-                !['pending', null].includes(s.delivery_status)))) {
-          throw new AppError('لا يمكن إسناد طلب ملغي أو مسلّم بالفعل أو في عهدة مندوب آخر', 'DELIVERY_DISPATCH_FORBIDDEN', 409);
+              (s.delivery_rep_id &&
+                Number(s.delivery_rep_id) !== Number(rep.id) &&
+                !['pending', null].includes(s.delivery_status)),
+          )
+        ) {
+          throw new AppError(
+            'لا يمكن إسناد طلب ملغي أو مسلّم بالفعل أو في عهدة مندوب آخر',
+            'DELIVERY_DISPATCH_FORBIDDEN',
+            409,
+          );
         }
         // C4: a pending order re-assigned to another rep is allowed,
         // but the old -> new rep move must be recorded, not silent.
         for (const s of sales) {
           auditEntries.push({
             orderLabel: `#${s.id}`,
-            oldRepId: s.delivery_rep_id && Number(s.delivery_rep_id) !== Number(rep.id)
-              ? Number(s.delivery_rep_id)
-              : null,
+            oldRepId:
+              s.delivery_rep_id && Number(s.delivery_rep_id) !== Number(rep.id) ? Number(s.delivery_rep_id) : null,
           });
         }
-        await trx.updateTable('sales').set({
-          order_type: 'delivery',
-          delivery_rep_id: rep.id,
-          delivery_status: 'out_for_delivery',
-          dispatched_at: now,
-          ...(payload.notes ? { note: sql`COALESCE(note, '') || ${' [' + payload.notes + ']'}` as any } : {}),
-        }).where('id', 'in', saleIds).where(this.tenantPredicate(actor)).execute();
+        await trx
+          .updateTable('sales')
+          .set({
+            order_type: 'delivery',
+            delivery_rep_id: rep.id,
+            delivery_status: 'out_for_delivery',
+            dispatched_at: now,
+            ...(payload.notes ? { note: sql`COALESCE(note, '') || ${' [' + payload.notes + ']'}` as any } : {}),
+          })
+          .where('id', 'in', saleIds)
+          .where(this.tenantPredicate(actor))
+          .execute();
 
-        for (const s of sales) if (s.customer_phone) {
-          notifications.push({
-            recipientPhone: s.customer_phone,
-            orderNumber: s.doc_no || `SALE-${s.id}`,
-            text: `عزيزي العميل، طلبك رقم #${s.doc_no || s.id} في الطريق إليك مع كابتن التوصيل ${rep.name} (${rep.phone || ''}). نتمنى لك وجبة شهية!`,
-          });
-        }
+        for (const s of sales)
+          if (s.customer_phone) {
+            notifications.push({
+              recipientPhone: s.customer_phone,
+              orderNumber: s.doc_no || `SALE-${s.id}`,
+              text: `عزيزي العميل، طلبك رقم #${s.doc_no || s.id} في الطريق إليك مع كابتن التوصيل ${rep.name} (${rep.phone || ''}). نتمنى لك وجبة شهية!`,
+            });
+          }
       }
 
       if (onlineOrderIds.length) {
-        const orders = await trx.selectFrom('online_orders')
-          .select(['id','order_number','customer_phone','status','sale_id'])
-          .where('id', 'in', onlineOrderIds).where(this.tenantPredicate(actor))
-          .orderBy('id', 'asc').forUpdate().execute();
-        if (orders.length !== onlineOrderIds.length ||
-            orders.some(order => ['cancelled','delivered','returned'].includes(String(order.status)))) {
+        const orders = await trx
+          .selectFrom('online_orders')
+          .select(['id', 'order_number', 'customer_phone', 'status', 'sale_id'])
+          .where('id', 'in', onlineOrderIds)
+          .where(this.tenantPredicate(actor))
+          .orderBy('id', 'asc')
+          .forUpdate()
+          .execute();
+        if (
+          orders.length !== onlineOrderIds.length ||
+          orders.some((order) => ['cancelled', 'delivered', 'returned'].includes(String(order.status)))
+        ) {
           throw new AppError('طلب أونلاين غير موجود أو أُلغي أو سُلّم بالفعل', 'DELIVERY_DISPATCH_FORBIDDEN', 409);
         }
-        await trx.updateTable('online_orders').set({
-          status: 'shipped', dispatched_at: now,
-        }).where('id','in',onlineOrderIds).where(this.tenantPredicate(actor)).execute();
+        await trx
+          .updateTable('online_orders')
+          .set({
+            status: 'shipped',
+            dispatched_at: now,
+          })
+          .where('id', 'in', onlineOrderIds)
+          .where(this.tenantPredicate(actor))
+          .execute();
 
-        const linkedSaleIds = orders.map(o => o.sale_id).filter((id): id is number => Boolean(id) && Number(id) > 0);
+        const linkedSaleIds = orders.map((o) => o.sale_id).filter((id): id is number => Boolean(id) && Number(id) > 0);
         dispatchedSaleIds.push(...linkedSaleIds);
         if (linkedSaleIds.length > 0) {
           // C2 (INV-DISPATCH-STATE-GUARDS-AUDIT): mirror the saleIds
           // guard on the linked sale — a settled sale, or one already
           // out for delivery in another rep's custody, must be
           // refused here too, not silently overwritten.
-          const linkedSales = await trx.selectFrom('sales')
+          const linkedSales = await trx
+            .selectFrom('sales')
             .select(['id', 'status', 'delivery_status', 'delivery_rep_id'])
-            .where('id', 'in', [...new Set(linkedSaleIds)]).where(this.tenantPredicate(actor))
-            .orderBy('id', 'asc').forUpdate().execute();
-          if (linkedSales.length !== new Set(linkedSaleIds).size ||
-              linkedSales.some(s => s.status === 'cancelled' ||
+            .where('id', 'in', [...new Set(linkedSaleIds)])
+            .where(this.tenantPredicate(actor))
+            .orderBy('id', 'asc')
+            .forUpdate()
+            .execute();
+          if (
+            linkedSales.length !== new Set(linkedSaleIds).size ||
+            linkedSales.some(
+              (s) =>
+                s.status === 'cancelled' ||
                 ['delivered', 'settled'].includes(String(s.delivery_status)) ||
-                (s.delivery_rep_id && Number(s.delivery_rep_id) !== Number(rep.id) &&
-                  !['pending', null].includes(s.delivery_status)))) {
-            throw new AppError('لا يمكن إسناد طلب أونلاين مسلّم بالفعل أو مُسوَّى أو في عهدة مندوب آخر', 'DELIVERY_DISPATCH_FORBIDDEN', 409);
+                (s.delivery_rep_id &&
+                  Number(s.delivery_rep_id) !== Number(rep.id) &&
+                  !['pending', null].includes(s.delivery_status)),
+            )
+          ) {
+            throw new AppError(
+              'لا يمكن إسناد طلب أونلاين مسلّم بالفعل أو مُسوَّى أو في عهدة مندوب آخر',
+              'DELIVERY_DISPATCH_FORBIDDEN',
+              409,
+            );
           }
-          const linkedById = new Map(linkedSales.map(s => [Number(s.id), s]));
+          const linkedById = new Map(linkedSales.map((s) => [Number(s.id), s]));
           for (const order of orders) {
             if (!order.sale_id) {
               auditEntries.push({ orderLabel: `أونلاين #${order.order_number || order.id}`, oldRepId: null });
@@ -324,18 +402,24 @@ export class DeliveryRepsDriverOrdersService {
             const linked = linkedById.get(Number(order.sale_id));
             auditEntries.push({
               orderLabel: `#${order.sale_id}`,
-              oldRepId: linked && linked.delivery_rep_id && Number(linked.delivery_rep_id) !== Number(rep.id)
-                ? Number(linked.delivery_rep_id)
-                : null,
+              oldRepId:
+                linked && linked.delivery_rep_id && Number(linked.delivery_rep_id) !== Number(rep.id)
+                  ? Number(linked.delivery_rep_id)
+                  : null,
             });
           }
-          await trx.updateTable('sales').set({
-            order_type: 'delivery',
-            delivery_rep_id: rep.id,
-            delivery_status: 'out_for_delivery',
-            dispatched_at: now,
-            ...(payload.notes ? { note: sql`COALESCE(note, '') || ${' [' + payload.notes + ']'}` as any } : {}),
-          }).where('id', 'in', linkedSaleIds).where(this.tenantPredicate(actor)).execute();
+          await trx
+            .updateTable('sales')
+            .set({
+              order_type: 'delivery',
+              delivery_rep_id: rep.id,
+              delivery_status: 'out_for_delivery',
+              dispatched_at: now,
+              ...(payload.notes ? { note: sql`COALESCE(note, '') || ${' [' + payload.notes + ']'}` as any } : {}),
+            })
+            .where('id', 'in', linkedSaleIds)
+            .where(this.tenantPredicate(actor))
+            .execute();
         } else {
           // Online orders with no linked sale still get an audit row.
           for (const order of orders) {
@@ -343,13 +427,14 @@ export class DeliveryRepsDriverOrdersService {
           }
         }
 
-        for (const order of orders) if (order.customer_phone) {
-          notifications.push({
-            recipientPhone: order.customer_phone,
-            orderNumber: order.order_number,
-            text: `عزيزي العميل، طلبك رقم #${order.order_number} في الطريق إليك مع كابتن التوصيل ${rep.name} (${rep.phone || ''}). نتمنى لك وجبة شهية!`,
-          });
-        }
+        for (const order of orders)
+          if (order.customer_phone) {
+            notifications.push({
+              recipientPhone: order.customer_phone,
+              orderNumber: order.order_number,
+              text: `عزيزي العميل، طلبك رقم #${order.order_number} في الطريق إليك مع كابتن التوصيل ${rep.name} (${rep.phone || ''}). نتمنى لك وجبة شهية!`,
+            });
+          }
       }
       // D-SF-02 (INV-SF-COD-CUSTODY-GL): dispatch moves the COD
       // receivable off the customer to courier custody — GL
@@ -360,22 +445,38 @@ export class DeliveryRepsDriverOrdersService {
       // to the same rep is idempotent there and writes no second
       // ledger leg.
       for (const dispatchedSaleId of dispatchedSaleIds) {
-        const reclass = await this.accountingPosting.postDeliveryCustodyReclassification(trx, dispatchedSaleId, rep.id, actor);
+        const reclass = await this.accountingPosting.postDeliveryCustodyReclassification(
+          trx,
+          dispatchedSaleId,
+          rep.id,
+          actor,
+        );
         if (reclass.posted && reclass.amount > 0 && reclass.customerId) {
-          await this.salesFinance.addCustomerLedgerLeg(trx, reclass.customerId, -reclass.amount, 'delivery_custody_transfer', `نقل عهدة فاتورة #${reclass.docNo} إلى مندوب التوصيل ${rep.name}`, 'sale', dispatchedSaleId, actor);
+          await this.salesFinance.addCustomerLedgerLeg(
+            trx,
+            reclass.customerId,
+            -reclass.amount,
+            'delivery_custody_transfer',
+            `نقل عهدة فاتورة #${reclass.docNo} إلى مندوب التوصيل ${rep.name}`,
+            'sale',
+            dispatchedSaleId,
+            actor,
+          );
         }
       }
       // C12: one audit row per dispatched item, in this same
       // transaction. A re-assignment row names the old rep too.
       for (const entry of auditEntries) {
         const reassigned = entry.oldRepId !== null;
-        await this.audit.logWithExecutor(trx,
+        await this.audit.logWithExecutor(
+          trx,
           reassigned ? 'إعادة إسناد طلب توصيل' : 'إسناد طلب توصيل',
           reassigned
             ? `تمت إعادة إسناد الطلب ${entry.orderLabel} من المندوب #${entry.oldRepId} إلى المندوب ${rep.name} (#${rep.id}) بواسطة ${actor.username}`
             : `تم إسناد الطلب ${entry.orderLabel} إلى المندوب ${rep.name} (#${rep.id}) بواسطة ${actor.username}`,
           actor,
-          { eventCode: 'DELIVERY_ORDER_DISPATCHED' });
+          { eventCode: 'DELIVERY_ORDER_DISPATCHED' },
+        );
       }
       return { rep, notifications };
     });

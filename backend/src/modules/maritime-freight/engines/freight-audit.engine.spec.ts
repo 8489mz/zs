@@ -1,8 +1,5 @@
 import { strict as assert } from 'node:assert';
-import {
-  calculateFreightAudit,
-  validateMakerCheckerOverride,
-} from './freight-audit.engine';
+import { calculateFreightAudit, validateMakerCheckerOverride } from './freight-audit.engine';
 
 const sampleRateCard = {
   id: 101,

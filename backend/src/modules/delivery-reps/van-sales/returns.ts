@@ -12,12 +12,7 @@ export class ReturnsService {
     return this.vanReturnsService.getCustomerEligibleSales(tenantId, customerId, repId);
   }
 
-  async submitFieldReturn(
-    repId: number,
-    tenantId: string,
-    accountId: string,
-    payload: SubmitFieldReturnPayload,
-  ) {
+  async submitFieldReturn(repId: number, tenantId: string, accountId: string, payload: SubmitFieldReturnPayload) {
     return this.vanReturnsService.submitFieldReturn(repId, tenantId, accountId, payload);
   }
 

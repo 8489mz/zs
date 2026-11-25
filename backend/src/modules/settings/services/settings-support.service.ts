@@ -21,7 +21,10 @@ export class SettingsSupportService {
 
   assertAdmin(auth?: AuthContext | null): asserts auth is AuthContext {
     if (!auth) throw new ForbiddenException('Authentication required');
-    const canManage = auth.role === 'super_admin' || auth.permissions.includes('settings') || auth.permissions.includes('canManageSettings');
+    const canManage =
+      auth.role === 'super_admin' ||
+      auth.permissions.includes('settings') ||
+      auth.permissions.includes('canManageSettings');
     if (!canManage) throw new ForbiddenException('Missing required permissions');
     requireTenantScope(auth);
   }
@@ -30,17 +33,32 @@ export class SettingsSupportService {
     this.assertAdmin(actor);
     const { tenantId } = requireTenantScope(actor);
     const zip = new AdmZip();
-    const auditRows = await this.db.selectFrom('audit_logs')
+    const auditRows = await this.db
+      .selectFrom('audit_logs')
       .select(['id', 'action', 'event_code', 'details', 'created_at'])
       .where('tenant_id', '=', tenantId)
-      .orderBy('id', 'desc').limit(250).execute();
-    zip.addFile('tenant-audit.json', Buffer.from(JSON.stringify({
-      tenantId,
-      generatedAt: new Date().toISOString(),
-      auditLogs: auditRows,
-    }, null, 2), 'utf8'));
+      .orderBy('id', 'desc')
+      .limit(250)
+      .execute();
+    zip.addFile(
+      'tenant-audit.json',
+      Buffer.from(
+        JSON.stringify(
+          {
+            tenantId,
+            generatedAt: new Date().toISOString(),
+            auditLogs: auditRows,
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      ),
+    );
     const buffer = zip.toBuffer();
-    await this.audit.log('استخراج حزمة الدعم', `تم إنشاء حزمة الدعم الفني بواسطة ${actor.username}`, actor).catch(() => undefined);
+    await this.audit
+      .log('استخراج حزمة الدعم', `تم إنشاء حزمة الدعم الفني بواسطة ${actor.username}`, actor)
+      .catch(() => undefined);
     return buffer;
   }
 
@@ -109,7 +127,10 @@ export class SettingsSupportService {
             // Basic redaction for tokens/passwords
             const redacted = content
               .replace(/(eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g, '[REDACTED_JWT]')
-              .replace(/(password|secret|pwd|pass|token|smtp_pass|smtp_user|session_?id|sid)[\s:=]+['"]?[^'"\s,]+['"]?/gi, '$1=[REDACTED]')
+              .replace(
+                /(password|secret|pwd|pass|token|smtp_pass|smtp_user|session_?id|sid)[\s:=]+['"]?[^'"\s,]+['"]?/gi,
+                '$1=[REDACTED]',
+              )
               .replace(/(?:mongodb|postgres|mysql|redis):\/\/[^"\s]+/gi, '[REDACTED_CONNECTION_STRING]');
 
             const lines = redacted.split('\n');
@@ -126,14 +147,17 @@ export class SettingsSupportService {
     return zip.toBuffer();
   }
 
-  async resolveClientMeta(tenantId?: string): Promise<{ clientName: string; clientIdentifier: string; appVersion: string }> {
+  async resolveClientMeta(
+    tenantId?: string,
+  ): Promise<{ clientName: string; clientIdentifier: string; appVersion: string }> {
     let clientName = tenantId ? '' : 'Platform diagnostics';
     let clientIdentifier = tenantId || 'platform';
     const appVersion = process.env.npm_package_version || '1.1.30';
 
     try {
-      const tenant = tenantId ? await this.db.selectFrom('tenants').selectAll()
-        .where('id', '=', tenantId).executeTakeFirst() : null;
+      const tenant = tenantId
+        ? await this.db.selectFrom('tenants').selectAll().where('id', '=', tenantId).executeTakeFirst()
+        : null;
       if (tenant?.business_name) {
         clientName = tenant.business_name;
         if (tenant.id) clientIdentifier = String(tenant.id);
@@ -167,18 +191,18 @@ export class SettingsSupportService {
       this.assertAdmin(actor);
     }
 
-    const bundleBuffer = existingBuffer || (actor
-      ? await this.generateSupportBundle(actor)
-      : await this.generateSupportBundleInternal());
-    const { clientName, clientIdentifier, appVersion } = await this.resolveClientMeta(actor ? requireTenantScope(actor).tenantId : undefined);
+    const bundleBuffer =
+      existingBuffer || (actor ? await this.generateSupportBundle(actor) : await this.generateSupportBundleInternal());
+    const { clientName, clientIdentifier, appVersion } = await this.resolveClientMeta(
+      actor ? requireTenantScope(actor).tenantId : undefined,
+    );
 
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
     const logPeriod = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
 
     const centralUrl =
-      process.env.CENTRAL_DIAGNOSTICS_URL ||
-      'https://app.zsystemai.com/api/v1/saas-admin/diagnostics/upload';
+      process.env.CENTRAL_DIAGNOSTICS_URL || 'https://app.zsystemai.com/api/v1/saas-admin/diagnostics/upload';
 
     const formData = new FormData();
     formData.append(

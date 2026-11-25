@@ -72,7 +72,7 @@ export class TicketPartsSlice {
             available: Number(row.qty || 0) - Number(row.reserved_qty || 0),
           }))
           .filter((row) => row.available >= deductQty)
-          .sort((a, b) => (b.available - a.available) || (a.locationId - b.locationId));
+          .sort((a, b) => b.available - a.available || a.locationId - b.locationId);
         const best = covering[0];
         if (best) {
           targetLocationId = best.locationId;
@@ -130,16 +130,26 @@ export class TicketPartsSlice {
         errorMessage: `الرصيد غير كافٍ لصرف قطعة الغيار ${payload.productName.trim()}`,
       });
 
-      const product = await trx.selectFrom('products').select('cost_price')
-        .where('tenant_id', '=', scope.tenantId).where('id', '=', payload.productId).executeTakeFirstOrThrow();
+      const product = await trx
+        .selectFrom('products')
+        .select('cost_price')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('id', '=', payload.productId)
+        .executeTakeFirstOrThrow();
       const unitCost = Number(product.cost_price);
-      const stockValue = roundMoney(unitCost * deductQty, currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)));
+      const stockValue = roundMoney(
+        unitCost * deductQty,
+        currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)),
+      );
       if (!Number.isFinite(stockValue) || unitCost < 0) {
         throw new AppError('Maintenance stock cost is invalid', 'MAINTENANCE_STOCK_COST_INVALID', 422);
       }
-      await trx.updateTable('maintenance_ticket_parts')
-        .set({ unit_cost: unitCost }).where('tenant_id', '=', scope.tenantId)
-        .where('id', '=', Number(partRes?.id)).execute();
+      await trx
+        .updateTable('maintenance_ticket_parts')
+        .set({ unit_cost: unitCost })
+        .where('tenant_id', '=', scope.tenantId)
+        .where('id', '=', Number(partRes?.id))
+        .execute();
       const movement = await trx
         .insertInto('stock_movements')
         .values({
@@ -160,13 +170,23 @@ export class TicketPartsSlice {
           tenant_id: scope.tenantId,
           account_id: scope.accountId,
         } as any)
-        .returning('id').executeTakeFirstOrThrow();
+        .returning('id')
+        .executeTakeFirstOrThrow();
       if (stockValue > 0) {
-        await postMaintenanceJournal(trx, this.accountingFoundation, this.accountingPosting, auth,
-          'maintenance_part_issue', Number(movement.id), targetBranchId, targetLocationId, [
+        await postMaintenanceJournal(
+          trx,
+          this.accountingFoundation,
+          this.accountingPosting,
+          auth,
+          'maintenance_part_issue',
+          Number(movement.id),
+          targetBranchId,
+          targetLocationId,
+          [
             { code: '5100', debit: stockValue, description: 'Maintenance part consumption cost' },
             { code: '1140', credit: stockValue, description: 'Inventory consumed on maintenance job' },
-          ]);
+          ],
+        );
       }
 
       let newFinalCost = Number(ticket.final_cost || 0);
@@ -214,7 +234,11 @@ export class TicketPartsSlice {
         throw new AppError('قطعة الغيار غير موجودة بالتذكرة', 'PART_NOT_FOUND', 404);
       }
       if (ticket.status === 'delivered') {
-        throw new AppError('Delivered maintenance parts require a formal reversal', 'MAINTENANCE_REVERSAL_REQUIRED', 409);
+        throw new AppError(
+          'Delivered maintenance parts require a formal reversal',
+          'MAINTENANCE_REVERSAL_REQUIRED',
+          409,
+        );
       }
 
       await trx
@@ -224,7 +248,11 @@ export class TicketPartsSlice {
         .execute();
 
       const returnQty = Number(part.qty);
-      const targetLocationId = part.location_id ? Number(part.location_id) : (ticket.location_id ? Number(ticket.location_id) : null);
+      const targetLocationId = part.location_id
+        ? Number(part.location_id)
+        : ticket.location_id
+          ? Number(ticket.location_id)
+          : null;
       let targetBranchId = ticket.branch_id ? Number(ticket.branch_id) : null;
 
       // Same branch derivation as addPart (see there): a branchless
@@ -256,14 +284,23 @@ export class TicketPartsSlice {
         allowNegative: true,
       });
 
-      const stockValue = roundMoney(Number(part.unit_cost) * returnQty, currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)));
+      const stockValue = roundMoney(
+        Number(part.unit_cost) * returnQty,
+        currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)),
+      );
       if (!Number.isFinite(stockValue) || Number(part.unit_cost) < 0) {
         throw new AppError('Historical part cost is invalid', 'MAINTENANCE_STOCK_COST_INVALID', 422);
       }
       // A return restores inventory at its historical consumed cost, not the
       // current price of any later purchases; refresh WAC under product lock.
-      await valueStockReceipt(trx, scope.tenantId, Number(part.product_id),
-        stockChange.globalAfter, returnQty, stockValue);
+      await valueStockReceipt(
+        trx,
+        scope.tenantId,
+        Number(part.product_id),
+        stockChange.globalAfter,
+        returnQty,
+        stockValue,
+      );
       const movement = await trx
         .insertInto('stock_movements')
         .values({
@@ -284,13 +321,23 @@ export class TicketPartsSlice {
           tenant_id: scope.tenantId,
           account_id: scope.accountId,
         } as any)
-        .returning('id').executeTakeFirstOrThrow();
+        .returning('id')
+        .executeTakeFirstOrThrow();
       if (stockValue > 0) {
-        await postMaintenanceJournal(trx, this.accountingFoundation, this.accountingPosting, auth,
-          'maintenance_part_return', Number(movement.id), targetBranchId, targetLocationId, [
+        await postMaintenanceJournal(
+          trx,
+          this.accountingFoundation,
+          this.accountingPosting,
+          auth,
+          'maintenance_part_return',
+          Number(movement.id),
+          targetBranchId,
+          targetLocationId,
+          [
             { code: '1140', debit: stockValue, description: 'Returned maintenance spare part inventory' },
             { code: '5100', credit: stockValue, description: 'Reverse maintenance part cost' },
-          ]);
+          ],
+        );
       }
     });
 

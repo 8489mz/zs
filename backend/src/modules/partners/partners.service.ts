@@ -48,127 +48,94 @@ export class PartnersService {
       this.db,
       this.accountingPosting,
       {
-        tenantPredicate: (actor, alias) =>
-          this.tenantPredicate(actor, alias),
-        tenantId: (actor) =>
-          this.tenantId(actor),
-        tenantFields: (actor) =>
-          this.tenantFields(actor),
+        tenantPredicate: (actor, alias) => this.tenantPredicate(actor, alias),
+        tenantId: (actor) => this.tenantId(actor),
+        tenantFields: (actor) => this.tenantFields(actor),
       },
     ));
   }
 
   private customerListingSliceInstance?: CustomerListingSlice;
   private get customerListingSlice(): CustomerListingSlice {
-    return (this.customerListingSliceInstance ??= new CustomerListingSlice(
-      this.db,
-      {
-        tenantPredicate: (actor, alias) =>
-          this.tenantPredicate(actor, alias),
-        tenantId: (actor) =>
-          this.tenantId(actor),
-      },
-    ));
+    return (this.customerListingSliceInstance ??= new CustomerListingSlice(this.db, {
+      tenantPredicate: (actor, alias) => this.tenantPredicate(actor, alias),
+      tenantId: (actor) => this.tenantId(actor),
+    }));
   }
 
   private customerAddressesPosSliceInstance?: CustomerAddressesPosSlice;
   private get customerAddressesPosSlice(): CustomerAddressesPosSlice {
-    return (this.customerAddressesPosSliceInstance ??= new CustomerAddressesPosSlice(
-      this.db,
-      {
-        tenantPredicate: (actor, alias) =>
-          this.tenantPredicate(actor, alias),
-        tenantId: (actor) =>
-          this.tenantId(actor),
-        getCustomerAddresses: (id, actor) =>
-          this.customerListingSlice.getCustomerAddresses(id, actor),
-      },
-    ));
+    return (this.customerAddressesPosSliceInstance ??= new CustomerAddressesPosSlice(this.db, {
+      tenantPredicate: (actor, alias) => this.tenantPredicate(actor, alias),
+      tenantId: (actor) => this.tenantId(actor),
+      getCustomerAddresses: (id, actor) => this.customerListingSlice.getCustomerAddresses(id, actor),
+    }));
   }
 
   private customerDeliveryProfileSliceInstance?: CustomerDeliveryProfileSlice;
   private get customerDeliveryProfileSlice(): CustomerDeliveryProfileSlice {
-    return (this.customerDeliveryProfileSliceInstance ??= new CustomerDeliveryProfileSlice(
-      this.db,
-      {
-        tenantPredicate: (actor, alias) =>
-          this.tenantPredicate(actor, alias),
-        extractCustomerAddresses: (customerAddress, metadata, rawSalesAddresses) =>
-          this.customerListingSlice.extractCustomerAddresses(customerAddress, metadata, rawSalesAddresses),
-      },
-    ));
+    return (this.customerDeliveryProfileSliceInstance ??= new CustomerDeliveryProfileSlice(this.db, {
+      tenantPredicate: (actor, alias) => this.tenantPredicate(actor, alias),
+      extractCustomerAddresses: (customerAddress, metadata, rawSalesAddresses) =>
+        this.customerListingSlice.extractCustomerAddresses(customerAddress, metadata, rawSalesAddresses),
+    }));
   }
 
   private customerCrudSliceInstance?: CustomerCrudSlice;
   private get customerCrudSlice(): CustomerCrudSlice {
-    return (this.customerCrudSliceInstance ??= new CustomerCrudSlice(
-      this.db,
-      this.audit,
-      {
-        tenantPredicate: (actor, alias) =>
-          this.tenantPredicate(actor, alias),
-        tenantId: (actor) =>
-          this.tenantId(actor),
-        tenantFields: (actor) =>
-          this.tenantFields(actor),
-        customerNameExists: (name, actor, excludeId) =>
-          this.customerOpeningBalancesSlice.customerNameExists(name, actor, excludeId),
-        findCustomerByPhone: (phone, actor, excludeId) =>
-          this.customerOpeningBalancesSlice.findCustomerByPhone(phone, actor, excludeId),
-        buildDuplicatePhoneWarning: (existing) =>
-          this.customerOpeningBalancesSlice.buildDuplicatePhoneWarning(existing),
-        addCustomerOpeningBalance: (customerId, amount, actor, db) =>
-          this.customerOpeningBalancesSlice.addCustomerOpeningBalance(customerId, amount, actor, db),
-        listCustomers: (query, actor) =>
-          this.customerListingSlice.listCustomers(query, actor),
-      },
-    ));
+    return (this.customerCrudSliceInstance ??= new CustomerCrudSlice(this.db, this.audit, {
+      tenantPredicate: (actor, alias) => this.tenantPredicate(actor, alias),
+      tenantId: (actor) => this.tenantId(actor),
+      tenantFields: (actor) => this.tenantFields(actor),
+      customerNameExists: (name, actor, excludeId) =>
+        this.customerOpeningBalancesSlice.customerNameExists(name, actor, excludeId),
+      findCustomerByPhone: (phone, actor, excludeId) =>
+        this.customerOpeningBalancesSlice.findCustomerByPhone(phone, actor, excludeId),
+      buildDuplicatePhoneWarning: (existing) => this.customerOpeningBalancesSlice.buildDuplicatePhoneWarning(existing),
+      addCustomerOpeningBalance: (customerId, amount, actor, db) =>
+        this.customerOpeningBalancesSlice.addCustomerOpeningBalance(customerId, amount, actor, db),
+      listCustomers: (query, actor) => this.customerListingSlice.listCustomers(query, actor),
+    }));
   }
 
   private supplierCrudSliceInstance?: SupplierCrudSlice;
   private get supplierCrudSlice(): SupplierCrudSlice {
-    return (this.supplierCrudSliceInstance ??= new SupplierCrudSlice(
-      this.db,
-      this.audit,
-      {
-        tenantPredicate: (actor, alias) =>
-          this.tenantPredicate(actor, alias),
-        tenantId: (actor) =>
-          this.tenantId(actor),
-        tenantFields: (actor) =>
-          this.tenantFields(actor),
-        supplierNameExists: (name, actor, excludeId) =>
-          this.customerOpeningBalancesSlice.supplierNameExists(name, actor, excludeId),
-        addSupplierOpeningBalance: (supplierId, amount, actor, db) =>
-          this.customerOpeningBalancesSlice.addSupplierOpeningBalance(supplierId, amount, actor, db),
-      },
-    ));
+    return (this.supplierCrudSliceInstance ??= new SupplierCrudSlice(this.db, this.audit, {
+      tenantPredicate: (actor, alias) => this.tenantPredicate(actor, alias),
+      tenantId: (actor) => this.tenantId(actor),
+      tenantFields: (actor) => this.tenantFields(actor),
+      supplierNameExists: (name, actor, excludeId) =>
+        this.customerOpeningBalancesSlice.supplierNameExists(name, actor, excludeId),
+      addSupplierOpeningBalance: (supplierId, amount, actor, db) =>
+        this.customerOpeningBalancesSlice.addSupplierOpeningBalance(supplierId, amount, actor, db),
+    }));
   }
 
   private partnerContactsLoyaltySliceInstance?: PartnerContactsLoyaltySlice;
   private get partnerContactsLoyaltySlice(): PartnerContactsLoyaltySlice {
-    return (this.partnerContactsLoyaltySliceInstance ??= new PartnerContactsLoyaltySlice(
-      this.db,
-      this.audit,
-      {
-        tenantPredicate: (actor, alias) =>
-          this.tenantPredicate(actor, alias),
-        tenantFields: (actor) =>
-          this.tenantFields(actor),
-        tenantId: (actor) =>
-          this.tenantId(actor),
-        accountId: (actor) =>
-          this.accountId(actor),
-      },
-    ));
+    return (this.partnerContactsLoyaltySliceInstance ??= new PartnerContactsLoyaltySlice(this.db, this.audit, {
+      tenantPredicate: (actor, alias) => this.tenantPredicate(actor, alias),
+      tenantFields: (actor) => this.tenantFields(actor),
+      tenantId: (actor) => this.tenantId(actor),
+      accountId: (actor) => this.accountId(actor),
+    }));
   }
 
-
-  private async addCustomerOpeningBalance(customerId: number, amount: number, actor: AuthContext, db: Kysely<Database>): Promise<void> {
+  private async addCustomerOpeningBalance(
+    customerId: number,
+    amount: number,
+    actor: AuthContext,
+    db: Kysely<Database>,
+  ): Promise<void> {
     return this.customerOpeningBalancesSlice.addCustomerOpeningBalance(customerId, amount, actor, db);
   }
 
-  private async addSupplierOpeningBalance(supplierId: number, amount: number, actor: AuthContext, db: Kysely<Database>): Promise<void> {
+  private async addSupplierOpeningBalance(
+    supplierId: number,
+    amount: number,
+    actor: AuthContext,
+    db: Kysely<Database>,
+  ): Promise<void> {
     return this.customerOpeningBalancesSlice.addSupplierOpeningBalance(supplierId, amount, actor, db);
   }
 
@@ -180,11 +147,19 @@ export class PartnersService {
     return this.customerListingSlice.getCustomerAddresses(id, actor);
   }
 
-  async addCustomerAddress(id: number, newAddress: string, actor: AuthContext): Promise<{ ok: boolean; addresses: string[] }> {
+  async addCustomerAddress(
+    id: number,
+    newAddress: string,
+    actor: AuthContext,
+  ): Promise<{ ok: boolean; addresses: string[] }> {
     return this.customerAddressesPosSlice.addCustomerAddress(id, newAddress, actor);
   }
 
-  async deleteCustomerAddress(id: number, addressToDelete: string, actor: AuthContext): Promise<{ ok: boolean; addresses: string[] }> {
+  async deleteCustomerAddress(
+    id: number,
+    addressToDelete: string,
+    actor: AuthContext,
+  ): Promise<{ ok: boolean; addresses: string[] }> {
     return this.customerAddressesPosSlice.deleteCustomerAddress(id, addressToDelete, actor);
   }
 
@@ -232,7 +207,12 @@ export class PartnersService {
     return this.partnerContactsLoyaltySlice.listContacts(partnerType, partnerId, actor);
   }
 
-  async createContact(partnerType: string, partnerId: number, payload: any, actor: AuthContext): Promise<Record<string, unknown>> {
+  async createContact(
+    partnerType: string,
+    partnerId: number,
+    payload: any,
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.partnerContactsLoyaltySlice.createContact(partnerType, partnerId, payload, actor);
   }
 
@@ -240,17 +220,22 @@ export class PartnersService {
     return this.partnerContactsLoyaltySlice.listAddresses(partnerType, partnerId, actor);
   }
 
-  async createAddress(partnerType: string, partnerId: number, payload: any, actor: AuthContext): Promise<Record<string, unknown>> {
+  async createAddress(
+    partnerType: string,
+    partnerId: number,
+    payload: any,
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.partnerContactsLoyaltySlice.createAddress(partnerType, partnerId, payload, actor);
   }
 
   async adjustCustomerLoyaltyPoints(
-      id: number,
-      pointsChange: number,
-      actionType: 'earn' | 'redeem' | 'manual_adjust',
-      notes: string | undefined,
-      actor: AuthContext,
-    ): Promise<Record<string, unknown>> {
+    id: number,
+    pointsChange: number,
+    actionType: 'earn' | 'redeem' | 'manual_adjust',
+    notes: string | undefined,
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.partnerContactsLoyaltySlice.adjustCustomerLoyaltyPoints(id, pointsChange, actionType, notes, actor);
   }
 

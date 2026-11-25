@@ -5,19 +5,9 @@ import { BadRequestException } from '@nestjs/common';
 // Single Source of Truth for Gateway G1 & Advance Payment Protection
 // =============================================================================
 
-export type GuaranteeType =
-  | 'advance_payment'
-  | 'performance'
-  | 'retention'
-  | 'maintenance'
-  | 'bid_bond';
+export type GuaranteeType = 'advance_payment' | 'performance' | 'retention' | 'maintenance' | 'bid_bond';
 
-export type GuaranteeStatus =
-  | 'active'
-  | 'expired'
-  | 'released'
-  | 'confiscated_invoked'
-  | 'cancelled';
+export type GuaranteeStatus = 'active' | 'expired' | 'released' | 'confiscated_invoked' | 'cancelled';
 
 export interface BankGuarantee {
   id: string;
@@ -89,7 +79,7 @@ export function assertAdvancePaymentGate(input: AdvancePaymentGateInput): Advanc
 
   if (matchingGuarantees.length === 0) {
     throw new BadRequestException(
-      'بوابة الاعتماد الرقابية G1: محظور صرف الدفعة المقدمة قطيعاً لعدم وجود خطاب ضمان دفعة مقدمة سارٍ (Advance Payment Guarantee) مسجل للمقاول/المشروع'
+      'بوابة الاعتماد الرقابية G1: محظور صرف الدفعة المقدمة قطيعاً لعدم وجود خطاب ضمان دفعة مقدمة سارٍ (Advance Payment Guarantee) مسجل للمقاول/المشروع',
     );
   }
 
@@ -115,11 +105,11 @@ export function assertAdvancePaymentGate(input: AdvancePaymentGateInput): Advanc
       const maxAvailable = Math.max(...sorted.map((g) => Number(g.amount)));
       if (priorDisbursed > 0) {
         throw new BadRequestException(
-          `بوابة الاعتماد الرقابية G1 (المعيار التراكمي G1-C): قيمة خطاب الضمان المتوفر (${maxAvailable.toLocaleString('en-US')} ج.م) غير كافية لتغطية إجمالي الدفعات المقدمة التراكمية (${totalCumulativeExposure.toLocaleString('en-US')} ج.م: منصرف سابق ${priorDisbursed.toLocaleString('en-US')} ج.م + دفعة حالية مطلوبة ${requestedDisbursementAmount.toLocaleString('en-US')} ج.م)`
+          `بوابة الاعتماد الرقابية G1 (المعيار التراكمي G1-C): قيمة خطاب الضمان المتوفر (${maxAvailable.toLocaleString('en-US')} ج.م) غير كافية لتغطية إجمالي الدفعات المقدمة التراكمية (${totalCumulativeExposure.toLocaleString('en-US')} ج.م: منصرف سابق ${priorDisbursed.toLocaleString('en-US')} ج.م + دفعة حالية مطلوبة ${requestedDisbursementAmount.toLocaleString('en-US')} ج.م)`,
         );
       } else {
         throw new BadRequestException(
-          `بوابة الاعتماد الرقابية G1: قيمة خطاب الضمان المتوفر (${maxAvailable.toLocaleString('en-US')} ج.م) غير كافية لتغطية الدفعة المقدمة المطلوبة (${requestedDisbursementAmount.toLocaleString('en-US')} ج.م)`
+          `بوابة الاعتماد الرقابية G1: قيمة خطاب الضمان المتوفر (${maxAvailable.toLocaleString('en-US')} ج.م) غير كافية لتغطية الدفعة المقدمة المطلوبة (${requestedDisbursementAmount.toLocaleString('en-US')} ج.م)`,
         );
       }
     }
@@ -127,12 +117,12 @@ export function assertAdvancePaymentGate(input: AdvancePaymentGateInput): Advanc
     const anyUnexpired = sorted.find((g) => g.expiry_date >= disbursementDate);
     if (!anyUnexpired) {
       throw new BadRequestException(
-        `بوابة الاعتماد الرقابية G1: خطاب ضمان الدفعة المقدمة رقم (${sorted[0].guarantee_number}) منتهي الصلاحية بتاريخ (${sorted[0].expiry_date}) قبل تاريخ الصرف (${disbursementDate})`
+        `بوابة الاعتماد الرقابية G1: خطاب ضمان الدفعة المقدمة رقم (${sorted[0].guarantee_number}) منتهي الصلاحية بتاريخ (${sorted[0].expiry_date}) قبل تاريخ الصرف (${disbursementDate})`,
       );
     }
 
     throw new BadRequestException(
-      'بوابة الاعتماد الرقابية G1: لم يتم العثور على خطاب ضمان سارٍ يغطي كلاً من التاريخ والمبلغ المطلوب'
+      'بوابة الاعتماد الرقابية G1: لم يتم العثور على خطاب ضمان سارٍ يغطي كلاً من التاريخ والمبلغ المطلوب',
     );
   }
 
@@ -189,9 +179,7 @@ export function checkIpcGuaranteeInterlocking(input: IpcInterlockingInput): IpcI
   }
 
   // Check if any guarantee is currently active and not expired
-  const unexpired = advanceGuarantees.find(
-    (g) => g.status === 'active' && g.expiry_date >= invoiceDate
-  );
+  const unexpired = advanceGuarantees.find((g) => g.status === 'active' && g.expiry_date >= invoiceDate);
 
   if (!unexpired) {
     const latest = advanceGuarantees[0];
@@ -231,7 +219,7 @@ export interface ExpiryAlertItem {
  */
 export function evaluateGuaranteeExpiryAlerts(
   guarantees: BankGuarantee[],
-  referenceDateStr: string
+  referenceDateStr: string,
 ): ExpiryAlertItem[] {
   const refDate = new Date(referenceDateStr);
   const alerts: ExpiryAlertItem[] = [];

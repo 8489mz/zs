@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
@@ -36,11 +30,7 @@ export class RecruitmentAtsService {
   ) {}
 
   private assertAccess(auth: AuthContext): void {
-    if (
-      auth.role === 'super_admin' ||
-      auth.permissions.includes('*') ||
-      auth.permissions.includes('hrEmployees')
-    ) {
+    if (auth.role === 'super_admin' || auth.permissions.includes('*') || auth.permissions.includes('hrEmployees')) {
       return;
     }
     throw new ForbiddenException('Missing required HR & Recruitment permissions');
@@ -86,10 +76,7 @@ export class RecruitmentAtsService {
     return { success: true, id, jobCode };
   }
 
-  async getJobOpenings(
-    auth: AuthContext,
-    params?: { status?: string; search?: string },
-  ): Promise<any[]> {
+  async getJobOpenings(auth: AuthContext, params?: { status?: string; search?: string }): Promise<any[]> {
     this.assertAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
@@ -117,11 +104,7 @@ export class RecruitmentAtsService {
     if (params?.search && params.search.trim()) {
       const term = `%${params.search.trim()}%`;
       query = query.where((eb: any) =>
-        eb.or([
-          eb('j.job_code', 'ilike', term),
-          eb('j.title', 'ilike', term),
-          eb('j.department', 'ilike', term),
-        ]),
+        eb.or([eb('j.job_code', 'ilike', term), eb('j.title', 'ilike', term), eb('j.department', 'ilike', term)]),
       );
     }
 
@@ -162,7 +145,13 @@ export class RecruitmentAtsService {
       .executeTakeFirst();
 
     const seq = Number(countRes?.count || 0) + 1;
-    const applicantNumber = formatDailyDocumentNumber('APP', seq, new Date(), 4, await getTenantTimezone(this.db, tenantId));
+    const applicantNumber = formatDailyDocumentNumber(
+      'APP',
+      seq,
+      new Date(),
+      4,
+      await getTenantTimezone(this.db, tenantId),
+    );
     const id = `app_${randomUUID()}`;
 
     await (this.db as any)
@@ -260,8 +249,11 @@ export class RecruitmentAtsService {
     return this.db.transaction().execute(async (trx) => {
       const applicant = await (trx as any)
         .selectFrom('recruitment_applicants')
-        .selectAll().where('id', '=', id).where('tenant_id', '=', tenantId)
-        .forUpdate().executeTakeFirst();
+        .selectAll()
+        .where('id', '=', id)
+        .where('tenant_id', '=', tenantId)
+        .forUpdate()
+        .executeTakeFirst();
       if (!applicant) throw new NotFoundException('Applicant not found');
 
       const check = validateStageTransition(applicant.stage, dto.stage);
@@ -269,8 +261,12 @@ export class RecruitmentAtsService {
       const updates: any = { stage: dto.stage, updated_at: new Date() };
       if (dto.interviewNotes !== undefined) updates.interview_notes = dto.interviewNotes;
       if (dto.rating !== undefined) updates.rating = dto.rating;
-      await (trx as any).updateTable('recruitment_applicants')
-        .set(updates).where('id', '=', id).where('tenant_id', '=', tenantId).execute();
+      await (trx as any)
+        .updateTable('recruitment_applicants')
+        .set(updates)
+        .where('id', '=', id)
+        .where('tenant_id', '=', tenantId)
+        .execute();
       return { success: true };
     });
   }
@@ -289,44 +285,65 @@ export class RecruitmentAtsService {
     }
     const { tenantId } = requireTenantScope(auth);
     const result = await this.db.transaction().execute(async (trx) => {
-      const applicant = await (trx as any).selectFrom('recruitment_applicants')
-        .selectAll().where('id', '=', id).where('tenant_id', '=', tenantId)
-        .forUpdate().executeTakeFirst();
+      const applicant = await (trx as any)
+        .selectFrom('recruitment_applicants')
+        .selectAll()
+        .where('id', '=', id)
+        .where('tenant_id', '=', tenantId)
+        .forUpdate()
+        .executeTakeFirst();
       if (!applicant) throw new NotFoundException('Applicant not found');
       if (applicant.stage === 'hired' || applicant.hired_employee_id) {
         throw new BadRequestException('تم تعيين هذا المرشح بالفعل');
       }
       let job: any = null;
       if (applicant.job_id) {
-        job = await (trx as any).selectFrom('recruitment_job_openings')
-          .selectAll().where('id', '=', applicant.job_id).where('tenant_id', '=', tenantId)
-          .forUpdate().executeTakeFirst();
+        job = await (trx as any)
+          .selectFrom('recruitment_job_openings')
+          .selectAll()
+          .where('id', '=', applicant.job_id)
+          .where('tenant_id', '=', tenantId)
+          .forUpdate()
+          .executeTakeFirst();
         if (!job || job.status === 'closed') throw new BadRequestException('الوظيفة غير متاحة للتعيين');
         if (!checkJobOpeningHeadcount(job.headcount, job.hired_count).canHire) {
           throw new BadRequestException('اكتمل العدد المطلوب لهذه الوظيفة');
         }
       }
-      const parts = String(applicant.full_name || '').trim().split(/\s+/);
-      const employeeId = await this.hrService.createEmployeeFromRecruitment(trx, {
-        firstName: parts[0] || '',
-        lastName: parts.slice(1).join(' '),
-        phone: String(applicant.phone || ''),
-        email: String(applicant.email || ''),
-        branchId: dto.branchId,
-        salary: dto.customSalary !== undefined ? dto.customSalary : Number(applicant.expected_salary || 0),
-      }, auth);
+      const parts = String(applicant.full_name || '')
+        .trim()
+        .split(/\s+/);
+      const employeeId = await this.hrService.createEmployeeFromRecruitment(
+        trx,
+        {
+          firstName: parts[0] || '',
+          lastName: parts.slice(1).join(' '),
+          phone: String(applicant.phone || ''),
+          email: String(applicant.email || ''),
+          branchId: dto.branchId,
+          salary: dto.customSalary !== undefined ? dto.customSalary : Number(applicant.expected_salary || 0),
+        },
+        auth,
+      );
 
-      await (trx as any).updateTable('recruitment_applicants')
+      await (trx as any)
+        .updateTable('recruitment_applicants')
         .set({ stage: 'hired', hired_employee_id: employeeId, updated_at: new Date() })
-        .where('id', '=', id).where('tenant_id', '=', tenantId).execute();
+        .where('id', '=', id)
+        .where('tenant_id', '=', tenantId)
+        .execute();
       if (job) {
         const hiredCount = Number(job.hired_count || 0) + 1;
-        await (trx as any).updateTable('recruitment_job_openings')
+        await (trx as any)
+          .updateTable('recruitment_job_openings')
           .set({
             hired_count: hiredCount,
             status: hiredCount >= Number(job.headcount) ? 'closed' : job.status,
             updated_at: new Date(),
-          }).where('id', '=', job.id).where('tenant_id', '=', tenantId).execute();
+          })
+          .where('id', '=', job.id)
+          .where('tenant_id', '=', tenantId)
+          .execute();
       }
       return { success: true, employeeId };
     });

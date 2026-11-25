@@ -3,16 +3,19 @@ import { MoneyDigits, toMinorUnits, fromMinorUnits } from '../../accounting/engi
 /** A bonus box increases stock but never creates an imaginary supplier liability. */
 export function buildDistributorPurchaseItem(
   line: {
-    productName: string; quantity: number; bonusQuantity?: number;
-    costPrice: number; batchNumber?: string; expiryDate?: string;
+    productName: string;
+    quantity: number;
+    bonusQuantity?: number;
+    costPrice: number;
+    batchNumber?: string;
+    expiryDate?: string;
   },
   productId: number,
   locationId: number,
   digits: MoneyDigits,
   isDrug = false,
 ) {
-  if (!Number.isSafeInteger(productId) || productId <= 0 ||
-      !Number.isSafeInteger(locationId) || locationId <= 0) {
+  if (!Number.isSafeInteger(productId) || productId <= 0 || !Number.isSafeInteger(locationId) || locationId <= 0) {
     throw new Error('Distributor invoice requires tenant-owned product and location');
   }
   const hasBatchOrExpiry = Boolean(line.batchNumber?.trim() || line.expiryDate?.trim());
@@ -32,8 +35,13 @@ export function buildDistributorPurchaseItem(
   const unitCost = Number((fromMinorUnits(purchasedValue, digits) / quantity).toFixed(6));
   if (!Number.isFinite(unitCost) || unitCost < 0) throw new Error('Distributor purchase unit cost invalid');
   return {
-    productId, name: line.productName.trim(), qty: quantity, cost: unitCost,
-    unitMultiplier: 1, locationId,
-    batchNumber: line.batchNumber?.trim() || undefined, expiryDate: line.expiryDate || undefined,
+    productId,
+    name: line.productName.trim(),
+    qty: quantity,
+    cost: unitCost,
+    unitMultiplier: 1,
+    locationId,
+    batchNumber: line.batchNumber?.trim() || undefined,
+    expiryDate: line.expiryDate || undefined,
   };
 }

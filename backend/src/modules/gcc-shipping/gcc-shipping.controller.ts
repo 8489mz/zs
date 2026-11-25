@@ -17,10 +17,7 @@ export class GccShippingController {
   }
 
   @Post('settings')
-  async saveSettings(
-    @Body() payload: Partial<GccShippingSettings>,
-    @Req() req: RequestWithAuth,
-  ) {
+  async saveSettings(@Body() payload: Partial<GccShippingSettings>, @Req() req: RequestWithAuth) {
     return this.gccShippingService.saveSettings(payload, req.authContext!);
   }
 
@@ -34,18 +31,12 @@ export class GccShippingController {
   }
 
   @Get('track/:trackingNumber')
-  async getTracking(
-    @Param('trackingNumber') trackingNumber: string,
-    @Req() req: RequestWithAuth,
-  ) {
+  async getTracking(@Param('trackingNumber') trackingNumber: string, @Req() req: RequestWithAuth) {
     return this.gccShippingService.getTracking(trackingNumber, req.authContext!);
   }
 
   @Get('awb-data/:trackingNumber')
-  async getAwbData(
-    @Param('trackingNumber') trackingNumber: string,
-    @Req() req: RequestWithAuth,
-  ) {
+  async getAwbData(@Param('trackingNumber') trackingNumber: string, @Req() req: RequestWithAuth) {
     return this.gccShippingService.getAwbPrintData(trackingNumber, req.authContext!);
   }
 
@@ -53,11 +44,7 @@ export class GccShippingController {
    * صفحة بوليصة الشحن الحرارية AWB المعتمدة للطباعة المباشرة على طابعات الباركود (4x6 إنش)
    */
   @Get('awb/:trackingNumber')
-  async printAwb(
-    @Param('trackingNumber') trackingNumber: string,
-    @Req() req: RequestWithAuth,
-    @Res() res: Response,
-  ) {
+  async printAwb(@Param('trackingNumber') trackingNumber: string, @Req() req: RequestWithAuth, @Res() res: Response) {
     const awb = await this.gccShippingService.getAwbPrintData(trackingNumber, req.authContext!);
     const carrierName = awb.carrier === 'aramex' ? 'ARAMEX EXPRESS 🔴' : 'SMSA EXPRESS 🟡';
     const isCod = awb.codAmount > 0;

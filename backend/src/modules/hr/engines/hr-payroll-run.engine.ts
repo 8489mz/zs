@@ -47,17 +47,21 @@ export function calculateHrPayrollRunLine(input: HrPayrollRunLineInput) {
   }
   const gross = money(
     nonnegative(line.baseSalary, 'baseSalary', minorUnits) +
-    nonnegative(line.allowanceAmount, 'allowanceAmount', minorUnits) +
-    nonnegative(line.overtimeAmount, 'overtimeAmount', minorUnits) +
-    nonnegative(line.commissionAmount, 'commissionAmount', minorUnits), minorUnits,
+      nonnegative(line.allowanceAmount, 'allowanceAmount', minorUnits) +
+      nonnegative(line.overtimeAmount, 'overtimeAmount', minorUnits) +
+      nonnegative(line.commissionAmount, 'commissionAmount', minorUnits),
+    minorUnits,
   );
   const attendance = nonnegative(line.attendanceDeduction, 'attendanceDeduction', minorUnits);
   const unpaidLeave = nonnegative(line.leaveDeduction, 'leaveDeduction', minorUnits);
   const wageAfterAbsence = Math.max(0, money(gross - attendance - unpaidLeave, minorUnits));
 
   let insuranceSalary: number;
-  if (input.policy.hrSocialInsuranceEnabled && input.eligibility.insured
-      && input.policy.insuranceWageBasis === 'employee_insurance_salary') {
+  if (
+    input.policy.hrSocialInsuranceEnabled &&
+    input.eligibility.insured &&
+    input.policy.insuranceWageBasis === 'employee_insurance_salary'
+  ) {
     insuranceSalary = nonnegative(input.configuredInsuranceSalary, 'configuredInsuranceSalary', minorUnits);
     if (insuranceSalary === 0) {
       throw new RangeError('أجر التأمينات الخاص بالموظف غير محدد وفق سياسة المنشأة');
@@ -65,26 +69,36 @@ export function calculateHrPayrollRunLine(input: HrPayrollRunLineInput) {
   } else {
     // "earned_base" means the full earnings base, not just baseSalary;
     // excluding allowances/overtime/commission silently underwithholds.
-    insuranceSalary = input.policy.insuranceWageBasis === 'earned_base'
-      ? wageAfterAbsence
-      : nonnegative(line.baseSalary, 'baseSalary', minorUnits);
+    insuranceSalary =
+      input.policy.insuranceWageBasis === 'earned_base'
+        ? wageAfterAbsence
+        : nonnegative(line.baseSalary, 'baseSalary', minorUnits);
   }
   // First pass calculates insurance; second pass calculates tax against the
   // explicitly selected tax base (with or without the employee insurance share).
   const insurance = calculateHrStatutoryAmounts(
     { ...input.policy, hrIncomeTaxEnabled: false },
     input.period,
-    { insured: input.eligibility.insured, taxable: false,
-      insuranceWage: insuranceSalary, taxableMonthlyWage: 0,
+    {
+      insured: input.eligibility.insured,
+      taxable: false,
+      insuranceWage: insuranceSalary,
+      taxableMonthlyWage: 0,
       insurancePeriodFraction: input.policy.insuranceProratePartialEmployment
-        ? (input.employmentMonthFraction ?? 1) : 1 },
+        ? (input.employmentMonthFraction ?? 1)
+        : 1,
+    },
     minorUnits,
   );
-  const taxableBeforeInsurance = input.policy.taxableEarningsBasis === 'gross_after_attendance_leave'
-    ? wageAfterAbsence : gross;
-  const taxableWage = Math.max(0, money(
-    taxableBeforeInsurance - (input.policy.taxDeductEmployeeInsurance ? insurance.employeeInsurance : 0), minorUnits,
-  ));
+  const taxableBeforeInsurance =
+    input.policy.taxableEarningsBasis === 'gross_after_attendance_leave' ? wageAfterAbsence : gross;
+  const taxableWage = Math.max(
+    0,
+    money(
+      taxableBeforeInsurance - (input.policy.taxDeductEmployeeInsurance ? insurance.employeeInsurance : 0),
+      minorUnits,
+    ),
+  );
   // D3 (INV-JOINER-TAX-FULL-MONTH-EQUIVALENT): tax is annualised on the
   // full-month-equivalent wage, not on prorated earnings. The statutory
   // engine annualises its input, so a partial-month employee's taxable
@@ -92,14 +106,19 @@ export function calculateHrPayrollRunLine(input: HrPayrollRunLineInput) {
   // absent, or outside (0, 1) leaves the wage unchanged: the guard can
   // only ever raise the tax base, never lower it, and never divides by 0.
   const employmentFraction = input.employmentMonthFraction ?? 1;
-  const fullMonthEquivalentTaxableWage = employmentFraction > 0 && employmentFraction < 1
-    ? money(taxableWage / employmentFraction, minorUnits)
-    : taxableWage;
+  const fullMonthEquivalentTaxableWage =
+    employmentFraction > 0 && employmentFraction < 1
+      ? money(taxableWage / employmentFraction, minorUnits)
+      : taxableWage;
   const tax = calculateHrStatutoryAmounts(
     { ...input.policy, hrSocialInsuranceEnabled: false },
     input.period,
-    { insured: false, taxable: input.eligibility.taxable,
-      insuranceWage: 0, taxableMonthlyWage: fullMonthEquivalentTaxableWage },
+    {
+      insured: false,
+      taxable: input.eligibility.taxable,
+      insuranceWage: 0,
+      taxableMonthlyWage: fullMonthEquivalentTaxableWage,
+    },
     minorUnits,
   );
 
@@ -136,8 +155,11 @@ export function requireStoredHrMoney(value: number, minorUnits: MoneyDigits): nu
 export const AUTO_PAYROLL_EXCLUSION_NOTE = 'استبعاد آلي: الموظف غير مستحق في فترة المسير';
 export const MANUAL_PAYROLL_EXCLUSION_NOTE = 'استبعاد يدوي من مسؤول المرتبات';
 export function canReincludeAutoExcludedPayrollItem(status: string, notes: string): boolean {
-  return status === 'excluded' && notes.includes(AUTO_PAYROLL_EXCLUSION_NOTE)
-    && !notes.includes(MANUAL_PAYROLL_EXCLUSION_NOTE);
+  return (
+    status === 'excluded' &&
+    notes.includes(AUTO_PAYROLL_EXCLUSION_NOTE) &&
+    !notes.includes(MANUAL_PAYROLL_EXCLUSION_NOTE)
+  );
 }
 
 /** A paid bank payroll must retain a bank-supplied traceable reference.
@@ -158,8 +180,12 @@ export function requireBankPayrollPaymentReference(channel: string, reference?: 
 // are no longer blocked here. EOS settlements and attendance-penalty
 // previews keep their own guards/precision and are separate packages.
 export function requirePayrollMonetaryCurrency(tenantCurrency: string, contractCurrency: string): void {
-  const tenant = String(tenantCurrency || '').trim().toUpperCase();
-  const contract = String(contractCurrency || '').trim().toUpperCase();
+  const tenant = String(tenantCurrency || '')
+    .trim()
+    .toUpperCase();
+  const contract = String(contractCurrency || '')
+    .trim()
+    .toUpperCase();
   if (!/^[A-Z]{3}$/.test(tenant) || !/^[A-Z]{3}$/.test(contract)) {
     throw new RangeError('حدد عملة منشأة وعملة عقد صحيحتين قبل حساب المرتب');
   }

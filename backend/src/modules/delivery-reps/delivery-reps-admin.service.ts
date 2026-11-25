@@ -105,9 +105,10 @@ export class DeliveryRepsAdminService {
     }
     const createPinRecord = payload.pinCode ? await createPasswordRecord(String(payload.pinCode)) : null;
 
-    const isVanRep = payload.isVanRep !== undefined
-      ? Boolean(payload.isVanRep)
-      : (payload.repType === 'van' || payload.repType === 'both');
+    const isVanRep =
+      payload.isVanRep !== undefined
+        ? Boolean(payload.isVanRep)
+        : payload.repType === 'van' || payload.repType === 'both';
     const repType = payload.repType || (isVanRep ? 'van' : 'delivery');
 
     const defaultPermissions = {
@@ -184,15 +185,22 @@ export class DeliveryRepsAdminService {
           )
         : undefined;
 
-    const isVanRep = payload.isVanRep !== undefined
-      ? Boolean(payload.isVanRep)
-      : (payload.repType ? (payload.repType === 'van' || payload.repType === 'both') : undefined);
+    const isVanRep =
+      payload.isVanRep !== undefined
+        ? Boolean(payload.isVanRep)
+        : payload.repType
+          ? payload.repType === 'van' || payload.repType === 'both'
+          : undefined;
 
     let mergedPermissions: any = undefined;
     if (payload.permissions !== undefined) {
       let currentPerms: any = {};
       if (typeof existing.permissions === 'string') {
-        try { currentPerms = JSON.parse(existing.permissions); } catch { currentPerms = {}; }
+        try {
+          currentPerms = JSON.parse(existing.permissions);
+        } catch {
+          currentPerms = {};
+        }
       } else if (existing.permissions && typeof existing.permissions === 'object') {
         currentPerms = existing.permissions;
       }
@@ -204,10 +212,10 @@ export class DeliveryRepsAdminService {
       .set({
         name,
         phone: payload.phone || null,
-        full_name: payload.fullName !== undefined ? (payload.fullName || null) : undefined,
-        national_id: payload.nationalId !== undefined ? (payload.nationalId || null) : undefined,
-        address: payload.address !== undefined ? (payload.address || null) : undefined,
-        vehicle_plate: payload.vehiclePlate !== undefined ? (payload.vehiclePlate || null) : undefined,
+        full_name: payload.fullName !== undefined ? payload.fullName || null : undefined,
+        national_id: payload.nationalId !== undefined ? payload.nationalId || null : undefined,
+        address: payload.address !== undefined ? payload.address || null : undefined,
+        vehicle_plate: payload.vehiclePlate !== undefined ? payload.vehiclePlate || null : undefined,
         pin_hash: updatePinRecord ? updatePinRecord.hash : undefined,
         pin_salt: updatePinRecord ? updatePinRecord.salt : undefined,
         rep_type: payload.repType !== undefined ? payload.repType : undefined,

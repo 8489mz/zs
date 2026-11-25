@@ -46,14 +46,14 @@ export class AddonsService {
       .execute();
 
     return {
-      addons: addons.map(a => ({
+      addons: addons.map((a) => ({
         id: String(a.id),
         name: a.name,
         price: Number(a.price),
         costPrice: Number(a.cost_price),
         isActive: a.is_active,
         createdAt: a.created_at,
-      }))
+      })),
     };
   }
 
@@ -140,7 +140,7 @@ export class AddonsService {
       options = await this.db
         .selectFrom('pos_modifier_options as pmo')
         .leftJoin('products as p', (join) =>
-          join.onRef('p.id', '=', 'pmo.component_product_id').onRef('p.tenant_id', '=', 'pmo.tenant_id')
+          join.onRef('p.id', '=', 'pmo.component_product_id').onRef('p.tenant_id', '=', 'pmo.tenant_id'),
         )
         .select([
           'pmo.id',
@@ -192,7 +192,8 @@ export class AddonsService {
             displayOrder: Number(opt.display_order || 0),
             componentProductId: opt.component_product_id ? Number(opt.component_product_id) : null,
             componentProductName: opt.component_product_name || null,
-            consumptionQty: opt.consumption_qty !== null && opt.consumption_qty !== undefined ? Number(opt.consumption_qty) : null,
+            consumptionQty:
+              opt.consumption_qty !== null && opt.consumption_qty !== undefined ? Number(opt.consumption_qty) : null,
             unitName: opt.unit_name || null,
             portionAllowed: (opt.portion_allowed as 'both' | 'half_only' | 'whole_only') || 'both',
             preparationTimeMinutes: opt.preparation_time_minutes ? Number(opt.preparation_time_minutes) : 0,
@@ -241,11 +242,14 @@ export class AddonsService {
               is_active: opt.isActive !== false,
               display_order: opt.displayOrder !== undefined ? Number(opt.displayOrder) : idx,
               component_product_id: opt.componentProductId ? Number(opt.componentProductId) : null,
-              consumption_qty: opt.consumptionQty !== null && opt.consumptionQty !== undefined && opt.consumptionQty !== '' ? Number(opt.consumptionQty) : null,
+              consumption_qty:
+                opt.consumptionQty !== null && opt.consumptionQty !== undefined && opt.consumptionQty !== ''
+                  ? Number(opt.consumptionQty)
+                  : null,
               unit_name: opt.unitName ? String(opt.unitName).trim() : null,
               portion_allowed: opt.portionAllowed || 'both',
               preparation_time_minutes: opt.preparationTimeMinutes ? Number(opt.preparationTimeMinutes) : 0,
-            }))
+            })),
           )
           .execute();
       }
@@ -274,10 +278,13 @@ export class AddonsService {
       if (!current) {
         throw new AppError('مجموعة الخيارات غير موجودة', 'MODIFIER_GROUP_NOT_FOUND', 404);
       }
-      const displayOrder = payload.displayOrder !== undefined && payload.displayOrder !== null
-        && payload.displayOrder !== '' && Number.isFinite(Number(payload.displayOrder))
-        ? Number(payload.displayOrder)
-        : Number(current.display_order ?? 0);
+      const displayOrder =
+        payload.displayOrder !== undefined &&
+        payload.displayOrder !== null &&
+        payload.displayOrder !== '' &&
+        Number.isFinite(Number(payload.displayOrder))
+          ? Number(payload.displayOrder)
+          : Number(current.display_order ?? 0);
       await trx
         .updateTable('pos_modifier_groups')
         .set({
@@ -288,12 +295,14 @@ export class AddonsService {
           min_selections: Number(payload.minSelections || 0),
           max_selections: Number(payload.maxSelections || 10),
           display_order: displayOrder,
-          is_active: payload.isActive !== undefined && payload.isActive !== null
-            ? payload.isActive !== false
-            : Boolean(current.is_active),
-          is_splittable_in_half: payload.isSplittableInHalf !== undefined && payload.isSplittableInHalf !== null
-            ? Boolean(payload.isSplittableInHalf)
-            : Boolean(current.is_splittable_in_half),
+          is_active:
+            payload.isActive !== undefined && payload.isActive !== null
+              ? payload.isActive !== false
+              : Boolean(current.is_active),
+          is_splittable_in_half:
+            payload.isSplittableInHalf !== undefined && payload.isSplittableInHalf !== null
+              ? Boolean(payload.isSplittableInHalf)
+              : Boolean(current.is_splittable_in_half),
           updated_at: (this.db as any).fn ? undefined : undefined,
         })
         .where('id', '=', id)
@@ -324,11 +333,14 @@ export class AddonsService {
                 is_active: opt.isActive !== false,
                 display_order: opt.displayOrder !== undefined ? Number(opt.displayOrder) : idx,
                 component_product_id: opt.componentProductId ? Number(opt.componentProductId) : null,
-                consumption_qty: opt.consumptionQty !== null && opt.consumptionQty !== undefined && opt.consumptionQty !== '' ? Number(opt.consumptionQty) : null,
+                consumption_qty:
+                  opt.consumptionQty !== null && opt.consumptionQty !== undefined && opt.consumptionQty !== ''
+                    ? Number(opt.consumptionQty)
+                    : null,
                 unit_name: opt.unitName ? String(opt.unitName).trim() : null,
                 portion_allowed: opt.portionAllowed || 'both',
                 preparation_time_minutes: opt.preparationTimeMinutes ? Number(opt.preparationTimeMinutes) : 0,
-              }))
+              })),
             )
             .execute();
         }
@@ -401,7 +413,7 @@ export class AddonsService {
       options = await this.db
         .selectFrom('pos_modifier_options as pmo')
         .leftJoin('products as p', (join) =>
-          join.onRef('p.id', '=', 'pmo.component_product_id').onRef('p.tenant_id', '=', 'pmo.tenant_id')
+          join.onRef('p.id', '=', 'pmo.component_product_id').onRef('p.tenant_id', '=', 'pmo.tenant_id'),
         )
         .select([
           'pmo.id',
@@ -447,7 +459,8 @@ export class AddonsService {
             isDefault: Boolean(opt.is_default),
             componentProductId: opt.component_product_id ? Number(opt.component_product_id) : null,
             componentProductName: opt.component_product_name || null,
-            consumptionQty: opt.consumption_qty !== null && opt.consumption_qty !== undefined ? Number(opt.consumption_qty) : null,
+            consumptionQty:
+              opt.consumption_qty !== null && opt.consumption_qty !== undefined ? Number(opt.consumption_qty) : null,
             unitName: opt.unit_name || null,
             portionAllowed: (opt.portion_allowed as 'both' | 'half_only' | 'whole_only') || 'both',
             preparationTimeMinutes: opt.preparation_time_minutes ? Number(opt.preparation_time_minutes) : 0,
@@ -474,7 +487,7 @@ export class AddonsService {
               account_id: scope.accountId,
               product_id: productId,
               modifier_group_id: gId,
-            }))
+            })),
           )
           .execute();
       }

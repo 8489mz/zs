@@ -58,8 +58,27 @@ export class CreateImportDocumentDto {
 }
 
 export class CreateApprovalRequestDto {
-  @IsIn(['supplier_bank_change', 'large_transfer', 'broker_settlement', 'partner_distribution', 'project_closure', 'import_receipt_reversal', 'import_legacy_receipt_review', 'broker_expense_verification', 'sourcing_trip_expense'])
-  actionType!: 'supplier_bank_change' | 'large_transfer' | 'broker_settlement' | 'partner_distribution' | 'project_closure' | 'import_receipt_reversal' | 'import_legacy_receipt_review' | 'broker_expense_verification' | 'sourcing_trip_expense';
+  @IsIn([
+    'supplier_bank_change',
+    'large_transfer',
+    'broker_settlement',
+    'partner_distribution',
+    'project_closure',
+    'import_receipt_reversal',
+    'import_legacy_receipt_review',
+    'broker_expense_verification',
+    'sourcing_trip_expense',
+  ])
+  actionType!:
+    | 'supplier_bank_change'
+    | 'large_transfer'
+    | 'broker_settlement'
+    | 'partner_distribution'
+    | 'project_closure'
+    | 'import_receipt_reversal'
+    | 'import_legacy_receipt_review'
+    | 'broker_expense_verification'
+    | 'sourcing_trip_expense';
 
   @IsString()
   referenceId!: string;

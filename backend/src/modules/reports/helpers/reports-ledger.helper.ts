@@ -107,12 +107,8 @@ export function mapLedgerEntries(rows: PartnerLedgerEntryRow[], direction: Ledge
     // phantom 1,000.00 payment in the supplier schedule (and in the
     // statement panel). The explicit debit/credit below is what the
     // frontend renders; the signed amount stays the source of truth.
-    const debit = direction === 'supplier'
-      ? (amount < 0 ? Math.abs(amount) : 0)
-      : (amount > 0 ? amount : 0);
-    const credit = direction === 'supplier'
-      ? (amount > 0 ? amount : 0)
-      : (amount < 0 ? Math.abs(amount) : 0);
+    const debit = direction === 'supplier' ? (amount < 0 ? Math.abs(amount) : 0) : amount > 0 ? amount : 0;
+    const credit = direction === 'supplier' ? (amount > 0 ? amount : 0) : amount < 0 ? Math.abs(amount) : 0;
     return {
       id: String(row.id ?? ''),
       type: row.entry_type || '',
@@ -129,9 +125,7 @@ export function mapLedgerEntries(rows: PartnerLedgerEntryRow[], direction: Ledge
        * so the ledger shape stays exactly as pinned by
        * reports-ledger.helper.spec.ts (deepStrictEqual — a null field
        * on ordinary rows broke it in ci-full #49). */
-      ...(row.advance_amount != null
-        ? { advanceAmount: Number(row.advance_amount) }
-        : {}),
+      ...(row.advance_amount != null ? { advanceAmount: Number(row.advance_amount) } : {}),
     };
   });
 }
@@ -196,7 +190,17 @@ export function buildSupplierLedgerPayload(args: {
   openAdvanceBalance?: number;
   digits?: MoneyDigits;
 }) {
-  const { supplier, rows, page, pageSize, totalItems, totalsRow, openingBalance, openAdvanceBalance, digits = 2 } = args;
+  const {
+    supplier,
+    rows,
+    page,
+    pageSize,
+    totalItems,
+    totalsRow,
+    openingBalance,
+    openAdvanceBalance,
+    digits = 2,
+  } = args;
   const summary = buildLedgerSummary(totalItems, totalsRow, openingBalance, digits);
   // INV-CUSTOMER-SUPPLIER-STATEMENTS: the raw totals are sums by
   // amount sign (positive = purchases, negative = payments). For a

@@ -3,12 +3,28 @@ import type { Database } from '../../../../database/database.types';
 import { compareSemver } from './offline-releases-semver';
 
 export class OfflineReleasesCheck {
-  constructor(private readonly db: Kysely<Database>, private readonly bound: { syncManifestsFromDisk: () => Promise<void>; fetchGitHubLatestRelease: () => Promise<{ version: string; changelog: string; patchUrl: string; passcode?: string; } | null> }) {}
+  constructor(
+    private readonly db: Kysely<Database>,
+    private readonly bound: {
+      syncManifestsFromDisk: () => Promise<void>;
+      fetchGitHubLatestRelease: () => Promise<{
+        version: string;
+        changelog: string;
+        patchUrl: string;
+        passcode?: string;
+      } | null>;
+    },
+  ) {}
 
   private async syncManifestsFromDisk(): Promise<void> {
     return this.bound.syncManifestsFromDisk();
   }
-  private async fetchGitHubLatestRelease(): Promise<{ version: string; changelog: string; patchUrl: string; passcode?: string; } | null> {
+  private async fetchGitHubLatestRelease(): Promise<{
+    version: string;
+    changelog: string;
+    patchUrl: string;
+    passcode?: string;
+  } | null> {
     return this.bound.fetchGitHubLatestRelease();
   }
 
@@ -77,11 +93,7 @@ export class OfflineReleasesCheck {
             changelog: ghRelease.changelog,
           };
           if (ghRelease.passcode) activationValues.passcode = ghRelease.passcode;
-          await this.db
-            .updateTable('offline_releases')
-            .set(activationValues)
-            .where('id', '=', existing.id)
-            .execute();
+          await this.db.updateTable('offline_releases').set(activationValues).where('id', '=', existing.id).execute();
         }
       }
     }
@@ -155,10 +167,7 @@ export class OfflineReleasesCheck {
   async listReleaseHistory() {
     await this.syncManifestsFromDisk().catch(() => {});
 
-    const rows = await this.db
-      .selectFrom('offline_releases')
-      .selectAll()
-      .execute();
+    const rows = await this.db.selectFrom('offline_releases').selectAll().execute();
 
     const isDev = process.env.NODE_ENV !== 'production' && process.env.APP_MODE !== 'SELF_CONTAINED';
 

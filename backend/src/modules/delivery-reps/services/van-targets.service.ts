@@ -3,10 +3,7 @@ import { Kysely, sql } from '../../../database/kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
-import {
-  calculateRepTargetMetrics,
-  calculateRepCommissionMetrics,
-} from '../rep-target.engine';
+import { calculateRepTargetMetrics, calculateRepCommissionMetrics } from '../rep-target.engine';
 import { getMonthlyOfficialHolidayDates } from './van-common.util';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
@@ -72,10 +69,7 @@ export class VanTargetsService {
           parsed?.targetBonusRatePercent !== undefined
             ? Math.max(0, Number(parsed.targetBonusRatePercent))
             : DEFAULT_COMMISSION_CONFIG.targetBonusRatePercent,
-        repOverrides:
-          parsed?.repOverrides && typeof parsed.repOverrides === 'object'
-            ? parsed.repOverrides
-            : {},
+        repOverrides: parsed?.repOverrides && typeof parsed.repOverrides === 'object' ? parsed.repOverrides : {},
       };
     } catch {
       return { ...DEFAULT_COMMISSION_CONFIG, repOverrides: {} };
@@ -118,10 +112,7 @@ export class VanTargetsService {
         current.salesCommissionRatePercent = Math.max(0, Number(payload.salesCommissionRatePercent));
       }
       if (payload.collectionCommissionRatePercent !== undefined) {
-        current.collectionCommissionRatePercent = Math.max(
-          0,
-          Number(payload.collectionCommissionRatePercent),
-        );
+        current.collectionCommissionRatePercent = Math.max(0, Number(payload.collectionCommissionRatePercent));
       }
       if (payload.targetBonusRatePercent !== undefined) {
         current.targetBonusRatePercent = Math.max(0, Number(payload.targetBonusRatePercent));
@@ -170,16 +161,11 @@ export class VanTargetsService {
           ? Number(ov.collectionCommissionRatePercent)
           : config.collectionCommissionRatePercent,
       targetBonusRatePercent:
-        ov?.targetBonusRatePercent !== undefined
-          ? Number(ov.targetBonusRatePercent)
-          : config.targetBonusRatePercent,
+        ov?.targetBonusRatePercent !== undefined ? Number(ov.targetBonusRatePercent) : config.targetBonusRatePercent,
     };
   }
 
-  private async getPaidCommissionsMapForMonth(
-    tenantId: string,
-    month: string,
-  ): Promise<Map<number, number>> {
+  private async getPaidCommissionsMapForMonth(tenantId: string, month: string): Promise<Map<number, number>> {
     // Book digits resolved once (D4): the accumulated commission sums
     // below round at book digits, never a hardcoded 2dp.
     const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
@@ -226,12 +212,14 @@ export class VanTargetsService {
     // Book digits resolved once (D4): target amounts round at book digits.
     const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
     const target = Math.max(0, roundMoney(Number(targetAmount || 0), moneyDigits));
-    const colTarget = collectionTarget !== undefined && collectionTarget !== null && !isNaN(Number(collectionTarget))
-      ? Math.max(0, roundMoney(Number(collectionTarget), moneyDigits))
-      : null;
-    const visTarget = visitsTarget !== undefined && visitsTarget !== null && !isNaN(Number(visitsTarget))
-      ? Math.max(0, Math.round(Number(visitsTarget)))
-      : null;
+    const colTarget =
+      collectionTarget !== undefined && collectionTarget !== null && !isNaN(Number(collectionTarget))
+        ? Math.max(0, roundMoney(Number(collectionTarget), moneyDigits))
+        : null;
+    const visTarget =
+      visitsTarget !== undefined && visitsTarget !== null && !isNaN(Number(visitsTarget))
+        ? Math.max(0, Math.round(Number(visitsTarget)))
+        : null;
 
     const rep = await this.anyDb
       .selectFrom('delivery_representatives')
@@ -317,12 +305,14 @@ export class VanTargetsService {
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();
     const targetAmount = Number(targetRow?.target_amount || 0);
-    const collectionTarget = targetRow?.collection_target !== null && targetRow?.collection_target !== undefined
-      ? Number(targetRow.collection_target)
-      : null;
-    const visitsTarget = targetRow?.visits_target !== null && targetRow?.visits_target !== undefined
-      ? Number(targetRow.visits_target)
-      : null;
+    const collectionTarget =
+      targetRow?.collection_target !== null && targetRow?.collection_target !== undefined
+        ? Number(targetRow.collection_target)
+        : null;
+    const visitsTarget =
+      targetRow?.visits_target !== null && targetRow?.visits_target !== undefined
+        ? Number(targetRow.visits_target)
+        : null;
 
     const salesMtdRow = await this.anyDb
       .selectFrom('sales')
@@ -454,11 +444,15 @@ export class VanTargetsService {
       .where('period_month', '=', month)
       .where('tenant_id', '=', tenantId)
       .execute();
-    const targetMap = new Map<number, { targetAmount: number; collectionTarget: number | null; visitsTarget: number | null }>();
+    const targetMap = new Map<
+      number,
+      { targetAmount: number; collectionTarget: number | null; visitsTarget: number | null }
+    >();
     for (const t of targets) {
       targetMap.set(Number(t.rep_id), {
         targetAmount: Number(t.target_amount || 0),
-        collectionTarget: t.collection_target !== null && t.collection_target !== undefined ? Number(t.collection_target) : null,
+        collectionTarget:
+          t.collection_target !== null && t.collection_target !== undefined ? Number(t.collection_target) : null,
         visitsTarget: t.visits_target !== null && t.visits_target !== undefined ? Number(t.visits_target) : null,
       });
     }
@@ -640,11 +634,7 @@ export class VanTargetsService {
     const maxPayable = Number(repSummary.remainingPayableCommission || 0);
 
     if (maxPayable <= 0.009) {
-      throw new AppError(
-        'لا توجد عمولات مستحقة غير مصروفة لهذا المندوب عن هذا الشهر',
-        'NO_PAYABLE_COMMISSION',
-        400,
-      );
+      throw new AppError('لا توجد عمولات مستحقة غير مصروفة لهذا المندوب عن هذا الشهر', 'NO_PAYABLE_COMMISSION', 400);
     }
 
     const requestedAmount =
@@ -734,4 +724,3 @@ export class VanTargetsService {
     });
   }
 }
-

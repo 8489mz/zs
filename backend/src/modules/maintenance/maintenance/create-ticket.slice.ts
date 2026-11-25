@@ -27,8 +27,13 @@ export class CreateTicketSlice {
   async createTicket(payload: UpsertMaintenanceTicketDto, auth: AuthContext) {
     const scope = requireTenantScope(auth);
     const advance = Number(payload.advancePayment || 0);
-    if (!Number.isFinite(advance) || advance < 0 || !Number.isFinite(Number(payload.finalCost ?? payload.expectedCost ?? 0)) ||
-        Number(payload.finalCost ?? payload.expectedCost ?? 0) < 0 || payload.status === 'delivered') {
+    if (
+      !Number.isFinite(advance) ||
+      advance < 0 ||
+      !Number.isFinite(Number(payload.finalCost ?? payload.expectedCost ?? 0)) ||
+      Number(payload.finalCost ?? payload.expectedCost ?? 0) < 0 ||
+      payload.status === 'delivered'
+    ) {
       throw new AppError('Invalid maintenance payment or initial state', 'MAINTENANCE_FINANCIAL_STATE_INVALID', 422);
     }
     // An advance larger than the ticket total can never settle at delivery
@@ -48,7 +53,11 @@ export class CreateTicketSlice {
       toMinorUnits(advance, advanceDigits);
       toMinorUnits(Number(payload.finalCost ?? payload.expectedCost ?? 0), advanceDigits);
     } catch {
-      throw new AppError('Maintenance amounts exceed tenant currency precision', 'MAINTENANCE_CURRENCY_PRECISION_INVALID', 422);
+      throw new AppError(
+        'Maintenance amounts exceed tenant currency precision',
+        'MAINTENANCE_CURRENCY_PRECISION_INVALID',
+        422,
+      );
     }
     const result = await this.tx.runInTransaction(this.db, async (trx) => {
       const tempTicketNo = `TMP-ZM-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
@@ -74,7 +83,12 @@ export class CreateTicketSlice {
           device_model: (payload.deviceModel || (payload as any).model || 'جهاز عام').trim(),
           serial_number: payload.serialNumber?.trim() ?? null,
           passcode: payload.passcode?.trim() ?? null,
-          problem_description: (payload.problemDescription || (payload as any).customerProblem || (payload as any).problem || 'صيانة عامة').trim(),
+          problem_description: (
+            payload.problemDescription ||
+            (payload as any).customerProblem ||
+            (payload as any).problem ||
+            'صيانة عامة'
+          ).trim(),
           device_condition: payload.deviceCondition?.trim() ?? null,
           expected_cost: payload.expectedCost ?? 0,
           final_cost: payload.finalCost ?? payload.expectedCost ?? 0,
@@ -97,7 +111,13 @@ export class CreateTicketSlice {
       }
 
       const ticketId = Number(inserted.id);
-      const ticketNo = formatDailyDocumentNumber('ZM', ticketId, new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
+      const ticketNo = formatDailyDocumentNumber(
+        'ZM',
+        ticketId,
+        new Date(),
+        4,
+        await getTenantTimezone(trx, scope.tenantId),
+      );
 
       await trx
         .updateTable('maintenance_tickets')
@@ -123,17 +143,30 @@ export class CreateTicketSlice {
             created_by: auth.userId ? Number(auth.userId) : null,
           })
           .execute();
-        await postMaintenanceJournal(trx, this.accountingFoundation, this.accountingPosting, auth,
-          'maintenance_advance', ticketId, payload.branchId ?? null, payload.locationId ?? null, [
+        await postMaintenanceJournal(
+          trx,
+          this.accountingFoundation,
+          this.accountingPosting,
+          auth,
+          'maintenance_advance',
+          ticketId,
+          payload.branchId ?? null,
+          payload.locationId ?? null,
+          [
             { code: '1110', debit: advance, description: 'Cash received as maintenance customer advance' },
             { code: '2150', credit: advance, description: 'Unearned maintenance customer advance' },
-          ]);
+          ],
+        );
       }
 
       return { id: String(ticketId), ticketNo };
     });
 
-    await this.audit.log('إنشاء تذكرة صيانة', `تم إنشاء تذكرة صيانة ${result.ticketNo} للعميل ${payload.customerName}`, auth);
+    await this.audit.log(
+      'إنشاء تذكرة صيانة',
+      `تم إنشاء تذكرة صيانة ${result.ticketNo} للعميل ${payload.customerName}`,
+      auth,
+    );
     return { ok: true, id: result.id, ticketNo: result.ticketNo };
   }
 }

@@ -7,7 +7,12 @@ export function evaluateOdometerReadings(params: OdometerEvaluationParams): Odom
   const start = params.startOdometer !== null && params.startOdometer !== undefined ? Number(params.startOdometer) : 0;
   const end = params.endOdometer !== null && params.endOdometer !== undefined ? Number(params.endOdometer) : 0;
 
-  if (params.endOdometer !== null && params.endOdometer !== undefined && params.startOdometer !== null && params.startOdometer !== undefined) {
+  if (
+    params.endOdometer !== null &&
+    params.endOdometer !== undefined &&
+    params.startOdometer !== null &&
+    params.startOdometer !== undefined
+  ) {
     if (end < start) {
       return {
         valid: false,
@@ -19,7 +24,7 @@ export function evaluateOdometerReadings(params: OdometerEvaluationParams): Odom
     }
   }
 
-  const distanceKm = Number((Math.max(0, end - start)).toFixed(2));
+  const distanceKm = Number(Math.max(0, end - start).toFixed(2));
 
   return {
     valid: true,

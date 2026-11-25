@@ -5,8 +5,15 @@ export function toMoney(value: number | string | null | undefined, digits: Money
   return Number(Number(value || 0).toFixed(digits));
 }
 
-export function sumMoney<T>(rows: T[], selector: (row: T) => number | string | null | undefined, digits: MoneyDigits = 2): number {
-  return toMoney(rows.reduce((sum, row) => sum + Number(selector(row) || 0), 0), digits);
+export function sumMoney<T>(
+  rows: T[],
+  selector: (row: T) => number | string | null | undefined,
+  digits: MoneyDigits = 2,
+): number {
+  return toMoney(
+    rows.reduce((sum, row) => sum + Number(selector(row) || 0), 0),
+    digits,
+  );
 }
 
 export function buildTrendMap<T>(
@@ -35,7 +42,12 @@ export function buildAggregatedBalances<T extends { id?: unknown; balance?: unkn
   for (const row of rows) {
     const key = String(row.id || '');
     if (!key) continue;
-    balances.set(key, totals.has(key) ? toMoney(totals.get(key) || 0, digits) : toMoney(row.balance as number | string | null | undefined, digits));
+    balances.set(
+      key,
+      totals.has(key)
+        ? toMoney(totals.get(key) || 0, digits)
+        : toMoney(row.balance as number | string | null | undefined, digits),
+    );
   }
   return balances;
 }

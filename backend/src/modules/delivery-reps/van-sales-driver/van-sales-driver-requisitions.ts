@@ -14,7 +14,9 @@ export interface VanSalesDriverRequisitionsDeps {
   vanSalesService: VanSalesService;
   // Bound kernel helper (stays in the facade; passed bound so the moved
   // bodies stay byte-identical).
-  verifyDriver: (authHeader: string) => Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string }>;
+  verifyDriver: (
+    authHeader: string,
+  ) => Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string }>;
 }
 
 @Injectable()
@@ -27,10 +29,7 @@ export class VanSalesDriverRequisitionsSlice {
     this.verifyDriver = deps.verifyDriver;
   }
 
-  async submitLoadRequisition(
-    authHeader: string,
-    body: SubmitLoadRequisitionDto,
-  ) {
+  async submitLoadRequisition(authHeader: string, body: SubmitLoadRequisitionDto) {
     const driver = await this.verifyDriver(authHeader);
     // INV-DRIVER-REQUISITION-DTO-WHITELIST: the driver route never
     // forwards allowMultiplePending. The DTO rejects it at the
@@ -52,18 +51,12 @@ export class VanSalesDriverRequisitionsSlice {
     return { ok: true, requisitions };
   }
 
-  async cancelMyRequisition(
-    authHeader: string,
-    id: number,
-  ) {
+  async cancelMyRequisition(authHeader: string, id: number) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.cancelLoadRequisitionByDriver(driver.tenantId, driver.repId, id);
   }
 
-  async cancelMyRequisitionPost(
-    authHeader: string,
-    id: number,
-  ) {
+  async cancelMyRequisitionPost(authHeader: string, id: number) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.cancelLoadRequisitionByDriver(driver.tenantId, driver.repId, id);
   }
@@ -74,20 +67,14 @@ export class VanSalesDriverRequisitionsSlice {
     return { ok: true, warehouses };
   }
 
-  async getDriverAvailableProducts(
-    authHeader: string,
-    warehouseId?: string,
-  ) {
+  async getDriverAvailableProducts(authHeader: string, warehouseId?: string) {
     const driver = await this.verifyDriver(authHeader);
     const parsedWhId = warehouseId && warehouseId !== 'all' ? Number(warehouseId) : undefined;
     const products = await this.vanSalesService.getDriverAvailableProducts(driver.tenantId, parsedWhId, driver.repId);
     return { ok: true, products };
   }
 
-  async getMyTarget(
-    authHeader: string,
-    month?: string,
-  ) {
+  async getMyTarget(authHeader: string, month?: string) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getRepTarget(driver.tenantId, driver.repId, month);
   }
@@ -98,10 +85,7 @@ export class VanSalesDriverRequisitionsSlice {
     return { ok: true, itinerary };
   }
 
-  async createDriverCustomer(
-    authHeader: string,
-    body: any,
-  ) {
+  async createDriverCustomer(authHeader: string, body: any) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.createDriverCustomer(driver.repId, driver.tenantId, driver.accountId, body);
   }
@@ -189,19 +173,12 @@ export class VanSalesDriverRequisitionsSlice {
     return { ok: true, transfers };
   }
 
-  async acceptTransfer(
-    authHeader: string,
-    id: number,
-  ) {
+  async acceptTransfer(authHeader: string, id: number) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.acceptInterVanTransfer(driver.tenantId, driver.accountId, driver.repId, id);
   }
 
-  async rejectTransfer(
-    authHeader: string,
-    id: number,
-    body: { reason?: string },
-  ) {
+  async rejectTransfer(authHeader: string, id: number, body: { reason?: string }) {
     const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.rejectInterVanTransfer(driver.tenantId, driver.repId, id, body?.reason);
   }

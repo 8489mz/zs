@@ -17,10 +17,15 @@ export class SettingsPlanFeatures {
       this._planFeaturesCache.set(cacheKey, cached);
       return cached.features;
     }
-    const rows = await this.db.selectFrom('plan_features').select('feature_code').where('plan_id', '=', planId as any).execute();
-    const features = rows.map(f => f.feature_code as string);
+    const rows = await this.db
+      .selectFrom('plan_features')
+      .select('feature_code')
+      .where('plan_id', '=', planId as any)
+      .execute();
+    const features = rows.map((f) => f.feature_code as string);
     this._planFeaturesCache.set(cacheKey, { features, expiresAt: Date.now() + this.PLAN_FEATURES_TTL_MS });
-    if (this._planFeaturesCache.size > 2_000) this._planFeaturesCache.delete(this._planFeaturesCache.keys().next().value!);
+    if (this._planFeaturesCache.size > 2_000)
+      this._planFeaturesCache.delete(this._planFeaturesCache.keys().next().value!);
     return features;
   }
 

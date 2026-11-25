@@ -28,7 +28,10 @@ export function reconcileTripFinancials(input: TripFinancialSummaryInput): TripF
   const isGoodsEquationBalanced = Math.abs(goodsEquationDiscrepancy) <= 0.05;
 
   // Expected Cash = Cash Sales + Collections - Cash Refunds for Returns - Approved Trip Expenses
-  const expectedCash = roundBookMoney(cashSales + fieldCollections - cashRefunds - totalTripExpenses, input.moneyDigits);
+  const expectedCash = roundBookMoney(
+    cashSales + fieldCollections - cashRefunds - totalTripExpenses,
+    input.moneyDigits,
+  );
   const cashVariance = roundBookMoney(countedCash - expectedCash, input.moneyDigits);
 
   let cashVarianceStatus: 'balanced' | 'shortage' | 'overage' = 'balanced';

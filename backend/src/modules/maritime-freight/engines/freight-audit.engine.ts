@@ -39,13 +39,7 @@ export interface FreightAuditInput {
 }
 
 export type FreightAuditStatus =
-  | 'matched'
-  | 'overcharge'
-  | 'undercharge'
-  | 'no_contract'
-  | 'currency_mismatch'
-  | 'approved_override'
-  | 'disputed';
+  'matched' | 'overcharge' | 'undercharge' | 'no_contract' | 'currency_mismatch' | 'approved_override' | 'disputed';
 
 export interface FreightAuditResult {
   hasRateCard: boolean;
@@ -55,7 +49,7 @@ export interface FreightAuditResult {
   contractedTotal: number;
   invoicedTotal: number;
   varianceAmount: number; // invoiced - contracted
-  variancePct: number;    // ((invoiced - contracted) / contracted) * 100
+  variancePct: number; // ((invoiced - contracted) / contracted) * 100
   auditStatus: FreightAuditStatus;
   isOvercharged: boolean;
   isUndercharged: boolean;
@@ -141,20 +135,19 @@ export function calculateFreightAudit(input: FreightAuditInput): FreightAuditRes
   // by container count, so sub-minor-unit inputs can differ by one
   // minor unit (pinned in maritime-fx-resolver.spec.ts case 8).
   const digits: MoneyDigits = input.moneyDigits ?? 3;
-  const fxMultiplier = (cardCurrency !== invCurrency && fxRate > 0) ? fxRate : 1;
+  const fxMultiplier = cardCurrency !== invCurrency && fxRate > 0 ? fxRate : 1;
   const ratePerUnit = convertFxAmount(Number(rateCard.totalFreightCost || 0), fxMultiplier, digits);
   const contractedTotal = roundMoney(ratePerUnit * containerCount, digits);
   const varianceAmount = roundMoney(invoicedTotal - contractedTotal, digits);
-  const variancePct =
-    contractedTotal > 0
-      ? roundMoney((varianceAmount / contractedTotal) * 100, 2)
-      : 0;
+  const variancePct = contractedTotal > 0 ? roundMoney((varianceAmount / contractedTotal) * 100, 2) : 0;
 
   // Breakdown diffs with FX applied: each contracted component
   // converts per unit through the shared engine, then scales by
   // the container count.
   const contractedOcean = convertFxAmount(Number(rateCard.oceanFreight || 0), fxMultiplier, digits) * containerCount;
-  const contractedThc = convertFxAmount((Number(rateCard.thcOrigin || 0) + Number(rateCard.thcDestination || 0)), fxMultiplier, digits) * containerCount;
+  const contractedThc =
+    convertFxAmount(Number(rateCard.thcOrigin || 0) + Number(rateCard.thcDestination || 0), fxMultiplier, digits) *
+    containerCount;
   const contractedBaf = convertFxAmount(Number(rateCard.bafCharges || 0), fxMultiplier, digits) * containerCount;
   const contractedOther = convertFxAmount(Number(rateCard.otherCharges || 0), fxMultiplier, digits) * containerCount;
 
@@ -221,7 +214,8 @@ export function validateMakerCheckerOverride(ctx: MakerCheckerContext): {
   if (ctx.invoiceCreatedBy && String(ctx.userId) === String(ctx.invoiceCreatedBy)) {
     return {
       valid: false,
-      error: 'حظر فصل المهام: لا يمكن للمستخدم الذي سجل الفاتورة اعتماد التجاوز المالي بنفسه (Maker-Checker Separation).',
+      error:
+        'حظر فصل المهام: لا يمكن للمستخدم الذي سجل الفاتورة اعتماد التجاوز المالي بنفسه (Maker-Checker Separation).',
     };
   }
 

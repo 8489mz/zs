@@ -48,10 +48,7 @@ export class MarketplaceSyncAnalyticsService {
     this.getSettlements = deps.getSettlements;
   }
 
-  async getMarketplaceAnalytics(
-    period: 'all' | '30d' | '7d',
-    auth: AuthContext,
-  ): Promise<MarketplaceAnalyticsSummary> {
+  async getMarketplaceAnalytics(period: 'all' | '30d' | '7d', auth: AuthContext): Promise<MarketplaceAnalyticsSummary> {
     const scope = requireTenantScope(auth);
     // D6a: the analytics sums aggregate stored settlement/order money,
     // so the per-platform and grand totals round at the book digits
@@ -84,17 +81,14 @@ export class MarketplaceSyncAnalyticsService {
       const pltGross = pltSettlements.reduce((sum, s) => sum + Number(s.grossSales || 0), 0);
       const pltNet = pltSettlements.reduce((sum, s) => sum + Number(s.netPayout || 0), 0);
       const pltFee = pltSettlements.reduce(
-        (sum, s) => sum + Number(s.referralFees || 0) + Number(s.fulfillmentFees || 0) + Number(s.storageOrOtherFees || 0),
+        (sum, s) =>
+          sum + Number(s.referralFees || 0) + Number(s.fulfillmentFees || 0) + Number(s.storageOrOtherFees || 0),
         0,
       );
 
       const pltOrders = orders.filter((o) => {
         const sc = (o.shipping_carrier || '').toLowerCase();
-        return (
-          sc.includes(plt) ||
-          (plt === 'amazon' && sc.includes('fba')) ||
-          (plt === 'noon' && sc.includes('fbn'))
-        );
+        return sc.includes(plt) || (plt === 'amazon' && sc.includes('fba')) || (plt === 'noon' && sc.includes('fbn'));
       });
 
       const returnedOrders = pltOrders.filter((o) => o.status === 'cancelled').length;

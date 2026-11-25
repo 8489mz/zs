@@ -60,7 +60,11 @@ export class ExecuteDamagedSwapSlice {
       .executeTakeFirst();
 
     if (!trip || trip.status !== 'open') {
-      throw new AppError('رحلة التوزيع المحددة مغلقة أو تمت تصفيتها، ولا يمكن تسجيل استبدال عليها', 'INVALID_TRIP', 400);
+      throw new AppError(
+        'رحلة التوزيع المحددة مغلقة أو تمت تصفيتها، ولا يمكن تسجيل استبدال عليها',
+        'INVALID_TRIP',
+        400,
+      );
     }
 
     // Resolved on the pool handle BEFORE the transaction: the journal
@@ -107,7 +111,11 @@ export class ExecuteDamagedSwapSlice {
         .forUpdate()
         .executeTakeFirst();
       if (!lockedTrip || lockedTrip.status !== 'open') {
-        throw new AppError('رحلة التوزيع المحددة مغلقة أو تمت تصفيتها، ولا يمكن تسجيل استبدال عليها', 'INVALID_TRIP', 400);
+        throw new AppError(
+          'رحلة التوزيع المحددة مغلقة أو تمت تصفيتها، ولا يمكن تسجيل استبدال عليها',
+          'INVALID_TRIP',
+          400,
+        );
       }
       if (payload.clientTxId) {
         const priorInTx = await this.findSwapByClientTxId(trxAny, tenantId, payload.tripId, payload.clientTxId);
@@ -133,7 +141,8 @@ export class ExecuteDamagedSwapSlice {
       const replacementProd = lockedProds.find((p: any) => Number(p.id) === replacementPid);
 
       if (!damagedProd) throw new AppError(`الصنف التالف #${damagedPid} غير موجود في النظام`, 'PRODUCT_NOT_FOUND', 404);
-      if (!replacementProd) throw new AppError(`الصنف البديل #${replacementPid} غير موجود في النظام`, 'PRODUCT_NOT_FOUND', 404);
+      if (!replacementProd)
+        throw new AppError(`الصنف البديل #${replacementPid} غير موجود في النظام`, 'PRODUCT_NOT_FOUND', 404);
 
       damagedProdName = damagedProd.name || `صنف #${damagedPid}`;
       replacementProdName = replacementProd.name || `صنف #${replacementPid}`;
@@ -166,7 +175,11 @@ export class ExecuteDamagedSwapSlice {
       });
 
       if (!evalResult.allowed) {
-        throw new AppError(evalResult.errorMessageAr || 'تعذر إتمام عملية الاستبدال', evalResult.reasonCode || 'SWAP_REJECTED', 400);
+        throw new AppError(
+          evalResult.errorMessageAr || 'تعذر إتمام عملية الاستبدال',
+          evalResult.reasonCode || 'SWAP_REJECTED',
+          400,
+        );
       }
 
       priceDiff = evalResult.priceDifference;
@@ -187,7 +200,11 @@ export class ExecuteDamagedSwapSlice {
         .orderBy('id', 'asc')
         .executeTakeFirst();
       if (!damagedLoc?.id) {
-        throw new AppError('لا يوجد موقع تالف مسجّل لهذا النشاط — سجّل موقع مخزون تالف قبل تنفيذ الاستبدال حتى لا يعود التالف مخزوناً قابلاً للبيع', 'SWAP_REJECTED', 400);
+        throw new AppError(
+          'لا يوجد موقع تالف مسجّل لهذا النشاط — سجّل موقع مخزون تالف قبل تنفيذ الاستبدال حتى لا يعود التالف مخزوناً قابلاً للبيع',
+          'SWAP_REJECTED',
+          400,
+        );
       }
       const damagedLocationId = Number(damagedLoc.id);
       const vanLocRow = await trxAny
@@ -370,15 +387,20 @@ export class ExecuteDamagedSwapSlice {
     replacementProdName: string,
     priceDiff: number,
   ): string {
-    const diffNote = priceDiff > 0
-      ? ` وفارق سعر مستحق على العميل قدره ${priceDiff.toFixed(2)} ج.م`
-      : priceDiff < 0
-      ? ` وفارق سعر مستحق لصالح العميل قدره ${Math.abs(priceDiff).toFixed(2)} ج.م`
-      : ' (استبدال متكافئ 1 لـ 1 بدون فارق سعري)';
+    const diffNote =
+      priceDiff > 0
+        ? ` وفارق سعر مستحق على العميل قدره ${priceDiff.toFixed(2)} ج.م`
+        : priceDiff < 0
+          ? ` وفارق سعر مستحق لصالح العميل قدره ${Math.abs(priceDiff).toFixed(2)} ج.م`
+          : ' (استبدال متكافئ 1 لـ 1 بدون فارق سعري)';
     return `تم استبدال ${damagedQty} من (${damagedProdName}) بـ ${replacementQty} من (${replacementProdName}) بنجاح${diffNote}`;
   }
 
-  private async buildDamagedSwapResult(db: any, tenantId: string, row: any): Promise<{
+  private async buildDamagedSwapResult(
+    db: any,
+    tenantId: string,
+    row: any,
+  ): Promise<{
     ok: boolean;
     swapId: number;
     damagedProductName: string;
@@ -398,8 +420,12 @@ export class ExecuteDamagedSwapSlice {
     const damagedQty = Number(row.damaged_qty || 0);
     const replacementQty = Number(row.replacement_qty || 0);
     const priceDifference = Number(row.price_difference || 0);
-    const damagedProdName = String(byId.get(Number(row.damaged_product_id)) || `صنف #${Number(row.damaged_product_id)}`);
-    const replacementProdName = String(byId.get(Number(row.replacement_product_id)) || `صنف #${Number(row.replacement_product_id)}`);
+    const damagedProdName = String(
+      byId.get(Number(row.damaged_product_id)) || `صنف #${Number(row.damaged_product_id)}`,
+    );
+    const replacementProdName = String(
+      byId.get(Number(row.replacement_product_id)) || `صنف #${Number(row.replacement_product_id)}`,
+    );
     return {
       ok: true,
       swapId: Number(row.id),
@@ -408,7 +434,13 @@ export class ExecuteDamagedSwapSlice {
       damagedQty,
       replacementQty,
       priceDifference,
-      messageAr: this.damagedSwapMessageAr(damagedQty, damagedProdName, replacementQty, replacementProdName, priceDifference),
+      messageAr: this.damagedSwapMessageAr(
+        damagedQty,
+        damagedProdName,
+        replacementQty,
+        replacementProdName,
+        priceDifference,
+      ),
     };
   }
 }

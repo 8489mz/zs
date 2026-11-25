@@ -28,10 +28,7 @@ export class VanSalesController {
     private readonly vanRoutesService: VanRoutesService,
     private readonly vanFieldExecutionService: VanFieldExecutionService,
   ) {
-    this.preSalesSlice = new VanSalesDriverPreSalesSlice(
-      this.vanPreSalesService,
-      this.verifyDriver.bind(this),
-    );
+    this.preSalesSlice = new VanSalesDriverPreSalesSlice(this.vanPreSalesService, this.verifyDriver.bind(this));
     this.tripsSettleSlice = new VanSalesDriverTripsSettleSlice(
       this.vanSalesService,
       this.deliveryRepsService,
@@ -79,10 +76,7 @@ export class VanSalesController {
   }
 
   @Post('pre-sales/orders')
-  async createPreSalesOrder(
-    @Headers('authorization') authHeader: string,
-    @Body() body: any,
-  ) {
+  async createPreSalesOrder(@Headers('authorization') authHeader: string, @Body() body: any) {
     return this.preSalesSlice.createPreSalesOrder(authHeader, body);
   }
 
@@ -98,10 +92,7 @@ export class VanSalesController {
   }
 
   @Get('pre-sales/orders/:id')
-  async getMyPreSalesOrderDetails(
-    @Headers('authorization') authHeader: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async getMyPreSalesOrderDetails(@Headers('authorization') authHeader: string, @Param('id', ParseIntPipe) id: number) {
     return this.preSalesSlice.getMyPreSalesOrderDetails(authHeader, id);
   }
 
@@ -118,7 +109,14 @@ export class VanSalesController {
   @Post('trips/open')
   async openTrip(
     @Headers('authorization') authHeader: string,
-    @Body() body: { sourceWarehouseId?: number; items?: { productId: number; qty: number }[]; notes?: string; startOdometer?: number; vehicleId?: number },
+    @Body()
+    body: {
+      sourceWarehouseId?: number;
+      items?: { productId: number; qty: number }[];
+      notes?: string;
+      startOdometer?: number;
+      vehicleId?: number;
+    },
   ) {
     return this.tripsSettleSlice.openTrip(authHeader, body);
   }
@@ -217,7 +215,9 @@ export class VanSalesController {
       // offline (outbox createdAt, ISO with offset).
       offlineCreatedAt?: string;
     },
-  ) { return this.driverSales.executeSale(authHeader, body); }
+  ) {
+    return this.driverSales.executeSale(authHeader, body);
+  }
 
   @Get('sales')
   async listDriverSales(
@@ -228,7 +228,17 @@ export class VanSalesController {
     @Query('search') search?: string,
     @Query('tripId') tripId?: string,
     @Query('discountedOnly') discountedOnly?: string,
-  ) { return this.driverSales.listDriverSales(authHeader, dateScope, customerId, paymentMethod, search, tripId, discountedOnly); }
+  ) {
+    return this.driverSales.listDriverSales(
+      authHeader,
+      dateScope,
+      customerId,
+      paymentMethod,
+      search,
+      tripId,
+      discountedOnly,
+    );
+  }
 
   @Post('collections')
   async recordCollection(
@@ -250,7 +260,9 @@ export class VanSalesController {
       // made offline (outbox createdAt, ISO with offset).
       offlineCreatedAt?: string;
     },
-  ) { return this.driverSales.recordCollection(authHeader, body); }
+  ) {
+    return this.driverSales.recordCollection(authHeader, body);
+  }
 
   @Post('trips/:tripId/damaged-swap')
   async executeDamagedSwap(
@@ -267,19 +279,25 @@ export class VanSalesController {
       notes?: string;
       clientTxId?: string;
     },
-  ) { return this.driverSales.executeDamagedSwap(authHeader, tripId, body); }
+  ) {
+    return this.driverSales.executeDamagedSwap(authHeader, tripId, body);
+  }
 
   @Get('trips/:tripId/damaged-swaps')
   async listTripDamagedSwaps(
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
-  ) { return this.driverSales.listTripDamagedSwaps(authHeader, tripId); }
+  ) {
+    return this.driverSales.listTripDamagedSwaps(authHeader, tripId);
+  }
 
   @Get('customers/:customerId/eligible-sales')
   async getCustomerEligibleSales(
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
-  ) { return this.driverSales.getCustomerEligibleSales(authHeader, customerId); }
+  ) {
+    return this.driverSales.getCustomerEligibleSales(authHeader, customerId);
+  }
 
   @Post('field-returns')
   async submitFieldReturn(
@@ -291,58 +309,70 @@ export class VanSalesController {
       saleId?: number | null;
       returnReason: 'damaged' | 'expired' | 'manufacturing_defect' | 'stagnant' | 'order_mismatch' | 'customer_request';
       refundMethod?: 'credit' | 'cash';
-      items: { productId: number; qty: number; unitPrice: number; saleItemId?: number; unitMultiplier?: number; unitName?: string }[];
+      items: {
+        productId: number;
+        qty: number;
+        unitPrice: number;
+        saleItemId?: number;
+        unitMultiplier?: number;
+        unitName?: string;
+      }[];
       notes?: string;
       // INV-VAN-OFFLINE-TIMESTAMPS: the instant the return was made
       // offline (outbox createdAt, ISO with offset).
       offlineCreatedAt?: string;
     },
-  ) { return this.driverSales.submitFieldReturn(authHeader, body); }
+  ) {
+    return this.driverSales.submitFieldReturn(authHeader, body);
+  }
 
   @Post('requisitions')
-  async submitLoadRequisition(
-    @Headers('authorization') authHeader: string,
-    @Body() body: SubmitLoadRequisitionDto,
-  ) { return this.requisitions.submitLoadRequisition(authHeader, body); }
+  async submitLoadRequisition(@Headers('authorization') authHeader: string, @Body() body: SubmitLoadRequisitionDto) {
+    return this.requisitions.submitLoadRequisition(authHeader, body);
+  }
 
   @Get('requisitions')
-  async listMyRequisitions(@Headers('authorization') authHeader: string) { return this.requisitions.listMyRequisitions(authHeader); }
+  async listMyRequisitions(@Headers('authorization') authHeader: string) {
+    return this.requisitions.listMyRequisitions(authHeader);
+  }
 
   @Delete('requisitions/:id')
-  async cancelMyRequisition(
-    @Headers('authorization') authHeader: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) { return this.requisitions.cancelMyRequisition(authHeader, id); }
+  async cancelMyRequisition(@Headers('authorization') authHeader: string, @Param('id', ParseIntPipe) id: number) {
+    return this.requisitions.cancelMyRequisition(authHeader, id);
+  }
 
   @Post('requisitions/:id/cancel')
-  async cancelMyRequisitionPost(
-    @Headers('authorization') authHeader: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) { return this.requisitions.cancelMyRequisitionPost(authHeader, id); }
+  async cancelMyRequisitionPost(@Headers('authorization') authHeader: string, @Param('id', ParseIntPipe) id: number) {
+    return this.requisitions.cancelMyRequisitionPost(authHeader, id);
+  }
 
   @Get('warehouses')
-  async getDriverWarehouses(@Headers('authorization') authHeader: string) { return this.requisitions.getDriverWarehouses(authHeader); }
+  async getDriverWarehouses(@Headers('authorization') authHeader: string) {
+    return this.requisitions.getDriverWarehouses(authHeader);
+  }
 
   @Get('available-products')
   async getDriverAvailableProducts(
     @Headers('authorization') authHeader: string,
     @Query('warehouseId') warehouseId?: string,
-  ) { return this.requisitions.getDriverAvailableProducts(authHeader, warehouseId); }
+  ) {
+    return this.requisitions.getDriverAvailableProducts(authHeader, warehouseId);
+  }
 
   @Get('my-target')
-  async getMyTarget(
-    @Headers('authorization') authHeader: string,
-    @Query('month') month?: string,
-  ) { return this.requisitions.getMyTarget(authHeader, month); }
+  async getMyTarget(@Headers('authorization') authHeader: string, @Query('month') month?: string) {
+    return this.requisitions.getMyTarget(authHeader, month);
+  }
 
   @Get('itinerary')
-  async getMyItinerary(@Headers('authorization') authHeader: string) { return this.requisitions.getMyItinerary(authHeader); }
+  async getMyItinerary(@Headers('authorization') authHeader: string) {
+    return this.requisitions.getMyItinerary(authHeader);
+  }
 
   @Post('customers')
-  async createDriverCustomer(
-    @Headers('authorization') authHeader: string,
-    @Body() body: any,
-  ) { return this.requisitions.createDriverCustomer(authHeader, body); }
+  async createDriverCustomer(@Headers('authorization') authHeader: string, @Body() body: any) {
+    return this.requisitions.createDriverCustomer(authHeader, body);
+  }
 
   @Post('field-visits')
   async recordFieldVisit(
@@ -359,7 +389,9 @@ export class VanSalesController {
       gpsLng?: number;
       notes?: string;
     },
-  ) { return this.requisitions.recordFieldVisit(authHeader, body); }
+  ) {
+    return this.requisitions.recordFieldVisit(authHeader, body);
+  }
 
   @Post('fuel-logs')
   async recordFuelLog(
@@ -374,10 +406,14 @@ export class VanSalesController {
       stationName?: string;
       notes?: string;
     },
-  ) { return this.requisitions.recordFuelLog(authHeader, body); }
+  ) {
+    return this.requisitions.recordFuelLog(authHeader, body);
+  }
 
   @Get('fuel-logs')
-  async listMyFuelLogs(@Headers('authorization') authHeader: string) { return this.requisitions.listMyFuelLogs(authHeader); }
+  async listMyFuelLogs(@Headers('authorization') authHeader: string) {
+    return this.requisitions.listMyFuelLogs(authHeader);
+  }
 
   @Post('oil-changes')
   async recordOilChange(
@@ -394,10 +430,14 @@ export class VanSalesController {
       performedBy?: string;
       notes?: string;
     },
-  ) { return this.requisitions.recordOilChange(authHeader, body); }
+  ) {
+    return this.requisitions.recordOilChange(authHeader, body);
+  }
 
   @Get('maintenance-alerts')
-  async getMyMaintenanceAlerts(@Headers('authorization') authHeader: string) { return this.requisitions.getMyMaintenanceAlerts(authHeader); }
+  async getMyMaintenanceAlerts(@Headers('authorization') authHeader: string) {
+    return this.requisitions.getMyMaintenanceAlerts(authHeader);
+  }
 
   @Post('transfers')
   async createTransfer(
@@ -410,26 +450,33 @@ export class VanSalesController {
       items: { productId: number; qty: number }[];
       notes?: string;
     },
-  ) { return this.requisitions.createTransfer(authHeader, body); }
+  ) {
+    return this.requisitions.createTransfer(authHeader, body);
+  }
 
   @Get('transfers')
-  async listMyTransfers(@Headers('authorization') authHeader: string) { return this.requisitions.listMyTransfers(authHeader); }
+  async listMyTransfers(@Headers('authorization') authHeader: string) {
+    return this.requisitions.listMyTransfers(authHeader);
+  }
 
   @Post('transfers/:id/accept')
-  async acceptTransfer(
-    @Headers('authorization') authHeader: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) { return this.requisitions.acceptTransfer(authHeader, id); }
+  async acceptTransfer(@Headers('authorization') authHeader: string, @Param('id', ParseIntPipe) id: number) {
+    return this.requisitions.acceptTransfer(authHeader, id);
+  }
 
   @Post('transfers/:id/reject')
   async rejectTransfer(
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { reason?: string },
-  ) { return this.requisitions.rejectTransfer(authHeader, id, body); }
+  ) {
+    return this.requisitions.rejectTransfer(authHeader, id, body);
+  }
 
   @Get('peer-reps')
-  async getPeerReps(@Headers('authorization') authHeader: string) { return this.requisitions.getPeerReps(authHeader); }
+  async getPeerReps(@Headers('authorization') authHeader: string) {
+    return this.requisitions.getPeerReps(authHeader);
+  }
 
   // =========================================================================
   // TRIP OPERATIONAL EXPENSES
@@ -439,103 +486,147 @@ export class VanSalesController {
   async recordTripExpense(
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
-    @Body() body: { expenseType: string; amount: number; notes?: string; receiptPhotoUrl?: string; supervisorOverridePin?: string },
-  ) { return this.driverField.recordTripExpense(authHeader, tripId, body); }
+    @Body()
+    body: {
+      expenseType: string;
+      amount: number;
+      notes?: string;
+      receiptPhotoUrl?: string;
+      supervisorOverridePin?: string;
+    },
+  ) {
+    return this.driverField.recordTripExpense(authHeader, tripId, body);
+  }
 
   @Get('trips/:tripId/expenses')
-  async getTripExpenses(
-    @Headers('authorization') authHeader: string,
-    @Param('tripId', ParseIntPipe) tripId: number,
-  ) { return this.driverField.getTripExpenses(authHeader, tripId); }
+  async getTripExpenses(@Headers('authorization') authHeader: string, @Param('tripId', ParseIntPipe) tripId: number) {
+    return this.driverField.getTripExpenses(authHeader, tripId);
+  }
 
   @Post('trips/:tripId/packaging')
   async recordPackagingMovement(
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
-    @Body() body: { customerId?: number; packageType: string; deliveredQty: number; returnedQty: number; notes?: string },
-  ) { return this.driverField.recordPackagingMovement(authHeader, tripId, body); }
+    @Body()
+    body: { customerId?: number; packageType: string; deliveredQty: number; returnedQty: number; notes?: string },
+  ) {
+    return this.driverField.recordPackagingMovement(authHeader, tripId, body);
+  }
 
   @Get('trips/:tripId/packaging')
   async getTripPackagingMovements(
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
-  ) { return this.driverField.getTripPackagingMovements(authHeader, tripId); }
+  ) {
+    return this.driverField.getTripPackagingMovements(authHeader, tripId);
+  }
 
   @Get('customers/:customerId/packaging')
   async getCustomerPackagingBalance(
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
-  ) { return this.driverField.getCustomerPackagingBalance(authHeader, customerId); }
+  ) {
+    return this.driverField.getCustomerPackagingBalance(authHeader, customerId);
+  }
 
   @Get('customers/:customerId/suggested-order')
   async getCustomerSuggestedOrder(
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
-  ) { return this.driverField.getCustomerSuggestedOrder(authHeader, customerId); }
+  ) {
+    return this.driverField.getCustomerSuggestedOrder(authHeader, customerId);
+  }
 
   @Get('customers/:customerId/last-prices')
   async getCustomerLastSoldPrices(
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
-  ) { return this.driverField.getCustomerLastSoldPrices(authHeader, customerId); }
+  ) {
+    return this.driverField.getCustomerLastSoldPrices(authHeader, customerId);
+  }
 
   @Get('customers/:customerId/field-statement')
   async getCustomerFieldStatement(
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
-  ) { return this.driverField.getCustomerFieldStatement(authHeader, customerId); }
+  ) {
+    return this.driverField.getCustomerFieldStatement(authHeader, customerId);
+  }
 
   @Get('promotions')
-  async listActivePromotions(@Headers('authorization') authHeader: string) { return this.driverField.listActivePromotions(authHeader); }
+  async listActivePromotions(@Headers('authorization') authHeader: string) {
+    return this.driverField.listActivePromotions(authHeader);
+  }
 
   @Post('promotions/evaluate-cart')
   async evaluateCartPromotions(
     @Headers('authorization') authHeader: string,
     @Body() body: { cartItems: any[]; invoiceSubtotal?: number; customerType?: string },
-  ) { return this.driverField.evaluateCartPromotions(authHeader, body); }
+  ) {
+    return this.driverField.evaluateCartPromotions(authHeader, body);
+  }
 
   @Post('routes/optimize')
   async optimizeDriverRoute(
     @Headers('authorization') authHeader: string,
-    @Body() body: { customerIds?: number[]; startLat?: number; startLng?: number; persistSequence?: boolean; route?: string },
-  ) { return this.driverField.optimizeDriverRoute(authHeader, body); }
+    @Body()
+    body: { customerIds?: number[]; startLat?: number; startLng?: number; persistSequence?: boolean; route?: string },
+  ) {
+    return this.driverField.optimizeDriverRoute(authHeader, body);
+  }
 
   @Post('visits/check-in')
   async checkInStoreVisit(
     @Headers('authorization') authHeader: string,
     @Body() body: { tripId?: number; customerId: number; customerName?: string; latitude?: number; longitude?: number },
-  ) { return this.driverField.checkInStoreVisit(authHeader, body); }
+  ) {
+    return this.driverField.checkInStoreVisit(authHeader, body);
+  }
 
   @Post('visits/:id/inventory')
   async recordVisitInventory(
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { items: any[] },
-  ) { return this.driverField.recordVisitInventory(authHeader, id, body); }
+  ) {
+    return this.driverField.recordVisitInventory(authHeader, id, body);
+  }
 
   @Post('visits/:id/no-sale')
   async recordVisitNoSale(
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { noSaleReason: string; noSaleNotes?: string },
-  ) { return this.driverField.recordVisitNoSale(authHeader, id, body); }
+  ) {
+    return this.driverField.recordVisitNoSale(authHeader, id, body);
+  }
 
   @Post('visits/:id/check-out')
   async checkOutStoreVisit(
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { hasSale?: boolean; saleId?: number; saleAmount?: number; hasCollection?: boolean; collectionAmount?: number },
-  ) { return this.driverField.checkOutStoreVisit(authHeader, id, body); }
+    @Body()
+    body: {
+      hasSale?: boolean;
+      saleId?: number;
+      saleAmount?: number;
+      hasCollection?: boolean;
+      collectionAmount?: number;
+    },
+  ) {
+    return this.driverField.checkOutStoreVisit(authHeader, id, body);
+  }
 
   @Post('trade-surveys')
-  async recordTradeSurvey(
-    @Headers('authorization') authHeader: string,
-    @Body() body: any,
-  ) { return this.driverField.recordTradeSurvey(authHeader, body); }
+  async recordTradeSurvey(@Headers('authorization') authHeader: string, @Body() body: any) {
+    return this.driverField.recordTradeSurvey(authHeader, body);
+  }
 
   @Post('breadcrumbs')
   async recordBreadcrumb(
     @Headers('authorization') authHeader: string,
     @Body() body: { tripId: number; latitude: number; longitude: number; speedKmh?: number; batteryLevel?: number },
-  ) { return this.driverField.recordBreadcrumb(authHeader, body); }
+  ) {
+    return this.driverField.recordBreadcrumb(authHeader, body);
+  }
 }

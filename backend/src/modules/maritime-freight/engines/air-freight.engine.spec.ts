@@ -38,9 +38,7 @@ import {
 {
   const res = calculateAirChargeableWeight({
     grossWeightKg: 80,
-    dimensions: [
-      { lengthCm: 60, widthCm: 50, heightCm: 40, quantity: 10 },
-    ],
+    dimensions: [{ lengthCm: 60, widthCm: 50, heightCm: 40, quantity: 10 }],
   });
 
   assert.equal(res.grossWeightKg, 80);

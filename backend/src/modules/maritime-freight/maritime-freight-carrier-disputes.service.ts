@@ -60,11 +60,7 @@ export class MaritimeFreightCarrierDisputesService {
     this.getJobById = deps.getJobById;
   }
 
-  async createCarrierDispute(
-    auth: AuthContext,
-    invoiceId: string,
-    dto: { reason: string; disputedAmount?: number },
-  ) {
+  async createCarrierDispute(auth: AuthContext, invoiceId: string, dto: { reason: string; disputedAmount?: number }) {
     const { tenantId } = requireTenantScope(auth);
 
     const invoice = await this.db
@@ -104,7 +100,13 @@ export class MaritimeFreightCarrierDisputesService {
         .returningAll()
         .execute();
 
-      const finalNumber = formatDailyDocumentNumber('DISP', Number(inserted.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
+      const finalNumber = formatDailyDocumentNumber(
+        'DISP',
+        Number(inserted.id),
+        new Date(),
+        4,
+        await getTenantTimezone(trx, tenantId),
+      );
       const [renamed] = await trx
         .updateTable('maritime_carrier_disputes')
         .set({ dispute_number: finalNumber })
@@ -145,56 +147,171 @@ export class MaritimeFreightCarrierDisputesService {
     },
   ) {
     const { tenantId } = requireTenantScope(auth);
-    if (!['accepted', 'rejected', 'partially_accepted'].includes(dto.status)) throw new BadRequestException('نتيجة النزاع غير صالحة.');
+    if (!['accepted', 'rejected', 'partially_accepted'].includes(dto.status))
+      throw new BadRequestException('نتيجة النزاع غير صالحة.');
     const creditAmount = Number(dto.creditNoteAmount || 0);
-    if (!Number.isFinite(creditAmount) || creditAmount < 0 || (dto.status === 'rejected' && creditAmount !== 0)) throw new BadRequestException('قيمة الإشعار الدائن غير صالحة.');
-    return this.db.transaction().execute(async trx => {
+    if (!Number.isFinite(creditAmount) || creditAmount < 0 || (dto.status === 'rejected' && creditAmount !== 0))
+      throw new BadRequestException('قيمة الإشعار الدائن غير صالحة.');
+    return this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, tenantId);
-      const dispute = await trx.selectFrom('maritime_carrier_disputes').selectAll().where('tenant_id', '=', tenantId).where('id', '=', String(disputeId)).forUpdate().executeTakeFirst();
+      const dispute = await trx
+        .selectFrom('maritime_carrier_disputes')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(disputeId))
+        .forUpdate()
+        .executeTakeFirst();
       if (!dispute) throw new NotFoundException('مذكرة النزاع غير موجودة');
       if (['accepted', 'rejected', 'partially_accepted'].includes(dispute.dispute_status)) {
-        if (dispute.dispute_status !== dto.status || Number(dispute.credit_note_amount || 0) !== creditAmount || String(dispute.credit_note_number || '') !== String(dto.creditNoteNumber || '')) throw new BadRequestException('النزاع مسوى بالفعل ببيانات مختلفة.');
+        if (
+          dispute.dispute_status !== dto.status ||
+          Number(dispute.credit_note_amount || 0) !== creditAmount ||
+          String(dispute.credit_note_number || '') !== String(dto.creditNoteNumber || '')
+        )
+          throw new BadRequestException('النزاع مسوى بالفعل ببيانات مختلفة.');
         return { success: true, dispute, message: 'تمت تسوية النزاع مسبقاً.' };
       }
-      if (creditAmount > Number(dispute.disputed_amount)) throw new BadRequestException('الإشعار يتجاوز المبلغ المتنازع عليه.');
-      const invoice = await trx.selectFrom('maritime_carrier_invoices').selectAll().where('tenant_id', '=', tenantId).where('id', '=', String(dispute.invoice_id)).forUpdate().executeTakeFirstOrThrow();
-      const job = await trx.selectFrom('maritime_jobs').selectAll().where('tenant_id', '=', tenantId).where('id', '=', String(dispute.job_id) as any).forUpdate().executeTakeFirstOrThrow();
+      if (creditAmount > Number(dispute.disputed_amount))
+        throw new BadRequestException('الإشعار يتجاوز المبلغ المتنازع عليه.');
+      const invoice = await trx
+        .selectFrom('maritime_carrier_invoices')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(dispute.invoice_id))
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      const job = await trx
+        .selectFrom('maritime_jobs')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(dispute.job_id) as any)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
       if (creditAmount > 0) {
-        if (!invoice.journal_entry_id || !invoice.shipping_line_id) throw new BadRequestException('يجب ترحيل فاتورة الناقل وربط الخط الملاحي قبل إشعارها الدائن.');
-        const originalExpense = await trx.selectFrom('journal_entry_lines').select(['account_id', 'debit', 'cost_center_id', 'branch_id', 'location_id'])
-          .where('tenant_id', '=', tenantId).where('journal_entry_id', '=', invoice.journal_entry_id).where('debit', '>', 0).executeTakeFirstOrThrow();
-        const previousCredits = await trx.selectFrom('maritime_carrier_disputes').select(sql<number>`coalesce(sum(credit_note_amount), 0)`.as('amount'))
-          .where('tenant_id', '=', tenantId).where('invoice_id', '=', invoice.id).where('id', '!=', dispute.id)
-          .where('dispute_status', 'in', ['accepted', 'partially_accepted']).executeTakeFirstOrThrow();
-        if (creditAmount + Number(previousCredits.amount) > Number(invoice.total_invoiced_amount) + 0.001) throw new BadRequestException('الإشعارات الدائنة المتراكمة تتجاوز قيمة فاتورة الناقل.');
+        if (!invoice.journal_entry_id || !invoice.shipping_line_id)
+          throw new BadRequestException('يجب ترحيل فاتورة الناقل وربط الخط الملاحي قبل إشعارها الدائن.');
+        const originalExpense = await trx
+          .selectFrom('journal_entry_lines')
+          .select(['account_id', 'debit', 'cost_center_id', 'branch_id', 'location_id'])
+          .where('tenant_id', '=', tenantId)
+          .where('journal_entry_id', '=', invoice.journal_entry_id)
+          .where('debit', '>', 0)
+          .executeTakeFirstOrThrow();
+        const previousCredits = await trx
+          .selectFrom('maritime_carrier_disputes')
+          .select(sql<number>`coalesce(sum(credit_note_amount), 0)`.as('amount'))
+          .where('tenant_id', '=', tenantId)
+          .where('invoice_id', '=', invoice.id)
+          .where('id', '!=', dispute.id)
+          .where('dispute_status', 'in', ['accepted', 'partially_accepted'])
+          .executeTakeFirstOrThrow();
+        if (creditAmount + Number(previousCredits.amount) > Number(invoice.total_invoiced_amount) + 0.001)
+          throw new BadRequestException('الإشعارات الدائنة المتراكمة تتجاوز قيمة فاتورة الناقل.');
         const ratio = creditAmount / Number(invoice.total_invoiced_amount);
-        if (!Number.isFinite(ratio) || ratio <= 0 || ratio > 1) throw new BadRequestException('قيمة الإشعار لا تطابق الفاتورة الأصلية.');
-        const baseCredit = calculateCarrierCreditBaseAmount(Number(invoice.total_invoiced_amount), Number(originalExpense.debit), Number(previousCredits.amount), creditAmount);
-        const supplierId = await ensureDomainSupplier(trx, tenantId, 'shipping_line', invoice.shipping_line_id, invoice.carrier_name || 'خط ملاحي');
+        if (!Number.isFinite(ratio) || ratio <= 0 || ratio > 1)
+          throw new BadRequestException('قيمة الإشعار لا تطابق الفاتورة الأصلية.');
+        const baseCredit = calculateCarrierCreditBaseAmount(
+          Number(invoice.total_invoiced_amount),
+          Number(originalExpense.debit),
+          Number(previousCredits.amount),
+          creditAmount,
+        );
+        const supplierId = await ensureDomainSupplier(
+          trx,
+          tenantId,
+          'shipping_line',
+          invoice.shipping_line_id,
+          invoice.carrier_name || 'خط ملاحي',
+        );
         const payableId = await this.accountingPosting.resolveSystemAccountByCode(trx, tenantId, '2110');
-        const originalPayable = await trx.selectFrom('journal_entry_lines')
+        const originalPayable = await trx
+          .selectFrom('journal_entry_lines')
           .select(['cost_center_id', 'branch_id', 'location_id'])
-          .where('tenant_id', '=', tenantId).where('journal_entry_id', '=', invoice.journal_entry_id)
-          .where('account_id', '=', payableId).where('partner_type', '=', 'supplier').where('partner_id', '=', supplierId)
-          .where('credit', '>', 0).executeTakeFirst();
-        if (!originalPayable) throw new BadRequestException('هوية مورد الفاتورة لا تطابق القيد الأصلي؛ يلزم مراجعة الربط قبل الإشعار الدائن.');
+          .where('tenant_id', '=', tenantId)
+          .where('journal_entry_id', '=', invoice.journal_entry_id)
+          .where('account_id', '=', payableId)
+          .where('partner_type', '=', 'supplier')
+          .where('partner_id', '=', supplierId)
+          .where('credit', '>', 0)
+          .executeTakeFirst();
+        if (!originalPayable)
+          throw new BadRequestException(
+            'هوية مورد الفاتورة لا تطابق القيد الأصلي؛ يلزم مراجعة الربط قبل الإشعار الدائن.',
+          );
         const description = `إشعار دائن ناقل ${dto.creditNoteNumber || ''} - النزاع ${dispute.dispute_number}`;
         await this.accountingPosting.postDomainJournal(trx, {
-          tenantId, accountId: tenantId, entryDate: new Date(), sourceType: 'maritime_carrier_credit_note', sourceId: Number(dispute.id), description, createdBy: auth.userId || null,
+          tenantId,
+          accountId: tenantId,
+          entryDate: new Date(),
+          sourceType: 'maritime_carrier_credit_note',
+          sourceId: Number(dispute.id),
+          description,
+          createdBy: auth.userId || null,
           lines: [
-            { accountId: payableId, description, debit: baseCredit, credit: 0, partnerType: 'supplier', partnerId: supplierId, costCenterId: originalPayable.cost_center_id, branchId: originalPayable.branch_id, locationId: originalPayable.location_id },
-            { accountId: Number(originalExpense.account_id), description, debit: 0, credit: baseCredit, partnerType: 'none', partnerId: null, costCenterId: originalExpense.cost_center_id, branchId: originalExpense.branch_id, locationId: originalExpense.location_id },
+            {
+              accountId: payableId,
+              description,
+              debit: baseCredit,
+              credit: 0,
+              partnerType: 'supplier',
+              partnerId: supplierId,
+              costCenterId: originalPayable.cost_center_id,
+              branchId: originalPayable.branch_id,
+              locationId: originalPayable.location_id,
+            },
+            {
+              accountId: Number(originalExpense.account_id),
+              description,
+              debit: 0,
+              credit: baseCredit,
+              partnerType: 'none',
+              partnerId: null,
+              costCenterId: originalExpense.cost_center_id,
+              branchId: originalExpense.branch_id,
+              locationId: originalExpense.location_id,
+            },
           ],
         });
         const carrierCost = Number(job.carrier_cost_total || 0) - baseCredit;
-        if (carrierCost < -0.01) throw new BadRequestException('تكلفة الشحنة لا تكفي للإشعار؛ يلزم مطابقة القيود السابقة.');
-        await trx.updateTable('maritime_jobs').set({ carrier_cost_total: Math.max(0, carrierCost), net_profit: Number(job.client_invoiced_total || 0) - Math.max(0, carrierCost) - Number(job.other_costs_total || 0), updated_at: new Date() })
-          .where('tenant_id', '=', tenantId).where('id', '=', job.id).execute();
+        if (carrierCost < -0.01)
+          throw new BadRequestException('تكلفة الشحنة لا تكفي للإشعار؛ يلزم مطابقة القيود السابقة.');
+        await trx
+          .updateTable('maritime_jobs')
+          .set({
+            carrier_cost_total: Math.max(0, carrierCost),
+            net_profit:
+              Number(job.client_invoiced_total || 0) - Math.max(0, carrierCost) - Number(job.other_costs_total || 0),
+            updated_at: new Date(),
+          })
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', job.id)
+          .execute();
       }
-      const updated = await trx.updateTable('maritime_carrier_disputes').set({ dispute_status: dto.status, resolution_notes: dto.resolutionNotes || null, credit_note_number: dto.creditNoteNumber || null, credit_note_amount: creditAmount, resolved_by: auth.userId || null, resolved_at: new Date(), updated_at: new Date() } as any)
-        .where('tenant_id', '=', tenantId).where('id', '=', dispute.id).returningAll().executeTakeFirstOrThrow();
-      await trx.updateTable('maritime_carrier_invoices').set({ payment_status: 'unpaid', audit_status: dto.status === 'rejected' ? 'approved_override' : 'matched', updated_at: new Date() })
-        .where('tenant_id', '=', tenantId).where('id', '=', invoice.id).execute();
+      const updated = await trx
+        .updateTable('maritime_carrier_disputes')
+        .set({
+          dispute_status: dto.status,
+          resolution_notes: dto.resolutionNotes || null,
+          credit_note_number: dto.creditNoteNumber || null,
+          credit_note_amount: creditAmount,
+          resolved_by: auth.userId || null,
+          resolved_at: new Date(),
+          updated_at: new Date(),
+        } as any)
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', dispute.id)
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      await trx
+        .updateTable('maritime_carrier_invoices')
+        .set({
+          payment_status: 'unpaid',
+          audit_status: dto.status === 'rejected' ? 'approved_override' : 'matched',
+          updated_at: new Date(),
+        })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', invoice.id)
+        .execute();
       return { success: true, dispute: updated, message: 'تمت تسوية النزاع وقيده المحاسبي.' };
     });
   }
@@ -391,7 +508,9 @@ export class MaritimeFreightCarrierDisputesService {
         sql<number>`count(case when audit_status = 'matched' then 1 end)::int`.as('matched_count'),
         sql<number>`count(case when audit_status = 'overcharge' then 1 end)::int`.as('overcharge_count'),
         sql<number>`count(case when audit_status = 'disputed' then 1 end)::int`.as('disputed_count'),
-        sql<number>`coalesce(sum(case when audit_status = 'overcharge' then variance_amount else 0 end), 0)::float`.as('overcharge_amount'),
+        sql<number>`coalesce(sum(case when audit_status = 'overcharge' then variance_amount else 0 end), 0)::float`.as(
+          'overcharge_amount',
+        ),
       ])
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();

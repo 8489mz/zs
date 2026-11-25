@@ -36,7 +36,12 @@ export class PaymentManagerService {
     return gateway.initiatePayment(input);
   }
 
-  async processWebhook(gatewayName: string, headers: Record<string, any>, body: any, rawBody?: Buffer): Promise<Record<string, unknown>> {
+  async processWebhook(
+    gatewayName: string,
+    headers: Record<string, any>,
+    body: any,
+    rawBody?: Buffer,
+  ): Promise<Record<string, unknown>> {
     const gateway = this.getGateway(gatewayName);
     const result: WebhookValidationResult = await gateway.verifyAndParseWebhook(headers, body, rawBody);
 
@@ -46,7 +51,9 @@ export class PaymentManagerService {
     }
 
     if (!result.isSuccessful) {
-      this.logger.log(`Webhook received from ${gatewayName} with non-successful status: ${result.transactionReference}`);
+      this.logger.log(
+        `Webhook received from ${gatewayName} with non-successful status: ${result.transactionReference}`,
+      );
       return { ok: true, status: 'ignored_unsuccessful' };
     }
 
@@ -77,7 +84,12 @@ export class PaymentManagerService {
       : null;
 
     if (!plan) {
-      plan = await this.db.selectFrom('saas_plans').selectAll().where('is_active', '=', true).orderBy('price', 'asc').executeTakeFirst();
+      plan = await this.db
+        .selectFrom('saas_plans')
+        .selectAll()
+        .where('is_active', '=', true)
+        .orderBy('price', 'asc')
+        .executeTakeFirst();
     }
 
     if (!plan) {
@@ -160,7 +172,12 @@ export class PaymentManagerService {
       newEnd = decision.endsAt;
 
       if (activeSub) {
-        await trx.updateTable('tenant_subscriptions').set({ status: 'expired', updated_at: now }).where('id', '=', activeSub.id).where('tenant_id', '=', tenant.id).execute();
+        await trx
+          .updateTable('tenant_subscriptions')
+          .set({ status: 'expired', updated_at: now })
+          .where('id', '=', activeSub.id)
+          .where('tenant_id', '=', tenant.id)
+          .execute();
       }
 
       const newSub = await trx
@@ -270,7 +287,12 @@ export class PaymentManagerService {
       : null;
 
     if (!plan) {
-      plan = await this.db.selectFrom('saas_plans').selectAll().where('is_active', '=', true).orderBy('price', 'asc').executeTakeFirst();
+      plan = await this.db
+        .selectFrom('saas_plans')
+        .selectAll()
+        .where('is_active', '=', true)
+        .orderBy('price', 'asc')
+        .executeTakeFirst();
     }
 
     if (!plan) throw new NotFoundException('لا توجد خطة مفعلة.');

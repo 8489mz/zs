@@ -78,7 +78,9 @@ export class SettingsDemoDataService {
     }));
   }
 
-  async getDemoDataStatus(actor: AuthContext): Promise<{ isEmpty: boolean; productCount: number; saleCount: number; isSuperAdmin: boolean }> {
+  async getDemoDataStatus(
+    actor: AuthContext,
+  ): Promise<{ isEmpty: boolean; productCount: number; saleCount: number; isSuperAdmin: boolean }> {
     return this.status.getDemoDataStatus(actor);
   }
   listActivities() {
@@ -88,7 +90,10 @@ export class SettingsDemoDataService {
   async wipeAllData(password: string, actor: AuthContext): Promise<{ ok: boolean; message: string }> {
     return this.wipe.wipeAllData(password, actor);
   }
-  async resetStockBalances(password: string, actor: AuthContext): Promise<{ ok: boolean; message: string; productsCount: number }> {
+  async resetStockBalances(
+    password: string,
+    actor: AuthContext,
+  ): Promise<{ ok: boolean; message: string; productsCount: number }> {
     return this.wipe.resetStockBalances(password, actor);
   }
   async wipeCatalogAndStock(password: string, actor: AuthContext): Promise<{ ok: boolean; message: string }> {
@@ -107,15 +112,37 @@ export class SettingsDemoDataService {
     tenantId: string,
     options: { activityType?: string; wipeExisting?: boolean; seedSales?: boolean; seedOnlineOrders?: boolean },
     platformActor: AuthContext,
-  ): Promise<{ ok: boolean; message: string; activity?: string; productsCount?: number; salesCount?: number; onlineOrdersCount?: number; demoCredentials?: DemoCredential[] }> {
+  ): Promise<{
+    ok: boolean;
+    message: string;
+    activity?: string;
+    productsCount?: number;
+    salesCount?: number;
+    onlineOrdersCount?: number;
+    demoCredentials?: DemoCredential[];
+  }> {
     return this.tenant.seedTenantDemoData(tenantId, options, platformActor);
   }
 
-  async seedComprehensiveDemoData(dtoOrPassword: string | SeedDemoDataDto, actor: AuthContext): Promise<{ ok: boolean; message: string; activity?: string; productsCount?: number; salesCount?: number; onlineOrdersCount?: number; demoCredentials?: DemoCredential[] }> {
+  async seedComprehensiveDemoData(
+    dtoOrPassword: string | SeedDemoDataDto,
+    actor: AuthContext,
+  ): Promise<{
+    ok: boolean;
+    message: string;
+    activity?: string;
+    productsCount?: number;
+    salesCount?: number;
+    onlineOrdersCount?: number;
+    demoCredentials?: DemoCredential[];
+  }> {
     return this.seed.seedComprehensiveDemoData(dtoOrPassword, actor);
   }
 
-  async clearDemoData(password: string, actor: AuthContext): Promise<{ ok: boolean; message: string; deletedProductsCount: number }> {
+  async clearDemoData(
+    password: string,
+    actor: AuthContext,
+  ): Promise<{ ok: boolean; message: string; deletedProductsCount: number }> {
     return this.clear.clearDemoData(password, actor);
   }
 }

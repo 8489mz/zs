@@ -6,10 +6,7 @@ import { getTenantTimezone } from '../../../../common/utils/tenant-timezone.util
 import { currencyMoneyDigits, roundMoney } from '../../../accounting/engines/money-minor-units.engine';
 
 export class VanFieldExecutionHistorySlice {
-  constructor(
-    private readonly db: Kysely<Database>,
-  ) {
-  }
+  constructor(private readonly db: Kysely<Database>) {}
 
   /**
    * 8. Get Store Visits History & Strike-Rate KPIs for Supervisor
@@ -25,10 +22,7 @@ export class VanFieldExecutionHistorySlice {
     },
   ) {
     // 1. Fetch visits recorded via itinerary check-in
-    let q = this.db
-      .selectFrom('van_store_visits')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let q = this.db.selectFrom('van_store_visits').selectAll().where('tenant_id', '=', tenantId);
 
     // P7 (single-server-clock rule): a visit's business day is its
     // check-in instant in the TENANT zone — resolve the zone once
@@ -52,7 +46,9 @@ export class VanFieldExecutionHistorySlice {
       const linkedSaleIds = rows.map((r) => r.sale_id).filter(Boolean);
       let sq = (this.db as any)
         .selectFrom('sales as s')
-        .leftJoin('customers as c', (join: any) => join.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'))
+        .leftJoin('customers as c', (join: any) =>
+          join.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'),
+        )
         .select([
           's.id',
           's.van_trip_id as trip_id',
@@ -137,7 +133,11 @@ export class VanFieldExecutionHistorySlice {
     if (filters?.repId) collectionsQuery = collectionsQuery.where('rep_id', '=', filters.repId);
     if (filters?.customerId) collectionsQuery = collectionsQuery.where('customer_id', '=', filters.customerId);
     if (filters?.date) {
-      collectionsQuery = collectionsQuery.where(sql`DATE(created_at AT TIME ZONE ${businessTimezone})`, '=', filters.date);
+      collectionsQuery = collectionsQuery.where(
+        sql`DATE(created_at AT TIME ZONE ${businessTimezone})`,
+        '=',
+        filters.date,
+      );
     }
     const collectionsRow = await collectionsQuery.executeTakeFirst();
     const metrics = {
@@ -166,7 +166,7 @@ export class VanFieldExecutionHistorySlice {
         collectionAmount: Number(r.collection_amount || 0),
         noSaleReason: r.no_sale_reason,
         noSaleNotes: r.no_sale_notes,
-        storeInventory: typeof r.store_inventory === 'string' ? JSON.parse(r.store_inventory) : (r.store_inventory || []),
+        storeInventory: typeof r.store_inventory === 'string' ? JSON.parse(r.store_inventory) : r.store_inventory || [],
       })),
     };
   }

@@ -56,11 +56,23 @@ export type ShiftRow = {
   location_name?: string | null;
   opened_by_name?: string | null;
   closed_by_name?: string | null;
-  movement_items?: Array<{ id: string; kind: 'cash_in' | 'cash_out' | 'delivery' | 'expense' | 'supplier_payment' | 'return'; kindLabel: string; amount: number; note: string; createdAt: string }>;
+  movement_items?: Array<{
+    id: string;
+    kind: 'cash_in' | 'cash_out' | 'delivery' | 'expense' | 'supplier_payment' | 'return';
+    kindLabel: string;
+    amount: number;
+    note: string;
+    createdAt: string;
+  }>;
 };
 
 export type SettingsRow = { key?: string; value?: string | null };
-export type UserPasswordRow = { id?: number | string; is_active?: boolean | number | string | null; password_hash?: string | null; password_salt?: string | null };
+export type UserPasswordRow = {
+  id?: number | string;
+  is_active?: boolean | number | string | null;
+  password_hash?: string | null;
+  password_salt?: string | null;
+};
 export type CashDrawerMovementRow = { cash_drawer_movement_total?: number | string | null };
 export type ShiftServiceBreakdown = { serviceCashTotal: number; serviceCardTotal: number; serviceTotal: number };
 export type ShiftSalesBreakdown = {
@@ -82,9 +94,35 @@ export type ShiftSalesBreakdown = {
   walletOperationCount: number;
   instapayOperationCount: number;
 };
-export type ShiftSaleReturnTotals = { saleReturnCashRefundTotal: number; saleReturnCardRefundTotal: number; saleReturnTotal: number };
+export type ShiftSaleReturnTotals = {
+  saleReturnCashRefundTotal: number;
+  saleReturnCardRefundTotal: number;
+  saleReturnTotal: number;
+};
 export type CloseOperationDetailInput = { amount?: number; reference?: string };
-export type BlindCloseMetadata = { blindClose: true; declared: { cash: number; cardTotal: number; cardCount: number; walletTotal: number; walletCount: number; instapayTotal: number; instapayCount: number }; detailTotals: { card: number; wallet: number; instapay: number }; details: { card: Array<{ amount: number; reference?: string }>; wallet: Array<{ amount: number; reference?: string }>; instapay: Array<{ amount: number; reference?: string }> }; managerReview?: { note: string; reviewedById: number; reviewedByName: string; reviewedAt: string }; rejection?: { note: string; rejectedById: number; rejectedByName: string; rejectedAt: string }; reconciliation?: BlindCloseReconciliation; postCloseCorrections?: Array<PostCloseCorrectionStamp>; note: string };
+export type BlindCloseMetadata = {
+  blindClose: true;
+  declared: {
+    cash: number;
+    cardTotal: number;
+    cardCount: number;
+    walletTotal: number;
+    walletCount: number;
+    instapayTotal: number;
+    instapayCount: number;
+  };
+  detailTotals: { card: number; wallet: number; instapay: number };
+  details: {
+    card: Array<{ amount: number; reference?: string }>;
+    wallet: Array<{ amount: number; reference?: string }>;
+    instapay: Array<{ amount: number; reference?: string }>;
+  };
+  managerReview?: { note: string; reviewedById: number; reviewedByName: string; reviewedAt: string };
+  rejection?: { note: string; rejectedById: number; rejectedByName: string; rejectedAt: string };
+  reconciliation?: BlindCloseReconciliation;
+  postCloseCorrections?: Array<PostCloseCorrectionStamp>;
+  note: string;
+};
 
 /**
  * One stamped post-close correction (INV-CLOSED-SHIFT-POST-CLOSE-REFRESH):

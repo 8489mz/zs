@@ -51,7 +51,12 @@ export class MarketplaceSyncInventoryService {
   private readonly logger = new Logger(MarketplaceSyncInventoryService.name);
   private readonly db: Kysely<Database>;
   private readonly audit: AuditService;
-  private readonly getSettingJson: <T>(key: string, tenantId: string, defaultValue: T, executor?: Kysely<Database>) => Promise<T>;
+  private readonly getSettingJson: <T>(
+    key: string,
+    tenantId: string,
+    defaultValue: T,
+    executor?: Kysely<Database>,
+  ) => Promise<T>;
   private readonly setSettingJson: <T>(key: string, tenantId: string, value: T) => Promise<void>;
   private readonly getConfig: (auth: AuthContext) => Promise<{
     amazon: AmazonConfig;
@@ -136,9 +141,13 @@ export class MarketplaceSyncInventoryService {
         }
       }
       await this.setSettingJson('marketplace_sku_mappings', tenantId, mappings);
-      this.logger.log(`[Marketplace Live Sync] Updated stock for product ${productId} -> ${newStock} across ${matching.length} mappings`);
+      this.logger.log(
+        `[Marketplace Live Sync] Updated stock for product ${productId} -> ${newStock} across ${matching.length} mappings`,
+      );
     } catch (err: any) {
-      this.logger.warn(`[Marketplace Live Sync] Failed to update stock for product ${productId}: ${err?.message || err}`);
+      this.logger.warn(
+        `[Marketplace Live Sync] Failed to update stock for product ${productId}: ${err?.message || err}`,
+      );
     }
   }
 
@@ -147,7 +156,9 @@ export class MarketplaceSyncInventoryService {
     const scope = requireTenantScope(auth);
     const mappings = await this.getSettingJson<MarketplaceSkuMapping[]>('marketplace_sku_mappings', scope.tenantId, []);
 
-    const targetMappings = productId ? mappings.filter((m) => m.productId === productId) : mappings.filter((m) => m.syncStock);
+    const targetMappings = productId
+      ? mappings.filter((m) => m.productId === productId)
+      : mappings.filter((m) => m.syncStock);
     if (!targetMappings.length) {
       return { syncedCount: 0, message: 'لا توجد أصناف مطابقة للربط المباشر.' };
     }

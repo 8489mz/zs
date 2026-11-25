@@ -7,7 +7,17 @@ import { getIndustryProfile, normalizeIndustryProfileKey } from '../../../core/t
 import { isEnterpriseOrUltimatePlan, isOmnichannelPlanId } from '../../../core/tenant/plan-tier.util';
 
 export class SettingsReads {
-  constructor(private readonly db: Kysely<Database>, private readonly bound: { getPlanFeatures: (tenantId: string, planId: string | null | undefined) => Promise<string[]>; loadFeatureOverride: (tenantId: string, featureCode: string) => Promise<boolean | null>; remember: <T>(cache: Map<string, { data: T; expiresAt: number }>, key: string, data: T) => void; scope: (actor: AuthContext) => TenantScope; tenantPredicate: (actor: AuthContext, alias?: string) => RawBuilder<boolean>; _settingsCache: Map<string, { data: Record<string, unknown>; expiresAt: number }> }) {}
+  constructor(
+    private readonly db: Kysely<Database>,
+    private readonly bound: {
+      getPlanFeatures: (tenantId: string, planId: string | null | undefined) => Promise<string[]>;
+      loadFeatureOverride: (tenantId: string, featureCode: string) => Promise<boolean | null>;
+      remember: <T>(cache: Map<string, { data: T; expiresAt: number }>, key: string, data: T) => void;
+      scope: (actor: AuthContext) => TenantScope;
+      tenantPredicate: (actor: AuthContext, alias?: string) => RawBuilder<boolean>;
+      _settingsCache: Map<string, { data: Record<string, unknown>; expiresAt: number }>;
+    },
+  ) {}
 
   private async getPlanFeatures(tenantId: string, planId: string | null | undefined): Promise<string[]> {
     return this.bound.getPlanFeatures(tenantId, planId);
@@ -50,9 +60,10 @@ export class SettingsReads {
 
   async getSettings(actor: AuthContext): Promise<Record<string, unknown>> {
     const scope = this.scope(actor);
-    const canManageSettings = actor.role === 'super_admin'
-      || actor.permissions?.includes('canManageSettings')
-      || actor.permissions?.includes('settings');
+    const canManageSettings =
+      actor.role === 'super_admin' ||
+      actor.permissions?.includes('canManageSettings') ||
+      actor.permissions?.includes('settings');
 
     const cacheKey = `${scope.tenantId}:${Boolean(canManageSettings)}`;
     const cached = this._settingsCache.get(cacheKey);
@@ -67,7 +78,11 @@ export class SettingsReads {
       if (!canManageSettings && this.sensitiveSettingKeys.has(row.key)) {
         return acc;
       }
-      try { acc[row.key] = JSON.parse(row.value); } catch { acc[row.key] = row.value; }
+      try {
+        acc[row.key] = JSON.parse(row.value);
+      } catch {
+        acc[row.key] = row.value;
+      }
       return acc;
     }, {});
 
@@ -106,7 +121,10 @@ export class SettingsReads {
       } else if (!primaryActivity || primaryActivity === 'retail_general' || primaryActivity === 'general') {
         // INV-POS-RETAIL-FEATURE-GATE: no services→retail_general rewrite — it showed POS while the backend gate refused the sale (cashDrawer is in every plan).
         // A services tenant stays services; only a super-admin 'pos' override opens POS for it.
-        primaryActivity = (settings.activityType || settings.businessIndustry || primaryActivity || 'retail_general') as string;
+        primaryActivity = (settings.activityType ||
+          settings.businessIndustry ||
+          primaryActivity ||
+          'retail_general') as string;
       }
       const effectiveType = normalizeIndustryProfileKey(primaryActivity as string);
       const profile = getIndustryProfile(effectiveType);
@@ -150,7 +168,10 @@ export class SettingsReads {
       settings.inventoryModuleEnabled = false;
       settings.posModuleEnabled = false;
       settings.requireCashierShiftForSales = false;
-    } else if (settings.pillar === 'manufacturing' || (settings.industryProfile as any)?.subVertical === 'manufacturing') {
+    } else if (
+      settings.pillar === 'manufacturing' ||
+      (settings.industryProfile as any)?.subVertical === 'manufacturing'
+    ) {
       // INV-POS-RETAIL-FEATURE-GATE: the pillar half was DEAD (manufacturing profile pillar is 'commerce', never 'manufacturing'), so this branch never fired and the page showed POS while the gate refused it.
       // The subVertical half restores the branch's intent: POS stays OFF for manufacturing.
       settings.manufacturingModuleEnabled = true;
@@ -178,7 +199,8 @@ export class SettingsReads {
       const isWholesaleVan = profileKey === 'wholesale_van';
       const isServiceVertical = profileKey === 'services';
       const isWarehousing = profileKey === 'warehousing';
-      const isImportVertical = profileKey === 'import_export' || (settings.industryProfile as any)?.subVertical === 'import_export';
+      const isImportVertical =
+        profileKey === 'import_export' || (settings.industryProfile as any)?.subVertical === 'import_export';
 
       // POS: enabled for all retail/hospitality/specialized verticals, disabled for wholesale_van, services, warehousing, and import_export
       if (isWarehousing || isImportVertical || isWholesaleVan) {
@@ -194,7 +216,7 @@ export class SettingsReads {
         }
       } else {
         // If the profile has 'sales' in defaultFeatures, POS must be enabled (self-heal from corrupted false)
-        settings.posModuleEnabled = profileDefaults.includes('sales') ? true : (settings.posModuleEnabled !== false);
+        settings.posModuleEnabled = profileDefaults.includes('sales') ? true : settings.posModuleEnabled !== false;
       }
 
       if (isAlmhnds) {
@@ -228,10 +250,16 @@ export class SettingsReads {
       }
 
       // Inventory & Purchases: respect DB if explicitly set, but default to true for profiles that need them
-      if (settings.inventoryModuleEnabled === undefined || (settings.inventoryModuleEnabled === false && profileDefaults.includes('inventory'))) {
+      if (
+        settings.inventoryModuleEnabled === undefined ||
+        (settings.inventoryModuleEnabled === false && profileDefaults.includes('inventory'))
+      ) {
         settings.inventoryModuleEnabled = profileDefaults.includes('inventory');
       }
-      if (settings.purchasesModuleEnabled === undefined || (settings.purchasesModuleEnabled === false && profileDefaults.includes('purchases'))) {
+      if (
+        settings.purchasesModuleEnabled === undefined ||
+        (settings.purchasesModuleEnabled === false && profileDefaults.includes('purchases'))
+      ) {
         settings.purchasesModuleEnabled = profileDefaults.includes('purchases');
       }
 
@@ -244,7 +272,9 @@ export class SettingsReads {
       }
       if (settings.phoneOrdersModuleEnabled === undefined) {
         const subVertical = (settings.industryProfile as any)?.subVertical;
-        settings.phoneOrdersModuleEnabled = ['restaurant', 'pharmacy', 'supermarket', 'grocery', 'food_beverage'].includes(subVertical) || settings.restaurantModuleEnabled === true;
+        settings.phoneOrdersModuleEnabled =
+          ['restaurant', 'pharmacy', 'supermarket', 'grocery', 'food_beverage'].includes(subVertical) ||
+          settings.restaurantModuleEnabled === true;
       }
       if (settings.enablePharmacyModule === undefined) {
         settings.enablePharmacyModule = (settings.industryProfile as any)?.subVertical === 'pharmacy';
@@ -270,7 +300,12 @@ export class SettingsReads {
       const isEnterprisePlan = isOmnichannelPlan || isUltimatePlan;
 
       // Delivery reps (retail / standard): if profile or plan includes deliveryReps, ensure it's enabled (self-heal)
-      if (!isWarehousing && !isServiceVertical && !isImportVertical && (profileDefaults.includes('deliveryReps') || isEnterprisePlan || planFeatures.includes('deliveryReps'))) {
+      if (
+        !isWarehousing &&
+        !isServiceVertical &&
+        !isImportVertical &&
+        (profileDefaults.includes('deliveryReps') || isEnterprisePlan || planFeatures.includes('deliveryReps'))
+      ) {
         if (settings.deliveryRepsModuleEnabled === undefined) {
           settings.deliveryRepsModuleEnabled = true;
         }
@@ -290,7 +325,10 @@ export class SettingsReads {
       }
 
       // Enterprise features & accounting: if the profile or plan includes accounting, ensure enterprise mode (self-heal)
-      if ((isEnterprisePlan || profileDefaults.includes('accounting') || planFeatures.includes('accounting')) && settings.enableEnterpriseFeatures !== true) {
+      if (
+        (isEnterprisePlan || profileDefaults.includes('accounting') || planFeatures.includes('accounting')) &&
+        settings.enableEnterpriseFeatures !== true
+      ) {
         settings.enableEnterpriseFeatures = true;
       }
       if ((isEnterprisePlan || planFeatures.includes('fixed_assets')) && settings.fixedAssetsModuleEnabled !== true) {
@@ -303,7 +341,10 @@ export class SettingsReads {
       }
 
       // Tax declaration & integration: if plan includes vat_declaration or taxIntegration
-      if ((isEnterprisePlan || planFeatures.includes('vat_declaration') || planFeatures.includes('taxIntegration')) && settings.taxDeclarationModuleEnabled !== true) {
+      if (
+        (isEnterprisePlan || planFeatures.includes('vat_declaration') || planFeatures.includes('taxIntegration')) &&
+        settings.taxDeclarationModuleEnabled !== true
+      ) {
         settings.taxDeclarationModuleEnabled = true;
       }
 

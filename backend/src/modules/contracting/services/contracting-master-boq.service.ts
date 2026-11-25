@@ -119,11 +119,17 @@ export class ContractingMasterBoqService {
     }
 
     if (query?.tradeCategory && query.tradeCategory !== 'all') {
-      const cats = query.tradeCategory.split(',').map((c: string) => c.trim()).filter(Boolean);
+      const cats = query.tradeCategory
+        .split(',')
+        .map((c: string) => c.trim())
+        .filter(Boolean);
       if (cats.length === 1) {
         rawQuery = sql`${rawQuery} AND trade_category = ${cats[0]}`;
       } else if (cats.length > 1) {
-        rawQuery = sql`${rawQuery} AND trade_category IN (${sql.join(cats.map((c: string) => sql`${c}`), sql`, `)})`;
+        rawQuery = sql`${rawQuery} AND trade_category IN (${sql.join(
+          cats.map((c: string) => sql`${c}`),
+          sql`, `,
+        )})`;
       }
     }
 
@@ -388,7 +394,10 @@ export class ContractingMasterBoqService {
       .where((eb: any) => eb.or([eb('tenant_id', '=', tenantId), eb('tenant_id', '=', '')]))
       .execute();
 
-    if (!masterItems || new Set(masterItems.map((item: any) => String(item.id))).size !== new Set(dto.itemIds.map(String)).size) {
+    if (
+      !masterItems ||
+      new Set(masterItems.map((item: any) => String(item.id))).size !== new Set(dto.itemIds.map(String)).size
+    ) {
       throw new NotFoundException('لم يتم العثور على البنود المحددة في بنك البنود المرجعي');
     }
 

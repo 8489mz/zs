@@ -1,7 +1,23 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { StorefrontService } from './storefront.service';
 import { StorefrontReservationSchedulerService } from './services/storefront-reservation-scheduler.service';
-import { DEFAULT_COD_STALE_TIMEOUT_MS, DEFAULT_ONLINE_PAYMENT_TIMEOUT_MS } from './engines/storefront-reservation.engine';
+import {
+  DEFAULT_COD_STALE_TIMEOUT_MS,
+  DEFAULT_ONLINE_PAYMENT_TIMEOUT_MS,
+} from './engines/storefront-reservation.engine';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { RequireAnyPermission } from '../../core/auth/decorators/permissions.decorator';
@@ -144,11 +160,7 @@ export class StorefrontMerchantController {
 
   @Put('coupons/:id')
   @RequireAnyPermission(...CONFIG_PERMISSIONS)
-  updateCoupon(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: UpdateCouponDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  updateCoupon(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateCouponDto, @Req() req: RequestWithAuth) {
     return this.service.updateCoupon(id, body, req.authContext!);
   }
 

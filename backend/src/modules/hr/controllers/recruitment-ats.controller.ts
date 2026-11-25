@@ -25,10 +25,7 @@ export class RecruitmentAtsController {
   }
 
   @Get('jobs')
-  getJobOpenings(
-    @Query() query: { status?: string; search?: string },
-    @Req() req: RequestWithAuth,
-  ) {
+  getJobOpenings(@Query() query: { status?: string; search?: string }, @Req() req: RequestWithAuth) {
     return this.recruitmentService.getJobOpenings(req.authContext!, query);
   }
 
@@ -51,21 +48,13 @@ export class RecruitmentAtsController {
   }
 
   @Patch('applicants/:id/stage')
-  updateApplicantStage(
-    @Param('id') id: string,
-    @Body() dto: UpdateApplicantStageDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  updateApplicantStage(@Param('id') id: string, @Body() dto: UpdateApplicantStageDto, @Req() req: RequestWithAuth) {
     return this.recruitmentService.updateApplicantStage(req.authContext!, id, dto);
   }
 
   @Post('applicants/:id/hire')
   @RequirePermissions('hrEmployees', 'hrSalaryManage')
-  hireApplicant(
-    @Param('id') id: string,
-    @Body() dto: HireApplicantDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  hireApplicant(@Param('id') id: string, @Body() dto: HireApplicantDto, @Req() req: RequestWithAuth) {
     return this.recruitmentService.hireApplicant(req.authContext!, id, dto);
   }
 }

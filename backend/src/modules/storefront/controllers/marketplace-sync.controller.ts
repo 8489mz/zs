@@ -30,7 +30,8 @@ export class MarketplaceSyncController {
 
   @Post('config')
   saveConfig(
-    @Body() payload: {
+    @Body()
+    payload: {
       amazon?: Partial<AmazonConfig>;
       noon?: Partial<NoonConfig>;
       jumia?: Partial<JumiaConfig>;
@@ -52,10 +53,7 @@ export class MarketplaceSyncController {
   }
 
   @Post('mappings')
-  saveMapping(
-    @Body() payload: Omit<MarketplaceSkuMapping, 'id'> & { id?: string },
-    @Req() req: RequestWithAuth,
-  ) {
+  saveMapping(@Body() payload: Omit<MarketplaceSkuMapping, 'id'> & { id?: string }, @Req() req: RequestWithAuth) {
     return this.syncService.saveMapping(payload, req.authContext!);
   }
 
@@ -179,10 +177,7 @@ export class MarketplaceSyncController {
   }
 
   @Get('analytics')
-  getMarketplaceAnalytics(
-    @Query('period') period: 'all' | '30d' | '7d' | undefined,
-    @Req() req: RequestWithAuth,
-  ) {
+  getMarketplaceAnalytics(@Query('period') period: 'all' | '30d' | '7d' | undefined, @Req() req: RequestWithAuth) {
     return this.syncService.getMarketplaceAnalytics(period || '30d', req.authContext!);
   }
 
@@ -241,4 +236,3 @@ export class MarketplaceSyncController {
     return this.syncService.generateGtinExemption(body, req.authContext!);
   }
 }
-

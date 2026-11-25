@@ -11,7 +11,16 @@ import { DecideAttendanceExceptionDto } from '../dto/hr.dto';
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { calculateAttendancePenalty } from '../engines/attendance-penalty.engine';
 import { type RawBuilder } from 'kysely';
-import { clean, normalizeDateOnly, tenantBookDigits, monthRange, timeToMinutes, normalizeTimeOnly, type AttendanceExceptionType, type AttendanceExceptionStatus } from '../hr-helpers';
+import {
+  clean,
+  normalizeDateOnly,
+  tenantBookDigits,
+  monthRange,
+  timeToMinutes,
+  normalizeTimeOnly,
+  type AttendanceExceptionType,
+  type AttendanceExceptionStatus,
+} from '../hr-helpers';
 
 /**
  * HrAttendanceExceptionsService — slice H12 of the hr split.
@@ -138,7 +147,9 @@ export class HrAttendanceExceptionsService {
     `.execute(db);
     const row = result.rows[0];
     if (!row) {
-      await sql`DELETE FROM hr_attendance_exceptions WHERE employee_id = ${employeeId} AND work_date = ${workDate}::date AND (tenant_id = ${tenantId} OR tenant_id = '')`.execute(db);
+      await sql`DELETE FROM hr_attendance_exceptions WHERE employee_id = ${employeeId} AND work_date = ${workDate}::date AND (tenant_id = ${tenantId} OR tenant_id = '')`.execute(
+        db,
+      );
       return;
     }
 
@@ -159,12 +170,12 @@ export class HrAttendanceExceptionsService {
       const globalPolicies = await this.getPayrollPolicies(db, effectiveTenantId);
       const weekendDaysStr = globalPolicies.hrWeekendDays || 'friday,saturday';
       const weekendDays = weekendDaysStr.split(',').map((d: string) => d.trim().toLowerCase());
-      
+
       const dateObj = new Date(workDate);
       const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
       const dayName = dayNames[dateObj.getDay()];
       isHolidayOrWeekend = weekendDays.includes(dayName);
-      
+
       if (!isHolidayOrWeekend) {
         const holidayRes = await sql<{ id: number }>`
           SELECT id FROM hr_holidays 
@@ -183,7 +194,9 @@ export class HrAttendanceExceptionsService {
 
     if (isHolidayOrWeekend) {
       if (!checkInActualTime && !checkOutActualTime) {
-        await sql`DELETE FROM hr_attendance_exceptions WHERE employee_id = ${employeeId} AND work_date = ${workDate}::date AND (tenant_id = ${tenantId} OR tenant_id = '')`.execute(db);
+        await sql`DELETE FROM hr_attendance_exceptions WHERE employee_id = ${employeeId} AND work_date = ${workDate}::date AND (tenant_id = ${tenantId} OR tenant_id = '')`.execute(
+          db,
+        );
         return;
       }
       let actualDuration = 0;
@@ -192,18 +205,32 @@ export class HrAttendanceExceptionsService {
         if (actualDuration < 0) actualDuration += 1440; // Overnight checkout.
       }
       if (actualDuration > 0) {
-        entries.push(this.buildAttendanceException('extra_hours', employeeId, attendanceId || null, workDate, actualDuration, null, null));
+        entries.push(
+          this.buildAttendanceException(
+            'extra_hours',
+            employeeId,
+            attendanceId || null,
+            workDate,
+            actualDuration,
+            null,
+            null,
+          ),
+        );
       } else {
-        entries.push(this.buildAttendanceException(
-          checkInActualTime ? 'missing_check_out' : 'missing_check_in',
-          employeeId,
-          attendanceId || null,
-          workDate,
-          expectedDailyHours * 60,
-          scheduledCheckIn || scheduledCheckOut,
-          null,
-          checkInActualTime ? `حضر في ${checkInActualTime} ولم يسجل انصراف` : `انصرف في ${checkOutActualTime} ولم يسجل حضور`
-        ));
+        entries.push(
+          this.buildAttendanceException(
+            checkInActualTime ? 'missing_check_out' : 'missing_check_in',
+            employeeId,
+            attendanceId || null,
+            workDate,
+            expectedDailyHours * 60,
+            scheduledCheckIn || scheduledCheckOut,
+            null,
+            checkInActualTime
+              ? `حضر في ${checkInActualTime} ولم يسجل انصراف`
+              : `انصرف في ${checkOutActualTime} ولم يسجل حضور`,
+          ),
+        );
       }
     } else if (attendancePolicy === 'flexible') {
       let actualDuration = 0;
@@ -212,50 +239,126 @@ export class HrAttendanceExceptionsService {
         if (actualDuration < 0) actualDuration += 1440; // Overnight checkout. // Cross midnight edge case, ignored for now
       } else if (checkInActualTime || checkOutActualTime) {
         // Missing a punch
-        entries.push(this.buildAttendanceException(
-          checkInActualTime ? 'missing_check_out' : 'missing_check_in',
-          employeeId,
-          attendanceId || null,
-          workDate,
-          expectedDailyHours * 60,
-          scheduledCheckIn || scheduledCheckOut,
-          null,
-          checkInActualTime ? `حضر في ${checkInActualTime} ولم يسجل انصراف` : `انصرف في ${checkOutActualTime} ولم يسجل حضور`
-        ));
+        entries.push(
+          this.buildAttendanceException(
+            checkInActualTime ? 'missing_check_out' : 'missing_check_in',
+            employeeId,
+            attendanceId || null,
+            workDate,
+            expectedDailyHours * 60,
+            scheduledCheckIn || scheduledCheckOut,
+            null,
+            checkInActualTime
+              ? `حضر في ${checkInActualTime} ولم يسجل انصراف`
+              : `انصرف في ${checkOutActualTime} ولم يسجل حضور`,
+          ),
+        );
       }
 
       if (checkInActualTime && checkOutActualTime) {
         const expectedDuration = expectedDailyHours * 60;
         if (actualDuration < expectedDuration) {
-          entries.push(this.buildAttendanceException('short_hours', employeeId, attendanceId || null, workDate, expectedDuration - actualDuration, null, null));
+          entries.push(
+            this.buildAttendanceException(
+              'short_hours',
+              employeeId,
+              attendanceId || null,
+              workDate,
+              expectedDuration - actualDuration,
+              null,
+              null,
+            ),
+          );
         } else if (actualDuration > expectedDuration) {
-          entries.push(this.buildAttendanceException('extra_hours', employeeId, attendanceId || null, workDate, actualDuration - expectedDuration, null, null));
+          entries.push(
+            this.buildAttendanceException(
+              'extra_hours',
+              employeeId,
+              attendanceId || null,
+              workDate,
+              actualDuration - expectedDuration,
+              null,
+              null,
+            ),
+          );
         }
-        
+
         // Flag unscheduled time if deviation is massive
         if (scheduledCheckIn && checkInActualTime) {
-           const delta = Math.abs(timeToMinutes(checkInActualTime) - timeToMinutes(scheduledCheckIn));
-           if (delta > 120) { // 2 hours deviation
-             entries.push(this.buildAttendanceException('unscheduled_time', employeeId, attendanceId || null, workDate, delta, scheduledCheckIn, checkInActualTime));
-           }
+          const delta = Math.abs(timeToMinutes(checkInActualTime) - timeToMinutes(scheduledCheckIn));
+          if (delta > 120) {
+            // 2 hours deviation
+            entries.push(
+              this.buildAttendanceException(
+                'unscheduled_time',
+                employeeId,
+                attendanceId || null,
+                workDate,
+                delta,
+                scheduledCheckIn,
+                checkInActualTime,
+              ),
+            );
+          }
         }
       }
     } else {
       if (scheduledCheckIn && checkInActualTime) {
         const delta = timeToMinutes(checkInActualTime) - timeToMinutes(scheduledCheckIn);
         if (delta < 0) {
-          entries.push(this.buildAttendanceException('early_check_in', employeeId, attendanceId || null, workDate, Math.abs(delta), scheduledCheckIn, checkInActualTime));
+          entries.push(
+            this.buildAttendanceException(
+              'early_check_in',
+              employeeId,
+              attendanceId || null,
+              workDate,
+              Math.abs(delta),
+              scheduledCheckIn,
+              checkInActualTime,
+            ),
+          );
         } else if (delta > graceMinutes) {
-          entries.push(this.buildAttendanceException('late_check_in', employeeId, attendanceId || null, workDate, delta - graceMinutes, scheduledCheckIn, checkInActualTime));
+          entries.push(
+            this.buildAttendanceException(
+              'late_check_in',
+              employeeId,
+              attendanceId || null,
+              workDate,
+              delta - graceMinutes,
+              scheduledCheckIn,
+              checkInActualTime,
+            ),
+          );
         }
       } else if (!checkInActualTime && checkOutActualTime) {
-        entries.push(this.buildAttendanceException('missing_check_in', employeeId, attendanceId || null, workDate, expectedDailyHours * 60, scheduledCheckIn, null, `انصرف في ${checkOutActualTime} ولم يسجل حضور`));
+        entries.push(
+          this.buildAttendanceException(
+            'missing_check_in',
+            employeeId,
+            attendanceId || null,
+            workDate,
+            expectedDailyHours * 60,
+            scheduledCheckIn,
+            null,
+            `انصرف في ${checkOutActualTime} ولم يسجل حضور`,
+          ),
+        );
       }
 
       if (scheduledCheckOut && checkOutActualTime) {
         const delta = timeToMinutes(checkOutActualTime) - timeToMinutes(scheduledCheckOut);
         if (delta < -graceMinutes) {
-          entries.push(this.buildAttendanceException('early_check_out', employeeId, attendanceId || null, workDate, Math.abs(delta) - graceMinutes, scheduledCheckOut, checkOutActualTime));
+          entries.push(
+            this.buildAttendanceException(
+              'early_check_out',
+              employeeId,
+              attendanceId || null,
+              workDate,
+              Math.abs(delta) - graceMinutes,
+              scheduledCheckOut,
+              checkOutActualTime,
+            ),
+          );
         } else if (delta > 0) {
           let eligibleForOvertime = true;
           if (scheduledCheckIn && checkInActualTime) {
@@ -266,21 +369,49 @@ export class HrAttendanceExceptionsService {
             if (actualDuration < expectedDuration) eligibleForOvertime = false;
           }
           if (eligibleForOvertime) {
-            entries.push(this.buildAttendanceException('late_check_out', employeeId, attendanceId || null, workDate, delta, scheduledCheckOut, checkOutActualTime));
+            entries.push(
+              this.buildAttendanceException(
+                'late_check_out',
+                employeeId,
+                attendanceId || null,
+                workDate,
+                delta,
+                scheduledCheckOut,
+                checkOutActualTime,
+              ),
+            );
           }
         }
       } else if (checkInActualTime && !checkOutActualTime) {
-        entries.push(this.buildAttendanceException('missing_check_out', employeeId, attendanceId || null, workDate, expectedDailyHours * 60, scheduledCheckOut, null, `حضر في ${checkInActualTime} ولم يسجل انصراف`));
+        entries.push(
+          this.buildAttendanceException(
+            'missing_check_out',
+            employeeId,
+            attendanceId || null,
+            workDate,
+            expectedDailyHours * 60,
+            scheduledCheckOut,
+            null,
+            `حضر في ${checkInActualTime} ولم يسجل انصراف`,
+          ),
+        );
       }
     }
 
-    const existingExceptions = await sql<{ exception_type: string; status: string; note: string; approved_duration_minutes: number | null }>`
+    const existingExceptions = await sql<{
+      exception_type: string;
+      status: string;
+      note: string;
+      approved_duration_minutes: number | null;
+    }>`
       SELECT exception_type, status, note, approved_duration_minutes FROM hr_attendance_exceptions
       WHERE employee_id = ${employeeId} AND work_date = ${workDate}::date AND (tenant_id = ${tenantId} OR tenant_id = '')
     `.execute(db);
-    const existingMap = new Map(existingExceptions.rows.map(r => [r.exception_type, r]));
+    const existingMap = new Map(existingExceptions.rows.map((r) => [r.exception_type, r]));
 
-    await sql`DELETE FROM hr_attendance_exceptions WHERE employee_id = ${employeeId} AND work_date = ${workDate}::date AND (tenant_id = ${tenantId} OR tenant_id = '')`.execute(db);
+    await sql`DELETE FROM hr_attendance_exceptions WHERE employee_id = ${employeeId} AND work_date = ${workDate}::date AND (tenant_id = ${tenantId} OR tenant_id = '')`.execute(
+      db,
+    );
     for (const entry of entries) {
       if (!entry) continue;
       const existing = existingMap.get(entry.exceptionType);
@@ -324,7 +455,8 @@ export class HrAttendanceExceptionsService {
       monthCondition = sql`ex.work_date >= ${range.from}::date AND ex.work_date <= ${range.to}::date`;
     }
     const employeeCondition = employeeId && !isNaN(employeeId) ? sql`ex.employee_id = ${employeeId}` : sql`1=1`;
-    const departmentCondition = departmentId && !isNaN(departmentId) ? sql`e.department_id = ${departmentId}` : sql`1=1`;
+    const departmentCondition =
+      departmentId && !isNaN(departmentId) ? sql`e.department_id = ${departmentId}` : sql`1=1`;
 
     try {
       const globalPolicies = await this.getPayrollPolicies(this.db, tenantId);
@@ -386,9 +518,7 @@ export class HrAttendanceExceptionsService {
       // The status filter matches the RAW trimmed status against the
       // LOWERCASED query (the old JS compared clean(row.status) with the
       // lowercased query, no lowercase on the stored value).
-      const statusFilter = status
-        ? sql<boolean>`btrim(s.status) = ${status}`
-        : sql<boolean>`1=1`;
+      const statusFilter = status ? sql<boolean>`btrim(s.status) = ${status}` : sql<boolean>`1=1`;
       const searchFilter = search
         ? sql<boolean>`strpos(lower(btrim(s.employee_no)), ${search}) > 0 OR strpos(lower(btrim(s.employee_name)), ${search}) > 0 OR strpos(lower(btrim(s.exception_type)), ${search}) > 0`
         : sql<boolean>`1=1`;
@@ -423,11 +553,14 @@ export class HrAttendanceExceptionsService {
           incidentIndexInMonth: Number(row.incident_index_in_month || 1),
           globalDelayPolicyEnabled: globalPolicies.hrDelayPolicyEnabled === true,
           globalFirstTimeDeduction: Number(globalPolicies.hrDelayPolicyFirstTimeDeduction || 0.25),
-          globalSecondTimeDeduction: Number(globalPolicies.hrDelayPolicySecondTimeDeduction || 0.50),
-          globalThirdTimeDeduction: Number(globalPolicies.hrDelayPolicyThirdTimeDeduction || 1.00),
-          globalFourthTimeDeduction: Number(globalPolicies.hrDelayPolicyFourthTimeDeduction || 1.00),
+          globalSecondTimeDeduction: Number(globalPolicies.hrDelayPolicySecondTimeDeduction || 0.5),
+          globalThirdTimeDeduction: Number(globalPolicies.hrDelayPolicyThirdTimeDeduction || 1.0),
+          globalFourthTimeDeduction: Number(globalPolicies.hrDelayPolicyFourthTimeDeduction || 1.0),
           graceMinutes: Number(row.grace_minutes || 0),
-          overtimeMultiplier: Number.isFinite(Number(globalPolicies.overtimeMultiplier)) && Number(globalPolicies.overtimeMultiplier) >= 1 ? Number(globalPolicies.overtimeMultiplier) : 1,
+          overtimeMultiplier:
+            Number.isFinite(Number(globalPolicies.overtimeMultiplier)) && Number(globalPolicies.overtimeMultiplier) >= 1
+              ? Number(globalPolicies.overtimeMultiplier)
+              : 1,
           referenceDate: clean(row.work_date_text),
           minorUnits: exceptionDigits,
         });
@@ -461,12 +594,23 @@ export class HrAttendanceExceptionsService {
     }
   }
 
-  async decideAttendanceException(id: number, status: 'approved' | 'skipped', payload: DecideAttendanceExceptionDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async decideAttendanceException(
+    id: number,
+    status: 'approved' | 'skipped',
+    payload: DecideAttendanceExceptionDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const { tenantId } = requireTenantScope(auth);
     let workDate = '';
-    await this.tx.runInTransaction(this.db, async trx => {
+    await this.tx.runInTransaction(this.db, async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + tenantId}))`.execute(trx);
-      const currentResult = await sql<{ id: number; employee_id: number; status: string; duration_minutes: number; work_date: string }>`
+      const currentResult = await sql<{
+        id: number;
+        employee_id: number;
+        status: string;
+        duration_minutes: number;
+        work_date: string;
+      }>`
         SELECT id, employee_id, status, duration_minutes,
                to_char(work_date, 'YYYY-MM-DD') AS work_date
         FROM hr_attendance_exceptions
@@ -484,14 +628,27 @@ export class HrAttendanceExceptionsService {
         LIMIT 1
       `.execute(trx);
       if (booked.rows.length) {
-        throw new AppError('لا يمكن تغيير استثناء حضور دخل بالفعل في مسير مرتبات معتمد؛ يلزم قيد تسوية منفصل',
-          'HR_ATTENDANCE_EXCEPTION_PAYROLL_LOCKED', 409);
+        throw new AppError(
+          'لا يمكن تغيير استثناء حضور دخل بالفعل في مسير مرتبات معتمد؛ يلزم قيد تسوية منفصل',
+          'HR_ATTENDANCE_EXCEPTION_PAYROLL_LOCKED',
+          409,
+        );
       }
       const rawApproved = Number(payload.approvedDurationMinutes ?? current.duration_minutes ?? 0);
       const actualMinutes = Number(current.duration_minutes || 0);
-      if (status === 'approved' && (!Number.isFinite(rawApproved) || rawApproved < 0
-        || !Number.isFinite(actualMinutes) || actualMinutes < 0 || rawApproved > actualMinutes)) {
-        throw new AppError('دقائق الحضور المعتمدة يجب أن تكون بين صفر والمدة المثبتة', 'HR_ATTENDANCE_APPROVED_MINUTES_INVALID', 400);
+      if (
+        status === 'approved' &&
+        (!Number.isFinite(rawApproved) ||
+          rawApproved < 0 ||
+          !Number.isFinite(actualMinutes) ||
+          actualMinutes < 0 ||
+          rawApproved > actualMinutes)
+      ) {
+        throw new AppError(
+          'دقائق الحضور المعتمدة يجب أن تكون بين صفر والمدة المثبتة',
+          'HR_ATTENDANCE_APPROVED_MINUTES_INVALID',
+          400,
+        );
       }
       const approvedDurationMinutes = status === 'approved' ? Math.floor(rawApproved) : null;
       await sql`
@@ -503,7 +660,8 @@ export class HrAttendanceExceptionsService {
     });
     await this.audit.log(
       `${status === 'approved' ? 'Approve' : 'Skip'} attendance exception`,
-      `Attendance exception #${id} ${status} by ${auth.username}`, auth,
+      `Attendance exception #${id} ${status} by ${auth.username}`,
+      auth,
     );
     return this.listAttendanceExceptions({ date: workDate }, auth);
   }

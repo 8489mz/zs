@@ -4,12 +4,16 @@ import { AppError } from '../../../../common/errors/app-error';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import { AccountingPostingService } from '../../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
+import {
+  currencyMoneyDigits,
+  roundMoney,
+  type MoneyDigits,
+} from '../../../accounting/engines/money-minor-units.engine';
 import { moveVanStock, sortItemsByProductId } from '../van-common.util';
 import { restoreReturnedInventoryBatches } from '../van-inventory-batches.helper';
 
 export type ApproveFieldReturnBoundDeps = {
-resolveSaleRefundLegs(
+  resolveSaleRefundLegs(
     q: any,
     tenantId: string,
     sale: {
@@ -26,7 +30,7 @@ resolveSaleRefundLegs(
       priorReturns?: Array<{ id?: unknown; refund_method?: string | null; total_amount?: unknown }> | null;
     },
   ): Promise<{ paymentMethod: string; cashRemaining: number; creditRemaining: number }>;
-assertRefundMethodCoveredByLegs(
+  assertRefundMethodCoveredByLegs(
     legs: { paymentMethod: string; cashRemaining: number; creditRemaining: number },
     refundMethod: 'credit' | 'cash',
     totalAmount: number,
@@ -45,7 +49,7 @@ export class ApproveFieldReturnSlice {
     this.bound = bound;
   }
 
-private async resolveSaleRefundLegs(
+  private async resolveSaleRefundLegs(
     q: any,
     tenantId: string,
     sale: {
@@ -65,7 +69,7 @@ private async resolveSaleRefundLegs(
     return this.bound.resolveSaleRefundLegs(q, tenantId, sale, moneyDigits, opts);
   }
 
-private assertRefundMethodCoveredByLegs(
+  private assertRefundMethodCoveredByLegs(
     legs: { paymentMethod: string; cashRemaining: number; creditRemaining: number },
     refundMethod: 'credit' | 'cash',
     totalAmount: number,
@@ -118,13 +122,19 @@ private assertRefundMethodCoveredByLegs(
       const trip = await trxAny
         .selectFrom('van_sales_trips as vt')
         .leftJoin('stock_locations as van', 'van.id', 'vt.van_location_id')
-        .select(['vt.id', 'vt.van_location_id', 'vt.source_warehouse_id', 'vt.cash_collected', 'van.branch_id as vanBranchId'])
+        .select([
+          'vt.id',
+          'vt.van_location_id',
+          'vt.source_warehouse_id',
+          'vt.cash_collected',
+          'van.branch_id as vanBranchId',
+        ])
         .where('vt.id', '=', ret.trip_id)
         .where('vt.tenant_id', '=', tenantId)
         .executeTakeFirst();
       if (!trip) throw new AppError('رحلة التوزيع المربوطة بالمرتجع غير صالحة', 'INVALID_TRIP', 400);
 
-      const items = typeof ret.items_json === 'string' ? JSON.parse(ret.items_json) : (ret.items_json || []);
+      const items = typeof ret.items_json === 'string' ? JSON.parse(ret.items_json) : ret.items_json || [];
       const totalAmount = Number(ret.total_amount || 0);
       const isDamaged = ret.return_reason === 'damaged' || ret.return_reason === 'expired';
       const branchId = trip.vanBranchId ? Number(trip.vanBranchId) : null;
@@ -189,7 +199,11 @@ private assertRefundMethodCoveredByLegs(
           .executeTakeFirst();
         if (!sale) throw new AppError('الفاتورة الأصلية غير موجودة', 'SALE_NOT_FOUND', 404);
         if (sale.status !== 'posted') {
-          throw new AppError('الفاتورة الأصلية غير مرحّلة أو تم إلغاؤها بعد تقديم المرتجع', 'RETURN_SALE_NOT_POSTED', 400);
+          throw new AppError(
+            'الفاتورة الأصلية غير مرحّلة أو تم إلغاؤها بعد تقديم المرتجع',
+            'RETURN_SALE_NOT_POSTED',
+            400,
+          );
         }
         if (Number(sale.customer_id) !== Number(ret.customer_id)) {
           throw new AppError('الفاتورة المحددة لا تخص هذا العميل', 'SALE_CUSTOMER_MISMATCH', 400);
@@ -219,7 +233,7 @@ private assertRefundMethodCoveredByLegs(
           // Exclude this return itself: it is pending_approval and
           // would otherwise count its own quantity against itself.
           if (Number(prior.id) === Number(returnId)) continue;
-          const parsed = typeof prior.items_json === 'string' ? JSON.parse(prior.items_json) : (prior.items_json || []);
+          const parsed = typeof prior.items_json === 'string' ? JSON.parse(prior.items_json) : prior.items_json || [];
           for (const it of parsed) {
             if (it.saleItemId) {
               const sid = Number(it.saleItemId);
@@ -232,7 +246,11 @@ private assertRefundMethodCoveredByLegs(
             ? linkedSaleLines.find((sl: any) => Number(sl.id) === Number(item.saleItemId))
             : linkedSaleLines.find((sl: any) => Number(sl.product_id) === Number(item.productId));
           if (!line) {
-            throw new AppError(`الصنف #${item.productId} لم يتم العثور عليه في الفاتورة الأصلية`, 'ITEM_NOT_IN_SALE', 400);
+            throw new AppError(
+              `الصنف #${item.productId} لم يتم العثور عليه في الفاتورة الأصلية`,
+              'ITEM_NOT_IN_SALE',
+              400,
+            );
           }
           const soldQty = Number(line.qty || 0);
           const lineTotal = Number(line.line_total || 0);
@@ -303,7 +321,8 @@ private assertRefundMethodCoveredByLegs(
         const returnedByProduct = new Map<number, number>();
         for (const retRow of existingCustomerReturns) {
           if (Number(retRow.id) === Number(returnId)) continue;
-          const parsed = typeof retRow.items_json === 'string' ? JSON.parse(retRow.items_json) : (retRow.items_json || []);
+          const parsed =
+            typeof retRow.items_json === 'string' ? JSON.parse(retRow.items_json) : retRow.items_json || [];
           for (const it of parsed) {
             const pid = Number(it.productId);
             returnedByProduct.set(pid, (returnedByProduct.get(pid) || 0) + Number(it.qty || 0));
@@ -393,7 +412,7 @@ private assertRefundMethodCoveredByLegs(
           .execute();
         for (const prior of approvedPriors) {
           if (Number(prior.id) === Number(returnId)) continue;
-          const parsed = typeof prior.items_json === 'string' ? JSON.parse(prior.items_json) : (prior.items_json || []);
+          const parsed = typeof prior.items_json === 'string' ? JSON.parse(prior.items_json) : prior.items_json || [];
           for (const it of parsed) {
             if (it.saleItemId) {
               const sid = Number(it.saleItemId);
@@ -418,9 +437,10 @@ private assertRefundMethodCoveredByLegs(
         // Unlinked returns have no sale line, so their qty is already
         // pieces (multiplier 1). unitCost becomes the per-piece price,
         // so the movement value is unchanged (12 x 12 = 1 x 144).
-        const linkedLine = item.saleItemId != null
-          ? linkedSaleLines.find((sl: any) => Number(sl.id) === Number(item.saleItemId))
-          : linkedSaleLines.find((sl: any) => Number(sl.product_id) === Number(pid));
+        const linkedLine =
+          item.saleItemId != null
+            ? linkedSaleLines.find((sl: any) => Number(sl.id) === Number(item.saleItemId))
+            : linkedSaleLines.find((sl: any) => Number(sl.product_id) === Number(pid));
         const rawMultiplier = linkedLine ? Number(linkedLine.unit_multiplier ?? 1) : 1;
         const unitMultiplier = Number.isFinite(rawMultiplier) && rawMultiplier > 0 ? rawMultiplier : 1;
         const pieceQty = qty * unitMultiplier;
@@ -459,8 +479,12 @@ private assertRefundMethodCoveredByLegs(
         if (linkedLine && !isDamaged && ret.sale_id) {
           const priorApproved = approvedReturnedBySaleItem.get(Number(linkedLine.id)) || 0;
           await restoreReturnedInventoryBatches(
-            trx, Number(ret.sale_id), Number(linkedLine.id), pid,
-            Number((priorApproved * unitMultiplier).toFixed(3)), pieceQty,
+            trx,
+            Number(ret.sale_id),
+            Number(linkedLine.id),
+            pid,
+            Number((priorApproved * unitMultiplier).toFixed(3)),
+            pieceQty,
             { tenantId, accountId },
           );
         }
@@ -469,7 +493,12 @@ private assertRefundMethodCoveredByLegs(
         // postVanFieldReturn's COGS mirror expects sold units and
         // converts to base units itself via each line's multiplier —
         // passing pieces there would 12x the COGS reversal.
-        itemsWithCost.push({ productId: pid, qty, costPrice: Number(prod?.cost_price || 0), saleItemId: item.saleItemId != null ? Number(item.saleItemId) : null });
+        itemsWithCost.push({
+          productId: pid,
+          qty,
+          costPrice: Number(prod?.cost_price || 0),
+          saleItemId: item.saleItemId != null ? Number(item.saleItemId) : null,
+        });
       }
 
       if (refundMethod === 'credit') {

@@ -86,33 +86,37 @@ export class MaritimeFreightPublicPortalService {
       .execute();
 
     const companySettings = companySettingsRows.reduce<Record<string, string>>((acc, r) => {
-      try { acc[r.key] = JSON.parse(r.value); } catch { acc[r.key] = r.value; }
+      try {
+        acc[r.key] = JSON.parse(r.value);
+      } catch {
+        acc[r.key] = r.value;
+      }
       return acc;
     }, {});
 
     const publicJob = {
-        id: job.id,
-        jobNumber: job.job_number,
-        bookingNumber: job.booking_number,
-        mblNumber: job.mbl_number,
-        hblNumber: job.hbl_number,
-        vesselName: job.vessel_name,
-        voyageNumber: job.voyage_number,
-        direction: job.direction,
-        paymentTerm: job.payment_term,
-        shippingLineName: job.shipping_line_name,
-        polCode: job.pol_code,
-        polName: job.pol_name,
-        podCode: job.pod_code,
-        podName: job.pod_name,
-        etd: job.etd,
-        eta: job.eta,
-        portCutOff: job.port_cut_off,
-        milestoneStatus: job.milestone_status,
-        deliveryOrderReleased: job.delivery_order_released,
-        deliveryOrderReleasedAt: job.delivery_order_released_at,
-        customerName: job.customer_name,
-        status: job.status,
+      id: job.id,
+      jobNumber: job.job_number,
+      bookingNumber: job.booking_number,
+      mblNumber: job.mbl_number,
+      hblNumber: job.hbl_number,
+      vesselName: job.vessel_name,
+      voyageNumber: job.voyage_number,
+      direction: job.direction,
+      paymentTerm: job.payment_term,
+      shippingLineName: job.shipping_line_name,
+      polCode: job.pol_code,
+      polName: job.pol_name,
+      podCode: job.pod_code,
+      podName: job.pod_name,
+      etd: job.etd,
+      eta: job.eta,
+      portCutOff: job.port_cut_off,
+      milestoneStatus: job.milestone_status,
+      deliveryOrderReleased: job.delivery_order_released,
+      deliveryOrderReleasedAt: job.delivery_order_released_at,
+      customerName: job.customer_name,
+      status: job.status,
     };
     return {
       shipment: publicJob,
@@ -194,7 +198,11 @@ export class MaritimeFreightPublicPortalService {
       .execute();
 
     const companySettings = companySettingsRows.reduce<Record<string, string>>((acc, r) => {
-      try { acc[r.key] = JSON.parse(r.value); } catch { acc[r.key] = r.value; }
+      try {
+        acc[r.key] = JSON.parse(r.value);
+      } catch {
+        acc[r.key] = r.value;
+      }
       return acc;
     }, {});
 
@@ -218,18 +226,20 @@ export class MaritimeFreightPublicPortalService {
         payment_term: rfq.payment_term,
         status: rfq.status,
       },
-      carrier: carrier ? {
-        id: carrier.id,
-        code: carrier.code,
-        name_ar: carrier.name_ar,
-        name_en: carrier.name_en,
-        carrier_type: carrier.carrier_type,
-      } : null,
+      carrier: carrier
+        ? {
+            id: carrier.id,
+            code: carrier.code,
+            name_ar: carrier.name_ar,
+            name_en: carrier.name_en,
+            carrier_type: carrier.carrier_type,
+          }
+        : null,
       company: {
         name: companySettings.companyName || companySettings.storeName || 'منصة Z-Systems اللوجستية',
         email: companySettings.email || '',
         phone: companySettings.phone || '',
-      }
+      },
     };
   }
 

@@ -21,16 +21,8 @@ export function evaluateBatchExpiryStatus(
     return { status: 'no_expiry', daysRemaining: null, earliestExpiryDate: null };
   }
 
-  const refDayStart = Date.UTC(
-    referenceDate.getUTCFullYear(),
-    referenceDate.getUTCMonth(),
-    referenceDate.getUTCDate(),
-  );
-  const expDayStart = Date.UTC(
-    parsed.getUTCFullYear(),
-    parsed.getUTCMonth(),
-    parsed.getUTCDate(),
-  );
+  const refDayStart = Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), referenceDate.getUTCDate());
+  const expDayStart = Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate());
   const daysRemaining = Math.floor((expDayStart - refDayStart) / (1000 * 60 * 60 * 24));
   const isoDate = `${parsed.getUTCFullYear()}-${String(parsed.getUTCMonth() + 1).padStart(2, '0')}-${String(parsed.getUTCDate()).padStart(2, '0')}`;
 

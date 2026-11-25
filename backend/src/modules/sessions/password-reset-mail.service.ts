@@ -72,15 +72,17 @@ export class PasswordResetMailService {
     const surface2 = '#f8fafc';
     const font = "'Cairo', 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, Arial, sans-serif";
 
-    const blocks = payload.targets.map((target) => {
-      const safeBusinessName = escapeHtml(target.businessName);
-      const safeUsername = escapeHtml(target.username);
-      const safeUrl = escapeHtml(target.resetUrl);
-      const heading = payload.targets.length > 1
-        ? `<div style="margin: 0 0 10px 0; color: #0f172a; font-size: 13px; font-weight: 700;">${safeBusinessName}</div>`
-        : '';
+    const blocks = payload.targets
+      .map((target) => {
+        const safeBusinessName = escapeHtml(target.businessName);
+        const safeUsername = escapeHtml(target.username);
+        const safeUrl = escapeHtml(target.resetUrl);
+        const heading =
+          payload.targets.length > 1
+            ? `<div style="margin: 0 0 10px 0; color: #0f172a; font-size: 13px; font-weight: 700;">${safeBusinessName}</div>`
+            : '';
 
-      return `
+        return `
         <div style="background-color: ${surface2}; border: 1px solid ${border}; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
           ${heading}
           <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: ${text};">
@@ -98,7 +100,8 @@ export class PasswordResetMailService {
           </div>
           <p style="margin: 14px 0 0 0; color: ${muted}; font-size: 11.5px; line-height: 1.6; word-break: break-all;" dir="ltr">${safeUrl}</p>
         </div>`;
-    }).join('');
+      })
+      .join('');
 
     return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">

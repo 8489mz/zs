@@ -157,94 +157,114 @@ export class ImportContainerDepositsService {
     const effectiveKey = suppliedKey || `deposit:${dto.shipmentId}:${dto.containerNo}`;
     try {
       return await this.db.transaction().execute(async (trx) => {
-      const shipment = await trx.selectFrom('import_shipments').select('project_id')
-        .where('tenant_id', '=', tenantId).where('id', '=', dto.shipmentId).executeTakeFirst();
-      if (dto.projectId) {
-        const project = await trx.selectFrom('import_projects').select('id')
-          .where('tenant_id', '=', tenantId).where('id', '=', dto.projectId).executeTakeFirst();
-        if (!project) throw new BadRequestException('مشروع تأمين الحاوية غير تابع للمنشأة.');
-      }
-      if (!shipment || (dto.projectId && shipment.project_id && shipment.project_id !== dto.projectId)) {
-        throw new BadRequestException('حاوية التأمين لا تتبع مشروع الاستيراد المحدد في المنشأة.');
-      }
-      const deposit = await trx
-        .insertInto('import_container_deposits')
-        .values({
-          tenant_id: tenantId,
-          project_id: dto.projectId ?? null,
-          shipment_id: dto.shipmentId,
-          container_no: dto.containerNo,
-          shipping_line: dto.shippingLine,
-          deposit_amount_egp: dto.depositAmountEgp,
-          payment_date: dto.paymentDate || await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),
-          expected_return_date: dto.expectedReturnDate,
-          refund_status: 'pending',
-          refunded_amount_egp: 0,
-          deductions_amount_egp: 0,
-          treasury_account_id: dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null,
-          notes: dto.notes || null,
-          idempotency_key: effectiveKey,
-        })
-        .returningAll()
-        .executeTakeFirstOrThrow();
+        const shipment = await trx
+          .selectFrom('import_shipments')
+          .select('project_id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', dto.shipmentId)
+          .executeTakeFirst();
+        if (dto.projectId) {
+          const project = await trx
+            .selectFrom('import_projects')
+            .select('id')
+            .where('tenant_id', '=', tenantId)
+            .where('id', '=', dto.projectId)
+            .executeTakeFirst();
+          if (!project) throw new BadRequestException('مشروع تأمين الحاوية غير تابع للمنشأة.');
+        }
+        if (!shipment || (dto.projectId && shipment.project_id && shipment.project_id !== dto.projectId)) {
+          throw new BadRequestException('حاوية التأمين لا تتبع مشروع الاستيراد المحدد في المنشأة.');
+        }
+        const deposit = await trx
+          .insertInto('import_container_deposits')
+          .values({
+            tenant_id: tenantId,
+            project_id: dto.projectId ?? null,
+            shipment_id: dto.shipmentId,
+            container_no: dto.containerNo,
+            shipping_line: dto.shippingLine,
+            deposit_amount_egp: dto.depositAmountEgp,
+            payment_date:
+              dto.paymentDate || (await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date())),
+            expected_return_date: dto.expectedReturnDate,
+            refund_status: 'pending',
+            refunded_amount_egp: 0,
+            deductions_amount_egp: 0,
+            treasury_account_id: dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null,
+            notes: dto.notes || null,
+            idempotency_key: effectiveKey,
+          })
+          .returningAll()
+          .executeTakeFirstOrThrow();
 
-      {
-        const depositAssetAccId = await this.resolveTenantAccount(trx, tenantId, 'container_deposit');
-        const bankAccId = await this.resolveTenantAccount(
-          trx,
-          tenantId,
-          'bank',
-          dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null
-        );
+        {
+          const depositAssetAccId = await this.resolveTenantAccount(trx, tenantId, 'container_deposit');
+          const bankAccId = await this.resolveTenantAccount(
+            trx,
+            tenantId,
+            'bank',
+            dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null,
+          );
 
-        const bankScope = await trx.selectFrom('accounting_accounts').select('account_id')
-          .where('tenant_id', '=', tenantId).where('id', '=', bankAccId).executeTakeFirstOrThrow();
-        await trx.insertInto('treasury_transactions').values({
-          tenant_id: tenantId, account_id: bankScope.account_id,
-          txn_type: 'import_container_deposit', amount: -Number(dto.depositAmountEgp),
-          note: `تأمين حاوية ${dto.containerNo} للخط الملاحي ${dto.shippingLine}`,
-          reference_type: 'import_container_deposit', reference_id: Number(deposit.serial_id),
-          created_by: userId,
-        }).execute();
-        const posting = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
-        await posting.postDomainJournal(trx, {
-          sourceType: 'import_container_deposit',
-          sourceId: Number(deposit.serial_id),
-          tenantId,
-          accountId: tenantId,
-          entryDate: deposit.payment_date ? new Date(deposit.payment_date as any) : new Date(),
-          description: `سداد تأمين حاوية #${dto.containerNo} للخط الملاحي ${dto.shippingLine}`,
-          branchId: null,
-          locationId: null,
-          createdBy: userId,
-          postedBy: userId,
-          lines: [
-            {
-              accountId: depositAssetAccId,
-              debit: Number(dto.depositAmountEgp),
-              credit: 0,
-              description: `تأمين حاوية مسترد - #${dto.containerNo}`,
-              partnerType: 'none',
-              partnerId: null,
-              branchId: null,
-              locationId: null,
-            },
-            {
-              accountId: bankAccId,
-              debit: 0,
-              credit: Number(dto.depositAmountEgp),
-              description: `صرف تأمين حاوية للتوكيل الملاحي`,
-              partnerType: 'none',
-              partnerId: null,
-              branchId: null,
-              locationId: null,
-            },
-          ],
-        });
-      }
+          const bankScope = await trx
+            .selectFrom('accounting_accounts')
+            .select('account_id')
+            .where('tenant_id', '=', tenantId)
+            .where('id', '=', bankAccId)
+            .executeTakeFirstOrThrow();
+          await trx
+            .insertInto('treasury_transactions')
+            .values({
+              tenant_id: tenantId,
+              account_id: bankScope.account_id,
+              txn_type: 'import_container_deposit',
+              amount: -Number(dto.depositAmountEgp),
+              note: `تأمين حاوية ${dto.containerNo} للخط الملاحي ${dto.shippingLine}`,
+              reference_type: 'import_container_deposit',
+              reference_id: Number(deposit.serial_id),
+              created_by: userId,
+            })
+            .execute();
+          const posting =
+            this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
+          await posting.postDomainJournal(trx, {
+            sourceType: 'import_container_deposit',
+            sourceId: Number(deposit.serial_id),
+            tenantId,
+            accountId: tenantId,
+            entryDate: deposit.payment_date ? new Date(deposit.payment_date as any) : new Date(),
+            description: `سداد تأمين حاوية #${dto.containerNo} للخط الملاحي ${dto.shippingLine}`,
+            branchId: null,
+            locationId: null,
+            createdBy: userId,
+            postedBy: userId,
+            lines: [
+              {
+                accountId: depositAssetAccId,
+                debit: Number(dto.depositAmountEgp),
+                credit: 0,
+                description: `تأمين حاوية مسترد - #${dto.containerNo}`,
+                partnerType: 'none',
+                partnerId: null,
+                branchId: null,
+                locationId: null,
+              },
+              {
+                accountId: bankAccId,
+                debit: 0,
+                credit: Number(dto.depositAmountEgp),
+                description: `صرف تأمين حاوية للتوكيل الملاحي`,
+                partnerType: 'none',
+                partnerId: null,
+                branchId: null,
+                locationId: null,
+              },
+            ],
+          });
+        }
 
-      return deposit;
-    });
+        return deposit;
+      });
     } catch (err: any) {
       if (this.isUniqueViolation(err)) {
         return await this.replayContainerDepositOrThrow(tenantId, dto, effectiveKey, err);
@@ -257,7 +277,7 @@ export class ImportContainerDepositsService {
     tenantId: string,
     userId: number,
     depositId: string,
-    dto: RecordContainerReturnRefundDto
+    dto: RecordContainerReturnRefundDto,
   ) {
     return await this.db.transaction().execute(async (trx) => {
       const deposit = await trx
@@ -270,9 +290,13 @@ export class ImportContainerDepositsService {
 
       const requestKey = String(dto.idempotencyKey || '').trim();
       if (!requestKey || requestKey.length > 128) throw new BadRequestException('مفتاح عدم التكرار للاسترداد إلزامي.');
-      const previousEvent = await trx.selectFrom('import_container_refund_events').select('id')
-        .where('tenant_id', '=', tenantId).where('deposit_id', '=', depositId)
-        .where('idempotency_key', '=', requestKey).executeTakeFirst();
+      const previousEvent = await trx
+        .selectFrom('import_container_refund_events')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('deposit_id', '=', depositId)
+        .where('idempotency_key', '=', requestKey)
+        .executeTakeFirst();
       if (previousEvent) throw new ConflictException('طلب استرداد التأمين بنفس المفتاح تم تسجيله مسبقًا.');
       const prevRefunded = Number(deposit.refunded_amount_egp || 0);
       const prevDeductions = Number(deposit.deductions_amount_egp || 0);
@@ -304,7 +328,7 @@ export class ImportContainerDepositsService {
 
       if (callSettled > remainingDeposit + 0.01) {
         throw new BadRequestException(
-          `مجموع الاسترداد والخصومات (${callSettled.toFixed(digits)}) يتجاوز الرصيد المتبقي من التأمين الأصلي (${remainingDeposit.toFixed(digits)}).`
+          `مجموع الاسترداد والخصومات (${callSettled.toFixed(digits)}) يتجاوز الرصيد المتبقي من التأمين الأصلي (${remainingDeposit.toFixed(digits)}).`,
         );
       }
 
@@ -317,12 +341,20 @@ export class ImportContainerDepositsService {
         newStatus = newTotalRefunded > 0 ? 'refunded' : 'forfeited';
       }
 
-      const refundEvent = await trx.insertInto('import_container_refund_events').values({
-        tenant_id: tenantId, deposit_id: depositId, idempotency_key: requestKey,
-        refunded_amount_egp: currentRefund, deductions_amount_egp: currentDeductions,
-        treasury_account_id: dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null,
-        created_by: userId, journal_entry_id: null,
-      }).returning(['id', 'serial_id']).executeTakeFirstOrThrow();
+      const refundEvent = await trx
+        .insertInto('import_container_refund_events')
+        .values({
+          tenant_id: tenantId,
+          deposit_id: depositId,
+          idempotency_key: requestKey,
+          refunded_amount_egp: currentRefund,
+          deductions_amount_egp: currentDeductions,
+          treasury_account_id: dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null,
+          created_by: userId,
+          journal_entry_id: null,
+        })
+        .returning(['id', 'serial_id'])
+        .executeTakeFirstOrThrow();
 
       const updated = await trx
         .updateTable('import_container_deposits')
@@ -354,20 +386,34 @@ export class ImportContainerDepositsService {
         trx,
         tenantId,
         'bank',
-        dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null
+        dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null,
       );
       const expenseAccId = await this.resolveTenantAccount(trx, tenantId, 'cogs');
 
       if (currentRefund > 0) {
         // Record actual receipt in treasury as well as the balanced GL journal; never create cash for penalties alone.
-        const cashScope = await trx.selectFrom('accounting_accounts').select('account_id')
-          .where('tenant_id', '=', tenantId).where('id', '=', bankAccId).executeTakeFirstOrThrow();
-        await trx.insertInto('treasury_transactions').values({
-          tenant_id: tenantId, account_id: cashScope.account_id, txn_type: 'import_container_refund',
-          amount: currentRefund, note: `استرداد تأمين حاوية #${deposit.container_no}`,
-          reference_type: 'import_container_refund', reference_id: Number(refundEvent.serial_id),
-          return_document_id: null, branch_id: null, location_id: null, created_by: userId,
-        }).execute();
+        const cashScope = await trx
+          .selectFrom('accounting_accounts')
+          .select('account_id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', bankAccId)
+          .executeTakeFirstOrThrow();
+        await trx
+          .insertInto('treasury_transactions')
+          .values({
+            tenant_id: tenantId,
+            account_id: cashScope.account_id,
+            txn_type: 'import_container_refund',
+            amount: currentRefund,
+            note: `استرداد تأمين حاوية #${deposit.container_no}`,
+            reference_type: 'import_container_refund',
+            reference_id: Number(refundEvent.serial_id),
+            return_document_id: null,
+            branch_id: null,
+            location_id: null,
+            created_by: userId,
+          })
+          .execute();
       }
 
       const lines: any[] = [];
@@ -408,7 +454,8 @@ export class ImportContainerDepositsService {
         });
       }
 
-      const postingService = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
+      const postingService =
+        this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
       const refundJournalEntryId = await postingService.postDomainJournal(trx, {
         sourceType: 'import_container_refund',
         sourceId: Number(refundEvent.serial_id),
@@ -422,8 +469,12 @@ export class ImportContainerDepositsService {
         postedBy: userId,
         lines,
       });
-      await trx.updateTable('import_container_refund_events').set({ journal_entry_id: refundJournalEntryId })
-        .where('id', '=', refundEvent.id).where('tenant_id', '=', tenantId).execute();
+      await trx
+        .updateTable('import_container_refund_events')
+        .set({ journal_entry_id: refundJournalEntryId })
+        .where('id', '=', refundEvent.id)
+        .where('tenant_id', '=', tenantId)
+        .execute();
 
       return updated;
     });
@@ -547,7 +598,15 @@ export class ImportContainerDepositsService {
     const vatEgp = (cifEgp + dutyEgp) * (Number(shipment.vat_rate_percent || 0) / 100);
 
     const totalLandedCostEgp =
-      factoryTotalEgp + shippingEgp + customsEgp + transportEgp + demurrageEgp + lateExpensesEgp + insuranceEgp + dutyEgp + vatEgp;
+      factoryTotalEgp +
+      shippingEgp +
+      customsEgp +
+      transportEgp +
+      demurrageEgp +
+      lateExpensesEgp +
+      insuranceEgp +
+      dutyEgp +
+      vatEgp;
 
     // Frozen vs open figures (INV-IMPORT-PROFIT-HONESTY). The
     // posted receipt journal is frozen evidence: its inventory
@@ -637,7 +696,10 @@ export class ImportContainerDepositsService {
 
     for (const alloc of allocations) {
       const q = Number(alloc.quantity);
-      const isNegative = alloc.allocation_type === 'reversal' || alloc.allocation_type === 'return' || alloc.allocation_type === 'cancellation';
+      const isNegative =
+        alloc.allocation_type === 'reversal' ||
+        alloc.allocation_type === 'return' ||
+        alloc.allocation_type === 'cancellation';
       const absQty = Math.abs(q);
       const effectiveQty = isNegative ? -absQty : absQty;
       const unitSalePrice = Number(alloc.unit_sale_price_egp || 0);
@@ -651,12 +713,12 @@ export class ImportContainerDepositsService {
     // Invoiced bookings are already included in invoiced sales. Refunded deposits are
     // not liabilities, and cancelled/refunded bookings must not inflate cash held.
     const openBookings = preorders.filter((p) => p.status === 'reserved' || p.status === 'allocated');
-    const preordersTotalRevenue = openBookings
-      .reduce((acc, p) => acc + Number(p.total_price_egp), 0);
-    const preordersDepositsCollected = openBookings
-      .reduce((acc, p) => acc + Math.max(0, Number(p.deposit_amount_egp) - Number(p.refunded_amount_egp || 0)), 0);
-    const preordersDepositsRefunded = preorders
-      .reduce((acc, p) => acc + Number(p.refunded_amount_egp || 0), 0);
+    const preordersTotalRevenue = openBookings.reduce((acc, p) => acc + Number(p.total_price_egp), 0);
+    const preordersDepositsCollected = openBookings.reduce(
+      (acc, p) => acc + Math.max(0, Number(p.deposit_amount_egp) - Number(p.refunded_amount_egp || 0)),
+      0,
+    );
+    const preordersDepositsRefunded = preorders.reduce((acc, p) => acc + Number(p.refunded_amount_egp || 0), 0);
 
     let totalUnitsShipped = 0;
     let totalUnitsReceived = 0;
@@ -666,11 +728,12 @@ export class ImportContainerDepositsService {
     }
 
     const totalRemainingUnits = lots.reduce((acc, l) => acc + Number(l.remaining_quantity), 0);
-    const totalSoldUnits = actualAllocatedUnits > 0 ? actualAllocatedUnits : Math.max(0, totalUnitsReceived - totalRemainingUnits);
+    const totalSoldUnits =
+      actualAllocatedUnits > 0 ? actualAllocatedUnits : Math.max(0, totalUnitsReceived - totalRemainingUnits);
 
     const unsoldStockLandedValueEgp = lots.reduce(
       (acc, l) => acc + Number(l.remaining_quantity) * Number(l.unit_landed_cost_egp),
-      0
+      0,
     );
 
     const avgCostPerUnit = totalUnitsReceived > 0 ? totalLandedCostEgp / totalUnitsReceived : 0;

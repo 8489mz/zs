@@ -107,7 +107,11 @@ export class StorefrontCatalogDetailService {
 
     return {
       branchId: resolvedBranchId,
-      locations: resolveBranchSellableLocations({ ...branch, sales_stock_mode: effectiveMode }, resolvedBranchId, allLocations),
+      locations: resolveBranchSellableLocations(
+        { ...branch, sales_stock_mode: effectiveMode },
+        resolvedBranchId,
+        allLocations,
+      ),
     };
   }
 
@@ -125,10 +129,12 @@ export class StorefrontCatalogDetailService {
       .select(['product_id', 'location_id', 'qty', 'reserved_qty'])
       .where(sql<boolean>`tenant_id = ${tenantId}`)
       .$if(Boolean(productIds), (qb) => qb.where('product_id', 'in', productIds || []))
-      .where((eb) => eb.or([
-        eb('location_id', 'is', null),
-        ...(locationIds.length > 0 ? [eb('location_id', 'in', locationIds)] : []),
-      ]))
+      .where((eb) =>
+        eb.or([
+          eb('location_id', 'is', null),
+          ...(locationIds.length > 0 ? [eb('location_id', 'in', locationIds)] : []),
+        ]),
+      )
       .execute();
 
     const eligible = new Set(locationIds);
@@ -383,7 +389,8 @@ export class StorefrontCatalogDetailService {
             displayOrder: Number(opt.display_order || 0),
             componentProductId: opt.component_product_id ? Number(opt.component_product_id) : null,
             componentProductName: opt.component_product_name || null,
-            consumptionQty: opt.consumption_qty !== null && opt.consumption_qty !== undefined ? Number(opt.consumption_qty) : null,
+            consumptionQty:
+              opt.consumption_qty !== null && opt.consumption_qty !== undefined ? Number(opt.consumption_qty) : null,
             unitName: opt.unit_name || null,
             portionAllowed: (opt.portion_allowed as 'both' | 'half_only' | 'whole_only') || 'both',
             preparationTimeMinutes: opt.preparation_time_minutes ? Number(opt.preparation_time_minutes) : 0,

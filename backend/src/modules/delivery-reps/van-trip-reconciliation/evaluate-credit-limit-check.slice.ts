@@ -50,7 +50,10 @@ export function evaluateCreditLimitCheck(params: CreditLimitEvaluationParams): C
     };
   }
 
-  if (params.hasOverdueInvoices && (Number(params.overdueAmount || 0) > 0 || Number(params.oldestOverdueDays || 0) > 0)) {
+  if (
+    params.hasOverdueInvoices &&
+    (Number(params.overdueAmount || 0) > 0 || Number(params.oldestOverdueDays || 0) > 0)
+  ) {
     if (params.supervisorOverride?.approved) {
       return {
         allowed: true,
@@ -115,7 +118,8 @@ export function evaluateCreditLimitCheck(params: CreditLimitEvaluationParams): C
       return {
         allowed: true,
         isOverridden: true,
-        overrideReason: params.supervisorOverride.reason || `اعتماد استثنائي لتجاوز سقف الائتمان بمقدار ${exceededAmount.toFixed(2)}`,
+        overrideReason:
+          params.supervisorOverride.reason || `اعتماد استثنائي لتجاوز سقف الائتمان بمقدار ${exceededAmount.toFixed(2)}`,
         reasonCode: 'SUPERVISOR_OVERRIDE',
         currentBalance,
         creditLimit,

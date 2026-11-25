@@ -6,7 +6,14 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { Database } from '../../../database/database.types';
 import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { buildEmployeeFinancialStatement } from '../engines/employee-financial-statement.engine';
-import { clean, hasHrPermission, monthRange, normalizeDateOnly, normalizePayrollMonth, tenantBookDigits } from '../hr-helpers';
+import {
+  clean,
+  hasHrPermission,
+  monthRange,
+  normalizeDateOnly,
+  normalizePayrollMonth,
+  tenantBookDigits,
+} from '../hr-helpers';
 
 /**
  * HrReportsService — slice H6 of the hr split.
@@ -49,11 +56,20 @@ export class HrReportsService {
     this.assertEmployeeBelongsToTenant = deps.assertEmployeeBelongsToTenant;
   }
 
-  async getEmployeeFinancialStatement(employeeId: number, query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
-    const allowed = ['hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView', 'hrSalaryManage']
-      .some(permission => hasHrPermission(auth, permission));
+  async getEmployeeFinancialStatement(
+    employeeId: number,
+    query: Record<string, unknown>,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
+    const allowed = ['hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView', 'hrSalaryManage'].some(
+      (permission) => hasHrPermission(auth, permission),
+    );
     if (!allowed) {
-      throw new AppError('تقرير الموظف المالي الكامل يتطلب صلاحية عرض المرتبات', 'HR_FINANCIAL_STATEMENT_FORBIDDEN', 403);
+      throw new AppError(
+        'تقرير الموظف المالي الكامل يتطلب صلاحية عرض المرتبات',
+        'HR_FINANCIAL_STATEMENT_FORBIDDEN',
+        403,
+      );
     }
     await this.assertEmployeeBelongsToTenant(employeeId, auth);
     const { tenantId } = requireTenantScope(auth);
@@ -202,7 +218,12 @@ export class HrReportsService {
 
   async summary(auth: AuthContext): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
-    const result = await sql<{ employee_count: string; active_count: string; open_loans: string; outstanding_amount: string }>`
+    const result = await sql<{
+      employee_count: string;
+      active_count: string;
+      open_loans: string;
+      outstanding_amount: string;
+    }>`
       SELECT
         (SELECT COUNT(*) FROM hr_employees WHERE tenant_id = ${auth.tenantId}) AS employee_count,
         (SELECT COUNT(*) FROM hr_employees WHERE tenant_id = ${auth.tenantId} AND status = 'active') AS active_count,
@@ -308,8 +329,13 @@ export class HrReportsService {
     const canSeeEmployees = hasHrPermission(auth, 'hrEmployees');
     const canSeeAttendance = hasHrPermission(auth, 'hrAttendance');
     const canSeeLoans = hasHrPermission(auth, 'hrLoans');
-    const canSeePayroll = ['hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView', 'hrSalaryManage']
-      .some((permission) => hasHrPermission(auth, permission));
+    const canSeePayroll = [
+      'hrPayrollView',
+      'hrPayrollManage',
+      'hrPayrollApprove',
+      'hrSalaryView',
+      'hrSalaryManage',
+    ].some((permission) => hasHrPermission(auth, permission));
 
     return {
       period: { from: range.from, to: range.to, month: month || '' },

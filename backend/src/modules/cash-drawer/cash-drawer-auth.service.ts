@@ -60,16 +60,26 @@ export class CashDrawerAuthService {
     }
   }
 
-  canReviewPendingShift(auth: AuthContext): boolean { return ['admin', 'super_admin', 'manager'].includes(String(auth.role || '').trim()); }
+  canReviewPendingShift(auth: AuthContext): boolean {
+    return ['admin', 'super_admin', 'manager'].includes(String(auth.role || '').trim());
+  }
 
   async assertCurrentUserPassword(password: string, auth: AuthContext): Promise<void> {
     const providedPassword = String(password || '').trim();
     if (!providedPassword) throw new AppError('أدخل كلمة مرور المستخدم الحالي', 'CURRENT_USER_PASSWORD_REQUIRED', 400);
     const scope = this.scope(auth);
-    const result = await sql<UserPasswordRow>`select id, is_active, password_hash, password_salt from users where id = ${auth.userId} and tenant_id = ${scope.tenantId} limit 1`.execute(this.db);
+    const result =
+      await sql<UserPasswordRow>`select id, is_active, password_hash, password_salt from users where id = ${auth.userId} and tenant_id = ${scope.tenantId} limit 1`.execute(
+        this.db,
+      );
     const user = result.rows?.[0] || null;
-    if (!user || user.is_active === false || user.is_active === 0 || user.is_active === 'false') throw new AppError('المستخدم الحالي غير متاح', 'CURRENT_USER_NOT_FOUND', 400);
-    const passwordCheck = await verifyPassword(providedPassword, String(user.password_hash || ''), String(user.password_salt || ''));
+    if (!user || user.is_active === false || user.is_active === 0 || user.is_active === 'false')
+      throw new AppError('المستخدم الحالي غير متاح', 'CURRENT_USER_NOT_FOUND', 400);
+    const passwordCheck = await verifyPassword(
+      providedPassword,
+      String(user.password_hash || ''),
+      String(user.password_salt || ''),
+    );
     if (!passwordCheck.valid) {
       try {
         await this.assertManagerPin(providedPassword, auth);
@@ -95,10 +105,18 @@ export class CashDrawerAuthService {
     const providedPassword = String(password || '').trim();
     if (!providedPassword) throw new AppError('أدخل كلمة مرور المستخدم الحالي', 'CURRENT_USER_PASSWORD_REQUIRED', 400);
     const scope = this.scope(auth);
-    const result = await sql<UserPasswordRow>`select id, is_active, password_hash, password_salt from users where id = ${auth.userId} and tenant_id = ${scope.tenantId} limit 1`.execute(this.db);
+    const result =
+      await sql<UserPasswordRow>`select id, is_active, password_hash, password_salt from users where id = ${auth.userId} and tenant_id = ${scope.tenantId} limit 1`.execute(
+        this.db,
+      );
     const user = result.rows?.[0] || null;
-    if (!user || user.is_active === false || user.is_active === 0 || user.is_active === 'false') throw new AppError('المستخدم الحالي غير متاح', 'CURRENT_USER_NOT_FOUND', 400);
-    const passwordCheck = await verifyPassword(providedPassword, String(user.password_hash || ''), String(user.password_salt || ''));
+    if (!user || user.is_active === false || user.is_active === 0 || user.is_active === 'false')
+      throw new AppError('المستخدم الحالي غير متاح', 'CURRENT_USER_NOT_FOUND', 400);
+    const passwordCheck = await verifyPassword(
+      providedPassword,
+      String(user.password_hash || ''),
+      String(user.password_salt || ''),
+    );
     if (!passwordCheck.valid) {
       throw new AppError('كلمة مرور المستخدم الحالي غير صحيحة', 'CURRENT_USER_PASSWORD_INVALID', 400);
     }
@@ -106,7 +124,10 @@ export class CashDrawerAuthService {
 
   async isPasswordRequiredOnShiftOpen(auth: AuthContext): Promise<boolean> {
     const scope = this.scope(auth);
-    const result = await sql<SettingsRow>`select key, value from settings where tenant_id = ${scope.tenantId} and key = 'requirePasswordOnShiftOpen' limit 1`.execute(this.db);
+    const result =
+      await sql<SettingsRow>`select key, value from settings where tenant_id = ${scope.tenantId} and key = 'requirePasswordOnShiftOpen' limit 1`.execute(
+        this.db,
+      );
     const raw = result.rows?.[0]?.value;
     if (raw == null) return false;
     if (typeof raw === 'boolean') return raw;
@@ -126,7 +147,11 @@ export class CashDrawerAuthService {
   // still accepted as a fallback inside assertCurrentUserPassword
   // (the deposits pattern). Posted-invoice edit and stock-count
   // approval stay manager-gated: they do not call this method.
-  async assertCashDrawerApproval(movementType: CashDrawerMovementType, approvalSecret: string, auth: AuthContext): Promise<void> {
+  async assertCashDrawerApproval(
+    movementType: CashDrawerMovementType,
+    approvalSecret: string,
+    auth: AuthContext,
+  ): Promise<void> {
     await this.assertCurrentUserPassword(approvalSecret, auth);
   }
 }

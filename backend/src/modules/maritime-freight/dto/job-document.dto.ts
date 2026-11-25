@@ -15,7 +15,7 @@ export const VALID_JOB_DOC_TYPES = [
   'other',
 ] as const;
 
-export type JobDocType = typeof VALID_JOB_DOC_TYPES[number];
+export type JobDocType = (typeof VALID_JOB_DOC_TYPES)[number];
 
 export class CreateJobDocumentDto {
   @IsString()

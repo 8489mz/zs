@@ -3,8 +3,19 @@ import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from
 export class UpdateTicketStatusDto {
   @IsNotEmpty({ message: 'حالة التذكرة مطلوبة' })
   @IsString()
-  @IsIn(['received', 'inspecting', 'in_progress', 'waiting_parts', 'repaired', 'delivered', 'unrepairable', 'cancelled'], { message: 'حالة التذكرة غير صالحة' })
-  status!: 'received' | 'inspecting' | 'in_progress' | 'waiting_parts' | 'repaired' | 'delivered' | 'unrepairable' | 'cancelled';
+  @IsIn(
+    ['received', 'inspecting', 'in_progress', 'waiting_parts', 'repaired', 'delivered', 'unrepairable', 'cancelled'],
+    { message: 'حالة التذكرة غير صالحة' },
+  )
+  status!:
+    | 'received'
+    | 'inspecting'
+    | 'in_progress'
+    | 'waiting_parts'
+    | 'repaired'
+    | 'delivered'
+    | 'unrepairable'
+    | 'cancelled';
 
   @IsOptional()
   @IsNumber()

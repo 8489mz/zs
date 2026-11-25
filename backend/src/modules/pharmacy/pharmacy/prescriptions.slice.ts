@@ -35,9 +35,7 @@ export class PrescriptionsSlice {
     },
   ) {
     const scope = requireTenantScope(auth);
-    let query = this.db
-      .selectFrom('pharmacy_prescriptions')
-      .where('tenant_id', '=', scope.tenantId);
+    let query = this.db.selectFrom('pharmacy_prescriptions').where('tenant_id', '=', scope.tenantId);
 
     if (filters?.status && filters.status !== 'all') {
       query = query.where('status', '=', filters.status);
@@ -65,12 +63,7 @@ export class PrescriptionsSlice {
     const pageSize = Math.min(100, Math.max(1, Number(filters?.pageSize || 25)));
     const offset = (page - 1) * pageSize;
 
-    const prescriptions = await query
-      .selectAll()
-      .orderBy('id', 'desc')
-      .limit(pageSize)
-      .offset(offset)
-      .execute();
+    const prescriptions = await query.selectAll().orderBy('id', 'desc').limit(pageSize).offset(offset).execute();
 
     return {
       prescriptions,
@@ -99,89 +92,167 @@ export class PrescriptionsSlice {
       cashMinor = toMinorUnits(patientCash, digits);
       insuranceMinor = toMinorUnits(insurance, digits);
     } catch {
-      throw new AppError('Prescription amount exceeds tenant currency precision', 'PHARMACY_CURRENCY_PRECISION_INVALID', 422);
+      throw new AppError(
+        'Prescription amount exceeds tenant currency precision',
+        'PHARMACY_CURRENCY_PRECISION_INVALID',
+        422,
+      );
     }
     if (totalMinor < 0 || cashMinor < 0 || insuranceMinor < 0 || cashMinor + insuranceMinor !== totalMinor) {
-      throw new AppError('Prescription total must equal patient and insurance allocations', 'PHARMACY_PRESCRIPTION_SETTLEMENT_MISMATCH', 422);
+      throw new AppError(
+        'Prescription total must equal patient and insurance allocations',
+        'PHARMACY_PRESCRIPTION_SETTLEMENT_MISMATCH',
+        422,
+      );
     }
     // Insurance settlement needs an insurer receivable/subledger, not fabricated cash.
     if (status === 'dispensed' && insuranceMinor > 0) {
-      throw new AppError('Insurer receivable requires a dedicated settlement document', 'PHARMACY_INSURANCE_SETTLEMENT_REQUIRED', 422);
+      throw new AppError(
+        'Insurer receivable requires a dedicated settlement document',
+        'PHARMACY_INSURANCE_SETTLEMENT_REQUIRED',
+        422,
+      );
     }
     if (status === 'dispensed' && totalMinor > 0 && (dto.items?.length ?? 0) > 0) {
       // A prescription log has no product/lot IDs or stock COGS provenance.
       // Charging for medicines here would invent revenue without the matching
       // canonical sale, inventory movement and cost-of-goods journal.
-      throw new AppError('Dispensed medicines must be billed through the linked inventory sale',
-        'PHARMACY_PRESCRIPTION_SALE_REQUIRED', 422);
+      throw new AppError(
+        'Dispensed medicines must be billed through the linked inventory sale',
+        'PHARMACY_PRESCRIPTION_SALE_REQUIRED',
+        422,
+      );
     }
     const initialRxNo = String(dto.prescriptionNo || '').trim() || 'PENDING_RX';
     const itemsJsonStr = JSON.stringify(dto.items ?? []);
     return this.db.transaction().execute(async (trx) => {
       let rx: any;
       if (dto.id) {
-        const previous = await trx.selectFrom('pharmacy_prescriptions')
-          .selectAll().where('tenant_id', '=', scope.tenantId).where('id', '=', dto.id)
-          .forUpdate().executeTakeFirst();
+        const previous = await trx
+          .selectFrom('pharmacy_prescriptions')
+          .selectAll()
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', dto.id)
+          .forUpdate()
+          .executeTakeFirst();
         if (!previous) throw new AppError('Prescription not found', 'PHARMACY_PRESCRIPTION_NOT_FOUND', 404);
-        const historicalCash = await trx.selectFrom('treasury_transactions').select('id')
+        const historicalCash = await trx
+          .selectFrom('treasury_transactions')
+          .select('id')
           .where('tenant_id', '=', scope.tenantId)
           .where('reference_type', '=', 'pharmacy_prescription')
-          .where('reference_id', '=', dto.id).executeTakeFirst();
+          .where('reference_id', '=', dto.id)
+          .executeTakeFirst();
         if (historicalCash || previous.status === 'dispensed') {
-          throw new AppError('Dispensed prescription requires formal reversal before editing', 'PHARMACY_PRESCRIPTION_REVERSAL_REQUIRED', 409);
+          throw new AppError(
+            'Dispensed prescription requires formal reversal before editing',
+            'PHARMACY_PRESCRIPTION_REVERSAL_REQUIRED',
+            409,
+          );
         }
-        rx = await trx.updateTable('pharmacy_prescriptions')
+        rx = await trx
+          .updateTable('pharmacy_prescriptions')
           .set({
             customer_name: dto.customerName,
-            customer_phone: dto.customerPhone ?? null, doctor_name: dto.doctorName ?? null,
-            doctor_specialty: dto.doctorSpecialty ?? null, diagnosis: dto.diagnosis ?? null,
-            insurance_provider: dto.insuranceProvider ?? null, insurance_card_no: dto.insuranceCardNo ?? null,
-            approval_code: dto.approvalCode ?? null, patient_copay_percent: dto.patientCopayPercent ?? 0,
-            total_amount: total, patient_amount: patientCash, insurance_amount: insurance,
-            items_json: itemsJsonStr, dispensed_by: dto.dispensedBy ?? null,
-            status, notes: dto.notes ?? null, updated_at: sql`now()`,
+            customer_phone: dto.customerPhone ?? null,
+            doctor_name: dto.doctorName ?? null,
+            doctor_specialty: dto.doctorSpecialty ?? null,
+            diagnosis: dto.diagnosis ?? null,
+            insurance_provider: dto.insuranceProvider ?? null,
+            insurance_card_no: dto.insuranceCardNo ?? null,
+            approval_code: dto.approvalCode ?? null,
+            patient_copay_percent: dto.patientCopayPercent ?? 0,
+            total_amount: total,
+            patient_amount: patientCash,
+            insurance_amount: insurance,
+            items_json: itemsJsonStr,
+            dispensed_by: dto.dispensedBy ?? null,
+            status,
+            notes: dto.notes ?? null,
+            updated_at: sql`now()`,
           })
-          .where('id', '=', dto.id).where('tenant_id', '=', scope.tenantId)
-          .returningAll().executeTakeFirstOrThrow();
+          .where('id', '=', dto.id)
+          .where('tenant_id', '=', scope.tenantId)
+          .returningAll()
+          .executeTakeFirstOrThrow();
       } else {
         if (dto.prescriptionNo?.trim()) {
           // Serialize same-tenant duplicate numbers before their insert. A
           // lost-response retry must not collect the patient copay twice.
           await sql`select pg_advisory_xact_lock(hashtext(${scope.tenantId}), hashtext(${initialRxNo}))`.execute(trx);
-          const prior = await trx.selectFrom('pharmacy_prescriptions').select('id')
+          const prior = await trx
+            .selectFrom('pharmacy_prescriptions')
+            .select('id')
             .where('tenant_id', '=', scope.tenantId)
-            .where('prescription_no', '=', initialRxNo).executeTakeFirst();
+            .where('prescription_no', '=', initialRxNo)
+            .executeTakeFirst();
           if (prior) throw new AppError('Prescription number already exists', 'PHARMACY_DUPLICATE_PRESCRIPTION', 409);
         }
-        rx = await trx.insertInto('pharmacy_prescriptions').values({
-          tenant_id: scope.tenantId, account_id: scope.accountId, prescription_no: initialRxNo,
-          customer_name: dto.customerName,
-          customer_phone: dto.customerPhone ?? null, doctor_name: dto.doctorName ?? null,
-          doctor_specialty: dto.doctorSpecialty ?? null, diagnosis: dto.diagnosis ?? null,
-          insurance_provider: dto.insuranceProvider ?? null, insurance_card_no: dto.insuranceCardNo ?? null,
-          approval_code: dto.approvalCode ?? null, patient_copay_percent: dto.patientCopayPercent ?? 0,
-          total_amount: total, patient_amount: patientCash, insurance_amount: insurance,
-          items_json: itemsJsonStr, dispensed_by: dto.dispensedBy ?? null,
-          status, notes: dto.notes ?? null,
-        }).returningAll().executeTakeFirstOrThrow();
+        rx = await trx
+          .insertInto('pharmacy_prescriptions')
+          .values({
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+            prescription_no: initialRxNo,
+            customer_name: dto.customerName,
+            customer_phone: dto.customerPhone ?? null,
+            doctor_name: dto.doctorName ?? null,
+            doctor_specialty: dto.doctorSpecialty ?? null,
+            diagnosis: dto.diagnosis ?? null,
+            insurance_provider: dto.insuranceProvider ?? null,
+            insurance_card_no: dto.insuranceCardNo ?? null,
+            approval_code: dto.approvalCode ?? null,
+            patient_copay_percent: dto.patientCopayPercent ?? 0,
+            total_amount: total,
+            patient_amount: patientCash,
+            insurance_amount: insurance,
+            items_json: itemsJsonStr,
+            dispensed_by: dto.dispensedBy ?? null,
+            status,
+            notes: dto.notes ?? null,
+          })
+          .returningAll()
+          .executeTakeFirstOrThrow();
         if (!dto.prescriptionNo?.trim()) {
-          const rxNo = formatDailyDocumentNumber('RX', Number(rx.id), new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
-          await trx.updateTable('pharmacy_prescriptions').set({ prescription_no: rxNo })
-            .where('id', '=', rx.id).where('tenant_id', '=', scope.tenantId).execute();
+          const rxNo = formatDailyDocumentNumber(
+            'RX',
+            Number(rx.id),
+            new Date(),
+            4,
+            await getTenantTimezone(trx, scope.tenantId),
+          );
+          await trx
+            .updateTable('pharmacy_prescriptions')
+            .set({ prescription_no: rxNo })
+            .where('id', '=', rx.id)
+            .where('tenant_id', '=', scope.tenantId)
+            .execute();
           rx.prescription_no = rxNo;
         }
       }
       if (status === 'dispensed' && cashMinor > 0) {
-        await trx.insertInto('treasury_transactions').values({
-          tenant_id: scope.tenantId, account_id: scope.accountId,
-          txn_type: 'revenue', amount: patientCash,
-          note: `صرف روشتة ${rx.prescription_no} — نقدي: ${patientCash.toFixed(digits)}`,
-          reference_type: 'pharmacy_prescription', reference_id: Number(rx.id),
-          created_by: auth.userId ? Number(auth.userId) : null,
-        }).execute();
-        await postPharmacyCashReceipt(trx, this.accountingFoundation, this.accountingPosting,
-          auth, 'pharmacy_prescription_cash', Number(rx.id), patientCash);
+        await trx
+          .insertInto('treasury_transactions')
+          .values({
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+            txn_type: 'revenue',
+            amount: patientCash,
+            note: `صرف روشتة ${rx.prescription_no} — نقدي: ${patientCash.toFixed(digits)}`,
+            reference_type: 'pharmacy_prescription',
+            reference_id: Number(rx.id),
+            created_by: auth.userId ? Number(auth.userId) : null,
+          })
+          .execute();
+        await postPharmacyCashReceipt(
+          trx,
+          this.accountingFoundation,
+          this.accountingPosting,
+          auth,
+          'pharmacy_prescription_cash',
+          Number(rx.id),
+          patientCash,
+        );
       }
       return rx;
     });

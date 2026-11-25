@@ -43,10 +43,7 @@ export class CashDrawerController {
 
   @Post('cashier-shifts/open')
   @RequirePermissions('cashDrawer')
-  open(
-    @Body() payload: OpenCashierShiftDto,
-    @Req() req: RequestWithAuth,
-  ): Promise<Record<string, unknown>> {
+  open(@Body() payload: OpenCashierShiftDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.cashDrawerService.openCashierShift(payload, req.authContext!);
   }
 

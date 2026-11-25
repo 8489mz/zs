@@ -16,7 +16,14 @@ import { UpdateTicketSlice } from './maintenance/update-ticket.slice';
 import { UpdateTicketStatusSlice } from './maintenance/update-ticket-status.slice';
 import { TicketPartsSlice } from './maintenance/ticket-parts.slice';
 import { DeleteTicketSlice } from './maintenance/delete-ticket.slice';
-export { computeWarrantyEnd, findSoldSerialSaleId, isFinancialTicketChange, buildNonFinancialTicketUpdate, resolveQuoteFields, assertInProgressQuoteAllowed } from './maintenance/maintenance-helpers';
+export {
+  computeWarrantyEnd,
+  findSoldSerialSaleId,
+  isFinancialTicketChange,
+  buildNonFinancialTicketUpdate,
+  resolveQuoteFields,
+  assertInProgressQuoteAllowed,
+} from './maintenance/maintenance-helpers';
 
 @Injectable()
 export class MaintenanceService {
@@ -38,9 +45,7 @@ export class MaintenanceService {
 
   private ticketListingSliceInstance?: TicketListingSlice;
   private get ticketListingSlice(): TicketListingSlice {
-    return (this.ticketListingSliceInstance ??= new TicketListingSlice(
-      this.db,
-    ));
+    return (this.ticketListingSliceInstance ??= new TicketListingSlice(this.db));
   }
 
   private createTicketSliceInstance?: CreateTicketSlice;
@@ -56,11 +61,7 @@ export class MaintenanceService {
 
   private updateTicketSliceInstance?: UpdateTicketSlice;
   private get updateTicketSlice(): UpdateTicketSlice {
-    return (this.updateTicketSliceInstance ??= new UpdateTicketSlice(
-      this.db,
-      this.tx,
-      this.audit,
-    ));
+    return (this.updateTicketSliceInstance ??= new UpdateTicketSlice(this.db, this.tx, this.audit));
   }
 
   private updateTicketStatusSliceInstance?: UpdateTicketStatusSlice;
@@ -99,16 +100,15 @@ export class MaintenanceService {
     ));
   }
 
-
   async listTickets(
-      auth: AuthContext,
-      filters?: {
-        status?: string;
-        q?: string;
-        page?: number;
-        pageSize?: number;
-      },
-    ) {
+    auth: AuthContext,
+    filters?: {
+      status?: string;
+      q?: string;
+      page?: number;
+      pageSize?: number;
+    },
+  ) {
     return this.ticketListingSlice.listTickets(auth, filters);
   }
 

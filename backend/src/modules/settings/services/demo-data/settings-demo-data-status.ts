@@ -15,7 +15,9 @@ export class SettingsDemoDataStatus {
     return this.bound.scope(actor);
   }
 
-  async getDemoDataStatus(actor: AuthContext): Promise<{ isEmpty: boolean; productCount: number; saleCount: number; isSuperAdmin: boolean }> {
+  async getDemoDataStatus(
+    actor: AuthContext,
+  ): Promise<{ isEmpty: boolean; productCount: number; saleCount: number; isSuperAdmin: boolean }> {
     const scope = this.scope(actor);
     const productCountRes = await this.db
       .selectFrom('products')

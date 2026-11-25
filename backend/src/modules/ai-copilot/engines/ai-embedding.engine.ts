@@ -100,7 +100,11 @@ export class AiEmbeddingEngine {
    */
   static generateLocalEmbedding(text: string, dimensions: number = 128): number[] {
     const vector = new Array(dimensions).fill(0);
-    const words = (text || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+    const words = (text || '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
     if (words.length === 0) return vector;
 
     for (const word of words) {

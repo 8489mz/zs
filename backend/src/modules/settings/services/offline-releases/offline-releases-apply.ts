@@ -34,24 +34,28 @@ export class OfflineReleasesApply {
     }
 
     // Resolve paths
-    const portableRoot  = getPortableRoot();
+    const portableRoot = getPortableRoot();
     const runtimeRunDir = path.join(portableRoot, 'runtime', 'run');
 
-    try { fs.mkdirSync(runtimeRunDir, { recursive: true }); } catch { /* ignore */ }
+    try {
+      fs.mkdirSync(runtimeRunDir, { recursive: true });
+    } catch {
+      /* ignore */
+    }
 
     // Write the pending marker with all runtime info the restart script needs
     const pendingFile = path.join(runtimeRunDir, '.update_pending');
     const payload = {
-      version:         active.version,
-      patchUrl:        active.patch_url,
-      changelog:       active.changelog,
-      triggeredBy:     auth.username ?? auth.role,
-      triggeredAt:     new Date().toISOString(),
+      version: active.version,
+      patchUrl: active.patch_url,
+      changelog: active.changelog,
+      triggeredBy: auth.username ?? auth.role,
+      triggeredAt: new Date().toISOString(),
       // Runtime context for ApplyAndRestart.ps1
-      nodeExe:         process.execPath,
-      backendCwd:      process.cwd(),
-      backendEntry:    process.argv[1] ?? 'dist/main.js',
-      backendPort:     process.env.APP_PORT ?? process.env.BACKEND_PORT ?? '3001',
+      nodeExe: process.execPath,
+      backendCwd: process.cwd(),
+      backendEntry: process.argv[1] ?? 'dist/main.js',
+      backendPort: process.env.APP_PORT ?? process.env.BACKEND_PORT ?? '3001',
       electronExePath: process.env.ELECTRON_EXE_PATH || '',
       electronMainPid: Number(process.env.ELECTRON_MAIN_PID || '0'),
     };
@@ -63,8 +67,18 @@ export class OfflineReleasesApply {
     if (fs.existsSync(applyScript)) {
       const ps = spawn(
         'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-          '-WindowStyle', 'Hidden', '-File', applyScript, '-PortableRoot', portableRoot],
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-WindowStyle',
+          'Hidden',
+          '-File',
+          applyScript,
+          '-PortableRoot',
+          portableRoot,
+        ],
         { detached: true, stdio: 'ignore', windowsHide: true, cwd: portableRoot },
       );
       if (!ps.pid) throw new BadRequestException('Could not launch the offline updater');
@@ -107,14 +121,20 @@ export class OfflineReleasesApply {
       const normalizedProvided = (body.passcode || '').replace(/[\s-]+/g, '').toUpperCase();
       const normalizedExpected = expected.replace(/[\s-]+/g, '').toUpperCase();
       if (normalizedProvided !== normalizedExpected) {
-        throw new BadRequestException('كود تفعيل التحديث غير صحيح. يرجى التواصل مع إدارة النظام للحصول على كود التفعيل المعتمد.');
+        throw new BadRequestException(
+          'كود تفعيل التحديث غير صحيح. يرجى التواصل مع إدارة النظام للحصول على كود التفعيل المعتمد.',
+        );
       }
     }
 
-    const portableRoot  = getPortableRoot();
+    const portableRoot = getPortableRoot();
     const runtimeRunDir = path.join(portableRoot, 'runtime', 'run');
 
-    try { fs.mkdirSync(runtimeRunDir, { recursive: true }); } catch { /* ignore */ }
+    try {
+      fs.mkdirSync(runtimeRunDir, { recursive: true });
+    } catch {
+      /* ignore */
+    }
 
     let resolvedLocalPatchPath = '';
     const isOnlineUrl = /^https?:\/\//i.test(body.patchUrl);
@@ -134,16 +154,16 @@ export class OfflineReleasesApply {
 
     const pendingFile = path.join(runtimeRunDir, '.update_pending');
     const payload = {
-      version:         body.version,
-      patchUrl:        body.patchUrl,
-      localPatchPath:  resolvedLocalPatchPath,
-      changelog:       body.changelog || '',
-      triggeredBy:     'Local User',
-      triggeredAt:     new Date().toISOString(),
-      nodeExe:         process.execPath,
-      backendCwd:      process.cwd(),
-      backendEntry:    process.argv[1] ?? 'dist/main.js',
-      backendPort:     process.env.APP_PORT ?? process.env.BACKEND_PORT ?? '3001',
+      version: body.version,
+      patchUrl: body.patchUrl,
+      localPatchPath: resolvedLocalPatchPath,
+      changelog: body.changelog || '',
+      triggeredBy: 'Local User',
+      triggeredAt: new Date().toISOString(),
+      nodeExe: process.execPath,
+      backendCwd: process.cwd(),
+      backendEntry: process.argv[1] ?? 'dist/main.js',
+      backendPort: process.env.APP_PORT ?? process.env.BACKEND_PORT ?? '3001',
       electronExePath: process.env.ELECTRON_EXE_PATH || '',
       electronMainPid: Number(process.env.ELECTRON_MAIN_PID || '0'),
     };
@@ -169,25 +189,40 @@ export class OfflineReleasesApply {
     // due to quoting of Windows paths and is not a reliable handoff for production.
     const psCommand = 'powershell.exe';
     const psArgs = [
-      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-      '-WindowStyle', 'Hidden', '-File', applyScript,
-      '-PortableRoot', portableRoot,
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-WindowStyle',
+      'Hidden',
+      '-File',
+      applyScript,
+      '-PortableRoot',
+      portableRoot,
     ];
 
-    fs.writeFileSync(spawnLog, JSON.stringify({
-      scriptPath: applyScript,
-      pendingFilePath: pendingFile,
-      localPatchPath: resolvedLocalPatchPath,
-      patchUrl: body.patchUrl,
-      cwd: process.cwd(),
-      command: psCommand + ' ' + psArgs.join(' ')
-    }, null, 2), 'utf8');
+    fs.writeFileSync(
+      spawnLog,
+      JSON.stringify(
+        {
+          scriptPath: applyScript,
+          pendingFilePath: pendingFile,
+          localPatchPath: resolvedLocalPatchPath,
+          patchUrl: body.patchUrl,
+          cwd: process.cwd(),
+          command: psCommand + ' ' + psArgs.join(' '),
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    );
 
     const ps = spawn(psCommand, psArgs, {
       detached: true,
       stdio: 'ignore',
       windowsHide: true,
-      cwd: portableRoot
+      cwd: portableRoot,
     });
     if (!ps.pid) {
       throw new BadRequestException('Could not launch the offline updater process');

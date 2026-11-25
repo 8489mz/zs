@@ -17,12 +17,7 @@ import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { RequireAnyPermission } from '../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { CrmService } from './crm.service';
-import {
-  CreateActivityDto,
-  CreateDealDto,
-  ListDealsQueryDto,
-  UpdateDealDto,
-} from './dto/crm.dto';
+import { CreateActivityDto, CreateDealDto, ListDealsQueryDto, UpdateDealDto } from './dto/crm.dto';
 
 @Controller('api/crm')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -46,11 +41,7 @@ export class CrmController {
   }
 
   @Put('deals/:id')
-  updateDeal(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateDealDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  updateDeal(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateDealDto, @Req() req: RequestWithAuth) {
     return this.crmService.updateDeal(id, dto, req.authContext!);
   }
 
@@ -65,27 +56,17 @@ export class CrmController {
   }
 
   @Post('deals/:id/activities')
-  addActivity(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CreateActivityDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  addActivity(@Param('id', ParseIntPipe) id: number, @Body() dto: CreateActivityDto, @Req() req: RequestWithAuth) {
     return this.crmService.addActivity(id, dto as any, req.authContext!);
   }
 
   @Patch('activities/:id/toggle')
-  toggleActivity(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth,
-  ) {
+  toggleActivity(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.crmService.toggleActivity(id, req.authContext!);
   }
 
   @Post('deals/:id/convert-to-customer')
-  convertToCustomer(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth,
-  ) {
+  convertToCustomer(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.crmService.convertToCustomer(id, req.authContext!);
   }
 }

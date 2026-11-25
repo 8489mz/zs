@@ -6,7 +6,11 @@ import { getTenantTimezone, normalizePgDateOnly, todayTenantDate } from '../../.
 import { reserveLocationStock } from '../../../../common/utils/location-stock-ledger';
 import { sortItemsByProductId } from '../van-common.util';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
+import {
+  currencyMoneyDigits,
+  roundMoney,
+  type MoneyDigits,
+} from '../../../accounting/engines/money-minor-units.engine';
 import type { CreatePreSalesOrderDto, CreatePreSalesOrderResult } from './van-pre-sales-types';
 
 export class CreatePreSalesOrderSlice {
@@ -16,7 +20,11 @@ export class CreatePreSalesOrderSlice {
 
   constructor(
     private readonly db: Kysely<Database>,
-    private readonly resolveDefaultWarehouseLocationId: (tenantId: string, preferredLocationId?: number, productIds?: number[]) => Promise<number | null>,
+    private readonly resolveDefaultWarehouseLocationId: (
+      tenantId: string,
+      preferredLocationId?: number,
+      productIds?: number[],
+    ) => Promise<number | null>,
   ) {}
 
   /**
@@ -121,7 +129,17 @@ export class CreatePreSalesOrderSlice {
       const nowIso = todayTenantDate(await getTenantTimezone(trx, tenantId));
       const offers = await trxAny
         .selectFrom('product_offers')
-        .select(['product_id', 'offer_type', 'value', 'min_qty', 'start_date', 'end_date', 'bogo_buy_qty', 'bogo_get_qty', 'bogo_discount_percent'])
+        .select([
+          'product_id',
+          'offer_type',
+          'value',
+          'min_qty',
+          'start_date',
+          'end_date',
+          'bogo_buy_qty',
+          'bogo_get_qty',
+          'bogo_discount_percent',
+        ])
         .where('product_id', 'in', productIds)
         .where('tenant_id', '=', tenantId)
         .where('is_active', '=', true)
@@ -148,7 +166,17 @@ export class CreatePreSalesOrderSlice {
         // Canonical Lock: Lock product row first
         const prod = await trxAny
           .selectFrom('products')
-          .select(['id', 'name', 'cost_price', 'retail_price', 'wholesale_price', 'credit_price', 'consumer_price', 'stock_qty', 'reserved_qty'])
+          .select([
+            'id',
+            'name',
+            'cost_price',
+            'retail_price',
+            'wholesale_price',
+            'credit_price',
+            'consumer_price',
+            'stock_qty',
+            'reserved_qty',
+          ])
           .where('id', '=', pid)
           .where('tenant_id', '=', tenantId)
           .forUpdate()
@@ -172,9 +200,10 @@ export class CreatePreSalesOrderSlice {
         }
 
         // Determine baseline list price (Credit Price is official catalog baseline):
-        const creditBasePrice = prod.credit_price != null && Number(prod.credit_price) > 0
-          ? Number(prod.credit_price) * multiplier
-          : Number(prod.retail_price || 0) * multiplier;
+        const creditBasePrice =
+          prod.credit_price != null && Number(prod.credit_price) > 0
+            ? Number(prod.credit_price) * multiplier
+            : Number(prod.retail_price || 0) * multiplier;
 
         const cashBasePrice = Number(prod.retail_price || 0) * multiplier;
         const listPrice = Math.max(creditBasePrice, cashBasePrice);
@@ -183,13 +212,16 @@ export class CreatePreSalesOrderSlice {
         // When cash: grant cash discount equal to difference between list/credit price and cash price
         const cashDiscountPerUnit = isCredit ? 0 : Math.max(0, roundMoney(listPrice - cashBasePrice, moneyDigits));
 
-        let unitPrice = isCredit ? listPrice : (item.unitPrice ? Number(item.unitPrice) : cashBasePrice);
+        let unitPrice = isCredit ? listPrice : item.unitPrice ? Number(item.unitPrice) : cashBasePrice;
         let pricingTierType: 'cash' | 'credit' | 'offer' = isCredit ? 'credit' : 'cash';
         let unitOfferSavings = 0;
 
         // Check applicable offers
         const activeOffers = offersByProduct.get(pid) || [];
-        const getMinQty = (o: any) => o.offer_type === 'bogo' ? (Number(o.bogo_buy_qty || 1) + Number(o.bogo_get_qty || 1)) : Math.max(1, Number(o.min_qty || 1));
+        const getMinQty = (o: any) =>
+          o.offer_type === 'bogo'
+            ? Number(o.bogo_buy_qty || 1) + Number(o.bogo_get_qty || 1)
+            : Math.max(1, Number(o.min_qty || 1));
         const matchingOffer = activeOffers
           .filter((off) => totalBaseQty >= getMinQty(off))
           .sort((a, b) => getMinQty(b) - getMinQty(a))[0];
@@ -201,7 +233,7 @@ export class CreatePreSalesOrderSlice {
             pricingTierType = 'offer';
             unitOfferSavings = Math.max(0, roundMoney(listPrice - unitPrice, moneyDigits));
           } else if (matchingOffer.offer_type === 'fixed' && offerVal > 0) {
-            unitPrice = Math.max(0, roundMoney(unitPrice - (offerVal * multiplier), moneyDigits));
+            unitPrice = Math.max(0, roundMoney(unitPrice - offerVal * multiplier, moneyDigits));
             pricingTierType = 'offer';
             unitOfferSavings = Math.max(0, roundMoney(listPrice - unitPrice, moneyDigits));
           } else if (matchingOffer.offer_type === 'price' && offerVal > 0) {
@@ -212,21 +244,24 @@ export class CreatePreSalesOrderSlice {
             const minQ = Math.max(1, Number(matchingOffer.min_qty || 1));
             const bundles = Math.floor(qty / minQ);
             const rem = qty % minQ;
-            const bundleTotal = (bundles * offerVal) + (rem * listPrice);
+            const bundleTotal = bundles * offerVal + rem * listPrice;
             unitPrice = roundMoney(bundleTotal / qty, moneyDigits);
             pricingTierType = 'offer';
             unitOfferSavings = Math.max(0, roundMoney(listPrice - unitPrice, moneyDigits));
           } else if (matchingOffer.offer_type === 'bogo') {
             const buyQ = Math.max(1, Number(matchingOffer.bogo_buy_qty || 1));
             const getQ = Math.max(1, Number(matchingOffer.bogo_get_qty || 1));
-            const discPct = Math.min(100, Math.max(0, Number(matchingOffer.bogo_discount_percent ?? (offerVal || 100))));
+            const discPct = Math.min(
+              100,
+              Math.max(0, Number(matchingOffer.bogo_discount_percent ?? (offerVal || 100))),
+            );
             const cycle = buyQ + getQ;
             if (qty >= cycle) {
               const fullCycles = Math.floor(qty / cycle);
               const rem = qty % cycle;
-              const freeUnits = (fullCycles * getQ) + Math.max(0, rem - buyQ);
+              const freeUnits = fullCycles * getQ + Math.max(0, rem - buyQ);
               const discAmt = freeUnits * listPrice * (discPct / 100);
-              const netTot = Math.max(0, (qty * listPrice) - discAmt);
+              const netTot = Math.max(0, qty * listPrice - discAmt);
               unitPrice = roundMoney(netTot / qty, moneyDigits);
               pricingTierType = 'offer';
               unitOfferSavings = Math.max(0, roundMoney(listPrice - unitPrice, moneyDigits));
@@ -242,9 +277,10 @@ export class CreatePreSalesOrderSlice {
         totalDiscountAmount += lineDiscount;
         totalAmount += lineNetTotal;
 
-        const consumerPrice = prod.consumer_price != null && Number(prod.consumer_price) > 0
-          ? roundMoney(Number(prod.consumer_price) * multiplier, moneyDigits)
-          : null;
+        const consumerPrice =
+          prod.consumer_price != null && Number(prod.consumer_price) > 0
+            ? roundMoney(Number(prod.consumer_price) * multiplier, moneyDigits)
+            : null;
 
         preparedOrderItems.push({
           productId: pid,
@@ -307,7 +343,13 @@ export class CreatePreSalesOrderSlice {
         .execute();
 
       orderId = Number(insertedOrder.id);
-      finalOrderNumber = formatDailyDocumentNumber('SO', orderId, new Date(), 4, await getTenantTimezone(trx, tenantId));
+      finalOrderNumber = formatDailyDocumentNumber(
+        'SO',
+        orderId,
+        new Date(),
+        4,
+        await getTenantTimezone(trx, tenantId),
+      );
 
       await trxAny
         .updateTable('sales_orders')

@@ -1,5 +1,9 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
-import { AllowAuthenticated, RequirePermissions, RequireAnyPermission } from '../../core/auth/decorators/permissions.decorator';
+import {
+  AllowAuthenticated,
+  RequirePermissions,
+  RequireAnyPermission,
+} from '../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
@@ -17,7 +21,10 @@ export class PartnersController {
 
   @Get('customers')
   @RequirePermissions('customers')
-  listCustomers(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  listCustomers(
+    @Query() query: Record<string, unknown>,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.partnersService.listCustomers(query, req.authContext!);
   }
 
@@ -66,12 +73,21 @@ export class PartnersController {
     // earn / redeem is honoured; an unspecified action is 'manual_adjust',
     // never silently a purchase earn or a discount redemption.
     const action = resolveLoyaltyAdjustActionType(payload.actionType);
-    return this.partnersService.adjustCustomerLoyaltyPoints(id, Number(payload.pointsChange), action, payload.notes, req.authContext!);
+    return this.partnersService.adjustCustomerLoyaltyPoints(
+      id,
+      Number(payload.pointsChange),
+      action,
+      payload.notes,
+      req.authContext!,
+    );
   }
 
   @Get('customers/:id/pos-summary')
   @RequirePermissions('customers')
-  getCustomerPosSummary(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  getCustomerPosSummary(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.partnersService.getCustomerPosSummary(id, req.authContext!);
   }
 
@@ -103,7 +119,10 @@ export class PartnersController {
 
   @Get('customers/:id/delivery-profile')
   @AllowAuthenticated()
-  getCustomerDeliveryProfile(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  getCustomerDeliveryProfile(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.partnersService.getCustomerDeliveryProfile(id, req.authContext!);
   }
 
@@ -125,7 +144,10 @@ export class PartnersController {
 
   @Get('suppliers')
   @RequireAnyPermission('suppliers', 'purchases')
-  listSuppliers(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  listSuppliers(
+    @Query() query: Record<string, unknown>,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.partnersService.listSuppliers(query, req.authContext!);
   }
 
@@ -193,4 +215,3 @@ export class PartnersController {
     return this.partnersService.createAddress(partnerType, partnerId, payload, req.authContext!);
   }
 }
-

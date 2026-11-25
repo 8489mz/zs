@@ -7,7 +7,11 @@ import { releaseLocationStock } from '../../common/utils/location-stock-ledger';
 import { classifyPaymobTransaction } from './engines/paymob-notification.engine';
 import { extractReservationItems } from './engines/storefront-reservation.engine';
 import * as crypto from 'crypto';
-import { type TenantPaymentConfig, type StorefrontWebhookResult, type LockedOnlineOrder } from './storefront-payment.types';
+import {
+  type TenantPaymentConfig,
+  type StorefrontWebhookResult,
+  type LockedOnlineOrder,
+} from './storefront-payment.types';
 
 /**
  * StorefrontPaymentWebhooksService — slice S3 of the storefront payment split.
@@ -24,10 +28,30 @@ export interface StorefrontPaymentWebhooksDeps {
   whatsappService?: WhatsAppGatewayService;
   // Bound helpers from the helpers and session slices (passed bound so
   // the moved bodies stay byte-identical).
-  paymentReviewReason: (order: LockedOnlineOrder, provider: string, sessionId: string, amountMinor: unknown, currency: unknown, expectedCurrency: string) => string | null;
-  markPaymentForReview: (trx: Transaction<Database>, order: LockedOnlineOrder, provider: string, transactionId: string, sessionId: string, response: unknown, reason: string) => Promise<StorefrontWebhookResult>;
+  paymentReviewReason: (
+    order: LockedOnlineOrder,
+    provider: string,
+    sessionId: string,
+    amountMinor: unknown,
+    currency: unknown,
+    expectedCurrency: string,
+  ) => string | null;
+  markPaymentForReview: (
+    trx: Transaction<Database>,
+    order: LockedOnlineOrder,
+    provider: string,
+    transactionId: string,
+    sessionId: string,
+    response: unknown,
+    reason: string,
+  ) => Promise<StorefrontWebhookResult>;
   isCurrentPaymentSession: (order: LockedOnlineOrder, provider: string, sessionId: string) => boolean;
-  isRepeatedPaidWebhook: (order: LockedOnlineOrder, provider: string, transactionId: string, sessionId: string) => boolean;
+  isRepeatedPaidWebhook: (
+    order: LockedOnlineOrder,
+    provider: string,
+    transactionId: string,
+    sessionId: string,
+  ) => boolean;
   getTenantPaymentConfig: (tenantId: string) => Promise<TenantPaymentConfig>;
 }
 
@@ -35,10 +59,30 @@ export interface StorefrontPaymentWebhooksDeps {
 export class StorefrontPaymentWebhooksService {
   private readonly db: Kysely<Database>;
   private readonly whatsappService?: WhatsAppGatewayService;
-  private readonly paymentReviewReason: (order: LockedOnlineOrder, provider: string, sessionId: string, amountMinor: unknown, currency: unknown, expectedCurrency: string) => string | null;
-  private readonly markPaymentForReview: (trx: Transaction<Database>, order: LockedOnlineOrder, provider: string, transactionId: string, sessionId: string, response: unknown, reason: string) => Promise<StorefrontWebhookResult>;
+  private readonly paymentReviewReason: (
+    order: LockedOnlineOrder,
+    provider: string,
+    sessionId: string,
+    amountMinor: unknown,
+    currency: unknown,
+    expectedCurrency: string,
+  ) => string | null;
+  private readonly markPaymentForReview: (
+    trx: Transaction<Database>,
+    order: LockedOnlineOrder,
+    provider: string,
+    transactionId: string,
+    sessionId: string,
+    response: unknown,
+    reason: string,
+  ) => Promise<StorefrontWebhookResult>;
   private readonly isCurrentPaymentSession: (order: LockedOnlineOrder, provider: string, sessionId: string) => boolean;
-  private readonly isRepeatedPaidWebhook: (order: LockedOnlineOrder, provider: string, transactionId: string, sessionId: string) => boolean;
+  private readonly isRepeatedPaidWebhook: (
+    order: LockedOnlineOrder,
+    provider: string,
+    transactionId: string,
+    sessionId: string,
+  ) => boolean;
   private readonly getTenantPaymentConfig: (tenantId: string) => Promise<TenantPaymentConfig>;
   private readonly logger = new Logger(StorefrontPaymentWebhooksService.name);
 
@@ -106,11 +150,7 @@ export class StorefrontPaymentWebhooksService {
    * Compensates a failed, declined, or expired online payment.
    * Releases reserved location stock and claimed coupons, marking the order failed.
    */
-  async compensateFailedOrderPayment(
-    trx: Transaction<Database>,
-    order: any,
-    gatewayResponse: any,
-  ): Promise<void> {
+  async compensateFailedOrderPayment(trx: Transaction<Database>, order: any, gatewayResponse: any): Promise<void> {
     await trx
       .updateTable('online_orders')
       .set({
@@ -147,7 +187,11 @@ export class StorefrontPaymentWebhooksService {
     }
   }
 
-  async processPaymobWebhook(headers: Record<string, any>, body: any, rawBody?: Buffer): Promise<StorefrontWebhookResult> {
+  async processPaymobWebhook(
+    headers: Record<string, any>,
+    body: any,
+    rawBody?: Buffer,
+  ): Promise<StorefrontWebhookResult> {
     const obj = body?.obj || body;
     const merchantOrderId = String(obj?.order?.merchant_order_id || '');
 
@@ -179,7 +223,9 @@ export class StorefrontPaymentWebhooksService {
     const hmacHeader = (headers['hmac'] || headers['HMAC'] || '') as string;
 
     if (!config.hmacSecret || !hmacHeader) {
-      this.logger.warn(`Paymob webhook rejected: storefront_paymob_hmac_secret not configured or hmac header missing for order ${order.order_number}`);
+      this.logger.warn(
+        `Paymob webhook rejected: storefront_paymob_hmac_secret not configured or hmac header missing for order ${order.order_number}`,
+      );
       throw new UnauthorizedException('توقيع HMAC غير صحيح أو مفقود.');
     }
 
@@ -221,7 +267,9 @@ export class StorefrontPaymentWebhooksService {
     // stays pending until the capture callback arrives.
     const transactionKind = classifyPaymobTransaction(obj);
     if (transactionKind === 'authorization_only') {
-      this.logger.log(`Paymob authorization-only notification for order ${order.order_number}; awaiting capture, no state change.`);
+      this.logger.log(
+        `Paymob authorization-only notification for order ${order.order_number}; awaiting capture, no state change.`,
+      );
       return { ok: true, received: true };
     }
 
@@ -242,10 +290,26 @@ export class StorefrontPaymentWebhooksService {
       }
 
       if (lockedOrder.payment_status === 'paid') {
-        if (isSuccessful && !this.isRepeatedPaidWebhook(lockedOrder, 'paymob', String(obj.id || ''), String(obj.order?.id || ''))) {
-          return this.markPaymentForReview(trx, lockedOrder, 'paymob', String(obj.id || ''), String(obj.order?.id || ''), body, 'additional_payment');
+        if (
+          isSuccessful &&
+          !this.isRepeatedPaidWebhook(lockedOrder, 'paymob', String(obj.id || ''), String(obj.order?.id || ''))
+        ) {
+          return this.markPaymentForReview(
+            trx,
+            lockedOrder,
+            'paymob',
+            String(obj.id || ''),
+            String(obj.order?.id || ''),
+            body,
+            'additional_payment',
+          );
         }
-        return { ok: true, status: lockedOrder.status === 'review_required' ? 'review_required' : 'paid', orderNumber: lockedOrder.order_number, alreadyPaid: true };
+        return {
+          ok: true,
+          status: lockedOrder.status === 'review_required' ? 'review_required' : 'paid',
+          orderNumber: lockedOrder.order_number,
+          alreadyPaid: true,
+        };
       }
 
       if (isSuccessful) {
@@ -260,16 +324,34 @@ export class StorefrontPaymentWebhooksService {
             return { ok: true, received: true };
           }
           await this.compensateFailedOrderPayment(trx, lockedOrder, body);
-          this.logger.warn(`Order ${lockedOrder.order_number} marked as FAILED via Paymob Webhook (void/refund); stock reservation released.`);
+          this.logger.warn(
+            `Order ${lockedOrder.order_number} marked as FAILED via Paymob Webhook (void/refund); stock reservation released.`,
+          );
           return { ok: true, status: 'failed', orderNumber: lockedOrder.order_number };
         }
         // A successful callback carrying none of Paymob's capture flags
         // proves nothing; route it to a human instead of marking paid.
         if (transactionKind === 'unclassified') {
-          return this.markPaymentForReview(trx, lockedOrder, 'paymob', String(obj.id || ''), sessionId, body, 'non_capture_transaction');
+          return this.markPaymentForReview(
+            trx,
+            lockedOrder,
+            'paymob',
+            String(obj.id || ''),
+            sessionId,
+            body,
+            'non_capture_transaction',
+          );
         }
-        const reason = this.paymentReviewReason(lockedOrder, 'paymob', sessionId, obj.amount_cents, obj.currency, 'EGP');
-        if (reason) return this.markPaymentForReview(trx, lockedOrder, 'paymob', String(obj.id || ''), sessionId, body, reason);
+        const reason = this.paymentReviewReason(
+          lockedOrder,
+          'paymob',
+          sessionId,
+          obj.amount_cents,
+          obj.currency,
+          'EGP',
+        );
+        if (reason)
+          return this.markPaymentForReview(trx, lockedOrder, 'paymob', String(obj.id || ''), sessionId, body, reason);
 
         await trx
           .updateTable('online_orders')
@@ -292,11 +374,16 @@ export class StorefrontPaymentWebhooksService {
         return { ok: true, status: 'paid', orderNumber: lockedOrder.order_number };
       } else {
         if (obj.pending !== false || obj.success !== false) return { ok: true, received: true };
-        if (!this.isCurrentPaymentSession(lockedOrder, 'paymob', String(obj.order?.id || '')) || lockedOrder.status !== 'pending') {
+        if (
+          !this.isCurrentPaymentSession(lockedOrder, 'paymob', String(obj.order?.id || '')) ||
+          lockedOrder.status !== 'pending'
+        ) {
           return { ok: true, received: true };
         }
         await this.compensateFailedOrderPayment(trx, lockedOrder, body);
-        this.logger.warn(`Order ${lockedOrder.order_number} marked as FAILED via Paymob Webhook; stock reservation released.`);
+        this.logger.warn(
+          `Order ${lockedOrder.order_number} marked as FAILED via Paymob Webhook; stock reservation released.`,
+        );
         return { ok: true, status: 'failed', orderNumber: lockedOrder.order_number };
       }
     });
@@ -309,16 +396,26 @@ export class StorefrontPaymentWebhooksService {
     return result;
   }
 
-  async processXPayWebhook(headers: Record<string, any>, body: any, rawBody?: Buffer): Promise<StorefrontWebhookResult> {
+  async processXPayWebhook(
+    headers: Record<string, any>,
+    body: any,
+    rawBody?: Buffer,
+  ): Promise<StorefrontWebhookResult> {
     this.logger.log(`XPay Webhook received: ${JSON.stringify(body)}`);
     const data = body?.data || body;
-    const transactionStatus = String(data?.transaction_status || body?.transaction_status || data?.status || '').toUpperCase();
+    const transactionStatus = String(
+      data?.transaction_status || body?.transaction_status || data?.status || '',
+    ).toUpperCase();
     const transactionId = String(data?.transaction_id || data?.id || body?.transaction_id || '');
 
     // Extract orderNumber from custom_fields or payload
     let orderNumber = '';
     let tenantId = '';
-    const customFields = Array.isArray(data?.custom_fields) ? data.custom_fields : Array.isArray(body?.custom_fields) ? body.custom_fields : [];
+    const customFields = Array.isArray(data?.custom_fields)
+      ? data.custom_fields
+      : Array.isArray(body?.custom_fields)
+        ? body.custom_fields
+        : [];
     for (const f of customFields) {
       if (f.field_label === 'OrderNumber' || f.label === 'OrderNumber') orderNumber = String(f.value || '');
       if (f.field_label === 'TenantId' || f.label === 'TenantId') tenantId = String(f.value || '');
@@ -339,7 +436,11 @@ export class StorefrontPaymentWebhooksService {
     // Cryptographic signature check (Fail-closed)
     const config = await this.getTenantPaymentConfig(order.tenant_id);
     const xpaySecret = config.xpayApiKey || process.env.XPAY_WEBHOOK_SECRET || process.env.XPAY_API_KEY || '';
-    const signatureHeader = (headers['x-xpay-signature'] || headers['xpay-signature'] || headers['x-signature'] || headers['signature'] || '') as string;
+    const signatureHeader = (headers['x-xpay-signature'] ||
+      headers['xpay-signature'] ||
+      headers['x-signature'] ||
+      headers['signature'] ||
+      '') as string;
 
     if (!xpaySecret || !signatureHeader) {
       this.logger.warn(`XPay webhook rejected: secret or signature header missing for order ${order.order_number}`);
@@ -356,7 +457,8 @@ export class StorefrontPaymentWebhooksService {
       throw new UnauthorizedException('توقيع XPay غير صحيح.');
     }
 
-    const isSuccessful = transactionStatus === 'SUCCESSFUL' || transactionStatus === 'SUCCESS' || transactionStatus === 'PAID';
+    const isSuccessful =
+      transactionStatus === 'SUCCESSFUL' || transactionStatus === 'SUCCESS' || transactionStatus === 'PAID';
     let shouldNotifyWhatsApp = false;
 
     const result = await this.db.transaction().execute(async (trx) => {
@@ -374,16 +476,37 @@ export class StorefrontPaymentWebhooksService {
 
       if (lockedOrder.payment_status === 'paid') {
         if (isSuccessful && !this.isRepeatedPaidWebhook(lockedOrder, 'xpay', transactionId, transactionId)) {
-          return this.markPaymentForReview(trx, lockedOrder, 'xpay', transactionId, transactionId, body, 'additional_payment');
+          return this.markPaymentForReview(
+            trx,
+            lockedOrder,
+            'xpay',
+            transactionId,
+            transactionId,
+            body,
+            'additional_payment',
+          );
         }
-        return { ok: true, status: lockedOrder.status === 'review_required' ? 'review_required' : 'paid', orderNumber: lockedOrder.order_number, alreadyPaid: true };
+        return {
+          ok: true,
+          status: lockedOrder.status === 'review_required' ? 'review_required' : 'paid',
+          orderNumber: lockedOrder.order_number,
+          alreadyPaid: true,
+        };
       }
 
       if (isSuccessful) {
         const amount = data?.amount ?? data?.total_amount ?? body?.amount;
         const amountMinor = amount === undefined || amount === null ? undefined : Math.round(Number(amount) * 100);
-        const reason = this.paymentReviewReason(lockedOrder, 'xpay', transactionId, amountMinor, data?.currency ?? body?.currency, 'EGP');
-        if (reason) return this.markPaymentForReview(trx, lockedOrder, 'xpay', transactionId, transactionId, body, reason);
+        const reason = this.paymentReviewReason(
+          lockedOrder,
+          'xpay',
+          transactionId,
+          amountMinor,
+          data?.currency ?? body?.currency,
+          'EGP',
+        );
+        if (reason)
+          return this.markPaymentForReview(trx, lockedOrder, 'xpay', transactionId, transactionId, body, reason);
 
         await trx
           .updateTable('online_orders')
@@ -404,12 +527,17 @@ export class StorefrontPaymentWebhooksService {
         this.logger.log(`Order ${lockedOrder.order_number} marked as PAID via XPay Webhook.`);
         return { ok: true, status: 'paid', orderNumber: lockedOrder.order_number };
       } else {
-        if (!['FAILED', 'DECLINED', 'CANCELLED', 'CANCELED', 'EXPIRED'].includes(transactionStatus) ||
-            !this.isCurrentPaymentSession(lockedOrder, 'xpay', transactionId) || lockedOrder.status !== 'pending') {
+        if (
+          !['FAILED', 'DECLINED', 'CANCELLED', 'CANCELED', 'EXPIRED'].includes(transactionStatus) ||
+          !this.isCurrentPaymentSession(lockedOrder, 'xpay', transactionId) ||
+          lockedOrder.status !== 'pending'
+        ) {
           return { ok: true, received: true };
         }
         await this.compensateFailedOrderPayment(trx, lockedOrder, body);
-        this.logger.warn(`Order ${lockedOrder.order_number} marked as FAILED via XPay Webhook; stock reservation released.`);
+        this.logger.warn(
+          `Order ${lockedOrder.order_number} marked as FAILED via XPay Webhook; stock reservation released.`,
+        );
         return { ok: true, status: 'failed', orderNumber: lockedOrder.order_number };
       }
     });

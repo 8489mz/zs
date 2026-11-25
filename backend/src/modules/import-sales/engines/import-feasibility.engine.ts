@@ -166,7 +166,9 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
   const digits = input.moneyDigits ?? currencyMoneyDigits('EGP');
   const suppliedCommercialRate = resolveNumber(input.exchangeRateCommercial, NaN);
   if (!Number.isFinite(suppliedCommercialRate) || suppliedCommercialRate <= 0) {
-    throw new Error('Import feasibility requires a caller-resolved commercial exchange rate; a missing rate must never silently fall back to a hardcoded rate.');
+    throw new Error(
+      'Import feasibility requires a caller-resolved commercial exchange rate; a missing rate must never silently fall back to a hardcoded rate.',
+    );
   }
   const commRate = Math.max(0.0001, suppliedCommercialRate);
   const custRate = Math.max(0.0001, resolveNumber(input.exchangeRateCustoms, commRate));
@@ -250,8 +252,7 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
       // I6-A: carry the link natively. Only a finite number is a
       // link — a free-text '' (unlinked form line) must never be
       // stored as a product id.
-      productId:
-        typeof item.productId === 'number' && Number.isFinite(item.productId) ? item.productId : undefined,
+      productId: typeof item.productId === 'number' && Number.isFinite(item.productId) ? item.productId : undefined,
       hsCode: item.hsCode,
       qty,
       factoryPriceUsd: unitPriceUsd,
@@ -317,14 +318,10 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
   }
 
   const weightCapacityUtilizationPercent =
-    maxWeightPerCont > 0
-      ? Number(Math.min(100, (totalGrossWeightKg / maxWeightPerCont) * 100).toFixed(1))
-      : 0;
+    maxWeightPerCont > 0 ? Number(Math.min(100, (totalGrossWeightKg / maxWeightPerCont) * 100).toFixed(1)) : 0;
 
   const volumeCapacityUtilizationPercent =
-    maxCbmPerCont > 0
-      ? Number(Math.min(100, (totalVolumeCbm / maxCbmPerCont) * 100).toFixed(1))
-      : 0;
+    maxCbmPerCont > 0 ? Number(Math.min(100, (totalVolumeCbm / maxCbmPerCont) * 100).toFixed(1)) : 0;
 
   const isHeavyCargo = weightCapacityUtilizationPercent >= 75 && volumeCapacityUtilizationPercent <= 65;
   const isBulkyCargo = volumeCapacityUtilizationPercent >= 75 && weightCapacityUtilizationPercent <= 65;
@@ -392,18 +389,22 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
   // BreakEvenUnits = TotalAccountingCost / AverageSellingPrice = TotalUnits / (1 + Markup)
   const avgSellingPriceBase = totalUnitsCount > 0 ? baseRevenue / totalUnitsCount : 0;
   const baseBreakEvenUnits =
-    avgSellingPriceBase > 0 ? Math.min(totalUnitsCount, Math.ceil(totalAccountingCostEgp / avgSellingPriceBase)) : totalUnitsCount;
+    avgSellingPriceBase > 0
+      ? Math.min(totalUnitsCount, Math.ceil(totalAccountingCostEgp / avgSellingPriceBase))
+      : totalUnitsCount;
 
   // 8. Best Scenario (+10% Revenue, -5% Shipping)
   const bestAccountingCost = totalAccountingCostEgp - internationalShippingEgp * 0.05;
   const bestInvestment = totalProjectInvestmentEgp - internationalShippingEgp * 0.05;
-  const bestRevenue = baseRevenue * 1.10;
+  const bestRevenue = baseRevenue * 1.1;
   const bestProfit = bestRevenue - bestAccountingCost;
   const bestRoi = bestInvestment > 0 ? (bestProfit / bestInvestment) * 100 : 0;
   const bestGrossMargin = bestRevenue > 0 ? (bestProfit / bestRevenue) * 100 : 0;
   const avgSellingPriceBest = totalUnitsCount > 0 ? bestRevenue / totalUnitsCount : 0;
   const bestBreakEvenUnits =
-    avgSellingPriceBest > 0 ? Math.min(totalUnitsCount, Math.ceil(bestAccountingCost / avgSellingPriceBest)) : totalUnitsCount;
+    avgSellingPriceBest > 0
+      ? Math.min(totalUnitsCount, Math.ceil(bestAccountingCost / avgSellingPriceBest))
+      : totalUnitsCount;
 
   // 9. Worst Scenario (-10% Revenue, +15% Shipping/Overhead + demurrage reserve)
   // I2-P9: the demurrage reserve is derived from the shipment's own
@@ -425,7 +426,7 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
     containerCountNeeded * WORST_CASE_DEMURRAGE_OVERDUE_DAYS * DEMURRAGE_DAILY_RATE_USD * commRate;
   const worstAccountingCost = totalAccountingCostEgp + capitalizedOverheadEgp * 0.15 + worstDemurrageReserveEgp;
   const worstInvestment = totalProjectInvestmentEgp + capitalizedOverheadEgp * 0.15 + worstDemurrageReserveEgp;
-  const worstRevenue = baseRevenue * 0.90;
+  const worstRevenue = baseRevenue * 0.9;
   const worstProfit = worstRevenue - worstAccountingCost;
   const worstRoi = worstInvestment > 0 ? (worstProfit / worstInvestment) * 100 : 0;
   const worstGrossMargin = worstRevenue > 0 ? (worstProfit / worstRevenue) * 100 : 0;

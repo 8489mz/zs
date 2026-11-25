@@ -4,13 +4,21 @@ import { Selectable, Transaction } from 'kysely';
 import { Database, ImportShipmentItemTable } from '../../../database/database.types';
 
 export class ImportReceiptHelpersSlice {
-
   async lockShipment(trx: Transaction<Database>, tenantId: string, shipmentId: string) {
-    const shipment = await trx.selectFrom('import_shipments').selectAll()
-      .where('tenant_id', '=', tenantId).where('id', '=', shipmentId).forUpdate().executeTakeFirst();
+    const shipment = await trx
+      .selectFrom('import_shipments')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', shipmentId)
+      .forUpdate()
+      .executeTakeFirst();
     if (!shipment) throw new NotFoundException('الشحنة غير موجودة');
-    const receipt = await trx.selectFrom('import_inventory_receipts').selectAll()
-      .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId).executeTakeFirst();
+    const receipt = await trx
+      .selectFrom('import_inventory_receipts')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('shipment_id', '=', shipmentId)
+      .executeTakeFirst();
     return { shipment, receipt };
   }
 
@@ -33,11 +41,7 @@ export class ImportReceiptHelpersSlice {
    * belong to this tenant's suppliers. Callers must resolve BEFORE
    * any stock or journal write.
    */
-  async resolveImportReceiptSupplierId(
-    trx: any,
-    tenantId: string,
-    shipment: any,
-  ): Promise<number> {
+  async resolveImportReceiptSupplierId(trx: any, tenantId: string, shipment: any): Promise<number> {
     const candidates: number[] = [];
     if (shipment?.supplier_id) candidates.push(Number(shipment.supplier_id));
     if (shipment?.project_id) {
@@ -47,7 +51,8 @@ export class ImportReceiptHelpersSlice {
         .where('tenant_id', '=', tenantId)
         .where('id', '=', shipment.project_id)
         .executeTakeFirst();
-      const f = typeof proj?.feasibility_data === 'string' ? JSON.parse(proj.feasibility_data) : (proj?.feasibility_data || {});
+      const f =
+        typeof proj?.feasibility_data === 'string' ? JSON.parse(proj.feasibility_data) : proj?.feasibility_data || {};
       if (f?.supplierId) candidates.push(Number(f.supplierId));
     }
     for (const candidate of candidates) {
@@ -79,11 +84,7 @@ export class ImportReceiptHelpersSlice {
    * by the (tenant_id, code) unique key: a do-nothing conflict
    * re-reads the row the other transaction inserted.
    */
-  async resolveImportProjectCostCenter(
-    trx: any,
-    tenantId: string,
-    shipment: any,
-  ): Promise<number | null> {
+  async resolveImportProjectCostCenter(trx: any, tenantId: string, shipment: any): Promise<number | null> {
     const projectId = shipment?.project_id;
     if (!projectId) return null;
     const project = await trx
@@ -133,7 +134,9 @@ export class ImportReceiptHelpersSlice {
 
   costLine(item: Selectable<ImportShipmentItemTable>) {
     return {
-      id: item.id, productId: Number(item.product_id), quantity: Number(item.quantity),
+      id: item.id,
+      productId: Number(item.product_id),
+      quantity: Number(item.quantity),
       receivedQuantity: Number(item.received_quantity ?? item.quantity),
       factoryUnitPriceUsd: Number(item.factory_unit_price_usd),
       shortageHandlingMethod: item.shortage_handling_method ?? 'capitalize',

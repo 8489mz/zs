@@ -53,11 +53,13 @@ const STOREFRONT_EXCLUDED_SUB_VERTICALS = ['warehousing', 'services'];
  * expiry grants nothing (fail-closed); the caller supplies `now` so specs
  * can pin the boundary without touching the clock.
  */
-export function isStorefrontTrialActive(
-  tenant: StorefrontTenantEntitlementRow,
-  now: Date = new Date(),
-): boolean {
-  if (String(tenant.status || '').trim().toLowerCase() !== 'trial') return false;
+export function isStorefrontTrialActive(tenant: StorefrontTenantEntitlementRow, now: Date = new Date()): boolean {
+  if (
+    String(tenant.status || '')
+      .trim()
+      .toLowerCase() !== 'trial'
+  )
+    return false;
   if (tenant.trial_ends_at == null) return false;
   const endsAt = tenant.trial_ends_at instanceof Date ? tenant.trial_ends_at : new Date(tenant.trial_ends_at);
   if (Number.isNaN(endsAt.getTime())) return false;
@@ -85,9 +87,7 @@ export function parseTenantExtraFeatures(raw: unknown): string[] {
   if (typeof raw === 'string') {
     try {
       const parsed: unknown = JSON.parse(raw);
-      return Array.isArray(parsed)
-        ? parsed.filter((entry): entry is string => typeof entry === 'string')
-        : [];
+      return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : [];
     } catch {
       return [];
     }

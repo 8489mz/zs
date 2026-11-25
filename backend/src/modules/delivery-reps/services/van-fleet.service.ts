@@ -16,45 +16,33 @@ export class VanFleetService {
 
   private vehiclesSliceInstance?: VanFleetVehiclesSlice;
   private get vehiclesSlice(): VanFleetVehiclesSlice {
-    return (this.vehiclesSliceInstance ??= new VanFleetVehiclesSlice(
-      this.db,
-    ));
+    return (this.vehiclesSliceInstance ??= new VanFleetVehiclesSlice(this.db));
   }
 
   private fuelSliceInstance?: VanFleetFuelSlice;
   private get fuelSlice(): VanFleetFuelSlice {
-    return (this.fuelSliceInstance ??= new VanFleetFuelSlice(
-      this.db,
-      {
-        assertVehicleUsableByRep: (tenantId, vehicleId, repId, tripId) =>
-          this.vehiclesSlice.assertVehicleUsableByRep(tenantId, vehicleId, repId, tripId),
-      },
-    ));
+    return (this.fuelSliceInstance ??= new VanFleetFuelSlice(this.db, {
+      assertVehicleUsableByRep: (tenantId, vehicleId, repId, tripId) =>
+        this.vehiclesSlice.assertVehicleUsableByRep(tenantId, vehicleId, repId, tripId),
+    }));
   }
 
   private oilSliceInstance?: VanFleetOilSlice;
   private get oilSlice(): VanFleetOilSlice {
-    return (this.oilSliceInstance ??= new VanFleetOilSlice(
-      this.db,
-      {
-        assertVehicleUsableByRep: (tenantId, vehicleId, repId, tripId) =>
-          this.vehiclesSlice.assertVehicleUsableByRep(tenantId, vehicleId, repId, tripId),
-      },
-    ));
+    return (this.oilSliceInstance ??= new VanFleetOilSlice(this.db, {
+      assertVehicleUsableByRep: (tenantId, vehicleId, repId, tripId) =>
+        this.vehiclesSlice.assertVehicleUsableByRep(tenantId, vehicleId, repId, tripId),
+    }));
   }
 
   private maintenanceSliceInstance?: VanFleetMaintenanceSlice;
   private get maintenanceSlice(): VanFleetMaintenanceSlice {
-    return (this.maintenanceSliceInstance ??= new VanFleetMaintenanceSlice(
-      this.db,
-    ));
+    return (this.maintenanceSliceInstance ??= new VanFleetMaintenanceSlice(this.db));
   }
 
   private driversSliceInstance?: VanFleetDriversSlice;
   private get driversSlice(): VanFleetDriversSlice {
-    return (this.driversSliceInstance ??= new VanFleetDriversSlice(
-      this.db,
-    ));
+    return (this.driversSliceInstance ??= new VanFleetDriversSlice(this.db));
   }
 
   async listFleetVehicles(tenantId: string) {

@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Header, Param, ParseIntPipe, Post, Put, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  Header,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { SettingsService } from './settings.service';
@@ -18,7 +31,11 @@ export class SettingsController {
 
   private assertSettingsPermission(req: RequestWithAuth): void {
     const permissions = req.authContext?.permissions ?? [];
-    if (!permissions.includes('canManageSettings') && !permissions.includes('settings') && req.authContext?.role !== 'super_admin') {
+    if (
+      !permissions.includes('canManageSettings') &&
+      !permissions.includes('settings') &&
+      req.authContext?.role !== 'super_admin'
+    ) {
       throw new ForbiddenException('Missing required permissions');
     }
   }
@@ -31,11 +48,19 @@ export class SettingsController {
   }
 
   @Put('settings')
-  updateSettings(@Body() rawPayload: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  updateSettings(
+    @Body() rawPayload: Record<string, unknown>,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     this.assertSettingsPermission(req);
-    const settings = (rawPayload && typeof rawPayload === 'object' && 'settings' in rawPayload && rawPayload.settings && typeof rawPayload.settings === 'object')
-      ? (rawPayload.settings as Record<string, unknown>)
-      : rawPayload;
+    const settings =
+      rawPayload &&
+      typeof rawPayload === 'object' &&
+      'settings' in rawPayload &&
+      rawPayload.settings &&
+      typeof rawPayload.settings === 'object'
+        ? (rawPayload.settings as Record<string, unknown>)
+        : rawPayload;
     return this.settingsService.saveSettings(settings, req.authContext!);
   }
 
@@ -52,7 +77,11 @@ export class SettingsController {
   }
 
   @Put('branches/:id')
-  updateBranch(@Param('id', ParseIntPipe) id: number, @Body() payload: BranchPayloadDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  updateBranch(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: BranchPayloadDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     this.assertSettingsPermission(req);
     return this.settingsService.updateBranch(id, payload, req.authContext!);
   }

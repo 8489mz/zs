@@ -215,7 +215,13 @@ export class MaritimeFreightInsuranceWarehouseService {
         .returningAll()
         .execute();
 
-      const finalNumber = formatDailyDocumentNumber('MWR', Number(receipt.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
+      const finalNumber = formatDailyDocumentNumber(
+        'MWR',
+        Number(receipt.id),
+        new Date(),
+        4,
+        await getTenantTimezone(trx, tenantId),
+      );
       const [updated] = await trx
         .updateTable('maritime_warehouse_receipts')
         .set({ receipt_number: finalNumber })
@@ -279,10 +285,7 @@ export class MaritimeFreightInsuranceWarehouseService {
 
   async getWarehouseReceipts(auth: AuthContext, filters?: { status?: string; search?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let query = this.db
-      .selectFrom('maritime_warehouse_receipts')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('maritime_warehouse_receipts').selectAll().where('tenant_id', '=', tenantId);
 
     if (filters?.status && filters.status !== 'all') {
       query = query.where('warehouse_status', '=', filters.status as any);
@@ -290,10 +293,7 @@ export class MaritimeFreightInsuranceWarehouseService {
 
     if (filters?.search) {
       const term = `%${filters.search}%`;
-      query = query.where((eb) => eb.or([
-        eb('receipt_number', 'ilike', term),
-        eb('bay_rack_bin', 'ilike', term),
-      ]));
+      query = query.where((eb) => eb.or([eb('receipt_number', 'ilike', term), eb('bay_rack_bin', 'ilike', term)]));
     }
 
     return await query.orderBy('id', 'desc').execute();

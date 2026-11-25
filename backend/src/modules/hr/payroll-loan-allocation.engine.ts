@@ -25,14 +25,20 @@
  */
 import { MoneyDigits, toMinorUnits, fromMinorUnits, roundMoney } from '../accounting/engines/money-minor-units.engine';
 
-export function calculatePayrollLoanDueTotal(rows: Array<{
-  loanId: number; installmentAmount: number; installmentPaid: number; loanRemaining: number;
-}>, minorUnits: MoneyDigits): number {
+export function calculatePayrollLoanDueTotal(
+  rows: Array<{
+    loanId: number;
+    installmentAmount: number;
+    installmentPaid: number;
+    loanRemaining: number;
+  }>,
+  minorUnits: MoneyDigits,
+): number {
   const balances = new Map<number, number>();
   let dueMinor = 0;
   const toCents = (value: number): number => {
-    if (!Number.isFinite(value) || value < 0
-        || Math.abs(value - roundMoney(value, minorUnits)) > 0.000001) throw new RangeError('Invalid payroll loan balance or installment');
+    if (!Number.isFinite(value) || value < 0 || Math.abs(value - roundMoney(value, minorUnits)) > 0.000001)
+      throw new RangeError('Invalid payroll loan balance or installment');
     const result = toMinorUnits(value, minorUnits);
     if (!Number.isSafeInteger(result)) throw new RangeError('Payroll loan balance exceeds safe currency precision');
     return result;
@@ -56,13 +62,18 @@ export function calculatePayrollLoanDueTotal(rows: Array<{
 /** Clamp due dates to target month's last calendar day (31 Jan -> 28/29 Feb). */
 export function addLoanInstallmentMonths(dateOnly: string, offset: number): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly);
-  if (!match || !Number.isSafeInteger(offset) || Math.abs(offset) > 6000) throw new RangeError('Invalid installment date');
-  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  if (!match || !Number.isSafeInteger(offset) || Math.abs(offset) > 6000)
+    throw new RangeError('Invalid installment date');
+  const year = Number(match[1]),
+    month = Number(match[2]),
+    day = Number(match[3]);
   const original = new Date(Date.UTC(year, month - 1, day));
   if (original.toISOString().slice(0, 10) !== dateOnly) throw new RangeError('Invalid calendar date');
   const target = new Date(Date.UTC(year, month - 1 + offset, 1));
   const maxDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), Math.min(day, maxDay))).toISOString().slice(0, 10);
+  return new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), Math.min(day, maxDay)))
+    .toISOString()
+    .slice(0, 10);
 }
 
 /** Persisted manual loan money must be exact at the tenant's book precision.
@@ -86,14 +97,25 @@ export function requireLoanMoney(value: number, minorUnits: MoneyDigits): number
 /** Strictly positive, bounded, minor-unit-accurate installments with exact principal reconciliation.
  * The last installment absorbs the remainder so values sum exactly to the principal.
  */
-export function calculateLoanInstallmentSchedule(principal: number, countRequested: number, minorUnits: MoneyDigits, monthly?: number) {
+export function calculateLoanInstallmentSchedule(
+  principal: number,
+  countRequested: number,
+  minorUnits: MoneyDigits,
+  monthly?: number,
+) {
   // Validate precision explicitly before toMinorUnits: it throws its own
   // generic error for finer fractions, hiding this engine's contract.
-  if (!Number.isFinite(principal) || principal <= 0
-      || Math.abs(principal - roundMoney(principal, minorUnits)) > 0.000001) throw new RangeError('Loan principal requires book precision');
+  if (
+    !Number.isFinite(principal) ||
+    principal <= 0 ||
+    Math.abs(principal - roundMoney(principal, minorUnits)) > 0.000001
+  )
+    throw new RangeError('Loan principal requires book precision');
   const total = toMinorUnits(principal, minorUnits);
-  if (monthly !== undefined && (!Number.isFinite(monthly) || monthly <= 0
-      || Math.abs(monthly - roundMoney(monthly, minorUnits)) > 0.000001)) {
+  if (
+    monthly !== undefined &&
+    (!Number.isFinite(monthly) || monthly <= 0 || Math.abs(monthly - roundMoney(monthly, minorUnits)) > 0.000001)
+  ) {
     throw new RangeError('Monthly installment requires book precision');
   }
   const installment = monthly === undefined ? 0 : toMinorUnits(monthly, minorUnits);
@@ -102,8 +124,10 @@ export function calculateLoanInstallmentSchedule(principal: number, countRequest
     throw new RangeError('Invalid installment count (maximum 360 and at least one minor unit each)');
   }
   const per = monthly === undefined ? Math.floor(total / count) : Math.min(total, installment);
-  const values = Array.from({length: count}, (_, i) => fromMinorUnits(i === count - 1 ? total - per * (count - 1) : per, minorUnits));
-  if (values.some(x => x <= 0)) throw new RangeError('Invalid non-positive installment');
+  const values = Array.from({ length: count }, (_, i) =>
+    fromMinorUnits(i === count - 1 ? total - per * (count - 1) : per, minorUnits),
+  );
+  if (values.some((x) => x <= 0)) throw new RangeError('Invalid non-positive installment');
   return { installmentCount: count, installmentAmount: fromMinorUnits(per, minorUnits), installmentValues: values };
 }
 
@@ -139,7 +163,9 @@ function round2(value: number, minorUnits: MoneyDigits): number {
  * يحسب دورة توزيع واحدة. يعيد `null` إذا لم يكن هناك ما يُخصم
  * (قسط مسدَّد، أو قرض بلا رصيد، أو لا يتبقى من الخصم شيء).
  */
-export function allocateLoanDeduction(input: LoanAllocationInput & { minorUnits: MoneyDigits }): LoanAllocationResult | null {
+export function allocateLoanDeduction(
+  input: LoanAllocationInput & { minorUnits: MoneyDigits },
+): LoanAllocationResult | null {
   const minorUnits = input.minorUnits;
   const remainingToDeduct = round2(Math.max(0, Number(input.remainingToDeduct) || 0), minorUnits);
   const installmentAmount = round2(Math.max(0, Number(input.installmentAmount) || 0), minorUnits);

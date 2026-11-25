@@ -56,7 +56,11 @@ export interface MaritimeFreightInvoicingDeps {
   getJobById: (auth: AuthContext, id: string) => Promise<any>;
   // Bound kernel methods (same names as the facade members, so the moved
   // bodies are byte-identical). They stay in the facade forever.
-  resolveFreightExchangeRate: (tenantId: string, currency: string | undefined, suppliedRate?: number) => Promise<number>;
+  resolveFreightExchangeRate: (
+    tenantId: string,
+    currency: string | undefined,
+    suppliedRate?: number,
+  ) => Promise<number>;
   resolveAccountId: (tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
   assertMaritimeJournalPeriodOpen: (trx: any, tenantId: string, entryDate: Date) => Promise<void>;
 }
@@ -66,7 +70,11 @@ export class MaritimeFreightInvoicingService {
   private readonly db: Kysely<Database>;
   private readonly accountingPosting: AccountingPostingService;
   private readonly getJobById: (auth: AuthContext, id: string) => Promise<any>;
-  private readonly resolveFreightExchangeRate: (tenantId: string, currency: string | undefined, suppliedRate?: number) => Promise<number>;
+  private readonly resolveFreightExchangeRate: (
+    tenantId: string,
+    currency: string | undefined,
+    suppliedRate?: number,
+  ) => Promise<number>;
   private readonly resolveAccountId: (tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
   private readonly assertMaritimeJournalPeriodOpen: (trx: any, tenantId: string, entryDate: Date) => Promise<void>;
 
@@ -203,28 +211,69 @@ export class MaritimeFreightInvoicingService {
 
     const entryDate = new Date();
     const fxSuffix = exchangeRate !== 1 ? ` (${invoiceAmount} ${dto?.currency || 'USD'} @ ${exchangeRate})` : '';
-    const desc = (dto?.notes || `فاتورة مبيعات خدمات ملاحية - العملية #${job.job_number} (${job.customer_name})`) + fxSuffix;
+    const desc =
+      (dto?.notes || `فاتورة مبيعات خدمات ملاحية - العملية #${job.job_number} (${job.customer_name})`) + fxSuffix;
 
     const { updatedJob, entryId, entryNo } = await this.db.transaction().execute(async (trx: any) => {
       await this.assertMaritimeJournalPeriodOpen(trx, tenantId, entryDate);
-      job = { ...job, ...await trx.selectFrom('maritime_jobs').selectAll().where('tenant_id', '=', tenantId).where('id', '=', job.id).forUpdate().executeTakeFirstOrThrow() };
+      job = {
+        ...job,
+        ...(await trx
+          .selectFrom('maritime_jobs')
+          .selectAll()
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', job.id)
+          .forUpdate()
+          .executeTakeFirstOrThrow()),
+      };
 
       const newEntryId = await this.accountingPosting.postDomainJournal(trx, {
-        tenantId, accountId: tenantId, entryDate, description: desc,
-        sourceType: 'maritime_job', sourceId: Number(job.id), createdBy: auth.userId || null,
+        tenantId,
+        accountId: tenantId,
+        entryDate,
+        description: desc,
+        sourceType: 'maritime_job',
+        sourceId: Number(job.id),
+        createdBy: auth.userId || null,
         lines: [
-          { accountId: customerAccId, costCenterId, description: desc, debit: baseInvoiceAmount, credit: 0, partnerType: 'customer', partnerId: job.customer_id ? Number(job.customer_id) : null },
-          { accountId: revenueAccId, costCenterId, description: desc, debit: 0, credit: baseInvoiceAmount, partnerType: 'none', partnerId: null },
+          {
+            accountId: customerAccId,
+            costCenterId,
+            description: desc,
+            debit: baseInvoiceAmount,
+            credit: 0,
+            partnerType: 'customer',
+            partnerId: job.customer_id ? Number(job.customer_id) : null,
+          },
+          {
+            accountId: revenueAccId,
+            costCenterId,
+            description: desc,
+            debit: 0,
+            credit: baseInvoiceAmount,
+            partnerType: 'none',
+            partnerId: null,
+          },
         ],
       });
-      const posted = await trx.selectFrom('journal_entries').select('entry_no').where('tenant_id', '=', tenantId).where('id', '=', newEntryId).executeTakeFirstOrThrow();
+      const posted = await trx
+        .selectFrom('journal_entries')
+        .select('entry_no')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', newEntryId)
+        .executeTakeFirstOrThrow();
       const newEntryNo = posted.entry_no;
 
-      const postedRevenue = await trx.selectFrom('journal_entries as je')
-        .innerJoin('journal_entry_lines as jl', (join: any) => join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id'))
+      const postedRevenue = await trx
+        .selectFrom('journal_entries as je')
+        .innerJoin('journal_entry_lines as jl', (join: any) =>
+          join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id'),
+        )
         .select(sql<number>`COALESCE(SUM(jl.credit), 0)`.as('amount'))
-        .where('je.tenant_id', '=', tenantId).where('je.source_type', '=', 'maritime_job')
-        .where('je.source_id', '=', Number(job.id)).where('je.status', '=', 'posted')
+        .where('je.tenant_id', '=', tenantId)
+        .where('je.source_type', '=', 'maritime_job')
+        .where('je.source_id', '=', Number(job.id))
+        .where('je.status', '=', 'posted')
         .executeTakeFirst();
       const billedTotal = Number(postedRevenue?.amount || 0);
       const carrierCost = Number(job.carrier_cost_total || 0);
@@ -349,21 +398,59 @@ export class MaritimeFreightInvoicingService {
 
     const entryDate = new Date();
     const fxSuffix = exchangeRate !== 1 ? ` (${amount} ${dto?.currency || 'USD'} @ ${exchangeRate})` : '';
-    const desc = (dto.description || `سند مصروفات ملاحية (${dto.expenseType === 'carrier' ? 'نولون الخط الملاحي' : 'مصروفات موانئ وتخليص'}) - العملية #${job.job_number}`) + fxSuffix;
+    const desc =
+      (dto.description ||
+        `سند مصروفات ملاحية (${dto.expenseType === 'carrier' ? 'نولون الخط الملاحي' : 'مصروفات موانئ وتخليص'}) - العملية #${job.job_number}`) +
+      fxSuffix;
 
     const { updatedJob, entryId, entryNo } = await this.db.transaction().execute(async (trx: any) => {
       await this.assertMaritimeJournalPeriodOpen(trx, tenantId, entryDate);
-      job = { ...job, ...await trx.selectFrom('maritime_jobs').selectAll().where('tenant_id', '=', tenantId).where('id', '=', job.id).forUpdate().executeTakeFirstOrThrow() };
+      job = {
+        ...job,
+        ...(await trx
+          .selectFrom('maritime_jobs')
+          .selectAll()
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', job.id)
+          .forUpdate()
+          .executeTakeFirstOrThrow()),
+      };
 
       const newEntryId = await this.accountingPosting.postDomainJournal(trx, {
-        tenantId, accountId: tenantId, entryDate, description: desc,
-        sourceType: 'maritime_job_expense', sourceId: Number(job.id), createdBy: auth.userId || null,
+        tenantId,
+        accountId: tenantId,
+        entryDate,
+        description: desc,
+        sourceType: 'maritime_job_expense',
+        sourceId: Number(job.id),
+        createdBy: auth.userId || null,
         lines: [
-          { accountId: expenseAccId, costCenterId, description: desc, debit: baseExpenseAmount, credit: 0, partnerType: 'none', partnerId: null },
-          { accountId: creditAccId, costCenterId, description: desc, debit: 0, credit: baseExpenseAmount, partnerType, partnerId: dto.supplierId ? Number(dto.supplierId) : null },
+          {
+            accountId: expenseAccId,
+            costCenterId,
+            description: desc,
+            debit: baseExpenseAmount,
+            credit: 0,
+            partnerType: 'none',
+            partnerId: null,
+          },
+          {
+            accountId: creditAccId,
+            costCenterId,
+            description: desc,
+            debit: 0,
+            credit: baseExpenseAmount,
+            partnerType,
+            partnerId: dto.supplierId ? Number(dto.supplierId) : null,
+          },
         ],
       });
-      const posted = await trx.selectFrom('journal_entries').select('entry_no').where('tenant_id', '=', tenantId).where('id', '=', newEntryId).executeTakeFirstOrThrow();
+      const posted = await trx
+        .selectFrom('journal_entries')
+        .select('entry_no')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', newEntryId)
+        .executeTakeFirstOrThrow();
       const newEntryNo = posted.entry_no;
 
       let carrierCost = Number(job.carrier_cost_total || 0);
@@ -412,8 +499,12 @@ export class MaritimeFreightInvoicingService {
 
     let query = this.db
       .selectFrom('journal_entries as je')
-      .innerJoin('journal_entry_lines as jel', (join) => join.onRef('jel.journal_entry_id', '=', 'je.id').onRef('jel.tenant_id', '=', 'je.tenant_id'))
-      .innerJoin('accounting_accounts as acc', (join) => join.onRef('acc.id', '=', 'jel.account_id').onRef('acc.tenant_id', '=', 'je.tenant_id'))
+      .innerJoin('journal_entry_lines as jel', (join) =>
+        join.onRef('jel.journal_entry_id', '=', 'je.id').onRef('jel.tenant_id', '=', 'je.tenant_id'),
+      )
+      .innerJoin('accounting_accounts as acc', (join) =>
+        join.onRef('acc.id', '=', 'jel.account_id').onRef('acc.tenant_id', '=', 'je.tenant_id'),
+      )
       .select([
         'je.id as entry_id',
         'je.entry_no',
@@ -442,13 +533,18 @@ export class MaritimeFreightInvoicingService {
         ]),
       );
     } else {
-      query = query.where('je.source_type', 'in', ['maritime_job', 'maritime_job_expense'])
+      query = query
+        .where('je.source_type', 'in', ['maritime_job', 'maritime_job_expense'])
         .where('je.source_id', '=', Number(jobId));
     }
 
     const { page, pageSize, offset } = boundedPage(pagination?.page, pagination?.pageSize);
-    const pageRows = await query.orderBy('je.id', 'desc').orderBy('jel.id', 'desc')
-      .limit(pageSize + 1).offset(offset).execute();
+    const pageRows = await query
+      .orderBy('je.id', 'desc')
+      .orderBy('jel.id', 'desc')
+      .limit(pageSize + 1)
+      .offset(offset)
+      .execute();
 
     return {
       jobId: job.id,
@@ -459,22 +555,55 @@ export class MaritimeFreightInvoicingService {
     };
   }
 
-  async settleJobFromCustomerBalance(auth: AuthContext, jobId: string, dto?: { amount?: number; exchangeRate?: number }) {
+  async settleJobFromCustomerBalance(
+    auth: AuthContext,
+    jobId: string,
+    dto?: { amount?: number; exchangeRate?: number },
+  ) {
     const { tenantId } = requireTenantScope(auth);
-    return this.db.transaction().execute(async trx => {
+    return this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, tenantId);
-      const job = await trx.selectFrom('maritime_jobs').selectAll().where('tenant_id', '=', tenantId).where('id', '=', jobId as any).forUpdate().executeTakeFirstOrThrow();
-      if (!job.customer_id || Number(job.client_invoiced_total || 0) <= 0) throw new BadRequestException('يجب ربط العميل وإصدار فاتورة الشحنة أولاً.');
-      if (dto?.exchangeRate != null && Number(dto.exchangeRate) !== 1) throw new BadRequestException('أرصدة الشحنة والعميل مثبتة بعملة الأساس؛ لا يعاد تحويلها عند المطابقة.');
-      const customer = await trx.selectFrom('customers').select(['id', 'balance']).where('tenant_id', '=', tenantId).where('id', '=', job.customer_id).forUpdate().executeTakeFirstOrThrow();
-      const ledger = await trx.selectFrom('journal_entry_lines as l')
-        .innerJoin('journal_entries as j', join => join.onRef('j.id', '=', 'l.journal_entry_id').onRef('j.tenant_id', '=', 'l.tenant_id'))
-        .innerJoin('accounting_accounts as a', join => join.onRef('a.id', '=', 'l.account_id').onRef('a.tenant_id', '=', 'l.tenant_id'))
+      const job = await trx
+        .selectFrom('maritime_jobs')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', jobId as any)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      if (!job.customer_id || Number(job.client_invoiced_total || 0) <= 0)
+        throw new BadRequestException('يجب ربط العميل وإصدار فاتورة الشحنة أولاً.');
+      if (dto?.exchangeRate != null && Number(dto.exchangeRate) !== 1)
+        throw new BadRequestException('أرصدة الشحنة والعميل مثبتة بعملة الأساس؛ لا يعاد تحويلها عند المطابقة.');
+      const customer = await trx
+        .selectFrom('customers')
+        .select(['id', 'balance'])
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', job.customer_id)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      const ledger = await trx
+        .selectFrom('journal_entry_lines as l')
+        .innerJoin('journal_entries as j', (join) =>
+          join.onRef('j.id', '=', 'l.journal_entry_id').onRef('j.tenant_id', '=', 'l.tenant_id'),
+        )
+        .innerJoin('accounting_accounts as a', (join) =>
+          join.onRef('a.id', '=', 'l.account_id').onRef('a.tenant_id', '=', 'l.tenant_id'),
+        )
         .select(sql<number>`coalesce(sum(l.debit - l.credit), 0)`.as('balance'))
-        .where('l.tenant_id', '=', tenantId).where('l.partner_type', '=', 'customer').where('l.partner_id', '=', customer.id).where('j.status', '=', 'posted')
-        .where(eb => eb.or([eb('a.is_receivable', '=', true), eb('a.code', '=', '1130')])).executeTakeFirstOrThrow();
-      if (Math.abs(Number(ledger.balance) - Number(customer.balance)) > 0.01) throw new BadRequestException('الأستاذ العام ودفتر العميل غير متطابقين؛ يلزم تصحيح البيانات التاريخية قبل تسوية الشحنة.');
-      if (Number(customer.balance) > 0.01) throw new BadRequestException('الرصيد الإجمالي للعميل مدين؛ يلزم تحصيل أو تخصيص سند سداد قبل المطابقة من الرصيد.');
+        .where('l.tenant_id', '=', tenantId)
+        .where('l.partner_type', '=', 'customer')
+        .where('l.partner_id', '=', customer.id)
+        .where('j.status', '=', 'posted')
+        .where((eb) => eb.or([eb('a.is_receivable', '=', true), eb('a.code', '=', '1130')]))
+        .executeTakeFirstOrThrow();
+      if (Math.abs(Number(ledger.balance) - Number(customer.balance)) > 0.01)
+        throw new BadRequestException(
+          'الأستاذ العام ودفتر العميل غير متطابقين؛ يلزم تصحيح البيانات التاريخية قبل تسوية الشحنة.',
+        );
+      if (Number(customer.balance) > 0.01)
+        throw new BadRequestException(
+          'الرصيد الإجمالي للعميل مدين؛ يلزم تحصيل أو تخصيص سند سداد قبل المطابقة من الرصيد.',
+        );
       const invoiced = Number(job.client_invoiced_total);
       const paid = Number(job.client_paid_total || 0);
       // Settle math at the tenant's book digits, resolved on the
@@ -484,15 +613,46 @@ export class MaritimeFreightInvoicingService {
       const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
       const remaining = roundMoney(Math.max(0, invoiced - paid), digits);
       const amount = dto?.amount == null ? remaining : Number(dto.amount);
-      if (!Number.isFinite(amount) || amount < 0 || amount > remaining + 0.001) throw new BadRequestException('مبلغ المطابقة يتجاوز المتبقي على الشحنة.');
+      if (!Number.isFinite(amount) || amount < 0 || amount > remaining + 0.001)
+        throw new BadRequestException('مبلغ المطابقة يتجاوز المتبقي على الشحنة.');
       const newPaid = roundMoney(paid + amount, digits);
       const full = newPaid >= invoiced - 0.01;
-      const updated = await trx.updateTable('maritime_jobs').set({ client_paid_total: newPaid, payment_status: full ? 'paid' : 'partially_paid', paid_at: full ? new Date() : job.paid_at, updated_at: new Date() })
-        .where('tenant_id', '=', tenantId).where('id', '=', job.id).returningAll().executeTakeFirstOrThrow();
-      if (amount > 0) await trx.insertInto('maritime_job_milestones').values({ tenant_id: tenantId, job_id: String(job.id), milestone_key: 'PAYMENT', milestone_title: 'مطابقة الفاتورة مع رصيد العميل المغطى', location: 'الحسابات', notes: `مطابقة ${amount} بعملة الأساس؛ لا توجد حركة نقدية جديدة`, recorded_by: auth.userId || null } as any).execute();
+      const updated = await trx
+        .updateTable('maritime_jobs')
+        .set({
+          client_paid_total: newPaid,
+          payment_status: full ? 'paid' : 'partially_paid',
+          paid_at: full ? new Date() : job.paid_at,
+          updated_at: new Date(),
+        })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', job.id)
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      if (amount > 0)
+        await trx
+          .insertInto('maritime_job_milestones')
+          .values({
+            tenant_id: tenantId,
+            job_id: String(job.id),
+            milestone_key: 'PAYMENT',
+            milestone_title: 'مطابقة الفاتورة مع رصيد العميل المغطى',
+            location: 'الحسابات',
+            notes: `مطابقة ${amount} بعملة الأساس؛ لا توجد حركة نقدية جديدة`,
+            recorded_by: auth.userId || null,
+          } as any)
+          .execute();
       // Invoice and receipt already changed AR and the shared ledger. Applying their
       // offset a second time here would consume the customer's credit twice.
-      return { success: true, job: updated, settledAmount: amount, remainingUnpaid: Math.max(0, invoiced - newPaid), customerBalanceAfter: Number(customer.balance), customerAvailableCreditAfter: Math.max(0, -Number(customer.balance)), message: 'تمت مطابقة سداد الشحنة دون تكرار حركة رصيد العميل.' };
+      return {
+        success: true,
+        job: updated,
+        settledAmount: amount,
+        remainingUnpaid: Math.max(0, invoiced - newPaid),
+        customerBalanceAfter: Number(customer.balance),
+        customerAvailableCreditAfter: Math.max(0, -Number(customer.balance)),
+        message: 'تمت مطابقة سداد الشحنة دون تكرار حركة رصيد العميل.',
+      };
     });
   }
 

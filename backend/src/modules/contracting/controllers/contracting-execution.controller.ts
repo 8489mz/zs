@@ -199,5 +199,4 @@ export class ContractingExecutionController {
   ) {
     return this.contractingService.approveProjectHandover(req.authContext!, id, dto);
   }
-
 }

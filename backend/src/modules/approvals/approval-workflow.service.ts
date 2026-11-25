@@ -57,7 +57,12 @@ export class ApprovalWorkflowService {
     const maxAmount = dto.maxAmount !== undefined && dto.maxAmount !== null ? Number(dto.maxAmount) : null;
     const tierLevel = Number(dto.tierLevel ?? 1);
     const requiredRole = dto.requiredRole || 'admin';
-    if (!Number.isFinite(minAmount) || minAmount < 0 || (maxAmount !== null && (!Number.isFinite(maxAmount) || maxAmount < minAmount))) throw new BadRequestException('نطاق المبلغ غير صالح.');
+    if (
+      !Number.isFinite(minAmount) ||
+      minAmount < 0 ||
+      (maxAmount !== null && (!Number.isFinite(maxAmount) || maxAmount < minAmount))
+    )
+      throw new BadRequestException('نطاق المبلغ غير صالح.');
     if (!Number.isInteger(tierLevel) || tierLevel < 1) throw new BadRequestException('مستوى الموافقة غير صالح.');
     if (requiredRole !== 'admin') throw new BadRequestException('الدور المتاح لاعتماد أوامر الشراء هو admin فقط.');
 
@@ -83,8 +88,10 @@ export class ApprovalWorkflowService {
   async updateRule(id: string, dto: Partial<CreateApprovalRuleDto> & { isActive?: boolean }, auth: AuthContext) {
     this.requireManager(auth);
     const { tenantId } = requireTenantScope(auth);
-    if (dto.module !== undefined && dto.module !== 'purchase_orders') throw new BadRequestException('الموافقات مفعلة لأوامر الشراء فقط حالياً.');
-    if (dto.requiredRole !== undefined && dto.requiredRole !== 'admin') throw new BadRequestException('الدور المتاح هو admin فقط.');
+    if (dto.module !== undefined && dto.module !== 'purchase_orders')
+      throw new BadRequestException('الموافقات مفعلة لأوامر الشراء فقط حالياً.');
+    if (dto.requiredRole !== undefined && dto.requiredRole !== 'admin')
+      throw new BadRequestException('الدور المتاح هو admin فقط.');
     const updateData: any = { updated_at: sql`NOW()` };
     if (dto.minAmount !== undefined) updateData.min_amount = Number(dto.minAmount);
     if (dto.maxAmount !== undefined) updateData.max_amount = dto.maxAmount === null ? null : Number(dto.maxAmount);
@@ -95,25 +102,53 @@ export class ApprovalWorkflowService {
     if (dto.notes !== undefined) updateData.notes = dto.notes;
 
     const result = await this.db.transaction().execute(async (trx) => {
-      const current = await trx.selectFrom('approval_rules').selectAll()
-        .where('tenant_id', '=', tenantId).where('id', '=', id as any).forUpdate().executeTakeFirst();
+      const current = await trx
+        .selectFrom('approval_rules')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id as any)
+        .forUpdate()
+        .executeTakeFirst();
       if (!current) throw new NotFoundException('قاعدة الموافقة غير موجودة.');
       const minAmount = Number(dto.minAmount ?? current.min_amount);
-      const maxAmount = dto.maxAmount === undefined ? (current.max_amount === null ? null : Number(current.max_amount)) : dto.maxAmount === null ? null : Number(dto.maxAmount);
+      const maxAmount =
+        dto.maxAmount === undefined
+          ? current.max_amount === null
+            ? null
+            : Number(current.max_amount)
+          : dto.maxAmount === null
+            ? null
+            : Number(dto.maxAmount);
       const tierLevel = Number(dto.tierLevel ?? current.tier_level);
-      if (!Number.isFinite(minAmount) || minAmount < 0 || (maxAmount !== null && (!Number.isFinite(maxAmount) || maxAmount < minAmount))) throw new BadRequestException('نطاق المبلغ غير صالح.');
+      if (
+        !Number.isFinite(minAmount) ||
+        minAmount < 0 ||
+        (maxAmount !== null && (!Number.isFinite(maxAmount) || maxAmount < minAmount))
+      )
+        throw new BadRequestException('نطاق المبلغ غير صالح.');
       if (!Number.isInteger(tierLevel) || tierLevel < 1) throw new BadRequestException('مستوى الموافقة غير صالح.');
-      if (Object.keys(dto).some((key) => key !== 'notes')) await this.assertNoPendingRequests(trx, tenantId, current.module);
-      return trx.updateTable('approval_rules').set(updateData)
-        .where('tenant_id', '=', tenantId).where('id', '=', id as any).returningAll().executeTakeFirstOrThrow();
+      if (Object.keys(dto).some((key) => key !== 'notes'))
+        await this.assertNoPendingRequests(trx, tenantId, current.module);
+      return trx
+        .updateTable('approval_rules')
+        .set(updateData)
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id as any)
+        .returningAll()
+        .executeTakeFirstOrThrow();
     });
     return { ok: true, rule: result };
   }
 
   private async assertNoPendingRequests(trx: Transaction<Database>, tenantId: string, module: string): Promise<void> {
-    const pending = await trx.selectFrom('approval_requests').select('id')
-      .where('tenant_id', '=', tenantId).where('module', '=', module).where('status', '=', 'pending')
-      .limit(1).executeTakeFirst();
+    const pending = await trx
+      .selectFrom('approval_requests')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('module', '=', module)
+      .where('status', '=', 'pending')
+      .limit(1)
+      .executeTakeFirst();
     if (pending) throw new BadRequestException('لا يمكن تغيير قاعدة الموافقة مع وجود طلبات اعتماد معلقة.');
   }
 
@@ -121,11 +156,20 @@ export class ApprovalWorkflowService {
     this.requireManager(auth);
     const { tenantId } = requireTenantScope(auth);
     await this.db.transaction().execute(async (trx) => {
-      const current = await trx.selectFrom('approval_rules').selectAll()
-        .where('tenant_id', '=', tenantId).where('id', '=', id as any).forUpdate().executeTakeFirst();
+      const current = await trx
+        .selectFrom('approval_rules')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id as any)
+        .forUpdate()
+        .executeTakeFirst();
       if (!current) throw new NotFoundException('قاعدة الموافقة غير موجودة.');
       await this.assertNoPendingRequests(trx, tenantId, current.module);
-      await trx.deleteFrom('approval_rules').where('tenant_id', '=', tenantId).where('id', '=', id as any).execute();
+      await trx
+        .deleteFrom('approval_rules')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id as any)
+        .execute();
     });
     return { ok: true };
   }
@@ -133,14 +177,18 @@ export class ApprovalWorkflowService {
   /**
    * Evaluates if a transaction requires an approval workflow and creates a request if so.
    */
-  async checkAndInitiateApproval(params: {
-    module: string;
-    recordId: number | string;
-    recordRef: string;
-    amount: number;
-    currency?: string;
-    notes?: string;
-  }, auth: AuthContext, queryable: Kysely<Database> | Transaction<Database> = this.db) {
+  async checkAndInitiateApproval(
+    params: {
+      module: string;
+      recordId: number | string;
+      recordRef: string;
+      amount: number;
+      currency?: string;
+      notes?: string;
+    },
+    auth: AuthContext,
+    queryable: Kysely<Database> | Transaction<Database> = this.db,
+  ) {
     const { tenantId } = requireTenantScope(auth);
     const amount = Number(params.amount || 0);
 
@@ -152,12 +200,7 @@ export class ApprovalWorkflowService {
       .where('module', '=', params.module)
       .where('is_active', '=', true)
       .where('min_amount', '<=', amount)
-      .where((eb) =>
-        eb.or([
-          eb('max_amount', 'is', null),
-          eb('max_amount', '>=', amount),
-        ])
-      )
+      .where((eb) => eb.or([eb('max_amount', 'is', null), eb('max_amount', '>=', amount)]))
       .orderBy('tier_level', 'asc')
       .forShare()
       .execute();
@@ -239,7 +282,8 @@ export class ApprovalWorkflowService {
       };
 
       const moduleName = moduleLabels[module] || module;
-      const text = `🔔 *تنبيه طلب اعتماد معلق (Z-Systems Approval)*:\n` +
+      const text =
+        `🔔 *تنبيه طلب اعتماد معلق (Z-Systems Approval)*:\n` +
         `يوجد طلب اعتماد معلق لـ ${moduleName} رقم (${recordRef}) بقيمة ${amount.toLocaleString('ar-EG')} ج.م يتطلب مراجعتك واعتمادك في النظام.`;
 
       await this.whatsappService.sendRawMessage(tenantId, managerPhoneSetting.value, text);
@@ -254,10 +298,7 @@ export class ApprovalWorkflowService {
     const limit = Math.min(100, Math.max(1, Number(filter.page ? filter.limit || 25 : 50)));
     const offset = Math.max(0, (Number(filter.page || 1) - 1) * limit);
 
-    let query = this.db
-      .selectFrom('approval_requests')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('approval_requests').selectAll().where('tenant_id', '=', tenantId);
 
     if (filter.status) {
       query = query.where('status', '=', filter.status);
@@ -266,11 +307,7 @@ export class ApprovalWorkflowService {
       query = query.where('module', '=', filter.module);
     }
 
-    const items = await query
-      .orderBy('created_at', 'desc')
-      .limit(limit)
-      .offset(offset)
-      .execute();
+    const items = await query.orderBy('created_at', 'desc').limit(limit).offset(offset).execute();
 
     const countQuery = await this.db
       .selectFrom('approval_requests')
@@ -337,10 +374,16 @@ export class ApprovalWorkflowService {
   async approveRequest(id: string, notes: string, auth: AuthContext) {
     const { tenantId } = requireTenantScope(auth);
     return this.db.transaction().execute(async (trx) => {
-      const request = await trx.selectFrom('approval_requests').selectAll()
-        .where('tenant_id', '=', tenantId).where('id', '=', id as any).forUpdate().executeTakeFirst();
+      const request = await trx
+        .selectFrom('approval_requests')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id as any)
+        .forUpdate()
+        .executeTakeFirst();
       if (!request) throw new NotFoundException('طلب الاعتماد غير موجود.');
-      if (request.status !== 'pending') throw new BadRequestException(`لا يمكن اعتماد هذا الطلب لأن حالته الحالية هي: ${request.status}`);
+      if (request.status !== 'pending')
+        throw new BadRequestException(`لا يمكن اعتماد هذا الطلب لأن حالته الحالية هي: ${request.status}`);
       if (request.module !== 'purchase_orders') throw new BadRequestException('مسار اعتماد هذا النوع غير مفعل.');
       // INV-SOLO-ADMIN-PO-SELF-APPROVAL-OVERRIDE: a shop with only
       // ONE admin could never decide a purchase-order approval
@@ -366,18 +409,41 @@ export class ApprovalWorkflowService {
 
       const final = currentTier >= maxTier;
       if (final) await this.transitionPurchaseOrder(trx, tenantId, request.record_id, 'confirmed');
-      await trx.insertInto('approval_request_logs').values({
-        tenant_id: tenantId, request_id: String(request.id), tier_level: currentTier,
-        action: 'approved', action_by: auth.userId, action_by_name: auth.username,
-        action_role: auth.role, notes: (notes || `تمت الموافقة على المستوى ${currentTier}.`)
-          + (soloOverride ? ` — اعتماد منفرد بقرار إداري — صاحب الطلب ${auth.username} اعتمد مستنده بنفسه — لا يوجد مدير ثانٍ متاح` : ''),
-      } as any).execute();
-      await trx.updateTable('approval_requests').set({
-        status: final ? 'approved' : 'pending', current_tier: final ? currentTier : currentTier + 1,
-        updated_at: sql`NOW()`,
-      } as any).where('tenant_id', '=', tenantId).where('id', '=', request.id as any).execute();
-      return { ok: true, requestId: request.id, status: final ? 'approved' : 'pending',
-        currentTier: final ? currentTier : currentTier + 1, maxTier, isFullyApproved: final };
+      await trx
+        .insertInto('approval_request_logs')
+        .values({
+          tenant_id: tenantId,
+          request_id: String(request.id),
+          tier_level: currentTier,
+          action: 'approved',
+          action_by: auth.userId,
+          action_by_name: auth.username,
+          action_role: auth.role,
+          notes:
+            (notes || `تمت الموافقة على المستوى ${currentTier}.`) +
+            (soloOverride
+              ? ` — اعتماد منفرد بقرار إداري — صاحب الطلب ${auth.username} اعتمد مستنده بنفسه — لا يوجد مدير ثانٍ متاح`
+              : ''),
+        } as any)
+        .execute();
+      await trx
+        .updateTable('approval_requests')
+        .set({
+          status: final ? 'approved' : 'pending',
+          current_tier: final ? currentTier : currentTier + 1,
+          updated_at: sql`NOW()`,
+        } as any)
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', request.id as any)
+        .execute();
+      return {
+        ok: true,
+        requestId: request.id,
+        status: final ? 'approved' : 'pending',
+        currentTier: final ? currentTier : currentTier + 1,
+        maxTier,
+        isFullyApproved: final,
+      };
     });
   }
 
@@ -385,10 +451,16 @@ export class ApprovalWorkflowService {
     const { tenantId } = requireTenantScope(auth);
     if (!reason?.trim()) throw new BadRequestException('سبب الرفض إلزامي لتوثيقه في السجل.');
     return this.db.transaction().execute(async (trx) => {
-      const request = await trx.selectFrom('approval_requests').selectAll()
-        .where('tenant_id', '=', tenantId).where('id', '=', id as any).forUpdate().executeTakeFirst();
+      const request = await trx
+        .selectFrom('approval_requests')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id as any)
+        .forUpdate()
+        .executeTakeFirst();
       if (!request) throw new NotFoundException('طلب الاعتماد غير موجود.');
-      if (request.status !== 'pending') throw new BadRequestException(`لا يمكن رفض هذا الطلب لأن حالته الحالية هي: ${request.status}`);
+      if (request.status !== 'pending')
+        throw new BadRequestException(`لا يمكن رفض هذا الطلب لأن حالته الحالية هي: ${request.status}`);
       if (request.module !== 'purchase_orders') throw new BadRequestException('مسار رفض هذا النوع غير مفعل.');
       // INV-SOLO-ADMIN-PO-SELF-APPROVAL-OVERRIDE: same solo-admin
       // override as approveRequest — the requester may reject alone
@@ -402,14 +474,29 @@ export class ApprovalWorkflowService {
       }
       await this.assertApprover(trx, tenantId, request, auth);
       await this.transitionPurchaseOrder(trx, tenantId, request.record_id, 'draft');
-      await trx.insertInto('approval_request_logs').values({
-        tenant_id: tenantId, request_id: String(request.id), tier_level: Number(request.current_tier || 1),
-        action: 'rejected', action_by: auth.userId, action_by_name: auth.username,
-        action_role: auth.role, notes: reason.trim()
-          + (soloOverride ? ` — رفض منفرد بقرار إداري — صاحب الطلب ${auth.username} رفض مستنده بنفسه — لا يوجد مدير ثانٍ متاح` : ''),
-      } as any).execute();
-      await trx.updateTable('approval_requests').set({ status: 'rejected', updated_at: sql`NOW()` } as any)
-        .where('tenant_id', '=', tenantId).where('id', '=', request.id as any).execute();
+      await trx
+        .insertInto('approval_request_logs')
+        .values({
+          tenant_id: tenantId,
+          request_id: String(request.id),
+          tier_level: Number(request.current_tier || 1),
+          action: 'rejected',
+          action_by: auth.userId,
+          action_by_name: auth.username,
+          action_role: auth.role,
+          notes:
+            reason.trim() +
+            (soloOverride
+              ? ` — رفض منفرد بقرار إداري — صاحب الطلب ${auth.username} رفض مستنده بنفسه — لا يوجد مدير ثانٍ متاح`
+              : ''),
+        } as any)
+        .execute();
+      await trx
+        .updateTable('approval_requests')
+        .set({ status: 'rejected', updated_at: sql`NOW()` } as any)
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', request.id as any)
+        .execute();
       return { ok: true, status: 'rejected' };
     });
   }
@@ -426,34 +513,58 @@ export class ApprovalWorkflowService {
    */
   private async isSoloAdminOverride(trx: Transaction<Database>, tenantId: string, auth: AuthContext): Promise<boolean> {
     if (auth.role !== 'admin' && auth.role !== 'super_admin') return false;
-    const secondAdmin = await trx.selectFrom('users').select('id')
+    const secondAdmin = await trx
+      .selectFrom('users')
+      .select('id')
       .where('tenant_id', '=', tenantId)
       .where('role', 'in', ['admin', 'super_admin'])
       .where('is_active', '=', true)
       .where('id', '!=', Number(auth.userId))
-      .limit(1).executeTakeFirst();
+      .limit(1)
+      .executeTakeFirst();
     return !secondAdmin;
   }
 
-  private async assertApprover(trx: Transaction<Database>, tenantId: string,
-    request: { module: string; amount: number; current_tier: number }, auth: AuthContext): Promise<void> {
-    const rules = await trx.selectFrom('approval_rules').select(['required_role', 'approver_user_id'])
-      .where('tenant_id', '=', tenantId).where('module', '=', request.module)
-      .where('is_active', '=', true).where('tier_level', '=', Number(request.current_tier))
+  private async assertApprover(
+    trx: Transaction<Database>,
+    tenantId: string,
+    request: { module: string; amount: number; current_tier: number },
+    auth: AuthContext,
+  ): Promise<void> {
+    const rules = await trx
+      .selectFrom('approval_rules')
+      .select(['required_role', 'approver_user_id'])
+      .where('tenant_id', '=', tenantId)
+      .where('module', '=', request.module)
+      .where('is_active', '=', true)
+      .where('tier_level', '=', Number(request.current_tier))
       .where('min_amount', '<=', Number(request.amount))
       .where((eb) => eb.or([eb('max_amount', 'is', null), eb('max_amount', '>=', Number(request.amount))]))
       .execute();
-    if (!rules.some((rule) => (auth.role === rule.required_role || auth.role === 'super_admin')
-      && (rule.approver_user_id === null || Number(rule.approver_user_id) === auth.userId))) {
+    if (
+      !rules.some(
+        (rule) =>
+          (auth.role === rule.required_role || auth.role === 'super_admin') &&
+          (rule.approver_user_id === null || Number(rule.approver_user_id) === auth.userId),
+      )
+    ) {
       throw new ForbiddenException('ليس لديك صلاحية اعتماد هذا المستوى.');
     }
   }
 
-  private async transitionPurchaseOrder(trx: Transaction<Database>, tenantId: string,
-    recordId: string | number, status: 'confirmed' | 'draft'): Promise<void> {
-    const result = await trx.updateTable('purchase_orders').set({ status, updated_at: new Date() })
-      .where('tenant_id', '=', tenantId).where('id', '=', Number(recordId))
-      .where('status', '=', 'pending_approval').executeTakeFirst();
+  private async transitionPurchaseOrder(
+    trx: Transaction<Database>,
+    tenantId: string,
+    recordId: string | number,
+    status: 'confirmed' | 'draft',
+  ): Promise<void> {
+    const result = await trx
+      .updateTable('purchase_orders')
+      .set({ status, updated_at: new Date() })
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', Number(recordId))
+      .where('status', '=', 'pending_approval')
+      .executeTakeFirst();
     if (Number(result.numUpdatedRows) !== 1) throw new BadRequestException('أمر الشراء لم يعد في انتظار الموافقة.');
   }
 }

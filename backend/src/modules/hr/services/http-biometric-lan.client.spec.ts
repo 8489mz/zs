@@ -177,7 +177,14 @@ async function runTests() {
                 totalMatches: 2,
                 numOfMatches: 1,
                 responseStatusStrg: 'MORE',
-                InfoList: [{ employeeNoString: '501', time: '2026-11-22T08:00:00+02:00', minor: 75, attendanceStatus: 'checkIn' }],
+                InfoList: [
+                  {
+                    employeeNoString: '501',
+                    time: '2026-11-22T08:00:00+02:00',
+                    minor: 75,
+                    attendanceStatus: 'checkIn',
+                  },
+                ],
               },
             }),
           );
@@ -188,7 +195,14 @@ async function runTests() {
                 totalMatches: 2,
                 numOfMatches: 1,
                 responseStatusStrg: 'OK',
-                InfoList: [{ employeeNoString: '501', time: '2026-11-22T16:30:00+02:00', minor: 75, attendanceStatus: 'checkOut' }],
+                InfoList: [
+                  {
+                    employeeNoString: '501',
+                    time: '2026-11-22T16:30:00+02:00',
+                    minor: 75,
+                    attendanceStatus: 'checkOut',
+                  },
+                ],
               },
             }),
           );
@@ -215,7 +229,9 @@ async function runTests() {
       dahuaFindCalls++;
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       if (dahuaFindCalls === 1) {
-        res.end('found=1\r\nrecords[0].UserID=601\r\nrecords[0].CreateTime=1795327200\r\nrecords[0].Method=15\r\nrecords[0].Status=1\r\nrecords[0].Type=Entry\r\n');
+        res.end(
+          'found=1\r\nrecords[0].UserID=601\r\nrecords[0].CreateTime=1795327200\r\nrecords[0].Method=15\r\nrecords[0].Status=1\r\nrecords[0].Type=Entry\r\n',
+        );
       } else {
         res.end('found=0\r\n');
       }
@@ -244,7 +260,14 @@ async function runTests() {
     const hikBadAuth = await probeHikvisionLanDevice('127.0.0.1', addr.port, 'admin', 'WrongPass');
     assert.equal(hikBadAuth.requiresCommKey, true);
 
-    const hikPulled = await fetchHikvisionLanAttendance('127.0.0.1', addr.port, 'admin', 'Egypt@2026', '2026-11-01', '2026-11-22');
+    const hikPulled = await fetchHikvisionLanAttendance(
+      '127.0.0.1',
+      addr.port,
+      'admin',
+      'Egypt@2026',
+      '2026-11-01',
+      '2026-11-22',
+    );
     assert.equal(hikPulled.rawAttlogLines.length, 2);
     assert.equal(hikPulled.rawAttlogLines[0], '501\t2026-11-22 08:00:00\t15\t0\t0\t0');
     assert.equal(hikPulled.rawAttlogLines[1], '501\t2026-11-22 16:30:00\t15\t1\t0\t0');
@@ -255,14 +278,24 @@ async function runTests() {
     assert.equal(dahuaProbe.model, 'DHI-ASI7213X');
     assert.equal(dahuaProbe.serialNumber, 'DAHUA-EG-777');
 
-    const dahuaPulled = await fetchDahuaLanAttendance('127.0.0.1', addr.port, 'admin', 'Egypt@2026', '2026-11-01', '2026-11-22', 'Africa/Cairo');
+    const dahuaPulled = await fetchDahuaLanAttendance(
+      '127.0.0.1',
+      addr.port,
+      'admin',
+      'Egypt@2026',
+      '2026-11-01',
+      '2026-11-22',
+      'Africa/Cairo',
+    );
     assert.equal(dahuaPulled.rawAttlogLines.length, 1);
     assert.equal(dahuaPulled.rawAttlogLines[0], '601\t2026-11-22 08:00:00\t15\t0\t0\t0');
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 
-  console.log('http-biometric-lan.client.spec: all cases passed (Digest Auth, Hikvision ISAPI, Dahua CGI, Generic JSON)');
+  console.log(
+    'http-biometric-lan.client.spec: all cases passed (Digest Auth, Hikvision ISAPI, Dahua CGI, Generic JSON)',
+  );
 }
 
 runTests().catch((err) => {
