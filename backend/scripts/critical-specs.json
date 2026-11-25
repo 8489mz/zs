@@ -349,6 +349,7 @@
     "test/critical/dto-tax-approvals.spec.ts",
     "test/critical/dto-tail-core.spec.ts",
     "test/critical/dto-tail-rest.spec.ts",
-    "test/critical/api-versioning.spec.ts"
+    "test/critical/api-versioning.spec.ts",
+    "test/critical/api-docs.spec.ts"
   ]
 }

@@ -22,6 +22,7 @@ import { buildCorsOriginCallback } from './common/utils/cors-options.util';
 import { LoggerService } from './core/logging/logger.service';
 import { isDesktopRuntimeMode } from './config/app-mode';
 import { JSON_BODY_LIMIT } from './config/http-limits';
+import { setupSwagger } from './config/swagger';
 
 function formatErrorDetails(error: unknown): string {
   if (error instanceof Error) {
@@ -186,6 +187,13 @@ async function bootstrap(): Promise<void> {
         process.exit(1);
       }
     }
+  }
+
+  // API docs (INV-API-DOCS-SWAGGER, D12): mounted only when the gate allows
+  // (API_DOCS_ENABLED=true AND non-production); otherwise the routes do not
+  // exist at all. Logged only when mounted.
+  if (setupSwagger(app)) {
+    logger.log('API docs mounted at /api/docs (API_DOCS_ENABLED=true, non-production).');
   }
 
   await app.listen(port, host);

@@ -492,13 +492,13 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 350);
-    assert.equal(chain.length, 350);
+    assert.equal(specs.length, 351);
+    assert.equal(chain.length, 351);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/dto-tail-core.spec.ts'));
     assert.ok(specs.includes('test/critical/dto-tail-rest.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/api-versioning.spec.ts');
-    console.log('  evidence spec wired into both critical lists (350 = 350, identical order), passed');
+    assert.equal(specs[specs.length - 1], 'test/critical/api-docs.spec.ts');
+    console.log('  evidence spec wired into both critical lists (351 = 351, identical order), passed');
   }
 
   console.log('DTO tail-rest tests passed');
