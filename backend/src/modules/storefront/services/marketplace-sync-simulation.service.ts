@@ -27,6 +27,7 @@ import {
 } from '../engines/storefront-entitlement.engine';
 import { PlanFeatureService } from '../../../core/auth/services/plan-feature.service';
 import type { MarketplaceSkuMapping } from './marketplace-sync.types';
+import type { UpdateCompetitorPriceDto } from '../dto/marketplace-sync-write.dto';
 
 export interface MarketplaceSyncSimulationDeps {
   db: Kysely<Database>;
@@ -256,7 +257,7 @@ export class MarketplaceSyncSimulationService {
 
   async updateCompetitorPrice(
     mappingId: string,
-    payload: { competitorPrice?: number; buyBoxPrice?: number },
+    payload: UpdateCompetitorPriceDto,
     auth: AuthContext,
   ): Promise<MarketplaceSkuMapping> {
     const scope = requireTenantScope(auth);

@@ -103,13 +103,15 @@ import { fileURLToPath } from 'node:url';
 const BACKEND = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(BACKEND, 'src');
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D7 (89 after settings converts 22). */
-const PINNED_COUNT = 89;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D8 (75 after storefront converts 14 + 6 new webhook exclusions). */
+const PINNED_COUNT = 75;
 
 /**
- * The 9 pinned exclusions. A DTO on any of these breaks a real flow — see
+ * The 15 pinned exclusions. A DTO on any of these breaks a real flow — see
  * docs/DTO_AUTHORING_CONTRACT.md. File paths are relative to backend/,
  * line is the @Body() line. Bucket is the classifier bucket at D1.
+ * D8 adds the 6 storefront webhook `any` sites (same rationale as the
+ * tenant-subscription gateway webhook: provider payload + signature).
  */
 const PINNED_EXCLUSIONS = [
   {
@@ -165,6 +167,42 @@ const PINNED_EXCLUSIONS = [
     line: 396,
     bucket: 'any',
     reason: 'POST webhooks/:gateway: provider payload + raw-body signature',
+  },
+  {
+    file: 'src/modules/storefront/controllers/marketplace-sync.controller.ts',
+    line: 176,
+    bucket: 'any',
+    reason: 'POST marketplaces/webhook/:marketplace: provider payload, 4 marketplaces + raw-payload persist',
+  },
+  {
+    file: 'src/modules/storefront/storefront-public.controller.ts',
+    line: 254,
+    bucket: 'any',
+    reason: 'POST webhooks/paymob: provider payload + HMAC over concatenated fields',
+  },
+  {
+    file: 'src/modules/storefront/storefront-public.controller.ts',
+    line: 264,
+    bucket: 'any',
+    reason: 'POST webhooks/xpay: provider payload + signature',
+  },
+  {
+    file: 'src/modules/storefront/storefront-public.controller.ts',
+    line: 274,
+    bucket: 'any',
+    reason: 'POST webhooks/tap: provider payload + HMAC over concatenated fields',
+  },
+  {
+    file: 'src/modules/storefront/storefront-public.controller.ts',
+    line: 284,
+    bucket: 'any',
+    reason: 'POST webhooks/stripe: provider payload + raw-body signature',
+  },
+  {
+    file: 'src/modules/storefront/storefront-public.controller.ts',
+    line: 303,
+    bucket: 'any',
+    reason: 'POST webhooks/marketplace/:marketplace: provider payload + raw-payload persist',
   },
 ];
 

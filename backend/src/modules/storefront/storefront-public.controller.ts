@@ -23,6 +23,7 @@ import { CreateOnlineOrderDto } from './dto/create-online-order.dto';
 import { CreateProductReviewDto } from './dto/create-product-review.dto';
 import { RecordAbandonedCartDto } from './dto/abandoned-cart.dto';
 import { CustomerOrderLookupDto } from './dto/customer-order-lookup.dto';
+import { MockPayDto, PayTableBillDto, QuoteCartDto, ValidateCouponDto } from './dto/storefront-public-write.dto';
 import { ORDER_ACCESS_TOKEN_HEADER } from './engines/online-order-access.engine';
 import { MARKETPLACE_WEBHOOK_SIGNATURE_HEADER } from './engines/marketplace-webhook-event.engine';
 
@@ -162,17 +163,17 @@ export class StorefrontPublicController {
   }
 
   @Post(':slug/coupons/validate')
-  validateCoupon(@Param('slug') slug: string, @Body() body: { code: string; subtotal: number }) {
+  validateCoupon(@Param('slug') slug: string, @Body() body: ValidateCouponDto) {
     return this.service.validateCoupon(slug, body.code, Number(body.subtotal || 0));
   }
 
   @Post(':slug/cart/quote')
-  quoteCart(@Param('slug') slug: string, @Body() body: any) {
+  quoteCart(@Param('slug') slug: string, @Body() body: QuoteCartDto) {
     return this.service.quoteOnlineOrder(slug, body);
   }
 
   @Post(':slug/quote')
-  quoteAlias(@Param('slug') slug: string, @Body() body: any) {
+  quoteAlias(@Param('slug') slug: string, @Body() body: QuoteCartDto) {
     return this.service.quoteOnlineOrder(slug, body);
   }
 
@@ -243,7 +244,7 @@ export class StorefrontPublicController {
   mockPayOrder(
     @Param('slug') slug: string,
     @Param('orderNumber') orderNumber: string,
-    @Body() body: { cardNumber?: string; cardHolder?: string },
+    @Body() body: MockPayDto,
     @Headers(ORDER_ACCESS_TOKEN_HEADER) token?: string,
   ) {
     return this.paymentService.processMockPayment(slug, orderNumber, token, body);
@@ -321,11 +322,7 @@ export class StorefrontPublicController {
    * Next-Gen F&B: Pay active table check / bill via QR online checkout
    */
   @Post(':slug/table/:tableNumber/pay-bill')
-  payTableBill(
-    @Param('slug') slug: string,
-    @Param('tableNumber') tableNumber: string,
-    @Body() body: { tipAmount?: number; paymentMethod?: string; guestName?: string; guestPhone?: string },
-  ) {
+  payTableBill(@Param('slug') slug: string, @Param('tableNumber') tableNumber: string, @Body() body: PayTableBillDto) {
     return this.service.payActiveTableBill(slug, tableNumber, body);
   }
 }

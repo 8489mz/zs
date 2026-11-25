@@ -18,6 +18,7 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import type { MarketplaceOnboardingCheck } from './marketplace-sync.types';
+import type { SaveMarketplaceOnboardingProfileDto } from '../dto/marketplace-sync-write.dto';
 
 export interface MarketplaceSyncOnboardingDeps {
   db: Kysely<Database>;
@@ -376,7 +377,7 @@ Official Company Stamp / Seal:
   }
 
   async saveOnboardingProfile(
-    data: Partial<MarketplaceOnboardingCheck>,
+    data: SaveMarketplaceOnboardingProfileDto,
     auth: AuthContext,
   ): Promise<MarketplaceOnboardingCheck> {
     const scope = requireTenantScope(auth);

@@ -3,6 +3,7 @@ import { Selectable, Kysely, sql } from 'kysely';
 import { Database } from '../../../database/database.types';
 import { computeTableBillTotals } from '../engines/table-bill.engine';
 import { storefrontMoneyDigits } from '../storefront-helpers';
+import type { PayTableBillDto } from '../dto/storefront-public-write.dto';
 
 /**
  * StorefrontTableBillService — slice T10 of the storefront split.
@@ -222,11 +223,7 @@ export class StorefrontTableBillService {
    * by restoring the generated-reference marking. Viewing the bill
    * (getActiveTableBill) is unchanged.
    */
-  async payActiveTableBill(
-    slug: string,
-    tableNumber: string,
-    dto: { tipAmount?: number; paymentMethod?: string; guestName?: string; guestPhone?: string },
-  ) {
+  async payActiveTableBill(slug: string, tableNumber: string, dto: PayTableBillDto) {
     void slug;
     void tableNumber;
     void dto;

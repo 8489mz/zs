@@ -6,6 +6,7 @@ import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { CreateOnlineOrderDto } from './dto/create-online-order.dto';
+import type { PayTableBillDto, QuoteCartDto } from './dto/storefront-public-write.dto';
 import { CreateProductReviewDto } from './dto/create-product-review.dto';
 import { UpdateStorefrontSettingsDto } from './dto/update-storefront-settings.dto';
 import { CreateCouponDto, UpdateCouponDto } from './dto/coupon.dto';
@@ -271,18 +272,7 @@ export class StorefrontService {
     return this.catalogDetailService.getProductModifiers(slug, productId);
   }
 
-  async quoteOnlineOrder(
-    slug: string,
-    dto: {
-      items: Array<{ productId: number | string; quantity: number; variantName?: string | null }>;
-      couponCode?: string;
-      deliveryZoneId?: number;
-      deliveryZoneName?: string;
-      fulfillmentType?: 'delivery' | 'pickup';
-      orderType?: string;
-      tableNumber?: string;
-    },
-  ) {
+  async quoteOnlineOrder(slug: string, dto: QuoteCartDto) {
     return this.orderQuoteService.quoteOnlineOrder(slug, dto);
   }
 
@@ -433,11 +423,7 @@ export class StorefrontService {
     return this.tableBillService.getActiveTableBill(slug, tableNumber);
   }
 
-  async payActiveTableBill(
-    slug: string,
-    tableNumber: string,
-    dto: { tipAmount?: number; paymentMethod?: string; guestName?: string; guestPhone?: string },
-  ) {
+  async payActiveTableBill(slug: string, tableNumber: string, dto: PayTableBillDto) {
     return this.tableBillService.payActiveTableBill(slug, tableNumber, dto);
   }
 }

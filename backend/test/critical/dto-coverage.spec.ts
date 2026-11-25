@@ -1,7 +1,7 @@
 /*
  * D1 DTO coverage guard: the whole-body @Body() sites whose type is not a
- * *Dto class are pinned at exactly 89 at D7 (80 convertible + the 9
- * pinned exclusions below; 264 at D1, 249 at D2, 191 at D3, 163 at D4, 136 at D5, 111 at D6).
+ * *Dto class are pinned at exactly 75 at D8 (60 convertible + the 15
+ * pinned exclusions below; 264 at D1, 249 at D2, 191 at D3, 163 at D4, 136 at D5, 111 at D6, 89 at D7).
  * Package C keeps the pin at 136 (136 + 0 CRLF + 1 reveal - 1 convert). The count is produced by
  * backend/scripts/dto-coverage-check.mjs, a port of the item-(5)
  * (~/workspace/audit/dto-census.py, re-counted at d1989b74e: 681 @Body(
@@ -61,13 +61,30 @@
  * 513 -> 535, inline-object 57 -> 43, any 22 -> 17, inline-other
  * 7 -> 4.
  *
+ * D8 (INV-DTO-STOREFRONT-14): storefront converts 14 of its 20
+ * non-DTO sites (6 inline-object + 2 inline-other + 2
+ * named-interface + 4 any) and the pin moves 89 -> 75 (60
+ * convertible + the 15 pinned exclusions below — the 9 old ones
+ * plus 6 new storefront webhook exclusions). The live census
+ * re-derived the list (the grounding's 20 held exactly) but the
+ * grounding's 20 do NOT all convert: the 6 webhook `any` sites
+ * stay `any` (provider payload + signature verification — the
+ * same rationale as the pinned tenant-subscription gateway
+ * webhook). Whole-body total stays 624; the buckets move dto-class
+ * 535 -> 549, inline-object 43 -> 37, any 17 -> 13, inline-other
+ * 4 -> 2, named-interface 3 -> 1. The two DTO files' header
+ * comments were reworded first (a literal `@Body(` in a comment
+ * is counted as a site by the census script — the D2 trap — and
+ * the first post-edit census read 626 whole-body / 77 non-DTO
+ * until the reword).
+ *
  * WHY THE NUMBER IS 264 AND NOT 211: the verification files counted 211
  * sites without a *Dto-named type, but 47 of the 407 "with DTO" sites use
  * an INTERFACE named *Dto, not a class — and the global ValidationPipe
  * does nothing for interfaces (it only validates classes). The real
  * unvalidated population is 217 + 47 = 264.
  *
- * THE 9 PINNED EXCLUSIONS (a DTO on any of these breaks a real flow):
+ * THE 15 PINNED EXCLUSIONS (a DTO on any of these breaks a real flow):
  * - 3 x device-push `unknown` (biometric-attendance.controller.ts:153,
  *   :196, :227): ZKTeco/Hikvision push — the handler reads the body as
  *   raw text/Buffer, not JSON. A DTO class would fail or mangle a
@@ -84,6 +101,30 @@
  *   free-form error sink (any JSON up to 10 KB, rate-limited). An error
  *   report's shape is arbitrary by definition; a DTO would reject
  *   legitimate error reports and blind the team to frontend failures.
+ * - 6 x `any` storefront webhooks (new in D8, same rationale as the
+ *   gateway webhook above — the payload shape is the provider's and
+ *   signature verification reads the raw body or concatenated
+ *   provider fields):
+ *   - marketplace-sync.controller.ts:176: POST marketplaces/webhook/
+ *     :marketplace — 4 marketplaces (Amazon SP-API, Noon, Jumia,
+ *     Trendyol), each with its own notification schema; the receive
+ *     service persists the RAW payload first (a 400 validation
+ *     failure is the ACK-and-dropped mode
+ *     INV-MARKETPLACE-WEBHOOK-PERSISTENCE was written to kill).
+ *   - storefront-public.controller.ts:254: POST webhooks/paymob —
+ *     `body?.obj || body` + ~20 fields under obj + custom_fields;
+ *     HMAC-SHA512 over concatenated field values.
+ *   - storefront-public.controller.ts:264: POST webhooks/xpay —
+ *     `body?.data || body`, transaction fields under data or root.
+ *   - storefront-public.controller.ts:274: POST webhooks/tap —
+ *     body.id/status/metadata/reference/amount/currency/
+ *     gateway?.reference/payment_reference/created; HMAC over a
+ *     concatenated string of those fields.
+ *   - storefront-public.controller.ts:284: POST webhooks/stripe —
+ *     body.type + body.data.object; the stripe-signature header is
+ *     verified over rawBody, which the service requires.
+ *   - storefront-public.controller.ts:303: POST webhooks/marketplace/
+ *     :marketplace — same receive path as the :179 webhook.
  *
  * THE PIN IS FAIL-CLOSED: a new unvalidated @Body() site moves the count
  * up and this spec goes red until the pin is updated deliberately; a
@@ -102,7 +143,7 @@
  * Fail-first: this spec is new in D1 — on the unpatched tree the census
  * script does not exist, so the spawn fails (MODULE_NOT_FOUND) and the
  * spec exits 1 (see the log). GREEN means the script exists, exits 0,
- * and reports exactly 136 with exactly the 9 exclusions.
+ * and reports exactly 75 with exactly the 15 exclusions.
  */
 
 import { strict as assert } from 'node:assert';
@@ -112,13 +153,13 @@ import * as path from 'path';
 const BACKEND = path.resolve(__dirname, '../..');
 const SCRIPT = 'scripts/dto-coverage-check.mjs';
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D7 (89 after settings converts 22). */
-const PINNED_COUNT = 89;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D8 (75 after storefront converts 14 + 6 new webhook exclusions). */
+const PINNED_COUNT = 75;
 
-/** Convertible sites inside the pinned count (89 - 9 exclusions). */
-const CONVERTIBLE_COUNT = 80;
+/** Convertible sites inside the pinned count (75 - 15 exclusions). */
+const CONVERTIBLE_COUNT = 60;
 
-/** The 9 pinned exclusions (paths relative to backend/, line = @Body() line). */
+/** The 15 pinned exclusions (paths relative to backend/, line = @Body() line). */
 const PINNED_EXCLUSIONS: Array<{ file: string; line: number }> = [
   { file: 'src/core/logging/logs.controller.ts', line: 15 },
   { file: 'src/modules/hr/controllers/biometric-attendance.controller.ts', line: 153 },
@@ -129,6 +170,12 @@ const PINNED_EXCLUSIONS: Array<{ file: string; line: number }> = [
   { file: 'src/modules/settings/controllers/tenant-transfer.controller.ts', line: 53 },
   { file: 'src/modules/settings/settings.controller.ts', line: 52 },
   { file: 'src/modules/tenant-subscription/tenant-subscription.controller.ts', line: 396 },
+  { file: 'src/modules/storefront/controllers/marketplace-sync.controller.ts', line: 176 },
+  { file: 'src/modules/storefront/storefront-public.controller.ts', line: 254 },
+  { file: 'src/modules/storefront/storefront-public.controller.ts', line: 264 },
+  { file: 'src/modules/storefront/storefront-public.controller.ts', line: 274 },
+  { file: 'src/modules/storefront/storefront-public.controller.ts', line: 284 },
+  { file: 'src/modules/storefront/storefront-public.controller.ts', line: 303 },
 ];
 
 interface CoverageSite {

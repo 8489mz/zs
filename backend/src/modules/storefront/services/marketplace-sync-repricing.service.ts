@@ -38,6 +38,7 @@ import type {
   RepricingBotResult,
   SupportedMarketplace,
 } from './marketplace-sync.types';
+import type { SaveRepricingSettingsDto } from '../dto/marketplace-sync-write.dto';
 
 export interface MarketplaceSyncRepricingDeps {
   db: Kysely<Database>;
@@ -124,13 +125,7 @@ export class MarketplaceSyncRepricingService {
 
   async saveRepricingSettings(
     mappingId: string,
-    settings: {
-      repricingEnabled: boolean;
-      minPrice?: number;
-      maxPrice?: number;
-      repricingRule?: 'match_buy_box' | 'undercut_buy_box' | 'match_lowest' | 'undercut_lowest';
-      repricingDelta?: number;
-    },
+    settings: SaveRepricingSettingsDto,
     auth: AuthContext,
   ): Promise<MarketplaceSkuMapping> {
     const scope = requireTenantScope(auth);

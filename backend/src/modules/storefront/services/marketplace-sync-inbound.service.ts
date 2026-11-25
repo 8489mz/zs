@@ -23,6 +23,7 @@ import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import type { FbaDiscrepancyClaimReport, FbaInboundShipment } from './marketplace-sync.types';
+import type { CreateFbaInboundShipmentDto } from '../dto/marketplace-sync-write.dto';
 
 export interface MarketplaceSyncInboundDeps {
   db: Kysely<Database>;
@@ -63,10 +64,7 @@ export class MarketplaceSyncInboundService {
     return this.getSettingJson<FbaInboundShipment[]>('marketplace_inbound_shipments', scope.tenantId, []);
   }
 
-  async createInboundShipment(
-    input: Omit<FbaInboundShipment, 'id' | 'shipmentNumber' | 'createdAt'>,
-    auth: AuthContext,
-  ): Promise<FbaInboundShipment> {
+  async createInboundShipment(input: CreateFbaInboundShipmentDto, auth: AuthContext): Promise<FbaInboundShipment> {
     const scope = requireTenantScope(auth);
     if (!input.items || !input.items.length) {
       throw new BadRequestException('يجب إضافة صنف واحد على الأقل لإذن التوريد');

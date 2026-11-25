@@ -26,6 +26,7 @@ import type {
   MarketplaceSkuMapping,
   SupportedMarketplace,
 } from './marketplace-sync.types';
+import type { CalculateMarketplaceFeesDto } from '../dto/marketplace-sync-write.dto';
 
 export interface MarketplaceSyncFeesListingDeps {
   db: Kysely<Database>;
@@ -44,7 +45,7 @@ export class MarketplaceSyncFeesListingService {
     this.getMappings = deps.getMappings;
   }
 
-  calculateMarketplaceFees(input: MarketplaceFeeCalculationInput): MarketplaceFeeCalculationResult {
+  calculateMarketplaceFees(input: CalculateMarketplaceFeesDto): MarketplaceFeeCalculationResult {
     const {
       marketplace,
       region,

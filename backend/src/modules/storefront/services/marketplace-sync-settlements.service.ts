@@ -34,6 +34,7 @@ import type {
   MarketplaceSettlementRecord,
   SettlementAccountItem,
 } from './marketplace-sync.types';
+import type { ReconcileMarketplaceSettlementDto } from '../dto/marketplace-sync-write.dto';
 
 export interface MarketplaceSyncSettlementsDeps {
   db: Kysely<Database>;
@@ -140,7 +141,7 @@ export class MarketplaceSyncSettlementsService {
   }
 
   async reconcileSettlement(
-    input: MarketplaceSettlementInput,
+    input: ReconcileMarketplaceSettlementDto,
     auth: AuthContext,
   ): Promise<{ ok: boolean; journalEntryId: number; journalEntryNo: string; settlement: MarketplaceSettlementRecord }> {
     const scope = requireTenantScope(auth);

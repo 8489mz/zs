@@ -83,9 +83,9 @@ Each money endpoint's spec must carry a positive case with a real caller
 payload, and the parent trials the money modules on a live login before
 the chain proceeds past them.
 
-## Rule 7 — Exclusions: only the 9 pinned, never more
+## Rule 7 — Exclusions: only the 15 pinned, never more
 
-These 9 sites must NEVER take a DTO. The coverage guard pins them by
+These 15 sites must NEVER take a DTO. The coverage guard pins them by
 file:line; a package that converts one fails its own proof.
 
 | Site | Why a DTO breaks it |
@@ -95,10 +95,16 @@ file:line; a package that converts one fails its own proof.
 | `src/modules/hr/controllers/biometric-attendance.controller.ts:196` — `POST hikvision`, `unknown` | Hikvision device push: raw body, same as above. |
 | `src/modules/hr/controllers/biometric-attendance.controller.ts:227` — `POST json`, `unknown` | Generic device push: raw body, same as above. |
 | `src/modules/settings/settings.controller.ts:52` — `PUT settings`, `Record<string, unknown>` | Open-ended key/value settings map by design — no fixed field set exists to validate. |
-| `src/modules/settings/controllers/settings-backup.controller.ts:60` — `POST backup/config`, `Record<string, unknown>` | Open-ended settings map, same as above. |
-| `src/modules/settings/controllers/settings-backup.controller.ts:68` — `POST backup/folder/test`, `Record<string, unknown>` | Open-ended settings map, same as above. |
+| `src/modules/settings/controllers/settings-backup.controller.ts:61` — `POST backup/config`, `Record<string, unknown>` | Open-ended settings map, same as above. |
+| `src/modules/settings/controllers/settings-backup.controller.ts:69` — `POST backup/folder/test`, `Record<string, unknown>` | Open-ended settings map, same as above. |
 | `src/modules/settings/controllers/tenant-transfer.controller.ts:53` — multipart upload body, `Record<string, unknown>` | Multipart form field map — open-ended by design. |
 | `src/modules/tenant-subscription/tenant-subscription.controller.ts:396` — `POST webhooks/:gateway`, `any` | Provider payload: the provider can add fields at any time (`forbidNonWhitelisted` would 400 a legitimate new event), and signature verification reads `req.rawBody`. |
+| `src/modules/storefront/controllers/marketplace-sync.controller.ts:176` — `POST marketplaces/webhook/:marketplace`, `any` | Provider payload, 4 marketplaces (Amazon SP-API, Noon, Jumia, Trendyol) with 4 different notification schemas; the receive service persists the raw payload first. A DTO would 400 a legitimate new event key. |
+| `src/modules/storefront/storefront-public.controller.ts:254` — `POST webhooks/paymob`, `any` | Provider payload: `body?.obj` + ~20 fields under `obj` + `custom_fields`; HMAC-SHA512 over concatenated field values. |
+| `src/modules/storefront/storefront-public.controller.ts:264` — `POST webhooks/xpay`, `any` | Provider payload: `body?.data \|\| body`, transaction fields under `data` or the root. |
+| `src/modules/storefront/storefront-public.controller.ts:274` — `POST webhooks/tap`, `any` | Provider payload: charge object (`id`, `status`, `metadata`, `reference`, `amount`, `currency`, `gateway`, `payment_reference`, `created`); HMAC over a concatenated string of those fields. |
+| `src/modules/storefront/storefront-public.controller.ts:284` — `POST webhooks/stripe`, `any` | Provider payload: `type` + `data.object`; the `stripe-signature` header is verified over `req.rawBody`, which the service requires. |
+| `src/modules/storefront/storefront-public.controller.ts:303` — `POST webhooks/marketplace/:marketplace`, `any` | Provider payload, same receive path as the :179 webhook — the raw payload is persisted first, 200 only after durable store. |
 
 ## Out of scope (not counted, not converted)
 
@@ -113,15 +119,17 @@ file:line; a package that converts one fails its own proof.
 - `backend/scripts/dto-coverage-check.mjs` walks `backend/src`, classifies
   every `@Body()` site with the grounding classifier, and exits 0 iff the
   non-DTO-class whole-body count equals the pinned number and the
-  exclusion set equals the 9 above. Run it any time:
+  exclusion set equals the 15 above. Run it any time:
   `node scripts/dto-coverage-check.mjs`.
 - `backend/test/critical/dto-coverage.spec.ts` runs the script with
   `--json` and asserts the count and the exclusion set. It is wired into
   `test:critical` (332 → 333 at D1).
-- Pin arithmetic: 264 at D1 = 255 convertible + 9 exclusions. Each DTO
-  package converts N sites and updates the pin by exactly N — the script
-  constant AND the spec constant, in the same package. The last DTO
-  package (D10) pins 9 (exclusions only).
+- Pin arithmetic: 264 at D1 = 255 convertible + 9 exclusions; 75 at D8 =
+  60 convertible + 15 exclusions (D8 adds the 6 storefront webhook
+  exclusions and converts 14). Each DTO package converts N sites and
+  updates the pin by exactly N — the script constant AND the spec
+  constant, in the same package. The last DTO package (D10) pins 15
+  (exclusions only).
 - If the count moves without a pin update, the spec goes red. That is the
   point: the pin moves only deliberately, in a package that proves the
   conversion with a spec.

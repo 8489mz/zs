@@ -13,6 +13,7 @@ import {
   type ModifierPriceTruth,
 } from '../../sales/helpers/restaurant-modifier-contract.helper';
 import { offerTimezone, storefrontMoneyDigits } from '../storefront-helpers';
+import type { QuoteCartDto } from '../dto/storefront-public-write.dto';
 
 /**
  * StorefrontOrderQuoteService — slice T1 of the storefront split.
@@ -359,18 +360,7 @@ export class StorefrontOrderQuoteService {
    * Authoritative server-side pricing quote for cart & checkout preview.
    * Calculates exact line totals, volume/BOGO discounts, coupons, and delivery fees without creating records.
    */
-  async quoteOnlineOrder(
-    slug: string,
-    dto: {
-      items: Array<{ productId: number | string; quantity: number; variantName?: string | null }>;
-      couponCode?: string;
-      deliveryZoneId?: number;
-      deliveryZoneName?: string;
-      fulfillmentType?: 'delivery' | 'pickup';
-      orderType?: string;
-      tableNumber?: string;
-    },
-  ) {
+  async quoteOnlineOrder(slug: string, dto: QuoteCartDto) {
     const tenant = await this.getTenantBySlug(slug);
     const settings = await this.getTenantSettingsMap(tenant.id);
     const isDineIn = dto.orderType === 'dine_in' || Boolean(dto.tableNumber);

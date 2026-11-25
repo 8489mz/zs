@@ -51,6 +51,17 @@ import type {
   MarketplaceWebhookRelayResult,
   MarketplaceWebhookReceiptOpts,
 } from './marketplace-sync.types';
+import type {
+  CalculateMarketplaceFeesDto,
+  CreateFbaInboundShipmentDto,
+  GenerateGtinExemptionDto,
+  ReconcileMarketplaceSettlementDto,
+  SaveMarketplaceConfigDto,
+  SaveMarketplaceOnboardingProfileDto,
+  SaveMarketplaceSkuMappingDto,
+  SaveRepricingSettingsDto,
+  UpdateCompetitorPriceDto,
+} from '../dto/marketplace-sync-write.dto';
 export type {
   AmazonConfig,
   NoonConfig,
@@ -226,15 +237,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     return this.configService.getConfig(auth);
   }
 
-  async saveConfig(
-    payload: {
-      amazon?: Partial<AmazonConfig>;
-      noon?: Partial<NoonConfig>;
-      jumia?: Partial<JumiaConfig>;
-      trendyol?: Partial<TrendyolConfig>;
-    },
-    auth: AuthContext,
-  ): Promise<{ ok: boolean }> {
+  async saveConfig(payload: SaveMarketplaceConfigDto, auth: AuthContext): Promise<{ ok: boolean }> {
     return this.configService.saveConfig(payload, auth);
   }
 
@@ -249,10 +252,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     return this.mappingsService.getMappings(auth);
   }
 
-  async saveMapping(
-    payload: Omit<MarketplaceSkuMapping, 'id'> & { id?: string },
-    auth: AuthContext,
-  ): Promise<MarketplaceSkuMapping> {
+  async saveMapping(payload: SaveMarketplaceSkuMappingDto, auth: AuthContext): Promise<MarketplaceSkuMapping> {
     return this.mappingsService.saveMapping(payload, auth);
   }
 
@@ -282,13 +282,13 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
 
   async updateCompetitorPrice(
     mappingId: string,
-    payload: { competitorPrice?: number; buyBoxPrice?: number },
+    payload: UpdateCompetitorPriceDto,
     auth: AuthContext,
   ): Promise<MarketplaceSkuMapping> {
     return this.simulationService.updateCompetitorPrice(mappingId, payload, auth);
   }
 
-  calculateMarketplaceFees(input: MarketplaceFeeCalculationInput): MarketplaceFeeCalculationResult {
+  calculateMarketplaceFees(input: CalculateMarketplaceFeesDto): MarketplaceFeeCalculationResult {
     return this.feesListingService.calculateMarketplaceFees(input);
   }
 
@@ -320,7 +320,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
   }
 
   async reconcileSettlement(
-    input: MarketplaceSettlementInput,
+    input: ReconcileMarketplaceSettlementDto,
     auth: AuthContext,
   ): Promise<{ ok: boolean; journalEntryId: number; journalEntryNo: string; settlement: MarketplaceSettlementRecord }> {
     return this.settlementsService.reconcileSettlement(input, auth);
@@ -336,13 +336,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
 
   async saveRepricingSettings(
     mappingId: string,
-    settings: {
-      repricingEnabled: boolean;
-      minPrice?: number;
-      maxPrice?: number;
-      repricingRule?: 'match_buy_box' | 'undercut_buy_box' | 'match_lowest' | 'undercut_lowest';
-      repricingDelta?: number;
-    },
+    settings: SaveRepricingSettingsDto,
     auth: AuthContext,
   ): Promise<MarketplaceSkuMapping> {
     return this.repricingService.saveRepricingSettings(mappingId, settings, auth);
@@ -356,10 +350,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     return this.inboundService.getInboundShipments(auth);
   }
 
-  async createInboundShipment(
-    input: Omit<FbaInboundShipment, 'id' | 'shipmentNumber' | 'createdAt'>,
-    auth: AuthContext,
-  ): Promise<FbaInboundShipment> {
+  async createInboundShipment(input: CreateFbaInboundShipmentDto, auth: AuthContext): Promise<FbaInboundShipment> {
     return this.inboundService.createInboundShipment(input, auth);
   }
 
@@ -442,22 +433,13 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
   }
 
   async saveOnboardingProfile(
-    data: Partial<MarketplaceOnboardingCheck>,
+    data: SaveMarketplaceOnboardingProfileDto,
     auth: AuthContext,
   ): Promise<MarketplaceOnboardingCheck> {
     return this.onboardingService.saveOnboardingProfile(data, auth);
   }
 
-  async generateGtinExemption(
-    data: {
-      productId?: number;
-      brandName?: string;
-      category?: string;
-      marketplace?: SupportedMarketplace;
-      reason?: 'unbranded' | 'private_label' | 'custom_manufacturing' | 'parts_accessories';
-    },
-    auth: AuthContext,
-  ): Promise<GtinExemptionApplication> {
+  async generateGtinExemption(data: GenerateGtinExemptionDto, auth: AuthContext): Promise<GtinExemptionApplication> {
     return this.gtinService.generateGtinExemption(data, auth);
   }
 }

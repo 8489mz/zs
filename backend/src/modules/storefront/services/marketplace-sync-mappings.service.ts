@@ -22,6 +22,7 @@ import type {
   MarketplaceSkuMapping,
   SupportedMarketplace,
 } from './marketplace-sync.types';
+import type { SaveMarketplaceSkuMappingDto } from '../dto/marketplace-sync-write.dto';
 
 export interface MarketplaceSyncMappingsDeps {
   db: Kysely<Database>;
@@ -107,10 +108,7 @@ export class MarketplaceSyncMappingsService {
     });
   }
 
-  async saveMapping(
-    payload: Omit<MarketplaceSkuMapping, 'id'> & { id?: string },
-    auth: AuthContext,
-  ): Promise<MarketplaceSkuMapping> {
+  async saveMapping(payload: SaveMarketplaceSkuMappingDto, auth: AuthContext): Promise<MarketplaceSkuMapping> {
     const scope = requireTenantScope(auth);
     const mappings = await this.getSettingJson<MarketplaceSkuMapping[]>('marketplace_sku_mappings', scope.tenantId, []);
 

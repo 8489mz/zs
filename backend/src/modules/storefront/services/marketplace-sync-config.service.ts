@@ -14,6 +14,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AmazonConfig, JumiaConfig, NoonConfig, SupportedMarketplace, TrendyolConfig } from './marketplace-sync.types';
+import type { SaveMarketplaceConfigDto } from '../dto/marketplace-sync-write.dto';
 
 export interface MarketplaceSyncConfigDeps {
   getSettingJson: <T>(key: string, tenantId: string, defaultValue: T, executor?: Kysely<Database>) => Promise<T>;
@@ -99,15 +100,7 @@ export class MarketplaceSyncConfigService {
     return { amazon, noon, jumia, trendyol };
   }
 
-  async saveConfig(
-    payload: {
-      amazon?: Partial<AmazonConfig>;
-      noon?: Partial<NoonConfig>;
-      jumia?: Partial<JumiaConfig>;
-      trendyol?: Partial<TrendyolConfig>;
-    },
-    auth: AuthContext,
-  ): Promise<{ ok: boolean }> {
+  async saveConfig(payload: SaveMarketplaceConfigDto, auth: AuthContext): Promise<{ ok: boolean }> {
     const scope = requireTenantScope(auth);
 
     if (payload.amazon) {

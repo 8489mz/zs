@@ -15,6 +15,7 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import type { GtinExemptionApplication, SupportedMarketplace } from './marketplace-sync.types';
+import type { GenerateGtinExemptionDto } from '../dto/marketplace-sync-write.dto';
 
 export interface MarketplaceSyncGtinDeps {
   db: Kysely<Database>;
@@ -32,16 +33,7 @@ export class MarketplaceSyncGtinService {
   // GTIN / BARCODE EXEMPTION ASSISTANT ("معالج إعفاء الباركود الدولي")
   // =========================================================================
 
-  async generateGtinExemption(
-    data: {
-      productId?: number;
-      brandName?: string;
-      category?: string;
-      marketplace?: SupportedMarketplace;
-      reason?: 'unbranded' | 'private_label' | 'custom_manufacturing' | 'parts_accessories';
-    },
-    auth: AuthContext,
-  ): Promise<GtinExemptionApplication> {
+  async generateGtinExemption(data: GenerateGtinExemptionDto, auth: AuthContext): Promise<GtinExemptionApplication> {
     const scope = requireTenantScope(auth);
     const marketplace = data.marketplace || 'amazon';
     const reason = data.reason || 'unbranded';

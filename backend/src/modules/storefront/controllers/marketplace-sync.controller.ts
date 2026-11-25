@@ -5,17 +5,20 @@ import { RequireAnyPermission } from '../../../core/auth/decorators/permissions.
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import {
   MarketplaceSyncService,
-  AmazonConfig,
-  NoonConfig,
-  JumiaConfig,
-  TrendyolConfig,
   SupportedMarketplace,
-  MarketplaceSkuMapping,
-  MarketplaceFeeCalculationInput,
   BulkMappingImportRow,
-  MarketplaceSettlementInput,
-  FbaInboundShipment,
 } from '../services/marketplace-sync.service';
+import {
+  CalculateMarketplaceFeesDto,
+  CreateFbaInboundShipmentDto,
+  GenerateGtinExemptionDto,
+  ReconcileMarketplaceSettlementDto,
+  SaveMarketplaceConfigDto,
+  SaveMarketplaceOnboardingProfileDto,
+  SaveMarketplaceSkuMappingDto,
+  SaveRepricingSettingsDto,
+  UpdateCompetitorPriceDto,
+} from '../dto/marketplace-sync-write.dto';
 
 @Controller('api/storefront/marketplaces')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -31,12 +34,7 @@ export class MarketplaceSyncController {
   @Post('config')
   saveConfig(
     @Body()
-    payload: {
-      amazon?: Partial<AmazonConfig>;
-      noon?: Partial<NoonConfig>;
-      jumia?: Partial<JumiaConfig>;
-      trendyol?: Partial<TrendyolConfig>;
-    },
+    payload: SaveMarketplaceConfigDto,
     @Req() req: RequestWithAuth,
   ) {
     return this.syncService.saveConfig(payload, req.authContext!);
@@ -53,7 +51,7 @@ export class MarketplaceSyncController {
   }
 
   @Post('mappings')
-  saveMapping(@Body() payload: Omit<MarketplaceSkuMapping, 'id'> & { id?: string }, @Req() req: RequestWithAuth) {
+  saveMapping(@Body() payload: SaveMarketplaceSkuMappingDto, @Req() req: RequestWithAuth) {
     return this.syncService.saveMapping(payload, req.authContext!);
   }
 
@@ -74,7 +72,7 @@ export class MarketplaceSyncController {
   }
 
   @Post('calculate-fees')
-  calculateFees(@Body() input: MarketplaceFeeCalculationInput) {
+  calculateFees(@Body() input: CalculateMarketplaceFeesDto) {
     return this.syncService.calculateMarketplaceFees(input);
   }
 
@@ -86,7 +84,7 @@ export class MarketplaceSyncController {
   @Post('competitor-price/:id')
   updateCompetitorPrice(
     @Param('id') id: string,
-    @Body() payload: { competitorPrice?: number; buyBoxPrice?: number },
+    @Body() payload: UpdateCompetitorPriceDto,
     @Req() req: RequestWithAuth,
   ) {
     return this.syncService.updateCompetitorPrice(id, payload, req.authContext!);
@@ -109,7 +107,7 @@ export class MarketplaceSyncController {
   }
 
   @Post('settlements/reconcile')
-  reconcileSettlement(@Body() input: MarketplaceSettlementInput, @Req() req: RequestWithAuth) {
+  reconcileSettlement(@Body() input: ReconcileMarketplaceSettlementDto, @Req() req: RequestWithAuth) {
     return this.syncService.reconcileSettlement(input, req.authContext!);
   }
 
@@ -127,13 +125,7 @@ export class MarketplaceSyncController {
   saveRepricingSettings(
     @Param('id') id: string,
     @Body()
-    payload: {
-      repricingEnabled: boolean;
-      minPrice?: number;
-      maxPrice?: number;
-      repricingRule?: 'match_buy_box' | 'undercut_buy_box' | 'match_lowest' | 'undercut_lowest';
-      repricingDelta?: number;
-    },
+    payload: SaveRepricingSettingsDto,
     @Req() req: RequestWithAuth,
   ) {
     return this.syncService.saveRepricingSettings(id, payload, req.authContext!);
@@ -150,10 +142,7 @@ export class MarketplaceSyncController {
   }
 
   @Post('inbound-shipments')
-  createInboundShipment(
-    @Body() input: Omit<FbaInboundShipment, 'id' | 'shipmentNumber' | 'createdAt'>,
-    @Req() req: RequestWithAuth,
-  ) {
+  createInboundShipment(@Body() input: CreateFbaInboundShipmentDto, @Req() req: RequestWithAuth) {
     return this.syncService.createInboundShipment(input, req.authContext!);
   }
 
@@ -227,12 +216,12 @@ export class MarketplaceSyncController {
   }
 
   @Post('onboarding-profile')
-  saveOnboardingProfile(@Body() body: any, @Req() req: RequestWithAuth) {
+  saveOnboardingProfile(@Body() body: SaveMarketplaceOnboardingProfileDto, @Req() req: RequestWithAuth) {
     return this.syncService.saveOnboardingProfile(body, req.authContext!);
   }
 
   @Post('gtin-exemption')
-  generateGtinExemption(@Body() body: any, @Req() req: RequestWithAuth) {
+  generateGtinExemption(@Body() body: GenerateGtinExemptionDto, @Req() req: RequestWithAuth) {
     return this.syncService.generateGtinExemption(body, req.authContext!);
   }
 }
