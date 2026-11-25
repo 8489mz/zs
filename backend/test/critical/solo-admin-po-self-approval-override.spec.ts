@@ -315,18 +315,18 @@ async function main() {
       'the override stamp must carry no second-manager reference at all',
     );
 
-    // ---------- Wiring: this spec is in both critical lists, in identical order (352 specs — the stock-movement-writer spec is the last entry). ----------
+    // ---------- Wiring: this spec is in both critical lists, in identical order (353 specs — the delete-location-transaction spec is the last entry). ----------
     {
       const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
         .specs as string[];
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 352);
-      assert.equal(chain.length, 352);
+      assert.equal(specs.length, 353);
+      assert.equal(chain.length, 353);
       assert.deepEqual(chain, specs);
       assert.ok(specs.includes('test/critical/solo-admin-po-self-approval-override.spec.ts'));
-      console.log('wiring: evidence spec in both critical lists (352 = 352, identical order), passed');
+      console.log('wiring: evidence spec in both critical lists (353 = 353, identical order), passed');
     }
 
     console.log('Solo-admin PO self-approval override tests passed');

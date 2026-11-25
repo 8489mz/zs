@@ -159,42 +159,57 @@ export class SettingsLocationsAdmin {
     if (Number(stocks?.total_qty || 0) > 0)
       throw new AppError('لا يمكن حذف المخزن طالما يوجد به رصيد. يجب تحويل الرصيد أولاً', 'LOCATION_HAS_STOCK', 400);
 
-    // Clean up empty stock records first
-    await this.db
-      .deleteFrom('product_location_stock')
-      .where('location_id', '=', id)
-      .where('qty', '<=', 0)
-      .where(this.tenantPredicate(actor))
-      .execute();
-
+    // Clean up empty stock records first, then the movement history and the
+    // location itself — all in ONE transaction (INV-PHASE1-A1-DELETE-LOCATION-TXN):
+    // the pre-fix pool deletes committed the history cleanup before the hard
+    // delete could fail with 23503, losing the audit trail while the location
+    // survived. A 23503 aborts a Postgres transaction, so the soft-delete
+    // fallback below runs as its own second transaction.
     try {
-      // Clear movement history for this location to allow hard deletion
-      await this.db
-        .deleteFrom('stock_movements')
-        .where('location_id', '=', id)
-        .where(this.tenantPredicate(actor))
-        .execute();
+      await this.db.transaction().execute(async (trx) => {
+        await trx
+          .deleteFrom('product_location_stock')
+          .where('location_id', '=', id)
+          .where('qty', '<=', 0)
+          .where(this.tenantPredicate(actor))
+          .execute();
 
-      // Try to hard delete
-      await this.db.deleteFrom('stock_locations').where('id', '=', id).where(this.tenantPredicate(actor)).execute();
+        // Clear movement history for this location to allow hard deletion
+        await trx
+          .deleteFrom('stock_movements')
+          .where('location_id', '=', id)
+          .where(this.tenantPredicate(actor))
+          .execute();
+
+        // Try to hard delete
+        await trx.deleteFrom('stock_locations').where('id', '=', id).where(this.tenantPredicate(actor)).execute();
+        await this.audit.logWithExecutor(
+          trx,
+          'حذف مخزن نهائي',
+          `تم حذف المخزن #${id} نهائياً بواسطة ${actor.username}`,
+          actor,
+        );
+      });
       this.invalidateLocationsCache(scope.tenantId);
-      await this.audit.log('حذف مخزن نهائي', `تم حذف المخزن #${id} نهائياً بواسطة ${actor.username}`, actor);
     } catch (error: any) {
       // If foreign key constraint fails (e.g. stock_movements), fallback to soft delete
       if (error.code === '23503') {
         if (location.is_active) {
-          await this.db
-            .updateTable('stock_locations')
-            .set({ is_active: false })
-            .where('id', '=', id)
-            .where(this.tenantPredicate(actor))
-            .execute();
+          await this.db.transaction().execute(async (trx) => {
+            await trx
+              .updateTable('stock_locations')
+              .set({ is_active: false })
+              .where('id', '=', id)
+              .where(this.tenantPredicate(actor))
+              .execute();
+            await this.audit.logWithExecutor(
+              trx,
+              'أرشفة مخزن',
+              `تم أرشفة المخزن #${id} لوجود حركات سابقة بواسطة ${actor.username}`,
+              actor,
+            );
+          });
           this.invalidateLocationsCache(scope.tenantId);
-          await this.audit.log(
-            'أرشفة مخزن',
-            `تم أرشفة المخزن #${id} لوجود حركات سابقة بواسطة ${actor.username}`,
-            actor,
-          );
         }
       } else {
         throw error;

@@ -692,8 +692,8 @@ async function main(): Promise<void> {
     const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 352);
-    assert.equal(chain.length, 352);
+    assert.equal(specs.length, 353);
+    assert.equal(chain.length, 353);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/pos-van-stock-pool.spec.ts'));
     assert.equal(

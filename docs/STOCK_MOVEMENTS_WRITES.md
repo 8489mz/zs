@@ -98,7 +98,7 @@
 | backend/src/modules/settings/services/settings-demo-data-wipe-tables.ts:281 | delete | (delete) | no | Tenant wipe/demo reset (deleteFrom), not a ledger movement. |
 | backend/src/modules/settings/services/settings-import/settings-import-products.ts:282 | insert | opening_balance | no | Opening balance on import: row written without an applyStockDelta call in this file. Phase 1: route through the ledger or document why direct. Moved here from settings-import.service.ts:615 in the #116 split (the facade no longer holds the write). |
 | backend/src/modules/settings/services/settings-import/settings-import-suppliers-stock.ts:225 | insert | opening_stock | no | Opening stock on import: see above. Moved here from settings-import.service.ts:1067 in the #116 split. |
-| backend/src/modules/settings/settings/settings-locations-admin.ts:173 | delete | (delete) | no | Location delete cleanup (deleteFrom), not a ledger movement. |
+| backend/src/modules/settings/settings/settings-locations-admin.ts:179 | delete | (delete) | yes | Location delete cleanup (deleteFrom), not a ledger movement. Phase 1 A1: now in a transaction (was :173, flag no). |
 | backend/src/modules/tradein/tradein.service.ts:401 | insert | tradein_in | yes |  |
 | backend/src/common/utils/stock-movement-writer.ts:65 | insert | expr: params.movementType | yes | Phase 1 A0 unified writer (INV-PHASE1-A0-ROW-WRITER): runs applyStockDelta, then writes exactly one row from the returned scopeBefore/scopeAfter with total_cost = roundMoney(|delta| * unitCost, moneyDigits). The one insert all callers converge on (A6–A9); no caller migrated yet. |
 

@@ -351,6 +351,7 @@
     "test/critical/dto-tail-rest.spec.ts",
     "test/critical/api-versioning.spec.ts",
     "test/critical/api-docs.spec.ts",
-    "test/critical/stock-movement-writer.spec.ts"
+    "test/critical/stock-movement-writer.spec.ts",
+    "test/critical/delete-location-transaction.spec.ts"
   ]
 }
