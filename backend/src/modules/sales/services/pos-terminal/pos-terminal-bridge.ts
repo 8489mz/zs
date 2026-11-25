@@ -2,7 +2,12 @@ import { UnauthorizedException, type Logger } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
 import type { Kysely } from '../../../../database/kysely';
 import type { Database } from '../../../../database/database.types';
-import { derivePosBridgeKey, type BridgeJob, type TerminalPaymentSession, type BridgePoller } from './pos-terminal-shared';
+import {
+  derivePosBridgeKey,
+  type BridgeJob,
+  type TerminalPaymentSession,
+  type BridgePoller,
+} from './pos-terminal-shared';
 
 export class PosTerminalBridge {
   constructor(
@@ -25,7 +30,12 @@ export class PosTerminalBridge {
   /** The external bridge API intentionally has no user session; authenticate the device instead. */
   assertBridgeAuthenticated(tenantId: string, suppliedKey?: string): void {
     const master = process.env.POS_BRIDGE_MASTER_SECRET || '';
-    if (master.length < 32 || !tenantId?.trim() || typeof suppliedKey !== 'string' || !/^[0-9a-f]{64}$/i.test(suppliedKey)) {
+    if (
+      master.length < 32 ||
+      !tenantId?.trim() ||
+      typeof suppliedKey !== 'string' ||
+      !/^[0-9a-f]{64}$/i.test(suppliedKey)
+    ) {
       throw new UnauthorizedException('POS bridge credentials are missing or invalid');
     }
     const expected = Buffer.from(derivePosBridgeKey(master, tenantId), 'hex');
@@ -60,7 +70,10 @@ export class PosTerminalBridge {
 
       const timeoutId = setTimeout(() => {
         const list = this.bridgePollers.get(cleanTenant) || [];
-        this.bridgePollers.set(cleanTenant, list.filter((p: any) => p.resolve !== resolveWrapper));
+        this.bridgePollers.set(
+          cleanTenant,
+          list.filter((p: any) => p.resolve !== resolveWrapper),
+        );
         resolve({ hasJob: false });
       }, 25000);
 
@@ -74,15 +87,18 @@ export class PosTerminalBridge {
   /**
    * Handle result callback from hardware bridge
    */
-  async handleBridgeCallback(tenantId: string, payload: {
-    jobId: string;
-    status: string;
-    authCode?: string;
-    rrn?: string;
-    cardScheme?: string;
-    cardLastFour?: string;
-    message?: string;
-  }): Promise<boolean> {
+  async handleBridgeCallback(
+    tenantId: string,
+    payload: {
+      jobId: string;
+      status: string;
+      authCode?: string;
+      rrn?: string;
+      cardScheme?: string;
+      cardLastFour?: string;
+      message?: string;
+    },
+  ): Promise<boolean> {
     const cleanTenant = String(tenantId).trim();
     this.bridgeLastSeen.set(cleanTenant, Date.now());
     this.pruneExpiredSessions();
@@ -98,15 +114,18 @@ export class PosTerminalBridge {
       this.logger.warn('Bridge approval rejected: missing bank authorization or RRN');
       return false;
     }
-    session.status = isApproved ? 'approved' : (payload.status === 'cancelled' ? 'cancelled' : 'declined');
+    session.status = isApproved ? 'approved' : payload.status === 'cancelled' ? 'cancelled' : 'declined';
     session.approvalCode = isApproved ? payload.authCode : undefined;
     session.rrn = payload.rrn || session.transactionId;
     session.cardScheme = payload.cardScheme || 'Visa';
     session.cardLastFour = payload.cardLastFour || '';
-    session.message = payload.message || (isApproved ? 'تمت الموافقة بنجاح من ماكينة الدفع' : 'تم رفض العملية من البنك أو الماكينة');
+    session.message =
+      payload.message || (isApproved ? 'تمت الموافقة بنجاح من ماكينة الدفع' : 'تم رفض العملية من البنك أو الماكينة');
     session.updatedAt = Date.now();
 
-    this.logger.log(`Bridge callback resolved session ${payload.jobId} => ${session.status} (Auth: ${session.approvalCode})`);
+    this.logger.log(
+      `Bridge callback resolved session ${payload.jobId} => ${session.status} (Auth: ${session.approvalCode})`,
+    );
     return true;
   }
 

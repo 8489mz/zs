@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
@@ -75,10 +69,7 @@ export class QualityAssuranceService {
     return { success: true, id };
   }
 
-  async getQCPoints(
-    auth: AuthContext,
-    params?: { triggerStage?: string; productId?: number },
-  ): Promise<any[]> {
+  async getQCPoints(auth: AuthContext, params?: { triggerStage?: string; productId?: number }): Promise<any[]> {
     this.assertAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
@@ -267,7 +258,9 @@ export class QualityAssuranceService {
 
     let lines: any[] = [];
     if (/^\d+$/.test(reference)) {
-      lines = await trx.selectFrom('goods_receipt_lines').selectAll()
+      lines = await trx
+        .selectFrom('goods_receipt_lines')
+        .selectAll()
         .where('id', '=', Number(reference))
         .where('tenant_id', '=', tenantId)
         .where('product_id', '=', Number(dto.productId))
@@ -275,12 +268,16 @@ export class QualityAssuranceService {
         .execute();
     }
     if (lines.length === 0) {
-      const grn = await trx.selectFrom('goods_receipt_notes').select('id')
+      const grn = await trx
+        .selectFrom('goods_receipt_notes')
+        .select('id')
         .where('doc_no', '=', reference)
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
       if (!grn) return;
-      lines = await trx.selectFrom('goods_receipt_lines').selectAll()
+      lines = await trx
+        .selectFrom('goods_receipt_lines')
+        .selectAll()
         .where('grn_id', '=', Number(grn.id))
         .where('tenant_id', '=', tenantId)
         .where('product_id', '=', Number(dto.productId))
@@ -296,22 +293,32 @@ export class QualityAssuranceService {
       const releaseQty = Math.min(remaining, Number(line.accepted_qty || 0));
       if (releaseQty <= 0) continue;
       const quarantineLocationId = Number(line.quarantine_location_id);
-      const grn = await trx.selectFrom('goods_receipt_notes').select(['id', 'doc_no', 'location_id'])
+      const grn = await trx
+        .selectFrom('goods_receipt_notes')
+        .select(['id', 'doc_no', 'location_id'])
         .where('id', '=', Number(line.grn_id))
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
       if (!grn) throw new NotFoundException(`إذن الاستلام المرتبط بسطر الحجر رقم ${line.id} غير موجود.`);
       const targetLocationId = Number(grn.location_id);
-      const quarantineLocation = await trx.selectFrom('stock_locations').select(['id', 'branch_id'])
+      const quarantineLocation = await trx
+        .selectFrom('stock_locations')
+        .select(['id', 'branch_id'])
         .where('id', '=', quarantineLocationId)
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
-      if (!quarantineLocation) throw new NotFoundException(`مكان الحجر رقم ${quarantineLocationId} غير موجود؛ تعذر إفراج الكمية المحجوزة.`);
-      const targetLocation = await trx.selectFrom('stock_locations').select(['id', 'branch_id'])
+      if (!quarantineLocation)
+        throw new NotFoundException(`مكان الحجر رقم ${quarantineLocationId} غير موجود؛ تعذر إفراج الكمية المحجوزة.`);
+      const targetLocation = await trx
+        .selectFrom('stock_locations')
+        .select(['id', 'branch_id'])
         .where('id', '=', targetLocationId)
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
-      if (!targetLocation) throw new NotFoundException(`مخزن الاستلام المستهدف رقم ${targetLocationId} غير موجود؛ تعذر إفراج الكمية المحجوزة.`);
+      if (!targetLocation)
+        throw new NotFoundException(
+          `مخزن الاستلام المستهدف رقم ${targetLocationId} غير موجود؛ تعذر إفراج الكمية المحجوزة.`,
+        );
       const fromBranchId = quarantineLocation.branch_id != null ? Number(quarantineLocation.branch_id) : null;
       const toBranchId = targetLocation.branch_id != null ? Number(targetLocation.branch_id) : null;
       const unitCost = line.landed_unit_cost != null ? Number(line.landed_unit_cost) : Number(line.unit_cost || 0);
@@ -337,35 +344,40 @@ export class QualityAssuranceService {
         reference_id: Number(grn.id),
         created_by: userId,
       };
-      await trx.insertInto('stock_movements').values({
-        ...movementBase,
-        movement_type: 'transfer_send',
-        qty: -releaseQty,
-        before_qty: moved.sourceBefore,
-        after_qty: moved.sourceAfter,
-        branch_id: fromBranchId,
-        location_id: quarantineLocationId,
-      }).execute();
-      await trx.insertInto('stock_movements').values({
-        ...movementBase,
-        movement_type: 'transfer_receive',
-        qty: releaseQty,
-        before_qty: moved.targetBefore,
-        after_qty: moved.targetAfter,
-        branch_id: toBranchId,
-        location_id: targetLocationId,
-      }).execute();
+      await trx
+        .insertInto('stock_movements')
+        .values({
+          ...movementBase,
+          movement_type: 'transfer_send',
+          qty: -releaseQty,
+          before_qty: moved.sourceBefore,
+          after_qty: moved.sourceAfter,
+          branch_id: fromBranchId,
+          location_id: quarantineLocationId,
+        })
+        .execute();
+      await trx
+        .insertInto('stock_movements')
+        .values({
+          ...movementBase,
+          movement_type: 'transfer_receive',
+          qty: releaseQty,
+          before_qty: moved.targetBefore,
+          after_qty: moved.targetAfter,
+          branch_id: toBranchId,
+          location_id: targetLocationId,
+        })
+        .execute();
       remaining = Number((remaining - releaseQty).toFixed(3));
     }
     if (remaining > 0) {
-      throw new BadRequestException(`الكمية المقبولة في الفحص (${dto.acceptedQty}) تتجاوز الكمية المحجوزة صحياً لهذا الصنف في إذن الاستلام؛ راجع سطور الحجر قبل الاعتماد.`);
+      throw new BadRequestException(
+        `الكمية المقبولة في الفحص (${dto.acceptedQty}) تتجاوز الكمية المحجوزة صحياً لهذا الصنف في إذن الاستلام؛ راجع سطور الحجر قبل الاعتماد.`,
+      );
     }
   }
 
-  async getInspections(
-    auth: AuthContext,
-    params?: { status?: string; docType?: string },
-  ): Promise<any[]> {
+  async getInspections(auth: AuthContext, params?: { status?: string; docType?: string }): Promise<any[]> {
     this.assertAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
@@ -443,10 +455,7 @@ export class QualityAssuranceService {
     return { success: true, id, ncrNumber };
   }
 
-  async getNCRs(
-    auth: AuthContext,
-    params?: { status?: string; severity?: string },
-  ): Promise<any[]> {
+  async getNCRs(auth: AuthContext, params?: { status?: string; severity?: string }): Promise<any[]> {
     this.assertAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
@@ -483,11 +492,7 @@ export class QualityAssuranceService {
     return query.orderBy('ncr.created_at', 'desc').execute();
   }
 
-  async updateNCRStatus(
-    auth: AuthContext,
-    id: string,
-    dto: UpdateNCRStatusDto,
-  ): Promise<{ success: boolean }> {
+  async updateNCRStatus(auth: AuthContext, id: string, dto: UpdateNCRStatusDto): Promise<{ success: boolean }> {
     this.assertAccess(auth);
     const scope = requireTenantScope(auth);
 

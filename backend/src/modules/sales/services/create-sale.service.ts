@@ -132,9 +132,7 @@ export class CreateSaleService {
       this.authz,
       this.returnsService,
     );
-    this.allocateTendersAndDeliveryService = new AllocateTendersAndDeliveryService(
-      this.authz,
-    );
+    this.allocateTendersAndDeliveryService = new AllocateTendersAndDeliveryService(this.authz);
     this.insertSaleAndStockService = new InsertSaleAndStockService(
       this.generateSaleDocNo,
       this.lockSaleStockRows,
@@ -163,7 +161,12 @@ export class CreateSaleService {
    * phase docs for what each one does. The pre- and post-transaction
    * parts are moved verbatim from the facade.
    */
-  async createSale(payload: UpsertSaleDto, auth: AuthContext, approvedTerms?: SystemApprovedSaleTerms, conversionRelease?: SalesOrderConversionRelease): Promise<Record<string, unknown>> {
+  async createSale(
+    payload: UpsertSaleDto,
+    auth: AuthContext,
+    approvedTerms?: SystemApprovedSaleTerms,
+    conversionRelease?: SalesOrderConversionRelease,
+  ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const requestStartedAt = Date.now();
 
@@ -193,17 +196,39 @@ export class CreateSaleService {
 
     const returnedItems = (payload.items || []).filter((item) => Number(item.qty) < 0);
     const isExchange = Boolean(payload.exchangeSaleId);
-    if (returnedItems.length && !isExchange) throw new AppError('السطور السالبة تتطلب فاتورة أصلية للاستبدال', 'EXCHANGE_SOURCE_REQUIRED', 400);
-    if (isExchange && (!returnedItems.length || payload.source !== 'pos' || payload.onlineOrderId || payload.offlineDocNo ||
-      payload.paymentType === 'credit' || payload.paymentChannel === 'credit' || payload.orderType === 'delivery' ||
-      Number(payload.deliveryFee || 0) !== 0 ||
-      Number(payload.storeCreditUsed || 0) > 0 || Number(payload.loyaltyPointsRedeemed || 0) > 0 ||
-      returnedItems.some((item) => !Number.isInteger(item.originalSaleItemId) || Number(item.originalSaleItemId) <= 0))) {
-      throw new AppError('الاستبدال يتطلب سطور مرتجع مرتبطة بالأصل دون طلب متجر أو خصم نقاط إضافي', 'EXCHANGE_REQUEST_INVALID', 400);
+    if (returnedItems.length && !isExchange)
+      throw new AppError('السطور السالبة تتطلب فاتورة أصلية للاستبدال', 'EXCHANGE_SOURCE_REQUIRED', 400);
+    if (
+      isExchange &&
+      (!returnedItems.length ||
+        payload.source !== 'pos' ||
+        payload.onlineOrderId ||
+        payload.offlineDocNo ||
+        payload.paymentType === 'credit' ||
+        payload.paymentChannel === 'credit' ||
+        payload.orderType === 'delivery' ||
+        Number(payload.deliveryFee || 0) !== 0 ||
+        Number(payload.storeCreditUsed || 0) > 0 ||
+        Number(payload.loyaltyPointsRedeemed || 0) > 0 ||
+        returnedItems.some(
+          (item) => !Number.isInteger(item.originalSaleItemId) || Number(item.originalSaleItemId) <= 0,
+        ))
+    ) {
+      throw new AppError(
+        'الاستبدال يتطلب سطور مرتجع مرتبطة بالأصل دون طلب متجر أو خصم نقاط إضافي',
+        'EXCHANGE_REQUEST_INVALID',
+        400,
+      );
     }
-    const normalized = normalizeSalePayload(isExchange ? { ...payload, items: payload.items.filter((item) => Number(item.qty) >= 0) } : payload);
+    const normalized = normalizeSalePayload(
+      isExchange ? { ...payload, items: payload.items.filter((item) => Number(item.qty) >= 0) } : payload,
+    );
     if (!normalized.items.length) throw new AppError('Sale must include at least one item', 'SALE_ITEMS_REQUIRED', 400);
-    ensureUniqueFlowItems(normalized.items, 'SALE_DUPLICATE_PRODUCT', 'Sale must not contain duplicate product rows with the same unit and price');
+    ensureUniqueFlowItems(
+      normalized.items,
+      'SALE_DUPLICATE_PRODUCT',
+      'Sale must not contain duplicate product rows with the same unit and price',
+    );
 
     // F7 (POS-to-trip attribution): resolve the acting rep + active
     // trip BEFORE the transaction opens. A lookup that fails inside
@@ -218,9 +243,10 @@ export class CreateSaleService {
       vanTripAttribution = await resolvePosTripAttribution(this.db, {
         tenantId: scope.tenantId,
         auth,
-        explicitRepId: String(normalized.orderType || '').trim() === 'delivery'
-          ? (Number((payload as any).deliveryRepId || 0) || null)
-          : null,
+        explicitRepId:
+          String(normalized.orderType || '').trim() === 'delivery'
+            ? Number((payload as any).deliveryRepId || 0) || null
+            : null,
       });
     } catch {
       vanTripAttribution = null;

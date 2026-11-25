@@ -78,8 +78,22 @@ export class ReturnsReliefService {
    * allocation createSaleReturn backfills on disk, so the preview
    * and the create agree even on pre-allocation sales. */
   computeForfeitForReturn(args: {
-    sale: { discount: number | string | null; total: number | string | null; tax_amount: number | string | null; prices_include_tax: boolean | null };
-    saleItems: Array<{ id: number | string; qty: number | string | null; unit_price: number | string | null; line_total: number | string | null; line_discount?: number | string | null; net_line_total?: number | string | null; allocated_discount?: number | string | null; allocated_tax?: number | string | null }>;
+    sale: {
+      discount: number | string | null;
+      total: number | string | null;
+      tax_amount: number | string | null;
+      prices_include_tax: boolean | null;
+    };
+    saleItems: Array<{
+      id: number | string;
+      qty: number | string | null;
+      unit_price: number | string | null;
+      line_total: number | string | null;
+      line_discount?: number | string | null;
+      net_line_total?: number | string | null;
+      allocated_discount?: number | string | null;
+      allocated_tax?: number | string | null;
+    }>;
     returnedQtyByLine: Map<number, number>;
     returnedAmountByLine: Map<number, number>;
     items: ReturnInputItem[];
@@ -153,7 +167,11 @@ export class ReturnsReliefService {
     }
     const goodwill = roundBookMoney(requested - proRataTotal, moneyDigits);
     if (goodwill <= 0) return 0;
-    const finalTotals = allocateProRata(lines.map((line) => line.lineTotal), requested, moneyDigits);
+    const finalTotals = allocateProRata(
+      lines.map((line) => line.lineTotal),
+      requested,
+      moneyDigits,
+    );
     const existingTax = lines.reduce((sum, line) => sum + Number(line.allocatedTax || 0), 0);
     const totalTax = proRataTotal > 0 ? roundBookMoney(requested * (existingTax / proRataTotal), moneyDigits) : 0;
     const finalTaxes = allocateProRata(finalTotals, totalTax, moneyDigits);
@@ -165,17 +183,43 @@ export class ReturnsReliefService {
     return goodwill;
   }
 
-  async previewReturnRelief(payload: CreateReturnDto, auth: AuthContext): Promise<{ goodsTotal: number; originalGoodsTotal: number; tipRelief: number; courierRelief: number; totalRelief: number; refundTotal: number; forfeit?: ConditionalDiscountForfeitBreakdown }> {
-    if (payload.type !== 'sale') throw new AppError('معاينة الاسترداد متاحة لمرتجعات البيع فقط', 'RETURN_TYPE_INVALID', 400);
+  async previewReturnRelief(
+    payload: CreateReturnDto,
+    auth: AuthContext,
+  ): Promise<{
+    goodsTotal: number;
+    originalGoodsTotal: number;
+    tipRelief: number;
+    courierRelief: number;
+    totalRelief: number;
+    refundTotal: number;
+    forfeit?: ConditionalDiscountForfeitBreakdown;
+  }> {
+    if (payload.type !== 'sale')
+      throw new AppError('معاينة الاسترداد متاحة لمرتجعات البيع فقط', 'RETURN_TYPE_INVALID', 400);
     const scope = this.scope(auth);
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const items = normalizeReturnItems(payload);
-    const sale = await this.db.selectFrom('sales').selectAll().where('id', '=', Number(payload.invoiceId)).where('status', '=', 'posted').where(this.tenantPredicate(auth)).executeTakeFirst();
+    const sale = await this.db
+      .selectFrom('sales')
+      .selectAll()
+      .where('id', '=', Number(payload.invoiceId))
+      .where('status', '=', 'posted')
+      .where(this.tenantPredicate(auth))
+      .executeTakeFirst();
     if (!sale) throw new AppError('Invoice not found', 'INVOICE_NOT_FOUND', 404);
-    const saleItems = await this.db.selectFrom('sale_items').selectAll().where('sale_id', '=', Number(payload.invoiceId)).where(this.tenantPredicate(auth)).orderBy('id', 'asc').execute();
+    const saleItems = await this.db
+      .selectFrom('sale_items')
+      .selectAll()
+      .where('sale_id', '=', Number(payload.invoiceId))
+      .where(this.tenantPredicate(auth))
+      .orderBy('id', 'asc')
+      .execute();
     const returnedRows = await this.db
       .selectFrom('return_items as ri')
-      .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
+      .innerJoin('return_documents as rd', (join) =>
+        join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'),
+      )
       .select([
         'ri.product_id',
         'ri.sale_item_id',
@@ -198,7 +242,15 @@ export class ReturnsReliefService {
       returnedAmountByLine.set(Number(r.sale_item_id), Number(r.total_amount || 0));
       returnedTaxByLine.set(Number(r.sale_item_id), Number(r.total_tax || 0));
     }
-    const normalizedLines: Array<{ productId: number; productName: string; qty: number; unitTotal: number; lineTotal: number; allocatedTax: number; saleItemId?: number }> = [];
+    const normalizedLines: Array<{
+      productId: number;
+      productName: string;
+      qty: number;
+      unitTotal: number;
+      lineTotal: number;
+      allocatedTax: number;
+      saleItemId?: number;
+    }> = [];
     for (const requestItem of [...items].sort((a, b) => a.productId - b.productId)) {
       const matchingLines = saleItems.filter((entry) => Number(entry.product_id) === requestItem.productId);
       if (!requestItem.saleItemId && matchingLines.length > 1) {
@@ -209,14 +261,25 @@ export class ReturnsReliefService {
         : matchingLines[0];
       if (!saleItem) throw new AppError('Return item not found', 'NOT_FOUND', 404);
       const saleLineId = Number(saleItem.id);
-      const product = await this.db.selectFrom('products').select(['id', 'stock_qty']).where('id', '=', requestItem.productId).where(this.tenantPredicate(auth)).executeTakeFirst();
+      const product = await this.db
+        .selectFrom('products')
+        .select(['id', 'stock_qty'])
+        .where('id', '=', requestItem.productId)
+        .where(this.tenantPredicate(auth))
+        .executeTakeFirst();
       if (!product) throw new AppError('Product not found', 'PRODUCT_NOT_FOUND', 404);
       normalizedLines.push({
-        ...buildSaleReturnLine(saleItem, product, requestItem, {
-          qty: returnedQtyByLine.get(saleLineId) || 0,
-          amount: returnedAmountByLine.get(saleLineId) || 0,
-          tax: returnedTaxByLine.get(saleLineId) || 0,
-        }, moneyDigits),
+        ...buildSaleReturnLine(
+          saleItem,
+          product,
+          requestItem,
+          {
+            qty: returnedQtyByLine.get(saleLineId) || 0,
+            amount: returnedAmountByLine.get(saleLineId) || 0,
+            tax: returnedTaxByLine.get(saleLineId) || 0,
+          },
+          moneyDigits,
+        ),
         saleItemId: saleLineId,
       });
     }
@@ -232,7 +295,12 @@ export class ReturnsReliefService {
     let forfeit: ConditionalDiscountForfeitResult | null = null;
     if (Number(sale.discount || 0) > 0) {
       forfeit = this.computeForfeitForReturn({
-        sale, saleItems, returnedQtyByLine, returnedAmountByLine, items, moneyDigits,
+        sale,
+        saleItems,
+        returnedQtyByLine,
+        returnedAmountByLine,
+        items,
+        moneyDigits,
         requestedGoodsRefund: payload.forfeitHeaderDiscount ? payload.goodwillRefundAmount : undefined,
       });
     }
@@ -240,7 +308,12 @@ export class ReturnsReliefService {
       const pricedByLine = new Map(forfeit.lines.map((entry) => [entry.saleItemId, entry]));
       for (const line of normalizedLines) {
         const priced = line.saleItemId == null ? undefined : pricedByLine.get(line.saleItemId);
-        if (!priced) throw new AppError('تعذر تسعير بند المرتجع بعد إلغاء خصم الفاتورة', 'CONDITIONAL_DISCOUNT_FORFEIT_LINE_MISSING', 500);
+        if (!priced)
+          throw new AppError(
+            'تعذر تسعير بند المرتجع بعد إلغاء خصم الفاتورة',
+            'CONDITIONAL_DISCOUNT_FORFEIT_LINE_MISSING',
+            500,
+          );
         line.lineTotal = priced.lineTotal;
         line.allocatedTax = priced.allocatedTax;
         line.unitTotal = priced.unitTotal;
@@ -251,27 +324,48 @@ export class ReturnsReliefService {
       // lines, capped at the returned pieces' gross price — the
       // same cap as the forfeit mode.
       const cap = forfeit?.applies ? forfeit.goodwillCap : originalGoodsTotal;
-      this.applyRaisedGoodsTotal(normalizedLines, originalGoodsTotal, Number(payload.goodwillRefundAmount), cap, moneyDigits);
+      this.applyRaisedGoodsTotal(
+        normalizedLines,
+        originalGoodsTotal,
+        Number(payload.goodwillRefundAmount),
+        cap,
+        moneyDigits,
+      );
       goodsTotal = calculateReturnDocumentTotal(normalizedLines, moneyDigits);
     }
     const returnTaxAmount = normalizedLines.reduce((sum, line) => sum + Number(line.allocatedTax || 0), 0);
     const netReturnAmount = Math.max(0, goodsTotal - returnTaxAmount);
     const returnRelief = await this.accountingPosting.computeSalesReturnRelief(
-      this.db, scope.tenantId, sale, goodsTotal, netReturnAmount, null,
+      this.db,
+      scope.tenantId,
+      sale,
+      goodsTotal,
+      netReturnAmount,
+      null,
     );
     const refundTotal = roundBookMoney(goodsTotal + returnRelief.totalRelief, moneyDigits);
-    const forfeitBreakdown: ConditionalDiscountForfeitBreakdown | undefined = forfeit?.applies ? {
-      applies: forfeit.applies,
-      invoiceTotal: forfeit.invoiceTotal,
-      priorGoodsRefunded: forfeit.priorGoodsRefunded,
-      remainingNetAtOriginal: forfeit.remainingNetAtOriginal,
-      computedGoodsRefund: forfeit.computedGoodsRefund,
-      forfeitedHeaderDiscount: forfeit.forfeitedHeaderDiscount,
-      repricedReturnedTotal: forfeit.repricedReturnedTotal,
-      goodwillCap: forfeit.goodwillCap,
-      goodwillAmount: forfeit.goodwillAmount,
-    } : undefined;
-    return { goodsTotal, originalGoodsTotal, tipRelief: returnRelief.tipRelief, courierRelief: returnRelief.courierRelief, totalRelief: returnRelief.totalRelief, refundTotal, forfeit: forfeitBreakdown };
+    const forfeitBreakdown: ConditionalDiscountForfeitBreakdown | undefined = forfeit?.applies
+      ? {
+          applies: forfeit.applies,
+          invoiceTotal: forfeit.invoiceTotal,
+          priorGoodsRefunded: forfeit.priorGoodsRefunded,
+          remainingNetAtOriginal: forfeit.remainingNetAtOriginal,
+          computedGoodsRefund: forfeit.computedGoodsRefund,
+          forfeitedHeaderDiscount: forfeit.forfeitedHeaderDiscount,
+          repricedReturnedTotal: forfeit.repricedReturnedTotal,
+          goodwillCap: forfeit.goodwillCap,
+          goodwillAmount: forfeit.goodwillAmount,
+        }
+      : undefined;
+    return {
+      goodsTotal,
+      originalGoodsTotal,
+      tipRelief: returnRelief.tipRelief,
+      courierRelief: returnRelief.courierRelief,
+      totalRelief: returnRelief.totalRelief,
+      refundTotal,
+      forfeit: forfeitBreakdown,
+    };
   }
 
   // INV-SPIRIT-LARGE-CASH-REFUND: the manager-approval threshold
@@ -283,13 +377,19 @@ export class ReturnsReliefService {
     executor: Kysely<Database> | Transaction<Database> = this.db,
   ): Promise<number> {
     const { tenantId } = requireTenantScope(auth);
-    const row = await sql<{ value?: string }>`select value from settings where key = 'posLargeCashRefundThreshold' and tenant_id = ${tenantId}`.execute(executor);
+    const row = await sql<{
+      value?: string;
+    }>`select value from settings where key = 'posLargeCashRefundThreshold' and tenant_id = ${tenantId}`.execute(
+      executor,
+    );
     const raw = String(row.rows?.[0]?.value || '').trim();
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
         if (typeof parsed === 'number' && Number.isFinite(parsed) && parsed >= 0) return parsed;
-      } catch { /* fall through to the plain-number parse */ }
+      } catch {
+        /* fall through to the plain-number parse */
+      }
       const plain = Number(raw);
       if (Number.isFinite(plain) && plain >= 0) return plain;
     }

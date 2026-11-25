@@ -59,8 +59,14 @@ export function evaluateInspectionResult(
     }
 
     const val = Number(input.measuredValue);
-    const min = criteria.normMeasureMin !== null && criteria.normMeasureMin !== undefined ? Number(criteria.normMeasureMin) : -Infinity;
-    const max = criteria.normMeasureMax !== null && criteria.normMeasureMax !== undefined ? Number(criteria.normMeasureMax) : Infinity;
+    const min =
+      criteria.normMeasureMin !== null && criteria.normMeasureMin !== undefined
+        ? Number(criteria.normMeasureMin)
+        : -Infinity;
+    const max =
+      criteria.normMeasureMax !== null && criteria.normMeasureMax !== undefined
+        ? Number(criteria.normMeasureMax)
+        : Infinity;
 
     if (val < min || val > max) {
       return {
@@ -97,10 +103,7 @@ export function shouldTriggerNCR(status: QCInspectionStatus, rejectedQty: number
 /**
  * Suggests default NCR severity based on rejection ratio
  */
-export function suggestNCRSeverity(
-  rejectedQty: number,
-  inspectedQty: number,
-): NCRSeverity {
+export function suggestNCRSeverity(rejectedQty: number, inspectedQty: number): NCRSeverity {
   const rejected = Math.max(0, Number(rejectedQty) || 0);
   const total = Math.max(1, Number(inspectedQty) || 1);
   const ratio = rejected / total;

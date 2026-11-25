@@ -131,7 +131,9 @@ export class ReorderingRulesService {
       .select([
         'poi.product_id',
         'po.warehouse_id',
-        sql<number>`COALESCE(SUM(CAST(poi.quantity AS numeric) - CAST(poi.received_quantity AS numeric)), 0)`.as('incoming_qty'),
+        sql<number>`COALESCE(SUM(CAST(poi.quantity AS numeric) - CAST(poi.received_quantity AS numeric)), 0)`.as(
+          'incoming_qty',
+        ),
       ])
       .where('po.tenant_id', '=', scope.tenantId)
       .where('po.status', 'in', REORDER_INCOMING_STATUSES)
@@ -180,7 +182,7 @@ export class ReorderingRulesService {
 
       const specificIncoming = incomingMap.get(`${r.product_id}__${r.warehouse_id || 'all'}`);
       const generalIncoming = incomingMap.get(`${r.product_id}__all`);
-      const incomingQty = specificIncoming !== undefined ? specificIncoming : (generalIncoming || 0);
+      const incomingQty = specificIncoming !== undefined ? specificIncoming : generalIncoming || 0;
 
       const decision = evaluateReorderingRule({
         productId: r.product_id,
@@ -291,11 +293,7 @@ export class ReorderingRulesService {
   /**
    * Updates an existing reordering rule.
    */
-  async updateRule(
-    id: number,
-    dto: UpdateReorderingRuleDto,
-    auth: AuthContext,
-  ): Promise<Record<string, unknown>> {
+  async updateRule(id: number, dto: UpdateReorderingRuleDto, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
 
     const existing = await this.db
@@ -413,9 +411,7 @@ export class ReorderingRulesService {
         .where('po.tenant_id', '=', scope.tenantId)
         .where('po.status', '=', 'draft')
         .execute();
-      const draftKeys = new Set(
-        draftRows.map((row: any) => `${row.product_id}__${row.warehouse_id ?? '*'}`),
-      );
+      const draftKeys = new Set(draftRows.map((row: any) => `${row.product_id}__${row.warehouse_id ?? '*'}`));
       const hasOpenDraft = (rule: any): boolean =>
         draftKeys.has(`${rule.product_id}__*`) ||
         (rule.warehouse_id != null && draftKeys.has(`${rule.product_id}__${rule.warehouse_id}`));
@@ -494,7 +490,13 @@ export class ReorderingRulesService {
 
         // The number derives from the inserted row id, exactly as
         // createOrder numbers a purchase order: never from a row count.
-        const orderNumber = formatDailyDocumentNumber('PO', Number(insertedOrder.id), new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
+        const orderNumber = formatDailyDocumentNumber(
+          'PO',
+          Number(insertedOrder.id),
+          new Date(),
+          4,
+          await getTenantTimezone(trx, scope.tenantId),
+        );
         await trx
           .updateTable('purchase_orders')
           .set({ order_number: orderNumber })

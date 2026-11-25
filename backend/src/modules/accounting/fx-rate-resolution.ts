@@ -35,10 +35,15 @@ export async function resolveFxRate(
   options?: ResolveFxRateOptions,
 ): Promise<number> {
   const base = await tenantBaseCurrency(db, tenantId);
-  const code = String(currency || '').trim().toUpperCase() || base;
+  const code =
+    String(currency || '')
+      .trim()
+      .toUpperCase() || base;
   if (code === base) return 1;
   if (options?.asOf !== undefined && options?.suppliedRate !== undefined) {
-    throw new BadRequestException('A supplied exchange rate cannot be combined with an as-of moment; resolve one rate source.');
+    throw new BadRequestException(
+      'A supplied exchange rate cannot be combined with an as-of moment; resolve one rate source.',
+    );
   }
   if (options?.asOf !== undefined) {
     return exchangeRateAsOf(db, tenantId, code, options.asOf);
@@ -50,8 +55,12 @@ export async function resolveFxRate(
     }
     return supplied;
   }
-  const row = await db.selectFrom('currency_exchange_rates').select('exchange_rate')
-    .where('tenant_id', '=', tenantId).where('currency_code', '=', code).executeTakeFirst();
+  const row = await db
+    .selectFrom('currency_exchange_rates')
+    .select('exchange_rate')
+    .where('tenant_id', '=', tenantId)
+    .where('currency_code', '=', code)
+    .executeTakeFirst();
   const rate = Number(row?.exchange_rate);
   if (!row || !Number.isFinite(rate) || rate <= 0) {
     throw new BadRequestException(`سعر صرف ${code} غير متاح؛ لا يمكن ترحيل قيمة بعملة خاطئة`);

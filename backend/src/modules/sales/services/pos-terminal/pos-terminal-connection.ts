@@ -1,19 +1,22 @@
 import * as net from 'node:net';
 import type { Kysely } from '../../../../database/kysely';
 import type { Database } from '../../../../database/database.types';
-import { parseTerminalHostAndPort, isPrivateSubnetIp, execAsync, type TerminalConnectionTestResult } from './pos-terminal-shared';
+import {
+  parseTerminalHostAndPort,
+  isPrivateSubnetIp,
+  execAsync,
+  type TerminalConnectionTestResult,
+} from './pos-terminal-shared';
 
 export class PosTerminalConnection {
-  constructor(
-    private readonly db?: Kysely<Database>,
-  ) {}
+  constructor(private readonly db?: Kysely<Database>) {}
 
   /**
    * Test physical LAN / Wi-Fi connection to POS Terminal (Ping & TCP Port Handshake)
    */
   async testConnection(
     tenantId: string,
-    payload: { ip?: string; port?: number; provider?: string }
+    payload: { ip?: string; port?: number; provider?: string },
   ): Promise<TerminalConnectionTestResult> {
     const parsed = parseTerminalHostAndPort(payload?.ip || '', Number(payload?.port || 8080));
     let cleanIp = parsed.host;
@@ -37,7 +40,10 @@ export class PosTerminalConnection {
               settingsMap[row.key] = row.value;
             }
           }
-          const fromDb = parseTerminalHostAndPort(settingsMap.posTerminalIp || '192.168.1.150', Number(settingsMap.posTerminalPort || 8080));
+          const fromDb = parseTerminalHostAndPort(
+            settingsMap.posTerminalIp || '192.168.1.150',
+            Number(settingsMap.posTerminalPort || 8080),
+          );
           cleanIp = fromDb.host;
           port = fromDb.port;
         } catch {
@@ -91,7 +97,8 @@ export class PosTerminalConnection {
     }
 
     // SSRF Guard (ZS-084): Block loopback and link-local / cloud metadata unconditionally
-    const isLoopbackOrMetadata = cleanIp.startsWith('127.') ||
+    const isLoopbackOrMetadata =
+      cleanIp.startsWith('127.') ||
       cleanIp === 'localhost' ||
       cleanIp === '::1' ||
       cleanIp.startsWith('169.254.') ||
@@ -126,10 +133,7 @@ export class PosTerminalConnection {
     }
 
     // Execute Ping and TCP Port probe
-    const [pingRes, tcpRes] = await Promise.all([
-      this.pingHost(cleanIp, 2000),
-      this.checkTcpPort(cleanIp, port, 3000),
-    ]);
+    const [pingRes, tcpRes] = await Promise.all([this.pingHost(cleanIp, 2000), this.checkTcpPort(cleanIp, port, 3000)]);
 
     // Case 1: Port is open - Ready to trade!
     if (tcpRes.open) {
@@ -150,15 +154,16 @@ export class PosTerminalConnection {
     // Case 2: Machine is online on Wi-Fi/LAN (Ping ok), but TCP port closed
     if (pingRes.ok) {
       const pingText = pingRes.rttMs ? `${pingRes.rttMs}ms` : 'Ping ناجح';
-      const appName = provider === 'knet_pos'
-        ? 'تطبيق كي نت (KNET)'
-        : provider === 'geidea'
-        ? 'تطبيق جيديا (Geidea Mada)'
-        : provider === 'network_international'
-        ? 'تطبيق Network International (NI)'
-        : provider === 'paymob'
-        ? 'تطبيق Paymob'
-        : 'تطبيق فوري / PAX';
+      const appName =
+        provider === 'knet_pos'
+          ? 'تطبيق كي نت (KNET)'
+          : provider === 'geidea'
+            ? 'تطبيق جيديا (Geidea Mada)'
+            : provider === 'network_international'
+              ? 'تطبيق Network International (NI)'
+              : provider === 'paymob'
+                ? 'تطبيق Paymob'
+                : 'تطبيق فوري / PAX';
       return {
         reachable: false,
         pingSucceeded: true,
@@ -186,9 +191,7 @@ export class PosTerminalConnection {
 
   private async pingHost(host: string, timeoutMs = 2500): Promise<{ ok: boolean; rttMs?: number }> {
     const isWin = process.platform === 'win32';
-    const pingCmd = isWin
-      ? `ping -n 2 -w 1500 ${host}`
-      : `ping -c 2 -W 2 ${host}`;
+    const pingCmd = isWin ? `ping -n 2 -w 1500 ${host}` : `ping -c 2 -W 2 ${host}`;
 
     try {
       const { stdout } = await execAsync(pingCmd, { timeout: timeoutMs + 2000 });
@@ -200,7 +203,11 @@ export class PosTerminalConnection {
 
       const ok = isWin
         ? (stdout.includes(`Reply from ${host}:`) || (stdout.includes('Reply from') && !is100Loss)) && !is100Loss
-        : (stdout.includes('1 received') || stdout.includes('2 received') || stdout.includes('1 packets received') || stdout.includes('2 packets received')) && !is100Loss;
+        : (stdout.includes('1 received') ||
+            stdout.includes('2 received') ||
+            stdout.includes('1 packets received') ||
+            stdout.includes('2 packets received')) &&
+          !is100Loss;
 
       const match = stdout.match(/Average = ([0-9]+)ms/i) || stdout.match(/time[=<]([0-9.]+)\s*ms/i);
       const rttMs = match ? Math.round(Number(match[1])) : undefined;
@@ -214,7 +221,7 @@ export class PosTerminalConnection {
   private checkTcpPort(
     host: string,
     port: number,
-    timeoutMs = 3000
+    timeoutMs = 3000,
   ): Promise<{ open: boolean; rttMs?: number; error?: string }> {
     const start = Date.now();
     return new Promise((resolve) => {

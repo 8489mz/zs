@@ -14,7 +14,7 @@ export class EtaSubmissionService {
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly etaAuthService: EtaAuthService,
     private readonly etaSerializer: EtaSerializerService,
-    private readonly taxSettings: TaxSettingsService
+    private readonly taxSettings: TaxSettingsService,
   ) {}
 
   async getPendingInvoices(tenantId: string) {
@@ -22,14 +22,7 @@ export class EtaSubmissionService {
       .selectFrom('sales')
       .where('tenant_id', '=', tenantId)
       .where('eta_status', 'in', ['pending', 'failed'])
-      .select([
-        'id',
-        'doc_no',
-        'created_at',
-        'total',
-        'eta_status',
-        'customer_name'
-      ])
+      .select(['id', 'doc_no', 'created_at', 'total', 'eta_status', 'customer_name'])
       .orderBy('created_at', 'desc')
       .execute();
 
@@ -52,9 +45,10 @@ export class EtaSubmissionService {
       throw new BadRequestException('تعذر الحصول على رمز دخول صالح من مصلحة الضرائب');
     }
 
-    const baseUrl = settings.environment === 'production'
-      ? 'https://api.invoicing.eta.gov.eg'
-      : 'https://api.preprod.invoicing.eta.gov.eg';
+    const baseUrl =
+      settings.environment === 'production'
+        ? 'https://api.invoicing.eta.gov.eg'
+        : 'https://api.preprod.invoicing.eta.gov.eg';
 
     // Serialize each sale to ETA format
     const documents: any[] = [];
@@ -74,11 +68,11 @@ export class EtaSubmissionService {
       const response = await fetch(`${baseUrl}/api/v1/documentsubmissions`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          Accept: 'application/json',
         },
-        body: JSON.stringify({ documents })
+        body: JSON.stringify({ documents }),
       });
 
       if (!response.ok) {
@@ -117,13 +111,12 @@ export class EtaSubmissionService {
           .set({
             eta_status: 'submitted',
             eta_uuid: acc.uuid || null,
-            eta_submission_id: submissionId
+            eta_submission_id: submissionId,
           })
           .where('tenant_id', '=', tenantId)
-          .where((eb) => eb.or([
-            eb('doc_no', '=', internalId),
-            eb('id', '=', isNaN(Number(internalId)) ? -1 : Number(internalId))
-          ]))
+          .where((eb) =>
+            eb.or([eb('doc_no', '=', internalId), eb('id', '=', isNaN(Number(internalId)) ? -1 : Number(internalId))]),
+          )
           .execute();
       }
     }
@@ -136,13 +129,12 @@ export class EtaSubmissionService {
           .updateTable('sales')
           .set({
             eta_status: 'failed',
-            eta_submission_id: submissionId
+            eta_submission_id: submissionId,
           })
           .where('tenant_id', '=', tenantId)
-          .where((eb) => eb.or([
-            eb('doc_no', '=', internalId),
-            eb('id', '=', isNaN(Number(internalId)) ? -1 : Number(internalId))
-          ]))
+          .where((eb) =>
+            eb.or([eb('doc_no', '=', internalId), eb('id', '=', isNaN(Number(internalId)) ? -1 : Number(internalId))]),
+          )
           .execute();
       }
     }
@@ -166,7 +158,7 @@ export class EtaSubmissionService {
           ? 'لم تؤكد مصلحة الضرائب استلام أي وثيقة؛ بقيت الفواتير معلقة للتحقق أو إعادة الإرسال'
           : rejectedDocuments.length > 0
             ? `تم إرسال ${acceptedDocuments.length} وثيقة ورفض ${rejectedDocuments.length}`
-            : 'تم إرسال الفواتير إلى منظومة الضرائب المصرية بنجاح'
+            : 'تم إرسال الفواتير إلى منظومة الضرائب المصرية بنجاح',
     };
   }
 
@@ -175,16 +167,17 @@ export class EtaSubmissionService {
     if (!settings) throw new BadRequestException('إعدادات الضرائب غير موجودة');
 
     const token = await this.etaAuthService.getAccessToken(tenantId);
-    const baseUrl = settings.environment === 'production'
-      ? 'https://api.invoicing.eta.gov.eg'
-      : 'https://api.preprod.invoicing.eta.gov.eg';
+    const baseUrl =
+      settings.environment === 'production'
+        ? 'https://api.invoicing.eta.gov.eg'
+        : 'https://api.preprod.invoicing.eta.gov.eg';
 
     try {
       const response = await fetch(`${baseUrl}/api/v1/documentsubmissions/${submissionId}`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
-        }
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
       });
 
       if (!response.ok) {
@@ -197,7 +190,12 @@ export class EtaSubmissionService {
       const documentSummary = statusData.documentSummary || [];
       for (const doc of documentSummary) {
         if (doc.uuid && doc.status) {
-          const mappedStatus = doc.status.toLowerCase() === 'valid' ? 'valid' : doc.status.toLowerCase() === 'invalid' ? 'failed' : 'submitted';
+          const mappedStatus =
+            doc.status.toLowerCase() === 'valid'
+              ? 'valid'
+              : doc.status.toLowerCase() === 'invalid'
+                ? 'failed'
+                : 'submitted';
           await this.db
             .updateTable('sales')
             .set({ eta_status: mappedStatus })
@@ -209,7 +207,7 @@ export class EtaSubmissionService {
 
       return {
         success: true,
-        data: statusData
+        data: statusData,
       };
     } catch (error: any) {
       if (error instanceof BadRequestException) throw error;
@@ -222,16 +220,17 @@ export class EtaSubmissionService {
     if (!settings) throw new BadRequestException('إعدادات الضرائب غير موجودة');
 
     const token = await this.etaAuthService.getAccessToken(tenantId);
-    const baseUrl = settings.environment === 'production'
-      ? 'https://api.invoicing.eta.gov.eg'
-      : 'https://api.preprod.invoicing.eta.gov.eg';
+    const baseUrl =
+      settings.environment === 'production'
+        ? 'https://api.invoicing.eta.gov.eg'
+        : 'https://api.preprod.invoicing.eta.gov.eg';
 
     try {
       const response = await fetch(`${baseUrl}/api/v1/documents/${uuid}/raw`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
-        }
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
       });
 
       if (!response.ok) {
@@ -241,7 +240,7 @@ export class EtaSubmissionService {
       const rawDoc = await response.json();
       return {
         success: true,
-        data: rawDoc
+        data: rawDoc,
       };
     } catch (error: any) {
       if (error instanceof BadRequestException) throw error;
@@ -249,4 +248,3 @@ export class EtaSubmissionService {
     }
   }
 }
-

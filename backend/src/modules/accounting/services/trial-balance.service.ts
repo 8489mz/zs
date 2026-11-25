@@ -6,10 +6,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits } from '../engines/money-minor-units.engine';
-import {
-  buildTrialBalance,
-  TrialBalanceReportData,
-} from '../engines/trial-balance.engine';
+import { buildTrialBalance, TrialBalanceReportData } from '../engines/trial-balance.engine';
 
 /* Trial balance service (INV-TRIAL-BALANCE-PAGE): one dedicated read of the
  * posted general ledger, per account, as of a date. Same source and same

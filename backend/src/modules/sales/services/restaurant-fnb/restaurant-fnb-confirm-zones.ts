@@ -4,7 +4,10 @@ import { AppError } from '../../../../common/errors/app-error';
 import { TenantScope, SaveTableZoneDto } from './restaurant-fnb-types';
 
 export class RestaurantFnbConfirmZonesSlice {
-  constructor(private readonly db: Kysely<Database>, private readonly assertManagerCaller: (scope: TenantScope) => void) {}
+  constructor(
+    private readonly db: Kysely<Database>,
+    private readonly assertManagerCaller: (scope: TenantScope) => void,
+  ) {}
 
   async confirmTipDistribution(scope: TenantScope, poolId: number) {
     // INV-REST-FNB-CLAIMS-POST: only a manager caller may confirm a pool.
@@ -63,12 +66,7 @@ export class RestaurantFnbConfirmZonesSlice {
       .where('is_active', '=', true);
 
     if (branchId) {
-      query = query.where((eb) =>
-        eb.or([
-          eb('branch_id', '=', branchId),
-          eb('branch_id', 'is', null),
-        ])
-      );
+      query = query.where((eb) => eb.or([eb('branch_id', '=', branchId), eb('branch_id', 'is', null)]));
     }
 
     const zones = await query.orderBy('sort_order', 'asc').execute();
@@ -76,10 +74,38 @@ export class RestaurantFnbConfirmZonesSlice {
     // If tenant has no custom zones yet, provide clean initial industry presets
     if (zones.length === 0) {
       return [
-        { id: 1, zone_code: 'main', name: 'الصالة الرئيسية', sort_order: 1, capacity_seats: 4, table_numbers: ['1', '2', '3', '4', '5', '6'] },
-        { id: 2, zone_code: 'patio', name: 'التراس الخارجي', sort_order: 2, capacity_seats: 4, table_numbers: ['7', '8', '9', '10'] },
-        { id: 3, zone_code: 'family', name: 'قسم العائلات', sort_order: 3, capacity_seats: 6, table_numbers: ['11', '12', '13', '14'] },
-        { id: 4, zone_code: 'vip', name: 'جناح الـ VIP', sort_order: 4, capacity_seats: 8, table_numbers: ['15', '16'] },
+        {
+          id: 1,
+          zone_code: 'main',
+          name: 'الصالة الرئيسية',
+          sort_order: 1,
+          capacity_seats: 4,
+          table_numbers: ['1', '2', '3', '4', '5', '6'],
+        },
+        {
+          id: 2,
+          zone_code: 'patio',
+          name: 'التراس الخارجي',
+          sort_order: 2,
+          capacity_seats: 4,
+          table_numbers: ['7', '8', '9', '10'],
+        },
+        {
+          id: 3,
+          zone_code: 'family',
+          name: 'قسم العائلات',
+          sort_order: 3,
+          capacity_seats: 6,
+          table_numbers: ['11', '12', '13', '14'],
+        },
+        {
+          id: 4,
+          zone_code: 'vip',
+          name: 'جناح الـ VIP',
+          sort_order: 4,
+          capacity_seats: 8,
+          table_numbers: ['15', '16'],
+        },
       ];
     }
 

@@ -31,7 +31,14 @@ export class ListChequesSlice {
   async listCheques(
     authContext: AuthContext,
     filters: PdcChequesFilter = {},
-  ): Promise<{ data: PdcChequeRecord[]; total: number; page: number; limit: number; serverTime: string; serverTimezone: string }> {
+  ): Promise<{
+    data: PdcChequeRecord[];
+    total: number;
+    page: number;
+    limit: number;
+    serverTime: string;
+    serverTimezone: string;
+  }> {
     const tenantId = String(authContext.tenantId || '');
     // P8 (RC-7): the PDC page's action-date default comes from the server
     // clock — the list response carries it, the HR attendance list precedent.
@@ -41,9 +48,7 @@ export class ListChequesSlice {
     const limit = Math.min(100, Math.max(1, Number(filters.limit || 25)));
     const offset = (page - 1) * limit;
 
-    let baseQuery = (this.db as any)
-      .selectFrom('accounting_cheques')
-      .where('tenant_id', '=', tenantId);
+    let baseQuery = (this.db as any).selectFrom('accounting_cheques').where('tenant_id', '=', tenantId);
 
     if (filters.type) {
       baseQuery = baseQuery.where('type', '=', filters.type);
@@ -82,9 +87,7 @@ export class ListChequesSlice {
     }
 
     // Count total
-    const countResult = await baseQuery
-      .select((eb: any) => eb.fn.count('id').as('count'))
-      .executeTakeFirst();
+    const countResult = await baseQuery.select((eb: any) => eb.fn.count('id').as('count')).executeTakeFirst();
     const total = Number(countResult?.count || 0);
 
     // Fetch records
@@ -131,7 +134,10 @@ export class ListChequesSlice {
     }));
 
     return {
-      data, total, page, limit,
+      data,
+      total,
+      page,
+      limit,
       // P8 (RC-7): the PDC page's action-date default comes from the server clock.
       serverTime: new Date().toISOString(),
       serverTimezone: tenantTimezone,

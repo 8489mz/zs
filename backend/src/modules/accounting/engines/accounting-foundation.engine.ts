@@ -92,7 +92,10 @@ export function buildSettingsMapping(idByCode: Map<string, number>): Record<stri
     let resolved: number | null = null;
     for (const code of entry.codes) {
       const id = idByCode.get(code);
-      if (id && id > 0) { resolved = id; break; }
+      if (id && id > 0) {
+        resolved = id;
+        break;
+      }
     }
     mapping[entry.column] = resolved;
   }
@@ -116,6 +119,5 @@ export function isFoundationComplete(
   existingCodes: Iterable<string>,
   settingsRow: Record<string, unknown> | null | undefined,
 ): boolean {
-  return findMissingAccountCodes(existingCodes).length === 0
-    && findMissingSettingsColumns(settingsRow).length === 0;
+  return findMissingAccountCodes(existingCodes).length === 0 && findMissingSettingsColumns(settingsRow).length === 0;
 }

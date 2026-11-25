@@ -60,13 +60,19 @@ export class InventoryScopeService {
     return Array.from(new Set(ids));
   }
 
-  async assertLocationScope(locationId: number, auth: AuthContext, allowInactive = false, action: 'read' | 'write' = 'read', executor: Kysely<Database> = this.db): Promise<{ id: number; name: string; branchId: number | null; locationType: string }> {
+  async assertLocationScope(
+    locationId: number,
+    auth: AuthContext,
+    allowInactive = false,
+    action: 'read' | 'write' = 'read',
+    executor: Kysely<Database> = this.db,
+  ): Promise<{ id: number; name: string; branchId: number | null; locationType: string }> {
     const tenantId = this.tenantId(auth);
     const location = await executor
       .selectFrom('stock_locations')
       .select(['id', 'name', 'branch_id', 'location_type'])
       .where('id', '=', locationId)
-      .where((eb) => allowInactive ? eb.val(true) : eb('is_active', '=', true))
+      .where((eb) => (allowInactive ? eb.val(true) : eb('is_active', '=', true)))
       .where(sql<boolean>`tenant_id = ${tenantId}`)
       .executeTakeFirst();
 
@@ -84,31 +90,44 @@ export class InventoryScopeService {
     if (location.location_type === 'branch_stock') {
       const isSuper = ['owner', 'admin', 'super_admin'].includes(auth.role);
       const hasPerm = auth.permissions?.includes('canManageBranchStock');
-      
+
       if (action === 'write' && !isSuper && !hasPerm) {
         throw new AppError('You do not have permission to modify branch stock', 'LOCATION_SCOPE_FORBIDDEN', 403);
       }
-      
+
       if (action === 'read' && auth.role === 'storekeeper' && !hasPerm) {
         throw new AppError('Location not found', 'LOCATION_NOT_FOUND', 404);
       }
     }
 
     const scope = await this.branchScope(auth, executor);
-    if (!this.canAccessEveryBranch(auth) &&
-        (scope.length === 0 || (location.branch_id != null && !scope.includes(Number(location.branch_id))))) {
+    if (
+      !this.canAccessEveryBranch(auth) &&
+      (scope.length === 0 || (location.branch_id != null && !scope.includes(Number(location.branch_id))))
+    ) {
       throw new AppError('Location is outside assigned branches', 'LOCATION_SCOPE_FORBIDDEN', 403);
     }
 
-    return { id: location.id, name: location.name || '', branchId: location.branch_id || null, locationType: location.location_type || '' };
+    return {
+      id: location.id,
+      name: location.name || '',
+      branchId: location.branch_id || null,
+      locationType: location.location_type || '',
+    };
   }
 
-  async filterByScope<T extends { branchId?: string; fromBranchId?: string; toBranchId?: string }>(rows: T[], auth: AuthContext, executor: Kysely<Database> = this.db): Promise<T[]> {
+  async filterByScope<T extends { branchId?: string; fromBranchId?: string; toBranchId?: string }>(
+    rows: T[],
+    auth: AuthContext,
+    executor: Kysely<Database> = this.db,
+  ): Promise<T[]> {
     const scope = await this.branchScope(auth, executor);
     if (this.canAccessEveryBranch(auth)) return rows;
     if (!scope.length) return [];
     return rows.filter((row) => {
-      const ids = [Number(row.branchId || 0), Number(row.fromBranchId || 0), Number(row.toBranchId || 0)].filter((id) => id > 0);
+      const ids = [Number(row.branchId || 0), Number(row.fromBranchId || 0), Number(row.toBranchId || 0)].filter(
+        (id) => id > 0,
+      );
       if (!ids.length) return true;
       return ids.every((id) => scope.includes(id));
     });
@@ -120,32 +139,44 @@ export class InventoryScopeService {
     if (!this.canAccessEveryBranch(auth) && !scope.length) return { locations: [] };
     let query = this.db
       .selectFrom('stock_locations as l')
-      .leftJoin('branches as b', (join) => join.onRef('b.id', '=', 'l.branch_id').on(sql<boolean>`b.tenant_id = ${tenantId}`))
+      .leftJoin('branches as b', (join) =>
+        join.onRef('b.id', '=', 'l.branch_id').on(sql<boolean>`b.tenant_id = ${tenantId}`),
+      )
       .select(['l.id', 'l.name', 'l.code', 'l.branch_id', 'b.name as branch_name', 'l.is_active', 'l.location_type'])
       .where(sql<boolean>`l.tenant_id = ${tenantId}`)
       .orderBy('l.id', 'asc');
-      
+
     if (auth.role === 'storekeeper' && !auth.permissions?.includes('canManageBranchStock')) {
       query = query.where('l.location_type', '!=', 'branch_stock');
     }
-      
+
     if (!includeInactive) {
-      query = query.where((eb) => eb.or([
-        eb('l.is_active', '=', true),
-        eb.exists(
-          eb.selectFrom('product_location_stock as s')
-            .select('s.id')
-            .whereRef('s.location_id', '=', 'l.id')
-            .where('s.qty', '>', 0)
-        )
-      ]));
+      query = query.where((eb) =>
+        eb.or([
+          eb('l.is_active', '=', true),
+          eb.exists(
+            eb
+              .selectFrom('product_location_stock as s')
+              .select('s.id')
+              .whereRef('s.location_id', '=', 'l.id')
+              .where('s.qty', '>', 0),
+          ),
+        ]),
+      );
     }
     if (!this.canAccessEveryBranch(auth)) {
       query = query.where((eb) => eb.or([eb('l.branch_id', 'in', scope), eb('l.branch_id', 'is', null)]));
     }
     const rows = await query.execute();
     return {
-      locations: rows.map((row) => ({ id: String(row.id), name: row.name + (!row.is_active ? ' (محذوف)' : ''), code: row.code || '', branchId: row.branch_id ? String(row.branch_id) : '', branchName: row.branch_name || '', locationType: row.location_type })),
+      locations: rows.map((row) => ({
+        id: String(row.id),
+        name: row.name + (!row.is_active ? ' (محذوف)' : ''),
+        code: row.code || '',
+        branchId: row.branch_id ? String(row.branch_id) : '',
+        branchName: row.branch_name || '',
+        locationType: row.location_type,
+      })),
     };
   }
   /**
@@ -160,7 +191,9 @@ export class InventoryScopeService {
     const scope = requireTenantScope(auth);
     let query = this.db
       .selectFrom('inventory_batches as ib')
-      .leftJoin('products as p', (join) => join.onRef('p.id', '=', 'ib.product_id').onRef('p.tenant_id', '=', 'ib.tenant_id'))
+      .leftJoin('products as p', (join) =>
+        join.onRef('p.id', '=', 'ib.product_id').onRef('p.tenant_id', '=', 'ib.tenant_id'),
+      )
       .where(sql<boolean>`ib.tenant_id = ${scope.tenantId}`);
 
     if (filters?.status && filters.status !== 'all') {
@@ -226,35 +259,30 @@ export class InventoryScopeService {
     if (!this.canAccessEveryBranch(auth) && !scope.length) return { stocks: [] };
     let query = this.db
       .selectFrom('product_location_stock as s')
-      .leftJoin('products as p', (join) => join.onRef('p.id', '=', 's.product_id').onRef('p.tenant_id', '=', 's.tenant_id'))
-      .innerJoin('stock_locations as l', (join) => join.onRef('l.id', '=', 's.location_id').onRef('l.tenant_id', '=', 's.tenant_id'))
-      .select([
-        's.product_id',
-        's.location_id',
-        's.qty',
-        sql<number>`COALESCE(s.reserved_qty, 0)`.as('reserved_qty'),
-      ])
+      .leftJoin('products as p', (join) =>
+        join.onRef('p.id', '=', 's.product_id').onRef('p.tenant_id', '=', 's.tenant_id'),
+      )
+      .innerJoin('stock_locations as l', (join) =>
+        join.onRef('l.id', '=', 's.location_id').onRef('l.tenant_id', '=', 's.tenant_id'),
+      )
+      .select(['s.product_id', 's.location_id', 's.qty', sql<number>`COALESCE(s.reserved_qty, 0)`.as('reserved_qty')])
       .where('p.is_active', '=', true)
-      .where((eb) => eb.or([
-        eb('l.is_active', '=', true),
-        eb('s.qty', '>', 0)
-      ]))
-      .where(sql<boolean>`s.tenant_id = ${tenantId} AND (s.account_id = ${accountId} OR s.account_id = ${tenantId} OR s.account_id IS NULL)`);
+      .where((eb) => eb.or([eb('l.is_active', '=', true), eb('s.qty', '>', 0)]))
+      .where(
+        sql<boolean>`s.tenant_id = ${tenantId} AND (s.account_id = ${accountId} OR s.account_id = ${tenantId} OR s.account_id IS NULL)`,
+      );
 
     if (auth.role === 'storekeeper' && !auth.permissions?.includes('canManageBranchStock')) {
       query = query.where('l.location_type', '!=', 'branch_stock');
     }
 
     if (!this.canAccessEveryBranch(auth)) {
-      query = query.where((eb) => eb.or([
-        eb('s.branch_id', 'in', scope),
-        eb('s.branch_id', 'is', null)
-      ]));
+      query = query.where((eb) => eb.or([eb('s.branch_id', 'in', scope), eb('s.branch_id', 'is', null)]));
     }
-    
+
     const rows = await query.execute();
     return {
-      stocks: rows.map(r => {
+      stocks: rows.map((r) => {
         const qty = Number(r.qty || 0);
         const reservedQty = Number((r as { reserved_qty?: unknown }).reserved_qty || 0);
         return {
@@ -263,7 +291,7 @@ export class InventoryScopeService {
           qty,
           availableQty: Math.max(0, Number((qty - reservedQty).toFixed(3))),
         };
-      })
+      }),
     };
   }
 
@@ -273,12 +301,14 @@ export class InventoryScopeService {
     const rows = await this.db
       .selectFrom('product_categories as c')
       .leftJoin('products as p', 'p.category_id', 'c.id')
-      .leftJoin('product_location_stock as s', join => join.onRef('s.product_id', '=', 'p.id').on('s.location_id', '=', locationId))
+      .leftJoin('product_location_stock as s', (join) =>
+        join.onRef('s.product_id', '=', 'p.id').on('s.location_id', '=', locationId),
+      )
       .select([
-        'c.id', 
+        'c.id',
         'c.name',
         sql<number>`COUNT(s.product_id)`.as('assignedProductCount'),
-        sql<number>`SUM(CASE WHEN s.qty > 0 THEN 1 ELSE 0 END)`.as('positiveStockProductCount')
+        sql<number>`SUM(CASE WHEN s.qty > 0 THEN 1 ELSE 0 END)`.as('positiveStockProductCount'),
       ])
       .where('c.is_active', '=', true)
       .where('c.tenant_id', '=', tenantId)
@@ -286,18 +316,22 @@ export class InventoryScopeService {
       .groupBy(['c.id', 'c.name'])
       .orderBy('c.name')
       .execute();
-      
+
     return {
-      categories: rows.map(r => ({ 
-        id: String(r.id), 
+      categories: rows.map((r) => ({
+        id: String(r.id),
         name: r.name || '',
         assignedProductCount: Number(r.assignedProductCount) || 0,
-        positiveStockProductCount: Number(r.positiveStockProductCount) || 0
-      }))
+        positiveStockProductCount: Number(r.positiveStockProductCount) || 0,
+      })),
     };
   }
 
-  async getLocationCategoryProducts(locationId: number, categoryId: number | 'all', auth: AuthContext): Promise<Record<string, unknown>> {
+  async getLocationCategoryProducts(
+    locationId: number,
+    categoryId: number | 'all',
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     await this.assertLocationScope(locationId, auth);
     const { tenantId, accountId } = requireTenantScope(auth);
     let query = this.db
@@ -308,20 +342,20 @@ export class InventoryScopeService {
       .where('p.is_active', '=', true)
       .where('p.tenant_id', '=', tenantId)
       .where('p.account_id', '=', accountId);
-      
+
     if (categoryId !== 'all') {
       query = query.where('p.category_id', '=', categoryId);
     }
-    
+
     const rows = await query.orderBy('p.name').execute();
     return {
-      products: rows.map(r => ({
+      products: rows.map((r) => ({
         id: String(r.id),
         name: r.name || '',
         barcode: r.barcode || '',
         stockQty: Number(r.qty || 0),
-        globalStockQty: Number(r.stock_qty || 0)
-      }))
+        globalStockQty: Number(r.stock_qty || 0),
+      })),
     };
   }
 
@@ -329,44 +363,54 @@ export class InventoryScopeService {
     const { tenantId, accountId } = requireTenantScope(auth);
     const branchScope = await this.branchScope(auth);
     if (!this.canAccessEveryBranch(auth) && !branchScope.length) return { locations: [], totalGlobalValue: 0 };
-    
-    const locationsRaw = await this.db.selectFrom('stock_locations as l')
+
+    const locationsRaw = await this.db
+      .selectFrom('stock_locations as l')
       .select(['l.id', 'l.name', 'l.is_active', 'l.branch_id'])
-      .where((eb) => eb.or([
-        eb('l.is_active', '=', true),
-        eb.exists(
-          eb.selectFrom('product_location_stock as s')
-            .select('s.id')
-            .whereRef('s.location_id', '=', 'l.id')
-            .where('s.qty', '>', 0)
-        )
-      ]))
+      .where((eb) =>
+        eb.or([
+          eb('l.is_active', '=', true),
+          eb.exists(
+            eb
+              .selectFrom('product_location_stock as s')
+              .select('s.id')
+              .whereRef('s.location_id', '=', 'l.id')
+              .where('s.qty', '>', 0),
+          ),
+        ]),
+      )
       .where('l.tenant_id', '=', tenantId)
       .where('l.account_id', '=', accountId)
       .execute();
-      
+
     const allowedLocationIds = locationsRaw
-      .filter((l) => this.canAccessEveryBranch(auth) || l.branch_id == null || branchScope.includes(Number(l.branch_id)))
+      .filter(
+        (l) => this.canAccessEveryBranch(auth) || l.branch_id == null || branchScope.includes(Number(l.branch_id)),
+      )
       .map((l) => Number(l.id));
     if (allowedLocationIds.length === 0) return { locations: [], totalGlobalValue: 0 };
-    const locations = locationsRaw.filter((l) => allowedLocationIds.includes(Number(l.id))).map(l => ({
-      id: l.id,
-      name: l.name + (!l.is_active ? ' (محذوف)' : '')
-    }));
-      
-    const categories = await this.db.selectFrom('product_categories')
+    const locations = locationsRaw
+      .filter((l) => allowedLocationIds.includes(Number(l.id)))
+      .map((l) => ({
+        id: l.id,
+        name: l.name + (!l.is_active ? ' (محذوف)' : ''),
+      }));
+
+    const categories = await this.db
+      .selectFrom('product_categories')
       .select(['id', 'name'])
       .where('tenant_id', '=', tenantId)
       .where('account_id', '=', accountId)
       .execute();
-      
-    const stockCounts = await this.db.selectFrom('product_location_stock as pls')
+
+    const stockCounts = await this.db
+      .selectFrom('product_location_stock as pls')
       .innerJoin('products as p', 'p.id', 'pls.product_id')
       .select([
         'pls.location_id',
         'p.category_id',
         sql<number>`count(distinct p.id)`.as('productCount'),
-        sql<number>`sum(pls.qty * p.cost_price)`.as('inventoryValue')
+        sql<number>`sum(pls.qty * p.cost_price)`.as('inventoryValue'),
       ])
       .where('pls.qty', '>', 0)
       .where('pls.location_id', 'in', allowedLocationIds)
@@ -387,41 +431,53 @@ export class InventoryScopeService {
 
     let totalGlobalValue = 0;
 
-    const overview = locations.map(loc => {
+    const overview = locations.map((loc) => {
       const locStocks = stockByLocation.get(Number(loc.id)) || [];
       let locationTotalValue = 0;
-      
-      const locCategories = locStocks.map(s => {
-        const categoryName = categoryNameById.get(Number(s.category_id));
-        const value = Number(s.inventoryValue) || 0;
-        locationTotalValue += value;
-        return {
-          id: String(s.category_id),
-          name: categoryName || 'بدون قسم',
-          productCount: Number(s.productCount) || 0,
-          inventoryValue: value
-        };
-      }).filter(c => c.productCount > 0);
-      
+
+      const locCategories = locStocks
+        .map((s) => {
+          const categoryName = categoryNameById.get(Number(s.category_id));
+          const value = Number(s.inventoryValue) || 0;
+          locationTotalValue += value;
+          return {
+            id: String(s.category_id),
+            name: categoryName || 'بدون قسم',
+            productCount: Number(s.productCount) || 0,
+            inventoryValue: value,
+          };
+        })
+        .filter((c) => c.productCount > 0);
+
       totalGlobalValue += locationTotalValue;
 
       return {
         id: String(loc.id),
         name: loc.name,
         totalValue: locationTotalValue,
-        categories: locCategories
+        categories: locCategories,
       };
     });
-    
+
     return { locations: overview, totalGlobalValue };
   }
-  async assignProductsToLocation(locationId: number, productIds: number[], auth: AuthContext): Promise<{ success: boolean }> {
+  async assignProductsToLocation(
+    locationId: number,
+    productIds: number[],
+    auth: AuthContext,
+  ): Promise<{ success: boolean }> {
     await this.assertLocationScope(locationId, auth, false, 'write');
     if (!productIds || productIds.length === 0) return { success: true };
 
-    await this.db.transaction().execute(async trx => {
+    await this.db.transaction().execute(async (trx) => {
       const { tenantId, accountId } = requireTenantScope(auth);
-      const location = await trx.selectFrom('stock_locations').select('branch_id').where('id', '=', locationId).where('tenant_id', '=', tenantId).where('account_id', '=', accountId).executeTakeFirst();
+      const location = await trx
+        .selectFrom('stock_locations')
+        .select('branch_id')
+        .where('id', '=', locationId)
+        .where('tenant_id', '=', tenantId)
+        .where('account_id', '=', accountId)
+        .executeTakeFirst();
       if (!location) throw new AppError('Location not found', 'NOT_FOUND', 404);
 
       await lockStockProducts(trx, { tenantId, accountId, productIds });
@@ -433,8 +489,14 @@ export class InventoryScopeService {
         // there, at quantity zero, with no movement, journal or audit
         // trace for stock that was never physically moved.
         await applyStockDelta(trx, {
-          tenantId, accountId, productId: pid, branchId: location.branch_id,
-          locationId, delta: 0, skipGlobalUpdate: true, disableAutoDrain: true,
+          tenantId,
+          accountId,
+          productId: pid,
+          branchId: location.branch_id,
+          locationId,
+          delta: 0,
+          skipGlobalUpdate: true,
+          disableAutoDrain: true,
         });
       }
     });
@@ -442,13 +504,18 @@ export class InventoryScopeService {
     return { success: true };
   }
 
-  async removeProductFromLocation(locationId: number, productId: number, auth: AuthContext): Promise<{ success: boolean }> {
+  async removeProductFromLocation(
+    locationId: number,
+    productId: number,
+    auth: AuthContext,
+  ): Promise<{ success: boolean }> {
     await this.assertLocationScope(locationId, auth, false, 'write');
-    await this.db.transaction().execute(async trx => {
+    await this.db.transaction().execute(async (trx) => {
       const { tenantId, accountId } = requireTenantScope(auth);
       await lockStockProducts(trx, { tenantId, accountId, productIds: [productId] });
       // Find the stock
-      const stock = await trx.selectFrom('product_location_stock')
+      const stock = await trx
+        .selectFrom('product_location_stock')
         .select(['qty', 'reserved_qty'])
         .where('location_id', '=', locationId)
         .where('product_id', '=', productId)
@@ -456,11 +523,13 @@ export class InventoryScopeService {
         .where('account_id', '=', accountId)
         .forUpdate()
         .executeTakeFirst();
-      
-      if (!stock) throw new AppError('Stock not found in this location', 'NOT_FOUND', 404);
-      if (Number(stock.qty) > 0 || Number(stock.reserved_qty || 0) > 0) throw new AppError('لا يمكن حذف المخزن طالما يوجد به رصيد. يجب تحويل الرصيد أولاً', 'BAD_REQUEST', 400);
 
-      await trx.deleteFrom('product_location_stock')
+      if (!stock) throw new AppError('Stock not found in this location', 'NOT_FOUND', 404);
+      if (Number(stock.qty) > 0 || Number(stock.reserved_qty || 0) > 0)
+        throw new AppError('لا يمكن حذف المخزن طالما يوجد به رصيد. يجب تحويل الرصيد أولاً', 'BAD_REQUEST', 400);
+
+      await trx
+        .deleteFrom('product_location_stock')
         .where('location_id', '=', locationId)
         .where('product_id', '=', productId)
         .where('tenant_id', '=', tenantId)

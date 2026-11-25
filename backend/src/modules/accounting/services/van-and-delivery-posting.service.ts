@@ -20,7 +20,6 @@ import { PostVanStockTransferSlice } from './van-and-delivery-posting/post-van-s
 import { PostVanFieldCollectionSlice } from './van-and-delivery-posting/post-van-field-collection.slice';
 import { PostVanFieldReturnSlice } from './van-and-delivery-posting/post-van-field-return.slice';
 
-
 export class VanAndDeliveryPostingService {
   private readonly accountingTenantFoundation: AccountingTenantFoundationService;
   private readonly getTenantAccountingSettings: VanAndDeliveryPostingDeps['getTenantAccountingSettings'];
@@ -58,158 +57,118 @@ export class VanAndDeliveryPostingService {
     await this.accountingTenantFoundation.ensureForAuth(queryable, auth);
   }
 
-
   private postVanDamagedSwapSliceInstance?: PostVanDamagedSwapSlice;
   private get postVanDamagedSwapSlice(): PostVanDamagedSwapSlice {
     return (this.postVanDamagedSwapSliceInstance ??= new PostVanDamagedSwapSlice({
-        ensureTenantFoundation: (queryable, auth) =>
-          this.ensureTenantFoundation(queryable, auth),
-        toMoney: (value, digits) =>
-          this.toMoney(value, digits),
-        getTenantAccountingSettings: (queryable, tenantId) =>
-          this.getTenantAccountingSettings(queryable, tenantId),
-        resolveSystemAccountByCode: (queryable, tenantId, code) =>
-          this.resolveSystemAccountByCode(queryable, tenantId, code),
-        addLine: (lines, next, digits) =>
-          this.addLine(lines, next, digits),
-        insertPostedJournal: (queryable, params) =>
-          this.insertPostedJournal(queryable, params),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
+      resolveSystemAccountByCode: (queryable, tenantId, code) =>
+        this.resolveSystemAccountByCode(queryable, tenantId, code),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
     }));
   }
 
   private postDeliveryRepSettlementSliceInstance?: PostDeliveryRepSettlementSlice;
   private get postDeliveryRepSettlementSlice(): PostDeliveryRepSettlementSlice {
     return (this.postDeliveryRepSettlementSliceInstance ??= new PostDeliveryRepSettlementSlice({
-        resolveSystemAccountByCode: (queryable, tenantId, code) =>
-          this.resolveSystemAccountByCode(queryable, tenantId, code),
-        maxAllowedDifference: (bookDigits) =>
-          this.maxAllowedDifference(bookDigits),
-        resolveAccountWithFallback: (queryable, tenantId, configuredId, fallbackCode) =>
-          this.resolveAccountWithFallback(queryable, tenantId, configuredId, fallbackCode),
-        toMoney: (value, digits) =>
-          this.toMoney(value, digits),
-        insertPostedJournal: (queryable, params) =>
-          this.insertPostedJournal(queryable, params),
-        hasDeliveryCustodyReclassification: (queryable, saleId, auth) =>
-          this.hasDeliveryCustodyReclassification(queryable, saleId, auth),
-        getTenantAccountingSettings: (queryable, tenantId) =>
-          this.getTenantAccountingSettings(queryable, tenantId),
-        deliverySettlementBasis: (queryable, saleId, auth) =>
-          this.deliverySettlementBasis(queryable, saleId, auth),
-        deliveryCustodyPartner: (queryable, saleId) =>
-          this.deliveryCustodyPartner(queryable, saleId),
-        addLine: (lines, next, digits) =>
-          this.addLine(lines, next, digits),
+      resolveSystemAccountByCode: (queryable, tenantId, code) =>
+        this.resolveSystemAccountByCode(queryable, tenantId, code),
+      maxAllowedDifference: (bookDigits) => this.maxAllowedDifference(bookDigits),
+      resolveAccountWithFallback: (queryable, tenantId, configuredId, fallbackCode) =>
+        this.resolveAccountWithFallback(queryable, tenantId, configuredId, fallbackCode),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
+      hasDeliveryCustodyReclassification: (queryable, saleId, auth) =>
+        this.hasDeliveryCustodyReclassification(queryable, saleId, auth),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
+      deliverySettlementBasis: (queryable, saleId, auth) => this.deliverySettlementBasis(queryable, saleId, auth),
+      deliveryCustodyPartner: (queryable, saleId) => this.deliveryCustodyPartner(queryable, saleId),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
     }));
   }
 
   private postRepShortageCashCollectionSliceInstance?: PostRepShortageCashCollectionSlice;
   private get postRepShortageCashCollectionSlice(): PostRepShortageCashCollectionSlice {
     return (this.postRepShortageCashCollectionSliceInstance ??= new PostRepShortageCashCollectionSlice({
-        ensureTenantFoundation: (queryable, auth) =>
-          this.ensureTenantFoundation(queryable, auth),
-        resolveSystemAccountByCode: (queryable, tenantId, code) =>
-          this.resolveSystemAccountByCode(queryable, tenantId, code),
-        toMoney: (value, digits) =>
-          this.toMoney(value, digits),
-        postDomainJournal: (queryable, params) =>
-          this.postDomainJournal(queryable, params),
-        getTenantAccountingSettings: (queryable, tenantId) =>
-          this.getTenantAccountingSettings(queryable, tenantId),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      resolveSystemAccountByCode: (queryable, tenantId, code) =>
+        this.resolveSystemAccountByCode(queryable, tenantId, code),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      postDomainJournal: (queryable, params) => this.postDomainJournal(queryable, params),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
     }));
   }
 
   private postRepShortageWaiverSliceInstance?: PostRepShortageWaiverSlice;
   private get postRepShortageWaiverSlice(): PostRepShortageWaiverSlice {
     return (this.postRepShortageWaiverSliceInstance ??= new PostRepShortageWaiverSlice({
-        ensureTenantFoundation: (queryable, auth) =>
-          this.ensureTenantFoundation(queryable, auth),
-        toMoney: (value, digits) =>
-          this.toMoney(value, digits),
-        resolveSystemAccountByCode: (queryable, tenantId, code) =>
-          this.resolveSystemAccountByCode(queryable, tenantId, code),
-        postDomainJournal: (queryable, params) =>
-          this.postDomainJournal(queryable, params),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      resolveSystemAccountByCode: (queryable, tenantId, code) =>
+        this.resolveSystemAccountByCode(queryable, tenantId, code),
+      postDomainJournal: (queryable, params) => this.postDomainJournal(queryable, params),
     }));
   }
 
   private postVanTripSettlementSliceInstance?: PostVanTripSettlementSlice;
   private get postVanTripSettlementSlice(): PostVanTripSettlementSlice {
     return (this.postVanTripSettlementSliceInstance ??= new PostVanTripSettlementSlice({
-        ensureTenantFoundation: (queryable, auth) =>
-          this.ensureTenantFoundation(queryable, auth),
-        toMoney: (value, digits) =>
-          this.toMoney(value, digits),
-        addLine: (lines, next, digits) =>
-          this.addLine(lines, next, digits),
-        getTenantAccountingSettings: (queryable, tenantId) =>
-          this.getTenantAccountingSettings(queryable, tenantId),
-        resolveSystemAccountByCode: (queryable, tenantId, code) =>
-          this.resolveSystemAccountByCode(queryable, tenantId, code),
-        maxAllowedDifference: (bookDigits) =>
-          this.maxAllowedDifference(bookDigits),
-        insertPostedJournal: (queryable, params) =>
-          this.insertPostedJournal(queryable, params),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
+      resolveSystemAccountByCode: (queryable, tenantId, code) =>
+        this.resolveSystemAccountByCode(queryable, tenantId, code),
+      maxAllowedDifference: (bookDigits) => this.maxAllowedDifference(bookDigits),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
     }));
   }
 
   private postVanStockTransferSliceInstance?: PostVanStockTransferSlice;
   private get postVanStockTransferSlice(): PostVanStockTransferSlice {
     return (this.postVanStockTransferSliceInstance ??= new PostVanStockTransferSlice({
-        ensureTenantFoundation: (queryable, auth) =>
-          this.ensureTenantFoundation(queryable, auth),
-        toMoney: (value, digits) =>
-          this.toMoney(value, digits),
-        getTenantAccountingSettings: (queryable, tenantId) =>
-          this.getTenantAccountingSettings(queryable, tenantId),
-        resolveSystemAccountByCode: (queryable, tenantId, code) =>
-          this.resolveSystemAccountByCode(queryable, tenantId, code),
-        insertPostedJournal: (queryable, params) =>
-          this.insertPostedJournal(queryable, params),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
+      resolveSystemAccountByCode: (queryable, tenantId, code) =>
+        this.resolveSystemAccountByCode(queryable, tenantId, code),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
     }));
   }
 
   private postVanFieldCollectionSliceInstance?: PostVanFieldCollectionSlice;
   private get postVanFieldCollectionSlice(): PostVanFieldCollectionSlice {
     return (this.postVanFieldCollectionSliceInstance ??= new PostVanFieldCollectionSlice({
-        ensureTenantFoundation: (queryable, auth) =>
-          this.ensureTenantFoundation(queryable, auth),
-        toMoney: (value, digits) =>
-          this.toMoney(value, digits),
-        getTenantAccountingSettings: (queryable, tenantId) =>
-          this.getTenantAccountingSettings(queryable, tenantId),
-        resolveSystemAccountByCode: (queryable, tenantId, code) =>
-          this.resolveSystemAccountByCode(queryable, tenantId, code),
-        resolveAccountWithFallback: (queryable, tenantId, configuredId, fallbackCode) =>
-          this.resolveAccountWithFallback(queryable, tenantId, configuredId, fallbackCode),
-        insertPostedJournal: (queryable, params) =>
-          this.insertPostedJournal(queryable, params),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
+      resolveSystemAccountByCode: (queryable, tenantId, code) =>
+        this.resolveSystemAccountByCode(queryable, tenantId, code),
+      resolveAccountWithFallback: (queryable, tenantId, configuredId, fallbackCode) =>
+        this.resolveAccountWithFallback(queryable, tenantId, configuredId, fallbackCode),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
     }));
   }
 
   private postVanFieldReturnSliceInstance?: PostVanFieldReturnSlice;
   private get postVanFieldReturnSlice(): PostVanFieldReturnSlice {
     return (this.postVanFieldReturnSliceInstance ??= new PostVanFieldReturnSlice({
-        ensureTenantFoundation: (queryable, auth) =>
-          this.ensureTenantFoundation(queryable, auth),
-        readSaleResidualLines: (queryable, tenantId, saleId) =>
-          this.readSaleResidualLines(queryable, tenantId, saleId),
-        salesReturnCogsResidual: (queryable, tenantId, saleId, bookDigits, returnedQtyBySaleItemId) =>
-          this.salesReturnCogsResidual(queryable, tenantId, saleId, bookDigits, returnedQtyBySaleItemId),
-        toMoney: (value, digits) =>
-          this.toMoney(value, digits),
-        addLine: (lines, next, digits) =>
-          this.addLine(lines, next, digits),
-        getTenantAccountingSettings: (queryable, tenantId) =>
-          this.getTenantAccountingSettings(queryable, tenantId),
-        resolveSystemAccountByCode: (queryable, tenantId, code) =>
-          this.resolveSystemAccountByCode(queryable, tenantId, code),
-        insertPostedJournal: (queryable, params) =>
-          this.insertPostedJournal(queryable, params),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      readSaleResidualLines: (queryable, tenantId, saleId) => this.readSaleResidualLines(queryable, tenantId, saleId),
+      salesReturnCogsResidual: (queryable, tenantId, saleId, bookDigits, returnedQtyBySaleItemId) =>
+        this.salesReturnCogsResidual(queryable, tenantId, saleId, bookDigits, returnedQtyBySaleItemId),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
+      resolveSystemAccountByCode: (queryable, tenantId, code) =>
+        this.resolveSystemAccountByCode(queryable, tenantId, code),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
     }));
   }
 
-async postVanDamagedSwap(
+  async postVanDamagedSwap(
     queryable: DbOrTx,
     swapId: number,
     params: {
@@ -228,11 +187,27 @@ async postVanDamagedSwap(
     return this.postVanDamagedSwapSlice.postVanDamagedSwap(queryable, swapId, params, auth);
   }
 
-async postDeliveryRepSettlement(queryable: DbOrTx, saleId: number, amount: number, branchId: number | null, locationId: number | null, auth: AuthContext, opts?: { countedCash?: number }): Promise<{ posted: boolean; journalEntryId: number | null }> {
-    return this.postDeliveryRepSettlementSlice.postDeliveryRepSettlement(queryable, saleId, amount, branchId, locationId, auth, opts);
+  async postDeliveryRepSettlement(
+    queryable: DbOrTx,
+    saleId: number,
+    amount: number,
+    branchId: number | null,
+    locationId: number | null,
+    auth: AuthContext,
+    opts?: { countedCash?: number },
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
+    return this.postDeliveryRepSettlementSlice.postDeliveryRepSettlement(
+      queryable,
+      saleId,
+      amount,
+      branchId,
+      locationId,
+      auth,
+      opts,
+    );
   }
 
-async postRepShortageCashCollection(
+  async postRepShortageCashCollection(
     queryable: DbOrTx,
     settlementItemId: number,
     params: {
@@ -243,10 +218,15 @@ async postRepShortageCashCollection(
     },
     auth: AuthContext,
   ): Promise<number> {
-    return this.postRepShortageCashCollectionSlice.postRepShortageCashCollection(queryable, settlementItemId, params, auth);
+    return this.postRepShortageCashCollectionSlice.postRepShortageCashCollection(
+      queryable,
+      settlementItemId,
+      params,
+      auth,
+    );
   }
 
-async postRepShortageWaiver(
+  async postRepShortageWaiver(
     queryable: DbOrTx,
     settlementItemId: number,
     params: {
@@ -259,7 +239,7 @@ async postRepShortageWaiver(
     return this.postRepShortageWaiverSlice.postRepShortageWaiver(queryable, settlementItemId, params, auth);
   }
 
-async postVanTripSettlement(
+  async postVanTripSettlement(
     queryable: DbOrTx,
     tripId: number,
     params: {
@@ -277,7 +257,7 @@ async postVanTripSettlement(
     return this.postVanTripSettlementSlice.postVanTripSettlement(queryable, tripId, params, auth);
   }
 
-async postVanStockTransfer(
+  async postVanStockTransfer(
     queryable: DbOrTx,
     tripId: number,
     params: {
@@ -292,16 +272,23 @@ async postVanStockTransfer(
     return this.postVanStockTransferSlice.postVanStockTransfer(queryable, tripId, params, auth);
   }
 
-async postVanFieldCollection(
+  async postVanFieldCollection(
     queryable: DbOrTx,
     collectionId: number,
-    params: { amount: number; customerId: number; branchId: number | null; locationId: number | null; paymentMethod?: string; transferReference?: string },
+    params: {
+      amount: number;
+      customerId: number;
+      branchId: number | null;
+      locationId: number | null;
+      paymentMethod?: string;
+      transferReference?: string;
+    },
     auth: AuthContext,
   ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.postVanFieldCollectionSlice.postVanFieldCollection(queryable, collectionId, params, auth);
   }
 
-async postVanFieldReturn(
+  async postVanFieldReturn(
     queryable: DbOrTx,
     returnId: number,
     params: {

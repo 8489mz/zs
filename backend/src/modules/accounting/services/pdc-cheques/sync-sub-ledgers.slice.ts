@@ -29,7 +29,12 @@ export class SyncSubLedgersSlice {
 
     if (!updated) throw new BadRequestException('الشريك لا يتبع المنشأة؛ تم إلغاء العملية بالكامل.');
 
-    const chequeDate = await trx.selectFrom('accounting_cheques').select(['last_action_date', 'issue_date']).where('tenant_id', '=', tenantId).where('id', '=', chequeId).executeTakeFirstOrThrow();
+    const chequeDate = await trx
+      .selectFrom('accounting_cheques')
+      .select(['last_action_date', 'issue_date'])
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', chequeId)
+      .executeTakeFirstOrThrow();
     await trx
       .insertInto('customer_ledger')
       .values({
@@ -78,7 +83,12 @@ export class SyncSubLedgersSlice {
 
     if (!updated) throw new BadRequestException('الشريك لا يتبع المنشأة؛ تم إلغاء العملية بالكامل.');
 
-    const chequeDate = await trx.selectFrom('accounting_cheques').select(['last_action_date', 'issue_date']).where('tenant_id', '=', tenantId).where('id', '=', chequeId).executeTakeFirstOrThrow();
+    const chequeDate = await trx
+      .selectFrom('accounting_cheques')
+      .select(['last_action_date', 'issue_date'])
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', chequeId)
+      .executeTakeFirstOrThrow();
     await trx
       .insertInto('supplier_ledger')
       .values({

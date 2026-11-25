@@ -12,7 +12,13 @@ import { AccountingPostingService } from '../../accounting/accounting-posting.se
 import { revalueStockCost } from '../../accounting/inventory-valuation';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { MoneyDigits, currencyMoneyDigits, toMinorUnits, fromMinorUnits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import {
+  MoneyDigits,
+  currencyMoneyDigits,
+  toMinorUnits,
+  fromMinorUnits,
+  roundMoney,
+} from '../../accounting/engines/money-minor-units.engine';
 
 @Injectable()
 export class PurchaseLandedCostsService {
@@ -40,7 +46,11 @@ export class PurchaseLandedCostsService {
    * configured account wins whenever it exists and is active, and 5100
    * is only the creation fallback, matching the posting service.
    */
-  private async resolveCogsAccount(trx: any, scope: { tenantId: string; accountId: string }, settings: any): Promise<number | null> {
+  private async resolveCogsAccount(
+    trx: any,
+    scope: { tenantId: string; accountId: string },
+    settings: any,
+  ): Promise<number | null> {
     const configuredId = Number(settings?.cogs_account_id || 0);
     if (configuredId > 0) {
       const configured = await trx
@@ -60,7 +70,12 @@ export class PurchaseLandedCostsService {
    * Guarding the journal with `if (account)` silently skipped posting while the perpetual cost had
    * already moved, leaving the ledger and inventory valuation permanently out of step.
    */
-  private async resolveAccountByCode(trx: any, tenantId: string, accountId: string, code: string): Promise<number | null> {
+  private async resolveAccountByCode(
+    trx: any,
+    tenantId: string,
+    accountId: string,
+    code: string,
+  ): Promise<number | null> {
     const existing = await trx
       .selectFrom('accounting_accounts')
       .select('id')
@@ -70,7 +85,13 @@ export class PurchaseLandedCostsService {
     if (existing) return Number(existing.id);
 
     const known: Record<string, { ar: string; en: string; type: string; group: string; balance: string }> = {
-      '1140': { ar: 'مخزون بضاعة ومواد خام', en: 'Inventory', type: 'asset', group: 'current_assets', balance: 'debit' },
+      '1140': {
+        ar: 'مخزون بضاعة ومواد خام',
+        en: 'Inventory',
+        type: 'asset',
+        group: 'current_assets',
+        balance: 'debit',
+      },
       '5100': { ar: 'تكلفة بضاعة مباعة', en: 'COGS', type: 'expense', group: 'cogs', balance: 'debit' },
     };
     const spec = known[code];
@@ -97,12 +118,18 @@ export class PurchaseLandedCostsService {
     return created ? Number(created.id) : null;
   }
 
-  async getPurchaseLandedCosts(purchaseId: number, auth: AuthContext, queryable: Kysely<Database> = this.db): Promise<any> {
+  async getPurchaseLandedCosts(
+    purchaseId: number,
+    auth: AuthContext,
+    queryable: Kysely<Database> = this.db,
+  ): Promise<any> {
     const scope = requireTenantScope(auth);
 
     const purchase = await (queryable as any)
       .selectFrom('purchases as p')
-      .leftJoin('suppliers as s', (join: any) => join.onRef('s.id', '=', 'p.supplier_id').onRef('s.tenant_id', '=', 'p.tenant_id'))
+      .leftJoin('suppliers as s', (join: any) =>
+        join.onRef('s.id', '=', 'p.supplier_id').onRef('s.tenant_id', '=', 'p.tenant_id'),
+      )
       .where('p.id', '=', purchaseId)
       .where(this.tenantPredicate(auth, 'p'))
       .select([
@@ -186,15 +213,33 @@ export class PurchaseLandedCostsService {
     };
   }
 
-  private async calculateStockFlowShares(trx: any, purchaseId: number, items: any[],
-    allocatedCosts: number[], tenantId: string, accountId: string, minorUnits: MoneyDigits) {
-    const productIds = [...new Set(items.map((item) => Number(item.product_id || 0)).filter((id) => id > 0))].sort((a, b) => a - b);
+  private async calculateStockFlowShares(
+    trx: any,
+    purchaseId: number,
+    items: any[],
+    allocatedCosts: number[],
+    tenantId: string,
+    accountId: string,
+    minorUnits: MoneyDigits,
+  ) {
+    const productIds = [...new Set(items.map((item) => Number(item.product_id || 0)).filter((id) => id > 0))].sort(
+      (a, b) => a - b,
+    );
     await lockStockProducts(trx, { tenantId, accountId, productIds });
-    const productRows = productIds.length ? await trx.selectFrom('products')
-      .select(['id', 'stock_qty', 'cost_price', 'item_type'])
-      .where('tenant_id', '=', tenantId).where('id', 'in', productIds).orderBy('id', 'asc').execute() : [];
+    const productRows = productIds.length
+      ? await trx
+          .selectFrom('products')
+          .select(['id', 'stock_qty', 'cost_price', 'item_type'])
+          .where('tenant_id', '=', tenantId)
+          .where('id', 'in', productIds)
+          .orderBy('id', 'asc')
+          .execute()
+      : [];
     const products = new Map<number, any>(productRows.map((row: any) => [Number(row.id), row]));
-    const receiptGroups = new Map<number, Array<{ key: number; movementId: number; receivedQty: number; allocatedCost: number }>>();
+    const receiptGroups = new Map<
+      number,
+      Array<{ key: number; movementId: number; receivedQty: number; allocatedCost: number }>
+    >();
     const usedAtMovement = new Map<number, number>();
     const splits = new Map<number, { inventory: number; cogs: number }>();
     for (const [index, item] of items.entries()) {
@@ -207,28 +252,40 @@ export class PurchaseLandedCostsService {
       }
       if (!product) throw new BadRequestException('صنف الفاتورة غير موجود في هذه المنشأة.');
       const receivedQty = Number(item.qty) * Number(item.unit_multiplier || 1);
-      if (!Number.isFinite(receivedQty) || receivedQty <= 0) throw new BadRequestException('كمية فاتورة الشراء غير صالحة لتحميل التكلفة.');
+      if (!Number.isFinite(receivedQty) || receivedQty <= 0)
+        throw new BadRequestException('كمية فاتورة الشراء غير صالحة لتحميل التكلفة.');
       let sourceType = 'purchase';
       let sourceId = purchaseId;
       if (item.grn_line_id) {
-        const receiptLine = await trx.selectFrom('goods_receipt_lines')
+        const receiptLine = await trx
+          .selectFrom('goods_receipt_lines')
           .select(['grn_id', 'product_id', 'accepted_qty'])
-          .where('tenant_id', '=', tenantId).where('id', '=', Number(item.grn_line_id)).executeTakeFirst();
-        if (!receiptLine || Number(receiptLine.product_id) !== productId ||
-            Number(receiptLine.accepted_qty) + 0.001 < receivedQty) {
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', Number(item.grn_line_id))
+          .executeTakeFirst();
+        if (
+          !receiptLine ||
+          Number(receiptLine.product_id) !== productId ||
+          Number(receiptLine.accepted_qty) + 0.001 < receivedQty
+        ) {
           throw new BadRequestException('بند الفاتورة لا يطابق محضر استلام منشوراً وكمية مقبولة.');
         }
         sourceType = 'goods_receipt';
         sourceId = Number(receiptLine.grn_id);
       }
-      const sourceMovements = await trx.selectFrom('stock_movements')
-        .select(['id', 'qty']).where('tenant_id', '=', tenantId)
-        .where('product_id', '=', productId).where('reference_type', '=', sourceType)
+      const sourceMovements = await trx
+        .selectFrom('stock_movements')
+        .select(['id', 'qty'])
+        .where('tenant_id', '=', tenantId)
+        .where('product_id', '=', productId)
+        .where('reference_type', '=', sourceType)
         .where('reference_id', '=', sourceId)
         .where('movement_type', 'in', sourceType === 'purchase' ? ['purchase', 'purchase_receipt'] : ['goods_receipt'])
-        .orderBy('id', 'asc').execute();
-      const anchor = sourceMovements.find((row: any) =>
-        Number(row.qty) - (usedAtMovement.get(Number(row.id)) || 0) + 0.001 >= receivedQty);
+        .orderBy('id', 'asc')
+        .execute();
+      const anchor = sourceMovements.find(
+        (row: any) => Number(row.qty) - (usedAtMovement.get(Number(row.id)) || 0) + 0.001 >= receivedQty,
+      );
       if (!anchor) throw new BadRequestException('لا توجد حركة استلام مخزني كافية يمكن ربط التكلفة الإضافية بها.');
       const movementId = Number(anchor.id);
       usedAtMovement.set(movementId, (usedAtMovement.get(movementId) || 0) + receivedQty);
@@ -238,19 +295,30 @@ export class PurchaseLandedCostsService {
     }
     for (const [productId, receipts] of receiptGroups) {
       const firstId = Math.min(...receipts.map((receipt) => receipt.movementId));
-      const rows = await trx.selectFrom('stock_movements').select(['id', 'movement_type', 'qty'])
-        .where('tenant_id', '=', tenantId).where('product_id', '=', productId)
-        .where('id', '>=', firstId).orderBy('id', 'asc').execute();
+      const rows = await trx
+        .selectFrom('stock_movements')
+        .select(['id', 'movement_type', 'qty'])
+        .where('tenant_id', '=', tenantId)
+        .where('product_id', '=', productId)
+        .where('id', '>=', firstId)
+        .orderBy('id', 'asc')
+        .execute();
       try {
         const movementFlow = rows.map((row: any) => ({
-          id: Number(row.id), globalDelta: stockMovementGlobalDelta(String(row.movement_type), Number(row.qty)),
+          id: Number(row.id),
+          globalDelta: stockMovementGlobalDelta(String(row.movement_type), Number(row.qty)),
         }));
         const portions = allocateReceiptCostByStockFlow({
-          currentStock: Number(products.get(productId).stock_qty), movements: movementFlow, receipts, minorUnits,
+          currentStock: Number(products.get(productId).stock_qty),
+          movements: movementFlow,
+          receipts,
+          minorUnits,
         });
         for (const [key, value] of portions) splits.set(key, value);
       } catch (error) {
-        throw new BadRequestException(`تعذر تسوية حركة مخزون الصنف ${productId} لتحميل التكلفة: ${(error as Error).message}`);
+        throw new BadRequestException(
+          `تعذر تسوية حركة مخزون الصنف ${productId} لتحميل التكلفة: ${(error as Error).message}`,
+        );
       }
     }
     return { products, splits };
@@ -319,13 +387,26 @@ export class PurchaseLandedCostsService {
         }
       }
       const totalLandedCost = fromMinorUnits(totalMinor, minorUnits);
-      if (dto.costs.some((cost) => cost.vendorId != null &&
-          (!Number.isSafeInteger(Number(cost.vendorId)) || Number(cost.vendorId) <= 0))) {
+      if (
+        dto.costs.some(
+          (cost) =>
+            cost.vendorId != null && (!Number.isSafeInteger(Number(cost.vendorId)) || Number(cost.vendorId) <= 0),
+        )
+      ) {
         throw new BadRequestException('معرّف مورد التكلفة الإضافية غير صالح.');
       }
       const vendorIds = [...new Set(dto.costs.map((cost) => Number(cost.vendorId || 0)).filter((id) => id > 0))];
-      if (vendorIds.length && (await trx.selectFrom('suppliers').select('id')
-        .where('tenant_id', '=', scope.tenantId).where('id', 'in', vendorIds).execute()).length !== vendorIds.length) {
+      if (
+        vendorIds.length &&
+        (
+          await trx
+            .selectFrom('suppliers')
+            .select('id')
+            .where('tenant_id', '=', scope.tenantId)
+            .where('id', 'in', vendorIds)
+            .execute()
+        ).length !== vendorIds.length
+      ) {
         throw new BadRequestException('أحد موردي التكاليف الإضافية لا يتبع المنشأة.');
       }
       // Split of the allocation between inventory still held and units already sold.
@@ -357,12 +438,20 @@ export class PurchaseLandedCostsService {
       // to silently lose pennies and misclassify residuals as COGS.
       const weights = items.map((item: any) => {
         if (dto.allocationMethod === 'value') return Math.max(0, Number(item.line_total || 0));
-        if (dto.allocationMethod === 'qty') return Math.max(0, Number(item.qty || 0) * Number(item.unit_multiplier || 1));
+        if (dto.allocationMethod === 'qty')
+          return Math.max(0, Number(item.qty || 0) * Number(item.unit_multiplier || 1));
         return 1;
       });
       const allocatedCosts = allocateLandedCosts(totalLandedCost, weights, minorUnits);
       const { products, splits } = await this.calculateStockFlowShares(
-        trx, purchaseId, items, allocatedCosts, scope.tenantId, scope.accountId, minorUnits);
+        trx,
+        purchaseId,
+        items,
+        allocatedCosts,
+        scope.tenantId,
+        scope.accountId,
+        minorUnits,
+      );
       const inventoryAdditionByProduct = new Map<number, number>();
       for (const [index, item] of items.entries()) {
         const itemQty = Number(item.qty || 1);
@@ -387,8 +476,7 @@ export class PurchaseLandedCostsService {
         totalCogsLandedCost += split.cogs;
         if (item.product_id && split.inventory > 0) {
           const productId = Number(item.product_id);
-          inventoryAdditionByProduct.set(productId,
-            (inventoryAdditionByProduct.get(productId) || 0) + split.inventory);
+          inventoryAdditionByProduct.set(productId, (inventoryAdditionByProduct.get(productId) || 0) + split.inventory);
         }
       }
       for (const [productId, capitalised] of inventoryAdditionByProduct) {
@@ -405,7 +493,10 @@ export class PurchaseLandedCostsService {
         // Products are locked by calculateStockFlowShares above.
         await revalueStockCost(trx, scope.tenantId, productId, currentStock, capitalised);
       }
-      if (toMinorUnits(roundMoney(totalCapitalisedLandedCost + totalCogsLandedCost, minorUnits), minorUnits) !== totalMinor) {
+      if (
+        toMinorUnits(roundMoney(totalCapitalisedLandedCost + totalCogsLandedCost, minorUnits), minorUnits) !==
+        totalMinor
+      ) {
         throw new BadRequestException('توزيع التكلفة الإضافية بين المخزون والمباع غير متزن.');
       }
 
@@ -439,9 +530,16 @@ export class PurchaseLandedCostsService {
         const cogsAccount = await this.resolveCogsAccount(trx, scope, settings);
 
         const payableAccountId = Number(settings?.supplier_payable_account_id || 0);
-        const payableAccount = payableAccountId > 0 ? await trx.selectFrom('accounting_accounts')
-          .select('id').where('tenant_id', '=', scope.tenantId).where('id', '=', payableAccountId)
-          .where('is_active', '=', true).executeTakeFirst() : null;
+        const payableAccount =
+          payableAccountId > 0
+            ? await trx
+                .selectFrom('accounting_accounts')
+                .select('id')
+                .where('tenant_id', '=', scope.tenantId)
+                .where('id', '=', payableAccountId)
+                .where('is_active', '=', true)
+                .executeTakeFirst()
+            : null;
 
         // Never skip the journal silently: products.cost_price has already been changed above, so
         // a skipped entry leaves the perpetual cost and the general ledger permanently divergent.
@@ -454,28 +552,60 @@ export class PurchaseLandedCostsService {
         const capitalised = roundMoney(totalCapitalisedLandedCost, minorUnits);
         const toCogs = fromMinorUnits(totalMinor - toMinorUnits(capitalised, minorUnits), minorUnits);
         await this.accountingPosting.postDomainJournal(trx, {
-          sourceType: 'purchase_landed_cost', sourceId: purchaseId,
-          tenantId: scope.tenantId, accountId: scope.accountId,
+          sourceType: 'purchase_landed_cost',
+          sourceId: purchaseId,
+          tenantId: scope.tenantId,
+          accountId: scope.accountId,
           entryDate: new Date(),
           description: `إثبات تكاليف إضافية لفاتورة شراء ${purchase.doc_no || purchaseId}`,
           createdBy: auth.userId,
           lines: [
-            ...(capitalised > 0 ? [{ accountId: Number(invAccount), debit: capitalised, credit: 0,
-              description: 'تحميل تكاليف إضافية على المخزون', partnerType: 'none' as const,
-              partnerId: null, branchId: null, locationId: null }] : []),
-            ...(toCogs > 0 ? [{ accountId: Number(cogsAccount), debit: toCogs, credit: 0,
-              description: 'نصيب الوحدات المباعة من التكاليف الإضافية', partnerType: 'none' as const,
-              partnerId: null, branchId: null, locationId: null }] : []),
-            ...Array.from(dto.costs.reduce((vendors, cost) => {
-              const vendorId = Number(cost.vendorId || purchase.supplier_id || 0);
-              if (!vendorId) throw new BadRequestException('يجب تحديد مورد كل تكلفة إضافية.');
-              vendors.set(vendorId, (vendors.get(vendorId) || 0) + toMinorUnits(cost.amount, minorUnits));
-              return vendors;
-            }, new Map<number, number>()), ([vendorId, amount]) => ({
-              accountId: payableAccountId, debit: 0, credit: fromMinorUnits(amount, minorUnits),
-              description: 'استحقاق تكاليف الشحن والجمارك', partnerType: 'supplier' as const,
-              partnerId: vendorId, branchId: null, locationId: null,
-            })),
+            ...(capitalised > 0
+              ? [
+                  {
+                    accountId: Number(invAccount),
+                    debit: capitalised,
+                    credit: 0,
+                    description: 'تحميل تكاليف إضافية على المخزون',
+                    partnerType: 'none' as const,
+                    partnerId: null,
+                    branchId: null,
+                    locationId: null,
+                  },
+                ]
+              : []),
+            ...(toCogs > 0
+              ? [
+                  {
+                    accountId: Number(cogsAccount),
+                    debit: toCogs,
+                    credit: 0,
+                    description: 'نصيب الوحدات المباعة من التكاليف الإضافية',
+                    partnerType: 'none' as const,
+                    partnerId: null,
+                    branchId: null,
+                    locationId: null,
+                  },
+                ]
+              : []),
+            ...Array.from(
+              dto.costs.reduce((vendors, cost) => {
+                const vendorId = Number(cost.vendorId || purchase.supplier_id || 0);
+                if (!vendorId) throw new BadRequestException('يجب تحديد مورد كل تكلفة إضافية.');
+                vendors.set(vendorId, (vendors.get(vendorId) || 0) + toMinorUnits(cost.amount, minorUnits));
+                return vendors;
+              }, new Map<number, number>()),
+              ([vendorId, amount]) => ({
+                accountId: payableAccountId,
+                debit: 0,
+                credit: fromMinorUnits(amount, minorUnits),
+                description: 'استحقاق تكاليف الشحن والجمارك',
+                partnerType: 'supplier' as const,
+                partnerId: vendorId,
+                branchId: null,
+                locationId: null,
+              }),
+            ),
           ],
         });
       }

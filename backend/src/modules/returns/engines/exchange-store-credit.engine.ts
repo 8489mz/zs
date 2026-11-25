@@ -9,7 +9,12 @@ export function exchangeStoreCreditAmount(retainedCredit: number, digits: MoneyD
 }
 
 /** A posted sale with even one outstanding fil cannot issue exchange credit. */
-export function hasUnpaidExchangeBalance(invoiceTotal: number, paidAmount: number, creditUsed: number, digits: MoneyDigits): boolean {
+export function hasUnpaidExchangeBalance(
+  invoiceTotal: number,
+  paidAmount: number,
+  creditUsed: number,
+  digits: MoneyDigits,
+): boolean {
   if (![invoiceTotal, paidAmount, creditUsed].every(Number.isFinite)) {
     throw new Error('Invalid exchange invoice balance');
   }

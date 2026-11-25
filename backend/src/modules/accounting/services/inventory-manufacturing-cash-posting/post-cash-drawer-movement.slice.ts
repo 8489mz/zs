@@ -99,7 +99,12 @@ export class PostCashDrawerMovementSlice {
     let counterpartId = 0;
     if (isTransferType) {
       counterpartId = Number(counterpartAccountId || 0);
-      if (!(counterpartId > 0)) throw new AppError('A counterpart cash or bank account is required for a safe transfer', 'DRAWER_COUNTERPART_REQUIRED', 400);
+      if (!(counterpartId > 0))
+        throw new AppError(
+          'A counterpart cash or bank account is required for a safe transfer',
+          'DRAWER_COUNTERPART_REQUIRED',
+          400,
+        );
       const counterpart = await queryable
         .selectFrom('accounting_accounts')
         .select('id')
@@ -111,8 +116,18 @@ export class PostCashDrawerMovementSlice {
         .where('is_active', '=', true)
         .forUpdate()
         .executeTakeFirst();
-      if (!counterpart) throw new AppError('The counterpart must be an active cash or bank account in this tenant', 'TREASURY_ACCOUNT_NOT_FOUND', 400);
-      if (counterpartId === cashAccountId) throw new AppError('The counterpart must differ from the drawer cash account', 'DRAWER_COUNTERPART_SAME_AS_CASH', 400);
+      if (!counterpart)
+        throw new AppError(
+          'The counterpart must be an active cash or bank account in this tenant',
+          'TREASURY_ACCOUNT_NOT_FOUND',
+          400,
+        );
+      if (counterpartId === cashAccountId)
+        throw new AppError(
+          'The counterpart must differ from the drawer cash account',
+          'DRAWER_COUNTERPART_SAME_AS_CASH',
+          400,
+        );
     } else if (movementType !== 'cash_in' && movementType !== 'cash_out') {
       throw new AppError('Unknown cash drawer movement type', 'DRAWER_MOVEMENT_TYPE_UNKNOWN', 400);
     }
@@ -144,7 +159,8 @@ export class PostCashDrawerMovementSlice {
       });
     } else if (movementType === 'cash_out') {
       let expenseAccountId = Number(settings?.expenses_account_id || 0);
-      if (!(expenseAccountId > 0)) expenseAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '6950');
+      if (!(expenseAccountId > 0))
+        expenseAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '6950');
       addBookLine({
         accountId: expenseAccountId,
         description: `صرف نقدية من الدرج: ${note}`,
@@ -211,7 +227,14 @@ export class PostCashDrawerMovementSlice {
       throw new AppError('Unknown cash drawer movement type', 'DRAWER_MOVEMENT_TYPE_UNKNOWN', 400);
     }
 
-    const movementLabel = movementType === 'cash_in' ? 'توريد' : movementType === 'cash_out' ? 'صرف' : movementType === 'safe_drop' ? 'تحويل للخزنة' : 'تغذية من الخزنة';
+    const movementLabel =
+      movementType === 'cash_in'
+        ? 'توريد'
+        : movementType === 'cash_out'
+          ? 'صرف'
+          : movementType === 'safe_drop'
+            ? 'تحويل للخزنة'
+            : 'تغذية من الخزنة';
     const entryId = await this.insertPostedJournal(queryable, {
       sourceType: `cash_drawer_${movementType}`,
       sourceId: txnId,

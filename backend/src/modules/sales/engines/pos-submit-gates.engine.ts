@@ -51,7 +51,8 @@ export function assertPosSubmitGates(params: {
   // customer-ledger debt is written by the caller — never reclassified
   // to credit (the silent flip is gone for POS sales).
   const remainingDebt = Number(params.collectibleTotal || 0) - Number(params.paidAmount || 0);
-  const hasCustomer = params.customerId !== null && params.customerId !== undefined && String(params.customerId).trim() !== '';
+  const hasCustomer =
+    params.customerId !== null && params.customerId !== undefined && String(params.customerId).trim() !== '';
   if (remainingDebt > 0.0001 && !hasCustomer) {
     throw new AppError('المبلغ غير المسدد يحتاج عميلًا مسجلًا.', 'CUSTOMER_REQUIRED_FOR_CREDIT', 400);
   }

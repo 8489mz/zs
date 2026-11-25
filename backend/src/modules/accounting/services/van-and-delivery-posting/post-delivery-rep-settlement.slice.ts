@@ -22,15 +22,15 @@ export type PostDeliveryRepSettlementBoundDeps = {
 export class PostDeliveryRepSettlementSlice {
   constructor(private readonly bound: PostDeliveryRepSettlementBoundDeps) {}
 
-private resolveSystemAccountByCode(queryable: DbOrTx, tenantId: string, code: string): Promise<number> {
+  private resolveSystemAccountByCode(queryable: DbOrTx, tenantId: string, code: string): Promise<number> {
     return this.bound.resolveSystemAccountByCode(queryable, tenantId, code);
   }
 
-private maxAllowedDifference(bookDigits: MoneyDigits): number {
+  private maxAllowedDifference(bookDigits: MoneyDigits): number {
     return this.bound.maxAllowedDifference(bookDigits);
   }
 
-private resolveAccountWithFallback(
+  private resolveAccountWithFallback(
     queryable: DbOrTx,
     tenantId: string,
     configuredId: number | null | undefined,
@@ -39,11 +39,11 @@ private resolveAccountWithFallback(
     return this.bound.resolveAccountWithFallback(queryable, tenantId, configuredId, fallbackCode);
   }
 
-private toMoney(value: unknown, digits: MoneyDigits): number {
+  private toMoney(value: unknown, digits: MoneyDigits): number {
     return this.bound.toMoney(value, digits);
   }
 
-private insertPostedJournal(
+  private insertPostedJournal(
     queryable: any,
     params: {
       sourceType: string;
@@ -64,15 +64,15 @@ private insertPostedJournal(
     return this.bound.insertPostedJournal(queryable, params);
   }
 
-private hasDeliveryCustodyReclassification(queryable: DbOrTx, saleId: number, auth: AuthContext): Promise<boolean> {
+  private hasDeliveryCustodyReclassification(queryable: DbOrTx, saleId: number, auth: AuthContext): Promise<boolean> {
     return this.bound.hasDeliveryCustodyReclassification(queryable, saleId, auth);
   }
 
-private getTenantAccountingSettings(queryable: DbOrTx, tenantId: string): Promise<any> {
+  private getTenantAccountingSettings(queryable: DbOrTx, tenantId: string): Promise<any> {
     return this.bound.getTenantAccountingSettings(queryable, tenantId);
   }
 
-private deliverySettlementBasis(
+  private deliverySettlementBasis(
     queryable: DbOrTx,
     saleId: number,
     auth: AuthContext,
@@ -80,24 +80,33 @@ private deliverySettlementBasis(
     return this.bound.deliverySettlementBasis(queryable, saleId, auth);
   }
 
-private deliveryCustodyPartner(
+  private deliveryCustodyPartner(
     queryable: DbOrTx,
     saleId: number,
   ): Promise<{ partnerType: 'rep' | 'none'; partnerId: number | null }> {
     return this.bound.deliveryCustodyPartner(queryable, saleId);
   }
 
-private addLine(lines: JournalLineDraft[], next: JournalLineDraft, digits: 2 | 3): void {
+  private addLine(lines: JournalLineDraft[], next: JournalLineDraft, digits: 2 | 3): void {
     this.bound.addLine(lines, next, digits);
   }
 
-async postDeliveryRepSettlement(queryable: DbOrTx, saleId: number, amount: number, branchId: number | null, locationId: number | null, auth: AuthContext, opts?: { countedCash?: number }): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postDeliveryRepSettlement(
+    queryable: DbOrTx,
+    saleId: number,
+    amount: number,
+    branchId: number | null,
+    locationId: number | null,
+    auth: AuthContext,
+    opts?: { countedCash?: number },
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
 
-    if (!Number.isFinite(amount) || amount < 0) throw new AppError('Invalid delivery settlement', 'DELIVERY_SETTLEMENT_INVALID', 400);
+    if (!Number.isFinite(amount) || amount < 0)
+      throw new AppError('Invalid delivery settlement', 'DELIVERY_SETTLEMENT_INVALID', 400);
     // INV-SF-SINGLE-SETTLE-COUNTED-CASH (D-SF-01): `amount` is the
     // BOOK cash due, as before. `opts.countedCash` is the cash the
     // rep actually handed over, counted by the cashier — supplied
@@ -111,12 +120,13 @@ async postDeliveryRepSettlement(queryable: DbOrTx, saleId: number, amount: numbe
     // gate): a human-counted difference is a variance to book,
     // a computed difference is a caller bug to reject.
     const bookCash = toBookMoney(amount);
-    const countedCash = opts?.countedCash !== undefined && opts?.countedCash !== null
-      ? toBookMoney(opts.countedCash)
-      : bookCash;
-    if (!Number.isFinite(countedCash) || countedCash < 0) throw new AppError('Invalid delivery settlement', 'DELIVERY_SETTLEMENT_INVALID', 400);
+    const countedCash =
+      opts?.countedCash !== undefined && opts?.countedCash !== null ? toBookMoney(opts.countedCash) : bookCash;
+    if (!Number.isFinite(countedCash) || countedCash < 0)
+      throw new AppError('Invalid delivery settlement', 'DELIVERY_SETTLEMENT_INVALID', 400);
 
-    const existing = await queryable.selectFrom('journal_entries')
+    const existing = await queryable
+      .selectFrom('journal_entries')
       .select('id')
       .where('source_type', '=', 'delivery_rep_settlement')
       .where('source_id', '=', saleId)
@@ -127,11 +137,25 @@ async postDeliveryRepSettlement(queryable: DbOrTx, saleId: number, amount: numbe
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
     if (!settings) throw new Error(`Accounting settings missing while posting delivery settlement for sale ${saleId}`);
 
-    const sale = await queryable.selectFrom('sales').select(['customer_id', 'doc_no', 'total', 'delivery_fee'])
-      .where('id', '=', saleId).where('tenant_id', '=', scope.tenantId).executeTakeFirstOrThrow();
+    const sale = await queryable
+      .selectFrom('sales')
+      .select(['customer_id', 'doc_no', 'total', 'delivery_fee'])
+      .where('id', '=', saleId)
+      .where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirstOrThrow();
 
-    const cashAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.cash_account_id, '1110');
-    const customerAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.customer_receivable_account_id, '1130');
+    const cashAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.cash_account_id,
+      '1110',
+    );
+    const customerAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.customer_receivable_account_id,
+      '1130',
+    );
 
     // R7-A (INV-REST-RETURN-PAYOUT-TRUTH) F2: the fee and the
     // credit leg are derived from the REMAINING amounts
@@ -150,7 +174,8 @@ async postDeliveryRepSettlement(queryable: DbOrTx, saleId: number, amount: numbe
     const remainingReceivable = basis.remainingReceivable;
     const remainingFee = basis.remainingFee;
     const fee = toBookMoney(remainingReceivable - bookCash);
-    if (fee < 0 || Math.abs(fee - remainingFee) > this.maxAllowedDifference(bookDigits)) throw new AppError('Delivery settlement does not reconcile with courier fee', 'DELIVERY_SETTLEMENT_INVALID', 409);
+    if (fee < 0 || Math.abs(fee - remainingFee) > this.maxAllowedDifference(bookDigits))
+      throw new AppError('Delivery settlement does not reconcile with courier fee', 'DELIVERY_SETTLEMENT_INVALID', 409);
     // INV-SF-SINGLE-SETTLE-COUNTED-CASH (D-SF-01): the difference
     // between the counted cash and the reconciled book cash is
     // the variance — a shortage (Dr 7200) or an overage
@@ -177,14 +202,41 @@ async postDeliveryRepSettlement(queryable: DbOrTx, saleId: number, amount: numbe
       // both settlement callers pass the full total (fee 0) for a
       // store-fleet sale, whose fee is 4200 revenue at sale time.
       const courierPayableId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '2115');
-      addBookLine({ accountId: courierPayableId, description: 'رسوم مندوب حر مخصومة من التحصيل', debit: fee, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
+      addBookLine({
+        accountId: courierPayableId,
+        description: 'رسوم مندوب حر مخصومة من التحصيل',
+        debit: fee,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     }
     if (variance < -this.maxAllowedDifference(bookDigits)) {
       const shortageAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7200');
-      addBookLine({ accountId: shortageAccountId, description: `عجز تسوية مندوب لفاتورة #${sale.doc_no || saleId}`, debit: Math.abs(variance), credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
+      addBookLine({
+        accountId: shortageAccountId,
+        description: `عجز تسوية مندوب لفاتورة #${sale.doc_no || saleId}`,
+        debit: Math.abs(variance),
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     } else if (variance > this.maxAllowedDifference(bookDigits)) {
       const overageAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7100');
-      addBookLine({ accountId: overageAccountId, description: `زيادة تسوية مندوب لفاتورة #${sale.doc_no || saleId}`, debit: 0, credit: variance, partnerType: 'none', partnerId: null, branchId, locationId });
+      addBookLine({
+        accountId: overageAccountId,
+        description: `زيادة تسوية مندوب لفاتورة #${sale.doc_no || saleId}`,
+        debit: 0,
+        credit: variance,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     }
     addBookLine({
       accountId: cashAccountId,
@@ -216,8 +268,8 @@ async postDeliveryRepSettlement(queryable: DbOrTx, saleId: number, amount: numbe
       // receivable leg, so crediting the full total would
       // over-credit 1130 by the returned share.
       credit: remainingReceivable,
-      partnerType: custodyPartner ? custodyPartner.partnerType : (sale.customer_id ? 'customer' : 'none'),
-      partnerId: custodyPartner ? custodyPartner.partnerId : (sale.customer_id ? Number(sale.customer_id) : null),
+      partnerType: custodyPartner ? custodyPartner.partnerType : sale.customer_id ? 'customer' : 'none',
+      partnerId: custodyPartner ? custodyPartner.partnerId : sale.customer_id ? Number(sale.customer_id) : null,
       branchId,
       locationId,
     });
@@ -239,7 +291,13 @@ async postDeliveryRepSettlement(queryable: DbOrTx, saleId: number, amount: numbe
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_race_window_uniq')) {
-        const existing = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'delivery_rep_settlement').where('source_id', '=', saleId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+        const existing = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'delivery_rep_settlement')
+          .where('source_id', '=', saleId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
         return { posted: false, journalEntryId: existing ? existing.id : null };
       }
       throw e;

@@ -59,33 +59,86 @@ export class AccountingJournalsReadService {
   }
 
   async assertJournalReferences(
-    queryable: Kysely<Database>, tenantId: string,
-    lines: Array<{ costCenterId?: number | null; branchId?: number | null; locationId?: number | null; partnerType?: string; partnerId?: number | null }>,
+    queryable: Kysely<Database>,
+    tenantId: string,
+    lines: Array<{
+      costCenterId?: number | null;
+      branchId?: number | null;
+      locationId?: number | null;
+      partnerType?: string;
+      partnerId?: number | null;
+    }>,
   ): Promise<void> {
-    const ids = (values: Array<number | null | undefined>) => Array.from(new Set(values.filter((value): value is number => Number.isSafeInteger(value) && Number(value) > 0)));
+    const ids = (values: Array<number | null | undefined>) =>
+      Array.from(new Set(values.filter((value): value is number => Number.isSafeInteger(value) && Number(value) > 0)));
     const branches = ids(lines.map((line) => line.branchId));
     const locations = ids(lines.map((line) => line.locationId));
     const centers = ids(lines.map((line) => line.costCenterId));
     const customers = ids(lines.filter((line) => line.partnerType === 'customer').map((line) => line.partnerId));
     const suppliers = ids(lines.filter((line) => line.partnerType === 'supplier').map((line) => line.partnerId));
-    if (branches.length && (await queryable.selectFrom('branches').select('id')
-      .where('tenant_id', '=', tenantId).where('id', 'in', branches).execute()).length !== branches.length) {
+    if (
+      branches.length &&
+      (
+        await queryable
+          .selectFrom('branches')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', 'in', branches)
+          .execute()
+      ).length !== branches.length
+    ) {
       throw new BadRequestException('فرع القيد لا ينتمي لهذه المنشأة.');
     }
-    if (locations.length && (await queryable.selectFrom('stock_locations').select('id')
-      .where('tenant_id', '=', tenantId).where('id', 'in', locations).execute()).length !== locations.length) {
+    if (
+      locations.length &&
+      (
+        await queryable
+          .selectFrom('stock_locations')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', 'in', locations)
+          .execute()
+      ).length !== locations.length
+    ) {
       throw new BadRequestException('موقع القيد لا ينتمي لهذه المنشأة.');
     }
-    if (centers.length && (await queryable.selectFrom('cost_centers').select('id')
-      .where('tenant_id', '=', tenantId).where('id', 'in', centers).execute()).length !== centers.length) {
+    if (
+      centers.length &&
+      (
+        await queryable
+          .selectFrom('cost_centers')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', 'in', centers)
+          .execute()
+      ).length !== centers.length
+    ) {
       throw new BadRequestException('مركز تكلفة القيد لا ينتمي لهذه المنشأة.');
     }
-    if (customers.length && (await queryable.selectFrom('customers').select('id')
-      .where('tenant_id', '=', tenantId).where('id', 'in', customers).execute()).length !== customers.length) {
+    if (
+      customers.length &&
+      (
+        await queryable
+          .selectFrom('customers')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', 'in', customers)
+          .execute()
+      ).length !== customers.length
+    ) {
       throw new BadRequestException('عميل القيد لا ينتمي لهذه المنشأة.');
     }
-    if (suppliers.length && (await queryable.selectFrom('suppliers').select('id')
-      .where('tenant_id', '=', tenantId).where('id', 'in', suppliers).execute()).length !== suppliers.length) {
+    if (
+      suppliers.length &&
+      (
+        await queryable
+          .selectFrom('suppliers')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', 'in', suppliers)
+          .execute()
+      ).length !== suppliers.length
+    ) {
       throw new BadRequestException('مورد القيد لا ينتمي لهذه المنشأة.');
     }
   }
@@ -105,8 +158,12 @@ export class AccountingJournalsReadService {
     let countQuery = this.db.selectFrom('journal_entries').where(this.tenantPredicate(auth));
     let rowsQuery = this.db
       .selectFrom('journal_entries as je')
-      .leftJoin('users as creator', (join) => join.onRef('creator.id', '=', 'je.created_by').onRef('creator.tenant_id', '=', 'je.tenant_id'))
-      .leftJoin('users as poster', (join) => join.onRef('poster.id', '=', 'je.posted_by').onRef('poster.tenant_id', '=', 'je.tenant_id'))
+      .leftJoin('users as creator', (join) =>
+        join.onRef('creator.id', '=', 'je.created_by').onRef('creator.tenant_id', '=', 'je.tenant_id'),
+      )
+      .leftJoin('users as poster', (join) =>
+        join.onRef('poster.id', '=', 'je.posted_by').onRef('poster.tenant_id', '=', 'je.tenant_id'),
+      )
       .select([
         'je.id',
         'je.entry_no',
@@ -218,8 +275,12 @@ export class AccountingJournalsReadService {
 
     const lines = await (this.db as any)
       .selectFrom('journal_entry_lines as l')
-      .innerJoin('accounting_accounts as a', (j: any) => j.onRef('a.id', '=', 'l.account_id').onRef('a.tenant_id', '=', 'l.tenant_id'))
-      .leftJoin('cost_centers as cc', (j: any) => j.onRef('cc.id', '=', 'l.cost_center_id').onRef('cc.tenant_id', '=', 'l.tenant_id'))
+      .innerJoin('accounting_accounts as a', (j: any) =>
+        j.onRef('a.id', '=', 'l.account_id').onRef('a.tenant_id', '=', 'l.tenant_id'),
+      )
+      .leftJoin('cost_centers as cc', (j: any) =>
+        j.onRef('cc.id', '=', 'l.cost_center_id').onRef('cc.tenant_id', '=', 'l.tenant_id'),
+      )
       .select([
         'l.id',
         'l.journal_entry_id',
@@ -244,8 +305,14 @@ export class AccountingJournalsReadService {
       .orderBy('l.id', 'asc')
       .execute();
 
-    const totalDebit = this.toMoney(lines.reduce((sum: number, line: any) => sum + Number(line.debit || 0), 0), digits);
-    const totalCredit = this.toMoney(lines.reduce((sum: number, line: any) => sum + Number(line.credit || 0), 0), digits);
+    const totalDebit = this.toMoney(
+      lines.reduce((sum: number, line: any) => sum + Number(line.debit || 0), 0),
+      digits,
+    );
+    const totalCredit = this.toMoney(
+      lines.reduce((sum: number, line: any) => sum + Number(line.credit || 0), 0),
+      digits,
+    );
 
     return {
       entry: {
@@ -256,8 +323,11 @@ export class AccountingJournalsReadService {
         sourceType: entry.source_type || 'manual',
         sourceId: entry.source_id ? String(entry.source_id) : '',
         status: entry.status,
-        canReverse: entry.status === 'posted' && entry.source_type === 'manual' &&
-          !entry.reversal_of_entry_id && !entry.reversed_by_entry_id &&
+        canReverse:
+          entry.status === 'posted' &&
+          entry.source_type === 'manual' &&
+          !entry.reversal_of_entry_id &&
+          !entry.reversed_by_entry_id &&
           !lines.some((line: { is_reconciled: boolean }) => line.is_reconciled),
         reversedByEntryId: entry.reversed_by_entry_id ? String(entry.reversed_by_entry_id) : null,
         reversalOfEntryId: entry.reversal_of_entry_id ? String(entry.reversal_of_entry_id) : null,
@@ -320,7 +390,7 @@ export class AccountingJournalsReadService {
         const lockAllStr = accountingDateKey(settings.lock_date_all);
         if (dateStr <= lockAllStr) {
           throw new BadRequestException(
-            `الفترة المحاسبية مقفلة نهائياً حتى تاريخ ${lockAllStr}. لا يمكن إضافة أو تعديل قيود في فترة مغلقة.`
+            `الفترة المحاسبية مقفلة نهائياً حتى تاريخ ${lockAllStr}. لا يمكن إضافة أو تعديل قيود في فترة مغلقة.`,
           );
         }
       }
@@ -331,7 +401,7 @@ export class AccountingJournalsReadService {
         const isAdviser = options?.auth?.role === 'admin' || options?.auth?.role === 'super_admin';
         if (!isAdviser && dateStr <= lockNonAdvStr) {
           throw new BadRequestException(
-            `الفترة المحاسبية مقفلة للعمليات التشغيلية حتى تاريخ ${lockNonAdvStr}. يرجى مراجعة الإدارة المالية.`
+            `الفترة المحاسبية مقفلة للعمليات التشغيلية حتى تاريخ ${lockNonAdvStr}. يرجى مراجعة الإدارة المالية.`,
           );
         }
       }
@@ -341,7 +411,7 @@ export class AccountingJournalsReadService {
         const lockTaxStr = accountingDateKey(settings.lock_date_tax);
         if (dateStr <= lockTaxStr) {
           throw new BadRequestException(
-            `الفترة الضريبية مقفلة حتى تاريخ ${lockTaxStr}. لا يمكن إجراء عمليات تؤثر على ضريبة هذه الفترة المغلقة.`
+            `الفترة الضريبية مقفلة حتى تاريخ ${lockTaxStr}. لا يمكن إجراء عمليات تؤثر على ضريبة هذه الفترة المغلقة.`,
           );
         }
       }
@@ -359,7 +429,7 @@ export class AccountingJournalsReadService {
 
     if (closedPeriod) {
       throw new BadRequestException(
-        `الفترة المحاسبية الشهرية [${closedPeriod.name}] مقفلة. لا يمكن إضافة أو تعديل قيود في فترة مغلقة.`
+        `الفترة المحاسبية الشهرية [${closedPeriod.name}] مقفلة. لا يمكن إضافة أو تعديل قيود في فترة مغلقة.`,
       );
     }
   }

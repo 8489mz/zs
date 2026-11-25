@@ -21,20 +21,34 @@ export function selectPurchaseReturnSerials(
   if (!Number.isSafeInteger(baseQty) || baseQty <= 0) {
     throw new AppError('كمية المرتجع التسلسلي يجب أن تكون عدداً صحيحاً', 'PURCHASE_RETURN_SERIAL_QTY_INVALID', 400);
   }
-  const normalized = (requested || []).map(s => String(s || '').trim().toLowerCase());
-  if (normalized.some(s => !s) || new Set(normalized).size !== normalized.length) {
+  const normalized = (requested || []).map((s) =>
+    String(s || '')
+      .trim()
+      .toLowerCase(),
+  );
+  if (normalized.some((s) => !s) || new Set(normalized).size !== normalized.length) {
     throw new AppError('أرقام السيريال المرسلة فارغة أو مكررة', 'PURCHASE_RETURN_SERIAL_INVALID', 400);
   }
   if (!normalized.length && eligible.length !== baseQty) {
     throw new AppError('حدد السيريالات المرتجعة للمورد', 'PURCHASE_RETURN_SERIALS_REQUIRED', 400);
   }
   const selected = normalized.length
-    ? eligible.filter(row => normalized.includes(row.serial_number.toLowerCase()) ||
-      (row.imei_2 != null && normalized.includes(row.imei_2.toLowerCase())))
+    ? eligible.filter(
+        (row) =>
+          normalized.includes(row.serial_number.toLowerCase()) ||
+          (row.imei_2 != null && normalized.includes(row.imei_2.toLowerCase())),
+      )
     : eligible;
-  if (selected.length !== baseQty || normalized.length > 0 && normalized.length !== selected.length ||
-      selected.some(row => row.status !== 'in_stock')) {
-    throw new AppError('السيريال غير موجود أو ليس متاحاً في الفاتورة الأصلية', 'PURCHASE_RETURN_SERIAL_NOT_AVAILABLE', 409);
+  if (
+    selected.length !== baseQty ||
+    (normalized.length > 0 && normalized.length !== selected.length) ||
+    selected.some((row) => row.status !== 'in_stock')
+  ) {
+    throw new AppError(
+      'السيريال غير موجود أو ليس متاحاً في الفاتورة الأصلية',
+      'PURCHASE_RETURN_SERIAL_NOT_AVAILABLE',
+      409,
+    );
   }
   return selected;
 }
@@ -48,10 +62,13 @@ export function selectPurchaseReturnBatch(
   if (!Number.isFinite(baseQty) || baseQty <= 0) {
     throw new AppError('كمية التشغيلة غير صالحة', 'PURCHASE_RETURN_BATCH_QTY_INVALID', 400);
   }
-  const candidates = eligible.filter(row => Number(row.quantity || 0) + 0.000001 >= baseQty);
-  const chosen = requestedBatchId != null
-    ? candidates.find(row => Number(row.id) === requestedBatchId)
-    : candidates.length === 1 ? candidates[0] : undefined;
+  const candidates = eligible.filter((row) => Number(row.quantity || 0) + 0.000001 >= baseQty);
+  const chosen =
+    requestedBatchId != null
+      ? candidates.find((row) => Number(row.id) === requestedBatchId)
+      : candidates.length === 1
+        ? candidates[0]
+        : undefined;
   if (!chosen) {
     throw new AppError('حدد تشغيلة صحيحة بها رصيد كافٍ للمرتجع', 'PURCHASE_RETURN_BATCH_SELECTION_REQUIRED', 422);
   }

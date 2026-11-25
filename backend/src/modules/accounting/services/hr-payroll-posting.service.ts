@@ -61,7 +61,11 @@ export class HrPayrollPostingService {
     await this.accountingTenantFoundation.ensureForAuth(queryable, auth);
   }
 
-  async postPayrollAccrual(queryable: DbOrTx, runId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postPayrollAccrual(
+    queryable: DbOrTx,
+    runId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
@@ -91,7 +95,11 @@ export class HrPayrollPostingService {
       .executeTakeFirst();
     const accrualDate = runRow?.end_date ? new Date(runRow.end_date as unknown as string) : null;
     if (!accrualDate || Number.isNaN(accrualDate.getTime())) {
-      throw new AppError('تاريخ نهاية فترة المسير غير موجود، لا يمكن ترحيل قيد الاستحقاق', 'HR_PAYROLL_ACCRUAL_PERIOD_END_MISSING', 409);
+      throw new AppError(
+        'تاريخ نهاية فترة المسير غير موجود، لا يمكن ترحيل قيد الاستحقاق',
+        'HR_PAYROLL_ACCRUAL_PERIOD_END_MISSING',
+        409,
+      );
     }
 
     // Aggregate totals alone can hide offsetting corrupt payslips. Reject any
@@ -113,7 +121,8 @@ export class HrPayrollPostingService {
     if (invalidLine.rows.length) {
       throw new AppError(
         `Payroll employee #${invalidLine.rows[0].employee_id} has an unreconciled payslip`,
-        'HR_PAYROLL_LINE_ACCOUNTING_MISMATCH', 409,
+        'HR_PAYROLL_LINE_ACCOUNTING_MISMATCH',
+        409,
       );
     }
 
@@ -148,23 +157,32 @@ export class HrPayrollPostingService {
     }
     let allocation: ReturnType<typeof allocatePayrollAccrual>;
     try {
-      allocation = allocatePayrollAccrual({
-        grossPay, netPay, loanDeductions, assetRecoveryDeductions, operationalDeductions,
-        employeeInsurance, employerInsurance, incomeTax,
-      }, bookDigits);
+      allocation = allocatePayrollAccrual(
+        {
+          grossPay,
+          netPay,
+          loanDeductions,
+          assetRecoveryDeductions,
+          operationalDeductions,
+          employeeInsurance,
+          employerInsurance,
+          incomeTax,
+        },
+        bookDigits,
+      );
     } catch (error) {
       throw new AppError(
         error instanceof Error ? error.message : 'Payroll totals cannot be reconciled',
-        'HR_PAYROLL_ACCOUNTING_MISMATCH', 400,
+        'HR_PAYROLL_ACCOUNTING_MISMATCH',
+        400,
       );
     }
 
     const expenseAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '6200'); // Salaries and Wages
     const payableAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '2140'); // Payroll Payable
     const advancesAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1160'); // Employee Advances
-    const recoveryAccountId = assetRecoveryDeductions > 0
-      ? await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7100')
-      : null; // Recovery of lost/damaged custody assets, NOT absenteeism income.
+    const recoveryAccountId =
+      assetRecoveryDeductions > 0 ? await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7100') : null; // Recovery of lost/damaged custody assets, NOT absenteeism income.
 
     const totalGosiPayable = toBookMoney(employeeInsurance + employerInsurance);
 
@@ -289,20 +307,30 @@ export class HrPayrollPostingService {
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_payroll_round2a_uniq')) {
-         const existingId = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'hr_payroll_accrual').where('source_id', '=', runId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
-         return { posted: false, journalEntryId: Number(existingId?.id || 0) };
+        const existingId = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'hr_payroll_accrual')
+          .where('source_id', '=', runId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
+        return { posted: false, journalEntryId: Number(existingId?.id || 0) };
       }
       throw e;
     }
   }
 
-  async postPayrollPayment(queryable: DbOrTx, runId: number, paymentChannel: string, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postPayrollPayment(
+    queryable: DbOrTx,
+    runId: number,
+    paymentChannel: string,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
-
 
     const existing = await queryable
       .selectFrom('journal_entries')
@@ -315,9 +343,7 @@ export class HrPayrollPostingService {
 
     const totals = await queryable
       .selectFrom('hr_payroll_run_items')
-      .select([
-        sql<number>`COALESCE(SUM(net_pay), 0)`.as('net_pay'),
-      ])
+      .select([sql<number>`COALESCE(SUM(net_pay), 0)`.as('net_pay')])
       .where('run_id', '=', runId)
       .where('tenant_id', '=', scope.tenantId)
       .where('status', '=', 'approved')
@@ -326,7 +352,7 @@ export class HrPayrollPostingService {
     const netPay = toBookMoney(totals?.net_pay || 0);
 
     if (netPay <= 0) {
-       throw new AppError('Cannot pay payroll with zero net pay', 'HR_PAYROLL_PAYMENT_ZERO', 400);
+      throw new AppError('Cannot pay payroll with zero net pay', 'HR_PAYROLL_PAYMENT_ZERO', 400);
     }
 
     const payableAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '2140'); // Payroll Payable
@@ -336,12 +362,34 @@ export class HrPayrollPostingService {
     // 1110. The old map sent 'drawer' to the bank although
     // payPayrollRun takes the money out of the cashier drawer, so
     // the journal credited a bank account that never paid.
-    const paymentAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, paymentChannel === 'bank' ? '1120' : '1110');
+    const paymentAccountId = await this.resolveSystemAccountByCode(
+      queryable,
+      scope.tenantId,
+      paymentChannel === 'bank' ? '1120' : '1110',
+    );
 
     const lines: JournalLineDraft[] = [];
 
-    addBookLine({ accountId: payableAccountId, description: `سداد رواتب مستحقة لمسير #${runId}`, debit: netPay, credit: 0, partnerType: 'none', partnerId: null, branchId: null, locationId: null });
-    addBookLine({ accountId: paymentAccountId, description: `دفع رواتب مسير #${runId}`, debit: 0, credit: netPay, partnerType: 'none', partnerId: null, branchId: null, locationId: null });
+    addBookLine({
+      accountId: payableAccountId,
+      description: `سداد رواتب مستحقة لمسير #${runId}`,
+      debit: netPay,
+      credit: 0,
+      partnerType: 'none',
+      partnerId: null,
+      branchId: null,
+      locationId: null,
+    });
+    addBookLine({
+      accountId: paymentAccountId,
+      description: `دفع رواتب مسير #${runId}`,
+      debit: 0,
+      credit: netPay,
+      partnerType: 'none',
+      partnerId: null,
+      branchId: null,
+      locationId: null,
+    });
 
     try {
       const entryId = await this.insertPostedJournal(queryable, {
@@ -362,8 +410,14 @@ export class HrPayrollPostingService {
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_payroll_round2a_uniq')) {
-         const existingId = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'hr_payroll_payment').where('source_id', '=', runId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
-         return { posted: false, journalEntryId: Number(existingId?.id || 0) };
+        const existingId = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'hr_payroll_payment')
+          .where('source_id', '=', runId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
+        return { posted: false, journalEntryId: Number(existingId?.id || 0) };
       }
       throw e;
     }
@@ -374,14 +428,13 @@ export class HrPayrollPostingService {
     itemId: number,
     paymentChannel: string,
     auth: AuthContext,
-    options?: { branchId?: number | null; locationId?: number | null; employeeName?: string }
+    options?: { branchId?: number | null; locationId?: number | null; employeeName?: string },
   ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
-
 
     const existing = await queryable
       .selectFrom('journal_entries')
@@ -407,7 +460,11 @@ export class HrPayrollPostingService {
     // INV-PAYROLL-PAYMENT-CHANNEL-ACCOUNTS: keep in sync with
     // postPayrollPayment — 'bank' pays from 1120, all other
     // channels ('cash', 'drawer') from cash 1110.
-    const paymentAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, paymentChannel === 'bank' ? '1120' : '1110');
+    const paymentAccountId = await this.resolveSystemAccountByCode(
+      queryable,
+      scope.tenantId,
+      paymentChannel === 'bank' ? '1120' : '1110',
+    );
 
     const empLabel = options?.employeeName ? ` - ${options.employeeName}` : '';
     const lines: JournalLineDraft[] = [];
@@ -450,14 +507,24 @@ export class HrPayrollPostingService {
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505') {
-        const existingId = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'hr_payroll_item_payment').where('source_id', '=', itemId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+        const existingId = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'hr_payroll_item_payment')
+          .where('source_id', '=', itemId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
         return { posted: false, journalEntryId: Number(existingId?.id || 0) };
       }
       throw e;
     }
   }
 
-  async postEmployeeLoanDisbursement(queryable: DbOrTx, loanId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postEmployeeLoanDisbursement(
+    queryable: DbOrTx,
+    loanId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
@@ -466,14 +533,14 @@ export class HrPayrollPostingService {
     const tenantId = scope.tenantId;
 
     const existing = await queryable
-        .selectFrom('journal_entries')
-        .select(['id', 'status'])
-        .where('source_type', '=', 'hr_employee_loan_disbursement')
-        .where('source_id', '=', loanId)
-        .where('tenant_id', '=', tenantId)
-        .where('status', 'in', ['draft', 'posted'])
-        .orderBy('id', 'desc')
-        .executeTakeFirst();
+      .selectFrom('journal_entries')
+      .select(['id', 'status'])
+      .where('source_type', '=', 'hr_employee_loan_disbursement')
+      .where('source_id', '=', loanId)
+      .where('tenant_id', '=', tenantId)
+      .where('status', 'in', ['draft', 'posted'])
+      .orderBy('id', 'desc')
+      .executeTakeFirst();
     if (existing) return { posted: false, journalEntryId: existing.id };
 
     const loanResult = await queryable
@@ -546,14 +613,24 @@ export class HrPayrollPostingService {
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_employee_loan_disb_uniq')) {
-          const existingId = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'hr_employee_loan_disbursement').where('source_id', '=', loanId).where('tenant_id', '=', tenantId).executeTakeFirst();
-          return { posted: false, journalEntryId: Number(existingId?.id || 0) };
+        const existingId = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'hr_employee_loan_disbursement')
+          .where('source_id', '=', loanId)
+          .where('tenant_id', '=', tenantId)
+          .executeTakeFirst();
+        return { posted: false, journalEntryId: Number(existingId?.id || 0) };
       }
       throw e;
     }
   }
 
-  async postEmployeeLoanManualRepayment(queryable: DbOrTx, ledgerId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postEmployeeLoanManualRepayment(
+    queryable: DbOrTx,
+    ledgerId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
@@ -562,14 +639,14 @@ export class HrPayrollPostingService {
     const tenantId = scope.tenantId;
 
     const existing = await queryable
-        .selectFrom('journal_entries')
-        .select(['id', 'status'])
-        .where('source_type', '=', 'hr_employee_loan_repayment')
-        .where('source_id', '=', ledgerId)
-        .where('tenant_id', '=', tenantId)
-        .where('status', 'in', ['draft', 'posted'])
-        .orderBy('id', 'desc')
-        .executeTakeFirst();
+      .selectFrom('journal_entries')
+      .select(['id', 'status'])
+      .where('source_type', '=', 'hr_employee_loan_repayment')
+      .where('source_id', '=', ledgerId)
+      .where('tenant_id', '=', tenantId)
+      .where('status', 'in', ['draft', 'posted'])
+      .orderBy('id', 'desc')
+      .executeTakeFirst();
     if (existing) return { posted: false, journalEntryId: existing.id };
 
     const ledger = await queryable
@@ -642,20 +719,30 @@ export class HrPayrollPostingService {
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_employee_loan_repay_uniq')) {
-          const existingId = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'hr_employee_loan_repayment').where('source_id', '=', ledgerId).where('tenant_id', '=', tenantId).executeTakeFirst();
-          return { posted: false, journalEntryId: Number(existingId?.id || 0) };
+        const existingId = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'hr_employee_loan_repayment')
+          .where('source_id', '=', ledgerId)
+          .where('tenant_id', '=', tenantId)
+          .executeTakeFirst();
+        return { posted: false, journalEntryId: Number(existingId?.id || 0) };
       }
       throw e;
     }
   }
 
-  async postEndOfServiceSettlement(queryable: DbOrTx, settlementId: number, treasuryAccountId: number | null, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postEndOfServiceSettlement(
+    queryable: DbOrTx,
+    settlementId: number,
+    treasuryAccountId: number | null,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
-
 
     const settlement = await queryable
       .selectFrom('hr_end_of_service_settlements')
@@ -818,7 +905,11 @@ export class HrPayrollPostingService {
       });
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
-      if (e.code === '23505' && (e.constraint?.includes('idx_journal_entries_hr_eos_uniq') || e.constraint?.includes('idx_journal_entries_round1_uniq'))) {
+      if (
+        e.code === '23505' &&
+        (e.constraint?.includes('idx_journal_entries_hr_eos_uniq') ||
+          e.constraint?.includes('idx_journal_entries_round1_uniq'))
+      ) {
         const existingId = await queryable
           .selectFrom('journal_entries')
           .select('id')

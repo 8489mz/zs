@@ -33,18 +33,18 @@ export class PostRepShortageWaiverSlice {
   }
 
   /**
-     * INV-VAN-REP-SHORTAGE-WAIVER-REVERSAL: waiving a pending stock
-     * shortage charged to the rep must reverse what trip settlement
-     * booked — Dr 7200 / Cr 1160 — or the rep custody debit 1160
-     * stands stranded forever. A cash shortage needs no reversal
-     * (Dr 7200 already stands at trip settlement), so this method is
-     * called only for stock_shortage waivers. The caller serializes
-     * on the settlement row (FOR UPDATE) and flips the status in the
-     * same transaction; this method additionally pre-checks for an
-     * existing posted journal for the item as a defensive dedup (no
-     * unique index covers this source type).
-     */
-async postRepShortageWaiver(
+   * INV-VAN-REP-SHORTAGE-WAIVER-REVERSAL: waiving a pending stock
+   * shortage charged to the rep must reverse what trip settlement
+   * booked — Dr 7200 / Cr 1160 — or the rep custody debit 1160
+   * stands stranded forever. A cash shortage needs no reversal
+   * (Dr 7200 already stands at trip settlement), so this method is
+   * called only for stock_shortage waivers. The caller serializes
+   * on the settlement row (FOR UPDATE) and flips the status in the
+   * same transaction; this method additionally pre-checks for an
+   * existing posted journal for the item as a defensive dedup (no
+   * unique index covers this source type).
+   */
+  async postRepShortageWaiver(
     queryable: DbOrTx,
     settlementItemId: number,
     params: {
@@ -63,7 +63,9 @@ async postRepShortageWaiver(
     }
     const expenseAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7200');
     const custodyAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1160');
-    const existing = await queryable.selectFrom('journal_entries').select('id')
+    const existing = await queryable
+      .selectFrom('journal_entries')
+      .select('id')
       .where('source_type', '=', 'rep_shortage_waiver')
       .where('source_id', '=', settlementItemId)
       .where('tenant_id', '=', scope.tenantId)
@@ -82,8 +84,22 @@ async postRepShortageWaiver(
       createdBy: auth.userId,
       postedBy: auth.userId,
       lines: [
-        { accountId: expenseAccountId, description: 'إعفاء عجز مخزني محمل على المندوب - تحويل العهدة إلى مصروف', debit: amount, credit: 0, partnerType: 'none', partnerId: null },
-        { accountId: custodyAccountId, description: 'تصفية عهدة المندوب من عجز مخزني معفى', debit: 0, credit: amount, partnerType: 'none', partnerId: null },
+        {
+          accountId: expenseAccountId,
+          description: 'إعفاء عجز مخزني محمل على المندوب - تحويل العهدة إلى مصروف',
+          debit: amount,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+        },
+        {
+          accountId: custodyAccountId,
+          description: 'تصفية عهدة المندوب من عجز مخزني معفى',
+          debit: 0,
+          credit: amount,
+          partnerType: 'none',
+          partnerId: null,
+        },
       ],
     });
   }

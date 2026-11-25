@@ -25,9 +25,9 @@ export function mapSaleRows(
   for (const item of items) {
     const key = String(item.sale_id);
     if (!itemsBySale.has(key)) itemsBySale.set(key, []);
-    const rawModifiers = typeof item.modifiers === 'string' ? JSON.parse(item.modifiers || '[]') : (item.modifiers || []);
+    const rawModifiers = typeof item.modifiers === 'string' ? JSON.parse(item.modifiers || '[]') : item.modifiers || [];
     const isOfferEnvelope = rawModifiers && !Array.isArray(rawModifiers) && rawModifiers.offer;
-    const itemModifiers = isOfferEnvelope ? (rawModifiers.mods || []) : (Array.isArray(rawModifiers) ? rawModifiers : []);
+    const itemModifiers = isOfferEnvelope ? rawModifiers.mods || [] : Array.isArray(rawModifiers) ? rawModifiers : [];
     const offerMeta = isOfferEnvelope ? rawModifiers.offer : null;
 
     itemsBySale.get(key)!.push({
@@ -54,7 +54,7 @@ export function mapSaleRows(
       ...(canViewCostPrice ? { cost: Number(item.cost_price || 0) } : {}),
       priceType: item.price_type || 'retail',
       modifiers: itemModifiers,
-      serials: typeof item.serials === 'string' ? JSON.parse(item.serials || '[]') : (item.serials || []),
+      serials: typeof item.serials === 'string' ? JSON.parse(item.serials || '[]') : item.serials || [],
     });
   }
 
@@ -172,8 +172,12 @@ export function filterSales(rows: SaleRow[], query: Record<string, unknown>): Sa
     if (!paymentChannelMatches(row)) return false;
     if (cashierLower !== 'all') {
       const createdById = String(row.createdById || '').trim();
-      const createdByName = String(row.createdBy || '').trim().toLowerCase();
-      const createdByUsername = String(row.createdByUsername || '').trim().toLowerCase();
+      const createdByName = String(row.createdBy || '')
+        .trim()
+        .toLowerCase();
+      const createdByUsername = String(row.createdByUsername || '')
+        .trim()
+        .toLowerCase();
       if (createdById !== cashier && createdByName !== cashierLower && createdByUsername !== cashierLower) return false;
     }
     if (!q) return true;
@@ -189,11 +193,9 @@ export function filterSales(rows: SaleRow[], query: Record<string, unknown>): Sa
 export function summarizeSales(rows: SaleRow[], digits: MoneyDigits = 2, todayKey?: string): SaleListSummary {
   const today = todayKey ?? new Date().toISOString().slice(0, 10);
   const todayRows = rows.filter((row) => String(row.date || '').slice(0, 10) === today);
-  const cashiers = [...new Set(
-    rows
-      .map((row) => String(row.createdBy || '').trim())
-      .filter((name) => Boolean(name)),
-  )].sort((a, b) => a.localeCompare(b, 'ar'));
+  const cashiers = [
+    ...new Set(rows.map((row) => String(row.createdBy || '').trim()).filter((name) => Boolean(name))),
+  ].sort((a, b) => a.localeCompare(b, 'ar'));
   const topCustomersMap = new Map<string, { name: string; total: number; count: number }>();
   for (const row of rows) {
     const key = String(row.customerId || row.customerName || 'cash');
@@ -205,11 +207,23 @@ export function summarizeSales(rows: SaleRow[], digits: MoneyDigits = 2, todayKe
 
   return {
     totalItems: rows.length,
-    totalSales: roundMoney(rows.reduce((sum, row) => sum + Number(row.total || 0), 0), digits),
+    totalSales: roundMoney(
+      rows.reduce((sum, row) => sum + Number(row.total || 0), 0),
+      digits,
+    ),
     todaySalesCount: todayRows.length,
-    todaySalesTotal: roundMoney(todayRows.reduce((sum, row) => sum + Number(row.total || 0), 0), digits),
-    cashTotal: roundMoney(rows.filter((row) => row.paymentType === 'cash').reduce((sum, row) => sum + Number(row.total || 0), 0), digits),
-    creditTotal: roundMoney(rows.filter((row) => row.paymentType === 'credit').reduce((sum, row) => sum + Number(row.total || 0), 0), digits),
+    todaySalesTotal: roundMoney(
+      todayRows.reduce((sum, row) => sum + Number(row.total || 0), 0),
+      digits,
+    ),
+    cashTotal: roundMoney(
+      rows.filter((row) => row.paymentType === 'cash').reduce((sum, row) => sum + Number(row.total || 0), 0),
+      digits,
+    ),
+    creditTotal: roundMoney(
+      rows.filter((row) => row.paymentType === 'credit').reduce((sum, row) => sum + Number(row.total || 0), 0),
+      digits,
+    ),
     cancelledCount: rows.filter((row) => row.status === 'cancelled').length,
     cashiers,
     topCustomers: [...topCustomersMap.values()].sort((a, b) => b.total - a.total).slice(0, 5),
@@ -224,11 +238,17 @@ export function mapHeldSalesRows(
   for (const item of items) {
     const key = String(item.held_sale_id);
     if (!itemsByDraft.has(key)) itemsByDraft.set(key, []);
-    const rawModifiers = typeof item.modifiers === 'string' ? JSON.parse(item.modifiers || '[]') : (item.modifiers || []);
+    const rawModifiers = typeof item.modifiers === 'string' ? JSON.parse(item.modifiers || '[]') : item.modifiers || [];
     const isEnvelope = rawModifiers && !Array.isArray(rawModifiers) && Array.isArray(rawModifiers.mods);
-    const itemModifiers = isEnvelope ? rawModifiers.mods : (Array.isArray(rawModifiers) ? rawModifiers : []);
-    const itemSeat = isEnvelope && rawModifiers.seatNumber != null ? Number(rawModifiers.seatNumber) : ((item as any).seat_number ? Number((item as any).seat_number) : undefined);
-    const itemCourse = isEnvelope && rawModifiers.course ? String(rawModifiers.course) : ((item as any).course || undefined);
+    const itemModifiers = isEnvelope ? rawModifiers.mods : Array.isArray(rawModifiers) ? rawModifiers : [];
+    const itemSeat =
+      isEnvelope && rawModifiers.seatNumber != null
+        ? Number(rawModifiers.seatNumber)
+        : (item as any).seat_number
+          ? Number((item as any).seat_number)
+          : undefined;
+    const itemCourse =
+      isEnvelope && rawModifiers.course ? String(rawModifiers.course) : (item as any).course || undefined;
     /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the held line fields ride in the
      * modifiers envelope under `held`. The stored lineKey is preferred
      * over rebuilding it (the rebuild drops the combo/recall suffix and
@@ -244,7 +264,9 @@ export function mapHeldSalesRows(
       unitName: item.unit_name || 'قطعة',
       unitMultiplier: Number(item.unit_multiplier || 1),
       priceType: item.price_type || 'retail',
-      lineKey: held?.lineKey ? String(held.lineKey) : `${item.product_id || ''}::${item.unit_name || 'قطعة'}::${item.price_type || 'retail'}`,
+      lineKey: held?.lineKey
+        ? String(held.lineKey)
+        : `${item.product_id || ''}::${item.unit_name || 'قطعة'}::${item.price_type || 'retail'}`,
       modifiers: itemModifiers,
       ...(typeof item.notes === 'string' && item.notes.trim() ? { notes: item.notes } : {}),
       ...(itemSeat != null ? { seatNumber: itemSeat } : {}),
@@ -256,7 +278,9 @@ export function mapHeldSalesRows(
       ...(held?.lineDiscount != null ? { lineDiscount: Number(held.lineDiscount) } : {}),
       ...(held?.offerName ? { offerName: String(held.offerName) } : {}),
       ...(held?.isWeighted != null ? { isWeighted: Boolean(held.isWeighted) } : {}),
-      ...(Array.isArray(held?.quantityChunks) ? { quantityChunks: held.quantityChunks.map((entry: unknown) => Number(entry)) } : {}),
+      ...(Array.isArray(held?.quantityChunks)
+        ? { quantityChunks: held.quantityChunks.map((entry: unknown) => Number(entry)) }
+        : {}),
     });
   }
 
@@ -266,7 +290,7 @@ export function mapHeldSalesRows(
     customerId: row.customer_id ? String(row.customer_id) : '',
     customerName: row.customer_name || '',
     paymentType: row.payment_type === 'credit' ? 'credit' : 'cash',
-    paymentChannel: row.payment_type === 'credit' ? 'credit' : (row.payment_channel || 'cash'),
+    paymentChannel: row.payment_type === 'credit' ? 'credit' : row.payment_channel || 'cash',
     paidAmount: Number(row.paid_amount || 0),
     cashAmount: Number(row.cash_amount || 0),
     cardAmount: Number(row.card_amount || 0),
@@ -286,9 +310,12 @@ export function mapHeldSalesRows(
     guestCount: row.guest_count != null ? Number(row.guest_count) : undefined,
     /* timestamptz comes back as a Date from the driver — normalise to
      * ISO so recall restores the same string the hold sent. */
-    guestCheckPrintedAt: row.guest_check_printed_at instanceof Date
-      ? row.guest_check_printed_at.toISOString()
-      : (row.guest_check_printed_at ? String(row.guest_check_printed_at) : null),
+    guestCheckPrintedAt:
+      row.guest_check_printed_at instanceof Date
+        ? row.guest_check_printed_at.toISOString()
+        : row.guest_check_printed_at
+          ? String(row.guest_check_printed_at)
+          : null,
     note: row.note || '',
     search: row.search || '',
     tableNumber: row.table_number || '',

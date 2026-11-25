@@ -11,7 +11,7 @@ import { roundMoney } from '../../../accounting/engines/money-minor-units.engine
 export class EtaSerializerService {
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
-    private readonly taxSettings: TaxSettingsService
+    private readonly taxSettings: TaxSettingsService,
   ) {}
 
   async serializeSaleToEtaFormat(tenantId: string, saleId: number): Promise<any> {
@@ -38,11 +38,7 @@ export class EtaSerializerService {
       .where('tenant_id', '=', tenantId)
       .executeTakeFirstOrThrow();
 
-    const items = await this.db
-      .selectFrom('sale_items')
-      .selectAll()
-      .where('sale_id', '=', saleId)
-      .execute();
+    const items = await this.db.selectFrom('sale_items').selectAll().where('sale_id', '=', saleId).execute();
 
     const customer = sale.customer_id
       ? await this.db
@@ -81,7 +77,7 @@ export class EtaSerializerService {
       return {
         description: item.product_name || `Item ${index + 1}`,
         itemType: 'EGS',
-        itemCode: 'EG-' + (settings.tax_id || '100000') + '-' + (item.product_id || (index + 1)),
+        itemCode: 'EG-' + (settings.tax_id || '100000') + '-' + (item.product_id || index + 1),
         unitType: 'EA',
         quantity: qty,
         internalCode: String(item.product_id || index + 1),
@@ -94,7 +90,7 @@ export class EtaSerializerService {
         unitValue: {
           currencySold: 'EGP',
           amountEGP: unitPrice,
-          currencyExchangeRate: 1
+          currencyExchangeRate: 1,
         },
         discount: { rate: 0, amount: 0 },
         taxableItems: [
@@ -102,9 +98,9 @@ export class EtaSerializerService {
             taxType: 'T1',
             amount: taxed.tax,
             subType: 'V009',
-            rate: taxed.rate
-          }
-        ]
+            rate: taxed.rate,
+          },
+        ],
       };
     });
 
@@ -120,11 +116,11 @@ export class EtaSerializerService {
           governate: 'Cairo',
           regionCity: 'Cairo',
           street: 'Main Street',
-          buildingNumber: '1'
+          buildingNumber: '1',
         },
         type: 'B',
         id: String(settings.tax_id || '000000000'),
-        name: 'Z-Systems Tenant Business'
+        name: 'Z-Systems Tenant Business',
       },
       receiver: {
         address: {
@@ -132,11 +128,11 @@ export class EtaSerializerService {
           governate: 'Cairo',
           regionCity: 'Cairo',
           street: customer?.address || 'Local Street',
-          buildingNumber: '1'
+          buildingNumber: '1',
         },
         type: isBusinessCustomer ? 'B' : 'P',
-        id: isBusinessCustomer ? String(customer?.tax_number) : (customer?.phone || ''),
-        name: sale.customer_name || customer?.name || 'عميل نقدي'
+        id: isBusinessCustomer ? String(customer?.tax_number) : customer?.phone || '',
+        name: sale.customer_name || customer?.name || 'عميل نقدي',
       },
       documentType: 'I',
       documentTypeVersion: '1.0',
@@ -154,7 +150,7 @@ export class EtaSerializerService {
         bankAccountNo: '',
         bankAccountIBAN: '',
         swiftCode: '',
-        terms: ''
+        terms: '',
       },
       delivery: {
         approach: '',
@@ -163,7 +159,7 @@ export class EtaSerializerService {
         exportPort: '',
         grossWeight: 0,
         netWeight: 0,
-        terms: ''
+        terms: '',
       },
       invoiceLines,
       totalDiscountAmount: Number(sale.discount || 0),
@@ -172,15 +168,14 @@ export class EtaSerializerService {
       taxTotals: [
         {
           taxType: 'T1',
-          amount: Number(totalTax.toFixed(2))
-        }
+          amount: Number(totalTax.toFixed(2)),
+        },
       ],
       totalAmount: totalAmount,
       extraDiscountAmount: 0,
-      totalItemsDiscountAmount: 0
+      totalItemsDiscountAmount: 0,
     };
 
     return etaDocument;
   }
 }
-

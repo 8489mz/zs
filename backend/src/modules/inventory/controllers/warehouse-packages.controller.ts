@@ -2,11 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { WarehousePackagesService } from '../services/warehouse-packages.service';
-import {
-  CreateWarehousePackageDto,
-  UnpackPackageDto,
-  UpdatePackageStatusDto,
-} from '../dto/warehouse-package.dto';
+import { CreateWarehousePackageDto, UnpackPackageDto, UpdatePackageStatusDto } from '../dto/warehouse-package.dto';
 
 @Controller('api/inventory/packages')
 @UseGuards(SessionAuthGuard)
@@ -14,10 +10,7 @@ export class WarehousePackagesController {
   constructor(private readonly packagesService: WarehousePackagesService) {}
 
   @Get()
-  getPackages(
-    @Query() query: { packageType?: string; status?: string; search?: string },
-    @Req() req: RequestWithAuth,
-  ) {
+  getPackages(@Query() query: { packageType?: string; status?: string; search?: string }, @Req() req: RequestWithAuth) {
     return this.packagesService.getPackages(req.authContext!, query);
   }
 
@@ -32,20 +25,12 @@ export class WarehousePackagesController {
   }
 
   @Post(':id/unpack')
-  unpack(
-    @Param('id') id: string,
-    @Body() dto: UnpackPackageDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  unpack(@Param('id') id: string, @Body() dto: UnpackPackageDto, @Req() req: RequestWithAuth) {
     return this.packagesService.unpack(req.authContext!, id, dto);
   }
 
   @Patch(':id/status')
-  updateStatus(
-    @Param('id') id: string,
-    @Body() dto: UpdatePackageStatusDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  updateStatus(@Param('id') id: string, @Body() dto: UpdatePackageStatusDto, @Req() req: RequestWithAuth) {
     return this.packagesService.updateStatus(req.authContext!, id, dto);
   }
 }

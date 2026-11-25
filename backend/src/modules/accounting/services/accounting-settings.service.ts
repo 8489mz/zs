@@ -77,11 +77,11 @@ export class AccountingSettingsService {
 
     const accounts = accountIds.length
       ? await this.db
-        .selectFrom('accounting_accounts')
-        .select(['id', 'code', 'name_ar', 'name_en'])
-        .where('tenant_id', '=', scope.tenantId)
-        .where('id', 'in', accountIds)
-        .execute()
+          .selectFrom('accounting_accounts')
+          .select(['id', 'code', 'name_ar', 'name_en'])
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', 'in', accountIds)
+          .execute()
       : [];
 
     const accountById = new Map(accounts.map((row) => [Number(row.id), row]));
@@ -128,11 +128,15 @@ export class AccountingSettingsService {
     const updateData: Record<string, any> = {};
     if (dto.cashAccountId !== undefined) updateData.cash_account_id = dto.cashAccountId || null;
     if (dto.bankAccountId !== undefined) updateData.bank_account_id = dto.bankAccountId || null;
-    if (dto.customerReceivableAccountId !== undefined) updateData.customer_receivable_account_id = dto.customerReceivableAccountId || null;
-    if (dto.supplierPayableAccountId !== undefined) updateData.supplier_payable_account_id = dto.supplierPayableAccountId || null;
+    if (dto.customerReceivableAccountId !== undefined)
+      updateData.customer_receivable_account_id = dto.customerReceivableAccountId || null;
+    if (dto.supplierPayableAccountId !== undefined)
+      updateData.supplier_payable_account_id = dto.supplierPayableAccountId || null;
     if (dto.inventoryAccountId !== undefined) updateData.inventory_account_id = dto.inventoryAccountId || null;
-    if (dto.salesRevenueAccountId !== undefined) updateData.sales_revenue_account_id = dto.salesRevenueAccountId || null;
-    if (dto.salesDiscountAccountId !== undefined) updateData.sales_discount_account_id = dto.salesDiscountAccountId || null;
+    if (dto.salesRevenueAccountId !== undefined)
+      updateData.sales_revenue_account_id = dto.salesRevenueAccountId || null;
+    if (dto.salesDiscountAccountId !== undefined)
+      updateData.sales_discount_account_id = dto.salesDiscountAccountId || null;
     if (dto.cogsAccountId !== undefined) updateData.cogs_account_id = dto.cogsAccountId || null;
     if (dto.purchaseAccountId !== undefined) updateData.purchase_account_id = dto.purchaseAccountId || null;
     if (dto.expensesAccountId !== undefined) updateData.expenses_account_id = dto.expensesAccountId || null;
@@ -142,32 +146,52 @@ export class AccountingSettingsService {
     if (dto.lockDateNonAdviser !== undefined) updateData.lock_date_non_adviser = dto.lockDateNonAdviser || null;
     if (dto.lockDateTax !== undefined) updateData.lock_date_tax = dto.lockDateTax || null;
     const referenceColumns = [
-      'cash_account_id', 'bank_account_id', 'customer_receivable_account_id',
-      'supplier_payable_account_id', 'inventory_account_id', 'sales_revenue_account_id',
-      'sales_discount_account_id', 'cogs_account_id', 'purchase_account_id',
-      'expenses_account_id', 'sales_tax_account_id', 'purchase_tax_account_id',
+      'cash_account_id',
+      'bank_account_id',
+      'customer_receivable_account_id',
+      'supplier_payable_account_id',
+      'inventory_account_id',
+      'sales_revenue_account_id',
+      'sales_discount_account_id',
+      'cogs_account_id',
+      'purchase_account_id',
+      'expenses_account_id',
+      'sales_tax_account_id',
+      'purchase_tax_account_id',
     ];
-    const accountIds = Array.from(new Set(referenceColumns
-      .map((column) => Number(updateData[column] || 0)).filter((id) => id > 0)));
+    const accountIds = Array.from(
+      new Set(referenceColumns.map((column) => Number(updateData[column] || 0)).filter((id) => id > 0)),
+    );
     if (accountIds.length) {
-      const owned = await this.db.selectFrom('accounting_accounts').select('id')
-        .where('tenant_id', '=', scope.tenantId).where('id', 'in', accountIds).execute();
+      const owned = await this.db
+        .selectFrom('accounting_accounts')
+        .select('id')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('id', 'in', accountIds)
+        .execute();
       if (owned.length !== accountIds.length) throw new BadRequestException('حساب الإعدادات لا ينتمي لهذه المنشأة.');
     }
 
     updateData.updated_at = new Date();
 
-    if (Object.keys(updateData).length > 1) { // more than just updated_at
+    if (Object.keys(updateData).length > 1) {
+      // more than just updated_at
       await this.db.transaction().execute(async (trx) => {
         await lockAccountingPeriod(trx, scope.tenantId);
-        const closingDates = [dto.lockDateAll, dto.lockDateNonAdviser, dto.lockDateTax].filter((day): day is string => Boolean(day)).sort();
-        if (closingDates.length) await assertAccountingCloseReady(trx, scope.tenantId, '1900-01-01', closingDates[closingDates.length - 1]);
-        await trx.updateTable('accounting_settings').set(updateData)
-          .where('tenant_id', '=', scope.tenantId).where('id', '=', 1).execute();
+        const closingDates = [dto.lockDateAll, dto.lockDateNonAdviser, dto.lockDateTax]
+          .filter((day): day is string => Boolean(day))
+          .sort();
+        if (closingDates.length)
+          await assertAccountingCloseReady(trx, scope.tenantId, '1900-01-01', closingDates[closingDates.length - 1]);
+        await trx
+          .updateTable('accounting_settings')
+          .set(updateData)
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', 1)
+          .execute();
       });
     }
 
     return { success: true };
   }
-
 }

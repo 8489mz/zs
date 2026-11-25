@@ -218,25 +218,17 @@ export class ProductSerialsService {
         // sales-query.service.ts: `docNo: sale.doc_no || \`Z-${sale.id}\``
         // — derived from the real sale row, never invented.
         saleId: row.sale_id ? String(row.sale_id) : null,
-        saleDocNo:
-          row.sale_doc_no || (row.sale_id ? `Z-${row.sale_id}` : null),
+        saleDocNo: row.sale_doc_no || (row.sale_id ? `Z-${row.sale_id}` : null),
         purchaseId: row.purchase_id ? String(row.purchase_id) : null,
         purchaseDocNo: row.purchase_doc_no || null,
-        customerName:
-          row.sale_customer_name || row.customer_name_ref || null,
-        customerPhone:
-          row.sale_customer_phone || row.customer_phone_ref || null,
+        customerName: row.sale_customer_name || row.customer_name_ref || null,
+        customerPhone: row.sale_customer_phone || row.customer_phone_ref || null,
         supplierName: row.supplier_name || null,
       },
     };
   }
 
-  async addSerials(
-    productId: number,
-    items: ProductSerialItemInput[],
-    actor: AuthContext,
-    trx?: Kysely<Database>,
-  ) {
+  async addSerials(productId: number, items: ProductSerialItemInput[], actor: AuthContext, trx?: Kysely<Database>) {
     const scope = this.scope(actor);
     const db = trx || this.db;
 
@@ -263,7 +255,11 @@ export class ProductSerialsService {
 
     if (existing.length > 0) {
       const existingSerials = existing.map((e) => e.serial_number).join(', ');
-      throw new AppError(`Serial number(s) already exist in database: ${existingSerials}`, 'SERIAL_ALREADY_EXISTS', 400);
+      throw new AppError(
+        `Serial number(s) already exist in database: ${existingSerials}`,
+        'SERIAL_ALREADY_EXISTS',
+        400,
+      );
     }
 
     const rowsToInsert = items.map((item) => ({
@@ -282,7 +278,10 @@ export class ProductSerialsService {
       notes: item.notes || null,
     }));
 
-    await db.insertInto('product_serials').values(rowsToInsert as any).execute();
+    await db
+      .insertInto('product_serials')
+      .values(rowsToInsert as any)
+      .execute();
 
     await this.audit.log(
       'إضافة سريالات أجهزة',
@@ -321,12 +320,7 @@ export class ProductSerialsService {
     return result;
   }
 
-  async markSerialsReturned(
-    returnItemId: number,
-    serialNumbers: string[],
-    actor: AuthContext,
-    trx?: Kysely<Database>,
-  ) {
+  async markSerialsReturned(returnItemId: number, serialNumbers: string[], actor: AuthContext, trx?: Kysely<Database>) {
     if (!serialNumbers || serialNumbers.length === 0) return;
     const db = trx || this.db;
     const cleanSerials = serialNumbers.map((s) => s.trim().toLowerCase());

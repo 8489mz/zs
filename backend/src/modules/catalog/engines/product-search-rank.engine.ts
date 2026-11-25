@@ -25,7 +25,9 @@ export interface ProductSearchOptions {
 export const STRONG_PRODUCT_MATCH_SCORE = 450;
 
 export function compileProductSearchQuery(rawQuery: unknown): CompiledProductSearchQuery {
-  const rawLower = String(rawQuery ?? '').trim().toLowerCase();
+  const rawLower = String(rawQuery ?? '')
+    .trim()
+    .toLowerCase();
   const norm = normalizeArabicSearch(rawQuery);
   const tokens = norm ? norm.split(/\s+/).filter(Boolean) : [];
   return { rawLower, norm, tokens };
@@ -42,16 +44,20 @@ export function scoreProductSearchMatch(
   const normName = normalizeArabicSearch(candidate.name);
   const normNameEn = normalizeArabicSearch(candidate.nameEn);
 
-  const rawCodes = [
-    candidate.barcode,
-    candidate.sku,
-    candidate.styleCode,
-  ]
-    .map((v) => String(v ?? '').trim().toLowerCase())
+  const rawCodes = [candidate.barcode, candidate.sku, candidate.styleCode]
+    .map((v) =>
+      String(v ?? '')
+        .trim()
+        .toLowerCase(),
+    )
     .filter(Boolean);
 
   const unitRawCodes = (candidate.unitSearchValues || [])
-    .map((v) => String(v ?? '').trim().toLowerCase())
+    .map((v) =>
+      String(v ?? '')
+        .trim()
+        .toLowerCase(),
+    )
     .filter(Boolean);
 
   if (
@@ -62,40 +68,24 @@ export function scoreProductSearchMatch(
     return 1000;
   }
 
-  if (
-    (normName && normName.startsWith(`${q} `)) ||
-    (normNameEn && normNameEn.startsWith(`${q} `))
-  ) {
+  if ((normName && normName.startsWith(`${q} `)) || (normNameEn && normNameEn.startsWith(`${q} `))) {
     return 900;
   }
 
-  if (
-    (normName && ` ${normName} `.includes(` ${q} `)) ||
-    (normNameEn && ` ${normNameEn} `.includes(` ${q} `))
-  ) {
+  if ((normName && ` ${normName} `.includes(` ${q} `)) || (normNameEn && ` ${normNameEn} `.includes(` ${q} `))) {
     return 800;
   }
 
-  if (
-    (normName && normName.startsWith(q)) ||
-    (normNameEn && normNameEn.startsWith(q))
-  ) {
+  if ((normName && normName.startsWith(q)) || (normNameEn && normNameEn.startsWith(q))) {
     return 720;
   }
 
-  if (
-    (normName && ` ${normName}`.includes(` ${q}`)) ||
-    (normNameEn && ` ${normNameEn}`.includes(` ${q}`))
-  ) {
+  if ((normName && ` ${normName}`.includes(` ${q}`)) || (normNameEn && ` ${normNameEn}`.includes(` ${q}`))) {
     return 650;
   }
 
   const combinedNames = [normName, normNameEn].filter(Boolean).join(' ');
-  if (
-    tokens.length > 1 &&
-    combinedNames &&
-    tokens.every((token) => ` ${combinedNames}`.includes(` ${token}`))
-  ) {
+  if (tokens.length > 1 && combinedNames && tokens.every((token) => ` ${combinedNames}`.includes(` ${token}`))) {
     return 550;
   }
 

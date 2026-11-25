@@ -81,15 +81,7 @@ export class InventoryReplenishmentService {
     // 2. Fetch active products
     const products = await this.db
       .selectFrom('products')
-      .select([
-        'id',
-        'name',
-        'barcode',
-        'min_stock_qty',
-        'cost_price',
-        'retail_price',
-        'stock_qty',
-      ])
+      .select(['id', 'name', 'barcode', 'min_stock_qty', 'cost_price', 'retail_price', 'stock_qty'])
       .where('tenant_id', '=', tenantId)
       .where('is_active', '=', true)
       .execute();
@@ -138,10 +130,7 @@ export class InventoryReplenishmentService {
     const salesVelocityRows = await this.db
       .selectFrom('sale_items as si')
       .innerJoin('sales as s', 's.id', 'si.sale_id')
-      .select([
-        'si.product_id',
-        sql<number>`SUM(si.qty)`.as('sold_qty'),
-      ])
+      .select(['si.product_id', sql<number>`SUM(si.qty)`.as('sold_qty')])
       .where('s.tenant_id', '=', tenantId)
       .where((eb) =>
         eb.or([

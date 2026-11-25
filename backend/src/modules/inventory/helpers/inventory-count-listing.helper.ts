@@ -133,10 +133,16 @@ export function groupStockCountItemsBySession(items: StockCountItemRow[]) {
       expectedQty: Number(item.expected_qty || 0),
       countedQty: Number(item.counted_qty || 0),
       varianceQty: Number(item.variance_qty || 0),
-      countedSerials: Array.isArray(item.counted_serials) ? item.counted_serials :
-        (typeof item.counted_serials === 'string' ? JSON.parse(item.counted_serials) : []),
-      batchCounts: Array.isArray(item.batch_counts) ? item.batch_counts :
-        (typeof item.batch_counts === 'string' ? JSON.parse(item.batch_counts) : []),
+      countedSerials: Array.isArray(item.counted_serials)
+        ? item.counted_serials
+        : typeof item.counted_serials === 'string'
+          ? JSON.parse(item.counted_serials)
+          : [],
+      batchCounts: Array.isArray(item.batch_counts)
+        ? item.batch_counts
+        : typeof item.batch_counts === 'string'
+          ? JSON.parse(item.batch_counts)
+          : [],
       reason: String(item.reason || ''),
       note: String(item.note || ''),
     });
@@ -144,7 +150,10 @@ export function groupStockCountItemsBySession(items: StockCountItemRow[]) {
   return bySession;
 }
 
-export function mapStockCountSessionRow(row: StockCountSessionRow, itemsBySession: Map<string, Record<string, unknown>[]>) {
+export function mapStockCountSessionRow(
+  row: StockCountSessionRow,
+  itemsBySession: Map<string, Record<string, unknown>[]>,
+) {
   return {
     id: String(row.id),
     docNo: row.doc_no ? String(row.doc_no) : `COUNT-${row.id}`,

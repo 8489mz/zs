@@ -30,7 +30,7 @@ export type ReturnListRow = {
   date: unknown;
   createdBy?: string;
   createdByName?: string;
-  items?: Array<{ productId: string; productName: string; qty: number; total: number; }>;
+  items?: Array<{ productId: string; productName: string; qty: number; total: number }>;
 };
 
 function returnDateKey(value: unknown, timeZone?: string): string {
@@ -43,7 +43,7 @@ function returnDateKey(value: unknown, timeZone?: string): string {
 
 export function mapReturnRows(rows: Array<Record<string, unknown>>): ReturnListRow[] {
   const docMap = new Map<string, ReturnListRow>();
-  
+
   for (const row of rows) {
     const docId = String(row.return_document_id);
     if (!docMap.has(docId)) {
@@ -51,10 +51,13 @@ export function mapReturnRows(rows: Array<Record<string, unknown>>): ReturnListR
         id: docId,
         rowId: docId,
         docNo: String(row.doc_no || 'ZR-' + docId),
-        returnType: (row.return_type === 'purchase' ? 'purchase' : 'sale'),
-        type: (row.return_type === 'purchase' ? 'purchase' : 'sale'),
+        returnType: row.return_type === 'purchase' ? 'purchase' : 'sale',
+        type: row.return_type === 'purchase' ? 'purchase' : 'sale',
         invoiceId: row.invoice_id ? String(row.invoice_id) : '',
-        invoiceDocNo: String(row.invoice_doc_no || (row.invoice_id ? (row.return_type === 'purchase' ? 'PO-' + row.invoice_id : 'Z-' + row.invoice_id) : '')),
+        invoiceDocNo: String(
+          row.invoice_doc_no ||
+            (row.invoice_id ? (row.return_type === 'purchase' ? 'PO-' + row.invoice_id : 'Z-' + row.invoice_id) : ''),
+        ),
         partyName: String(row.party_name || (row.return_type === 'sale' ? 'عميل نقدي' : 'مورد')),
         orderType: String(row.order_type || ''),
         productId: '',
@@ -72,7 +75,7 @@ export function mapReturnRows(rows: Array<Record<string, unknown>>): ReturnListR
           if (raw == null) return undefined;
           try {
             const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
-            return Array.isArray(parsed) ? parsed as Array<{ tender: string; amount: number }> : undefined;
+            return Array.isArray(parsed) ? (parsed as Array<{ tender: string; amount: number }>) : undefined;
           } catch {
             return undefined;
           }
@@ -81,7 +84,7 @@ export function mapReturnRows(rows: Array<Record<string, unknown>>): ReturnListR
         date: row.created_at,
         createdBy: row.created_by ? String(row.created_by) : '',
         createdByName: String(row.created_by_name || ''),
-        items: []
+        items: [],
       });
     }
     const doc = docMap.get(docId)!;
@@ -114,28 +117,56 @@ export function mapReturnRows(rows: Array<Record<string, unknown>>): ReturnListR
   return result;
 }
 
-export function filterReturnRows(rows: ReturnListRow[], query: Record<string, unknown>, today: string, timeZone?: string): ReturnListRow[] {
-  const q = String(query.search || query.q || '').trim().toLowerCase();
+export function filterReturnRows(
+  rows: ReturnListRow[],
+  query: Record<string, unknown>,
+  today: string,
+  timeZone?: string,
+): ReturnListRow[] {
+  const q = String(query.search || query.q || '')
+    .trim()
+    .toLowerCase();
   const filter = String(query.filter || query.view || 'all').trim();
-  const employee = String(query.employee || query.employeeName || '').trim().toLowerCase();
+  const employee = String(query.employee || query.employeeName || '')
+    .trim()
+    .toLowerCase();
 
   return rows.filter((row) => {
     if (filter === 'sales' && row.returnType !== 'sale') return false;
     if (filter === 'purchase' && row.returnType !== 'purchase') return false;
     if (filter === 'today' && returnDateKey(row.createdAt, timeZone) !== today) return false;
-    if (employee && !String(row.createdByName || '').toLowerCase().includes(employee)) return false;
+    if (
+      employee &&
+      !String(row.createdByName || '')
+        .toLowerCase()
+        .includes(employee)
+    )
+      return false;
     if (!q) return true;
-    return [row.docNo, row.productName, row.note, row.returnType, row.createdByName].some((value) => String(value || '').toLowerCase().includes(q));
+    return [row.docNo, row.productName, row.note, row.returnType, row.createdByName].some((value) =>
+      String(value || '')
+        .toLowerCase()
+        .includes(q),
+    );
   });
 }
 
-export function summarizeReturnRows(rows: ReturnListRow[], today: string, moneyDigits: MoneyDigits = 2, timeZone?: string) {
+export function summarizeReturnRows(
+  rows: ReturnListRow[],
+  today: string,
+  moneyDigits: MoneyDigits = 2,
+  timeZone?: string,
+) {
   return {
     totalItems: new Set(rows.map((row) => row.id)).size,
-    totalAmount: roundMoney(rows.reduce((sum, row) => sum + Number(row.refundTotal ?? row.total ?? 0), 0), moneyDigits),
+    totalAmount: roundMoney(
+      rows.reduce((sum, row) => sum + Number(row.refundTotal ?? row.total ?? 0), 0),
+      moneyDigits,
+    ),
     salesReturns: new Set(rows.filter((row) => row.returnType === 'sale').map((row) => row.id)).size,
     purchaseReturns: new Set(rows.filter((row) => row.returnType === 'purchase').map((row) => row.id)).size,
-    todayCount: new Set(rows.filter((row) => returnDateKey(row.createdAt, timeZone) === today).map((row) => row.id)).size,
+    todayCount: new Set(rows.filter((row) => returnDateKey(row.createdAt, timeZone) === today).map((row) => row.id))
+      .size,
     latestDocNo: rows[0]?.docNo || '',
   };
 }

@@ -21,10 +21,7 @@ import { SalesAuthorizationService } from './sales-authorization.service';
 
 export type SalesStockAndPricingHelperDeps = {
   authz: SalesAuthorizationService;
-  getTenantSettingsMap: (
-    trx: Kysely<Database> | Transaction<Database>,
-    tenantId: string,
-  ) => Promise<Map<string, any>>;
+  getTenantSettingsMap: (trx: Kysely<Database> | Transaction<Database>, tenantId: string) => Promise<Map<string, any>>;
   loadFlatAddonCosts: (
     trx: Kysely<Database> | Transaction<Database>,
     tenantId: string,
@@ -43,11 +40,11 @@ export class SalesStockAndPricingHelper {
     this.loadFlatAddonCosts = deps.loadFlatAddonCosts;
   }
 
-shouldLogCheckoutTimings(): boolean {
+  shouldLogCheckoutTimings(): boolean {
     return String(process.env.CHECKOUT_TIMINGS || '').trim() === '1';
   }
 
-async assertDiscountChangeAllowed(
+  async assertDiscountChangeAllowed(
     trx: Kysely<Database> | Transaction<Database>,
     auth: AuthContext,
     discount: number,
@@ -76,7 +73,9 @@ async assertDiscountChangeAllowed(
         flatAllowance = configuredAllowance;
       }
 
-      const isThresholdEnabled = settingsMap.get('posMaxDiscountThresholdEnabled') === true || settingsMap.get('posMaxDiscountThresholdEnabled') === 'true';
+      const isThresholdEnabled =
+        settingsMap.get('posMaxDiscountThresholdEnabled') === true ||
+        settingsMap.get('posMaxDiscountThresholdEnabled') === 'true';
       const thresholdType = settingsMap.get('posMaxDiscountThresholdType') || 'percentage';
       const thresholdValue = Number(settingsMap.get('posMaxDiscountThresholdValue') || 0);
 
@@ -107,17 +106,29 @@ async assertDiscountChangeAllowed(
     }
   }
 
-async assertUnitPriceChangeAllowed(trx: Kysely<Database> | Transaction<Database>, auth: AuthContext, providedPrice: number, allowedPrice: number, productId: number, managerPin?: string, saleId?: number): Promise<void> {
+  async assertUnitPriceChangeAllowed(
+    trx: Kysely<Database> | Transaction<Database>,
+    auth: AuthContext,
+    providedPrice: number,
+    allowedPrice: number,
+    productId: number,
+    managerPin?: string,
+    saleId?: number,
+  ): Promise<void> {
     if (Math.abs(Number(providedPrice || 0) - Number(allowedPrice || 0)) <= 0.0001) return;
     const scope = requireTenantScope(auth);
     const settingsMap = await this.getTenantSettingsMap(trx, scope.tenantId);
-    const thresholdEnabled = settingsMap.get('posMaxDiscountThresholdEnabled') === true || settingsMap.get('posMaxDiscountThresholdEnabled') === 'true';
+    const thresholdEnabled =
+      settingsMap.get('posMaxDiscountThresholdEnabled') === true ||
+      settingsMap.get('posMaxDiscountThresholdEnabled') === 'true';
     const thresholdType = settingsMap.get('posMaxDiscountThresholdType') || 'percentage';
     const threshold = Number(settingsMap.get('posMaxDiscountThresholdValue') || 0);
     const reduction = Math.max(0, allowedPrice - providedPrice);
-    const exceedsThreshold = thresholdEnabled && threshold > 0 &&
+    const exceedsThreshold =
+      thresholdEnabled &&
+      threshold > 0 &&
       (thresholdType === 'percentage'
-        ? allowedPrice > 0 && reduction / allowedPrice * 100 > threshold
+        ? allowedPrice > 0 && (reduction / allowedPrice) * 100 > threshold
         : reduction > threshold);
     let authorizedBy: string | null = null;
     // INV-POS-ADMIN-DISCOUNT-AUTHORITY: the tenant admin (store owner)
@@ -127,16 +138,25 @@ async assertUnitPriceChangeAllowed(trx: Kysely<Database> | Transaction<Database>
       const approval = await this.authz.authorizeDiscountOverride(String(managerPin || '').trim(), auth, trx);
       authorizedBy = approval.authorizedByName;
     }
-    await trx.insertInto('pos_audit_events').values({
-      tenant_id: scope.tenantId, account_id: scope.accountId,
-      event_type: 'price_edit', user_id: auth.userId, sale_id: saleId || null,
-      product_id: productId, amount: Number(providedPrice),
-      reason: authorizedBy ? `Price ${allowedPrice} -> ${providedPrice}; approved by ${authorizedBy}` : `Price ${allowedPrice} -> ${providedPrice}`,
-      metadata: { allowedPrice, providedPrice, authorizedBy },
-    }).execute();
+    await trx
+      .insertInto('pos_audit_events')
+      .values({
+        tenant_id: scope.tenantId,
+        account_id: scope.accountId,
+        event_type: 'price_edit',
+        user_id: auth.userId,
+        sale_id: saleId || null,
+        product_id: productId,
+        amount: Number(providedPrice),
+        reason: authorizedBy
+          ? `Price ${allowedPrice} -> ${providedPrice}; approved by ${authorizedBy}`
+          : `Price ${allowedPrice} -> ${providedPrice}`,
+        metadata: { allowedPrice, providedPrice, authorizedBy },
+      })
+      .execute();
   }
 
-async getCurrentProductOffers(trx: Kysely<Database> | Transaction<Database>, productId: number, tenantId: string) {
+  async getCurrentProductOffers(trx: Kysely<Database> | Transaction<Database>, productId: number, tenantId: string) {
     return trx
       .selectFrom('product_offers')
       .select([
@@ -159,7 +179,7 @@ async getCurrentProductOffers(trx: Kysely<Database> | Transaction<Database>, pro
       .execute();
   }
 
-/**
+  /**
    * Takes the canonical first lock for a product's stock mutation.
    * applyStockDelta locks products before product_location_stock; every stock path must do the same
    * or concurrent sales/purchases/transfers deadlock on inverted lock order.
@@ -180,7 +200,7 @@ async getCurrentProductOffers(trx: Kysely<Database> | Transaction<Database>, pro
       .executeTakeFirst();
   }
 
-async lockSaleStockRows(
+  async lockSaleStockRows(
     trx: Kysely<Database> | Transaction<Database>,
     scope: { tenantId: string; accountId: string },
     items: any[],
@@ -208,7 +228,8 @@ async lockSaleStockRows(
       .filter((item) => Number(item?.id) > 0 && ('sale_id' in item || 'product_id' in item))
       .map((item) => Number(item.id));
     if (existingSaleLineIds.length > 0) {
-      const allocProducts = await trx.selectFrom('sale_line_stock_allocations')
+      const allocProducts = await trx
+        .selectFrom('sale_line_stock_allocations')
         .select('product_id')
         .where('sale_line_id', 'in', existingSaleLineIds)
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
@@ -219,7 +240,8 @@ async lockSaleStockRows(
     }
 
     if (optionIds.size > 0) {
-      const modOptions = await trx.selectFrom('pos_modifier_options')
+      const modOptions = await trx
+        .selectFrom('pos_modifier_options')
         .select(['id', 'component_product_id'])
         .where('id', 'in', [...optionIds])
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
@@ -239,12 +261,22 @@ async lockSaleStockRows(
       const unseen = frontier.filter((id) => !visited.has(id));
       if (!unseen.length) break;
       unseen.forEach((id) => visited.add(id));
-      const boms = await trx.selectFrom('manufacturing_boms')
-        .select('id').where('product_id', 'in', unseen)
-        .where('tenant_id', '=', scope.tenantId).where('is_active', '=', true).execute();
+      const boms = await trx
+        .selectFrom('manufacturing_boms')
+        .select('id')
+        .where('product_id', 'in', unseen)
+        .where('tenant_id', '=', scope.tenantId)
+        .where('is_active', '=', true)
+        .execute();
       if (!boms.length) break;
-      const lines = await trx.selectFrom('manufacturing_bom_lines')
-        .select('component_product_id').where('bom_id', 'in', boms.map((bom) => Number(bom.id)))
+      const lines = await trx
+        .selectFrom('manufacturing_bom_lines')
+        .select('component_product_id')
+        .where(
+          'bom_id',
+          'in',
+          boms.map((bom) => Number(bom.id)),
+        )
         .execute();
       frontier = lines.map((line) => Number(line.component_product_id)).filter((id) => id > 0);
       frontier.forEach((id) => productIds.add(id));
@@ -256,9 +288,7 @@ async lockSaleStockRows(
         const missingMatch = err.message.match(/#(\d+)/);
         if (missingMatch) {
           const missingId = Number(missingMatch[1]);
-          const matchedItem = items.find(
-            (it) => Number(it.productId ?? it.product_id) === missingId,
-          );
+          const matchedItem = items.find((it) => Number(it.productId ?? it.product_id) === missingId);
           const itemName = matchedItem?.name || (matchedItem as any)?.productName;
           if (itemName) {
             throw new AppError(
@@ -273,14 +303,16 @@ async lockSaleStockRows(
     }
   }
 
-async getAllowNegativeStockSales(trx: Kysely<Database> | Transaction<Database>, tenantId: string): Promise<boolean> {
+  async getAllowNegativeStockSales(trx: Kysely<Database> | Transaction<Database>, tenantId: string): Promise<boolean> {
     const settingsMap = await this.getTenantSettingsMap(trx, tenantId);
     const allowNegative = settingsMap.get('allowNegativeStockSales');
     const allowSellingBelow = settingsMap.get('allowSellingBelowStock');
-    return allowNegative === true || allowNegative === 'true' || allowSellingBelow === true || allowSellingBelow === 'true';
+    return (
+      allowNegative === true || allowNegative === 'true' || allowSellingBelow === true || allowSellingBelow === 'true'
+    );
   }
 
-async buildInsufficientStockError(
+  async buildInsufficientStockError(
     trx: Kysely<Database> | Transaction<Database>,
     params: {
       productId: number;
@@ -326,9 +358,7 @@ async buildInsufficientStockError(
       otherLocationsQuery = otherLocationsQuery.where('pls.location_id', 'not in', Array.from(excludedIds));
     }
 
-    const otherLocations = await otherLocationsQuery
-      .orderBy('pls.qty', 'desc')
-      .execute();
+    const otherLocations = await otherLocationsQuery.orderBy('pls.qty', 'desc').execute();
 
     let unassignedQty = 0;
     if (!excludedIds.has(0)) {
@@ -346,9 +376,7 @@ async buildInsufficientStockError(
     const currentLocText = locName ? `في مخزن "${locName}"` : 'في المخزن المحدد';
     const availableText = `(المتاح: ${Number(params.currentAvailableQty || 0)})`;
 
-    const alternatives: string[] = otherLocations.map(
-      (l) => `"${l.locationName}" (${Number(l.qty)} قطعة)`,
-    );
+    const alternatives: string[] = otherLocations.map((l) => `"${l.locationName}" (${Number(l.qty)} قطعة)`);
     if (unassignedQty > 0) {
       alternatives.push(`مخزون عام (${unassignedQty} قطعة)`);
     }

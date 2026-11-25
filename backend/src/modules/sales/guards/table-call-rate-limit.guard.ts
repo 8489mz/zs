@@ -21,11 +21,21 @@ export class TableCallRateLimitGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
     const ip = resolveClientIp(req.ip || req.socket?.remoteAddress, req.headers?.['x-real-ip']);
-    const slug = String(req.query?.slug || req.body?.slug || 'unknown').trim().toLowerCase() || 'unknown';
-    const result = await this.rateLimit.hit(`table-call:${ip}:${slug}`, TABLE_CALLS_PER_WINDOW, TABLE_CALL_WINDOW_SECONDS);
+    const slug =
+      String(req.query?.slug || req.body?.slug || 'unknown')
+        .trim()
+        .toLowerCase() || 'unknown';
+    const result = await this.rateLimit.hit(
+      `table-call:${ip}:${slug}`,
+      TABLE_CALLS_PER_WINDOW,
+      TABLE_CALL_WINDOW_SECONDS,
+    );
     if (!result.allowed) {
       context.switchToHttp().getResponse().setHeader?.('Retry-After', String(result.retryAfterSeconds));
-      throw new HttpException('تم تجاوز عدد مرات نداء الطاولة المسموح، يرجى المحاولة لاحقاً.', HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        'تم تجاوز عدد مرات نداء الطاولة المسموح، يرجى المحاولة لاحقاً.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
     return true;
   }

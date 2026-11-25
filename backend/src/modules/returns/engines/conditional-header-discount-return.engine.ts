@@ -96,7 +96,8 @@ function fail(message: string, code: string): never {
 function toCents(value: number, digits: MoneyDigits): number {
   const scale = 10 ** digits;
   const cents = Math.round(Number(value) * scale);
-  if (!Number.isSafeInteger(cents)) fail('قيمة المرتجع تتجاوز حد الأرقام الآمن', 'CONDITIONAL_DISCOUNT_FORFEIT_INVALID_INPUT');
+  if (!Number.isSafeInteger(cents))
+    fail('قيمة المرتجع تتجاوز حد الأرقام الآمن', 'CONDITIONAL_DISCOUNT_FORFEIT_INVALID_INPUT');
   return cents;
 }
 
@@ -109,7 +110,8 @@ export function allocateProRata(weights: number[], target: number, digits: Money
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   if (weights.length === 0) return [];
   if (!(totalWeight > 0)) {
-    if (targetCents !== 0) fail('تعذر توزيع مبلغ المرتجع على البنود', 'CONDITIONAL_DISCOUNT_FORFEIT_ALLOCATION_INVALID');
+    if (targetCents !== 0)
+      fail('تعذر توزيع مبلغ المرتجع على البنود', 'CONDITIONAL_DISCOUNT_FORFEIT_ALLOCATION_INVALID');
     return weights.map(() => 0);
   }
   const result: number[] = [];
@@ -118,7 +120,10 @@ export function allocateProRata(weights: number[], target: number, digits: Money
   // never on a free (zero-weight) line.
   let lastPositive = -1;
   for (let index = weights.length - 1; index >= 0; index -= 1) {
-    if (weights[index] > 0) { lastPositive = index; break; }
+    if (weights[index] > 0) {
+      lastPositive = index;
+      break;
+    }
   }
   for (let index = 0; index < weights.length; index += 1) {
     if (index === lastPositive) {
@@ -168,9 +173,10 @@ export function computeConditionalDiscountForfeit(input: {
   const total = num(invoiceTotal, 'invoiceTotal');
   const priorRefunded = num(priorGoodsRefunded, 'priorGoodsRefunded');
   const priorQty = (saleItemId: number): number => {
-    const raw = input.priorReturnedQtyByLine instanceof Map
-      ? input.priorReturnedQtyByLine.get(saleItemId)
-      : (input.priorReturnedQtyByLine as Record<number, number>)[saleItemId];
+    const raw =
+      input.priorReturnedQtyByLine instanceof Map
+        ? input.priorReturnedQtyByLine.get(saleItemId)
+        : (input.priorReturnedQtyByLine as Record<number, number>)[saleItemId];
     return num(raw ?? 0, 'priorReturnedQty');
   };
   const requestedQtyByLine = new Map<number, number>();
@@ -234,15 +240,16 @@ export function computeConditionalDiscountForfeit(input: {
   const applies = header > 0 && partial;
   const computedGoodsRefund = Math.max(0, money(total - priorRefunded - remainingNetAtOriginal));
   const forfeitedHeaderDiscount = applies ? header : 0;
-  const goodwillCap = applies
-    ? Math.max(0, Math.min(goodwillCapBase, money(total - priorRefunded)))
-    : 0;
+  const goodwillCap = applies ? Math.max(0, Math.min(goodwillCapBase, money(total - priorRefunded))) : 0;
 
   let finalGoodsRefund = computedGoodsRefund;
   let goodwillAmount = 0;
   if (input.requestedGoodsRefund !== undefined && input.requestedGoodsRefund !== null) {
     if (!applies) {
-      fail('التسوية الودية تتطلب إلغاء خصم فاتورة سارياً على هذا المرتجع', 'CONDITIONAL_DISCOUNT_GOODWILL_REQUIRES_FORFEIT');
+      fail(
+        'التسوية الودية تتطلب إلغاء خصم فاتورة سارياً على هذا المرتجع',
+        'CONDITIONAL_DISCOUNT_GOODWILL_REQUIRES_FORFEIT',
+      );
     }
     const requested = num(input.requestedGoodsRefund, 'requestedGoodsRefund');
     if (requested < computedGoodsRefund - 0.000001) {
@@ -252,12 +259,18 @@ export function computeConditionalDiscountForfeit(input: {
       fail('المبلغ المسترد المطلوب يتجاوز سقف سعر القطع المرتجعة', 'GOODWILL_REFUND_ABOVE_CAP');
     }
     if (goodwillCap < computedGoodsRefund - 0.000001) {
-      fail('سقف التسوية الودية أقل من المبلغ المحسوب؛ راجع مرتجعات الفاتورة السابقة', 'CONDITIONAL_DISCOUNT_FORFEIT_CAP_INVALID');
+      fail(
+        'سقف التسوية الودية أقل من المبلغ المحسوب؛ راجع مرتجعات الفاتورة السابقة',
+        'CONDITIONAL_DISCOUNT_FORFEIT_CAP_INVALID',
+      );
     }
     finalGoodsRefund = money(requested);
     goodwillAmount = money(finalGoodsRefund - computedGoodsRefund);
   } else if (applies && goodwillCap < computedGoodsRefund - 0.000001) {
-    fail('سقف التسوية الودية أقل من المبلغ المحسوب؛ راجع مرتجعات الفاتورة السابقة', 'CONDITIONAL_DISCOUNT_FORFEIT_CAP_INVALID');
+    fail(
+      'سقف التسوية الودية أقل من المبلغ المحسوب؛ راجع مرتجعات الفاتورة السابقة',
+      'CONDITIONAL_DISCOUNT_FORFEIT_CAP_INVALID',
+    );
   }
 
   let resultLines: ForfeitLineResult[] = [];
@@ -267,9 +280,8 @@ export function computeConditionalDiscountForfeit(input: {
       finalGoodsRefund,
       digits,
     );
-    const totalTax = repricedReturnedTotal > 0
-      ? money(finalGoodsRefund * (repricedReturnedTax / repricedReturnedTotal))
-      : 0;
+    const totalTax =
+      repricedReturnedTotal > 0 ? money(finalGoodsRefund * (repricedReturnedTax / repricedReturnedTotal)) : 0;
     const allocatedTaxes = allocateProRata(allocatedTotals, totalTax, digits);
     resultLines = returned.map((entry, index) => ({
       saleItemId: entry.saleItemId,

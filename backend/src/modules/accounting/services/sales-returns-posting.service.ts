@@ -31,7 +31,6 @@ import { SalesReturnReliefService } from './sales-returns-posting/sales-return-r
 import { DeliveryCustodyService } from './sales-returns-posting/delivery-custody';
 import { PostSalesReturnService } from './sales-returns-posting/post-sales-return';
 
-
 export class SalesAndReturnsPostingService {
   private readonly foundation: AccountingTenantFoundationService;
   private readonly getTenantAccountingSettings: SalesAndReturnsPostingDeps['getTenantAccountingSettings'];
@@ -158,14 +157,30 @@ export class SalesAndReturnsPostingService {
     queryable: Transaction<Database>,
     tenantId: string,
     saleId: number,
-  ): Promise<Array<{ id: number; product_id: number | null; qty: number | string; cost_price: number | string | null; unit_multiplier: number | string | null; modifiers: unknown }>> {
+  ): Promise<
+    Array<{
+      id: number;
+      product_id: number | null;
+      qty: number | string;
+      cost_price: number | string | null;
+      unit_multiplier: number | string | null;
+      modifiers: unknown;
+    }>
+  > {
     return this.saleCogsResidualService.readSaleResidualLines(queryable, tenantId, saleId);
   }
 
   async residualCogsGroups(
     queryable: Transaction<Database>,
     tenantId: string,
-    saleItems: Array<{ id: number; product_id: number | null; qty: number | string; cost_price: number | string | null; unit_multiplier: number | string | null; modifiers: unknown }>,
+    saleItems: Array<{
+      id: number;
+      product_id: number | null;
+      qty: number | string;
+      cost_price: number | string | null;
+      unit_multiplier: number | string | null;
+      modifiers: unknown;
+    }>,
     qtySoldBySaleItemId: Map<number, number> | null,
   ): Promise<CogsResidualGroup[]> {
     return this.saleCogsResidualService.residualCogsGroups(queryable, tenantId, saleItems, qtySoldBySaleItemId);
@@ -178,7 +193,13 @@ export class SalesAndReturnsPostingService {
     bookDigits: MoneyDigits,
     returnedQtyBySaleItemId: Map<number, number>,
   ): Promise<number> {
-    return this.saleCogsResidualService.salesReturnCogsResidual(queryable, tenantId, saleId, bookDigits, returnedQtyBySaleItemId);
+    return this.saleCogsResidualService.salesReturnCogsResidual(
+      queryable,
+      tenantId,
+      saleId,
+      bookDigits,
+      returnedQtyBySaleItemId,
+    );
   }
 
   // resolveSalesReturnCostLines lives in sales-returns-posting/sale-cogs-residual.ts (S1 slice).
@@ -186,11 +207,23 @@ export class SalesAndReturnsPostingService {
     queryable: Transaction<Database>,
     tenantId: string,
     sale: { id: number } | null,
-    returnItems: Array<{ product_id: number | null; sale_item_id: number | null; qty: number | string; cost_price?: number | string | null }>,
+    returnItems: Array<{
+      product_id: number | null;
+      sale_item_id: number | null;
+      qty: number | string;
+      cost_price?: number | string | null;
+    }>,
     saleItems: Array<{ id: number; product_id: number | null; cost_price: number | string | null }>,
     bookDigits: MoneyDigits,
   ): Promise<number> {
-    return this.saleCogsResidualService.salesReturnCogsAmount(queryable, tenantId, sale, returnItems, saleItems, bookDigits);
+    return this.saleCogsResidualService.salesReturnCogsAmount(
+      queryable,
+      tenantId,
+      sale,
+      returnItems,
+      saleItems,
+      bookDigits,
+    );
   }
 
   async addSaleRevenueCreditLegs(
@@ -216,7 +249,11 @@ export class SalesAndReturnsPostingService {
     return this.postSaleService.addSaleRevenueCreditLegs(queryable, tenantId, add, input, bookDigits);
   }
 
-  async postSale(queryable: Transaction<Database>, saleId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number }> {
+  async postSale(
+    queryable: Transaction<Database>,
+    saleId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number }> {
     return this.postSaleService.postSale(queryable, saleId, auth);
   }
 
@@ -227,7 +264,14 @@ export class SalesAndReturnsPostingService {
     reason?: string,
     options?: {
       preparedWaste?: {
-        oldItems: Array<{ id: number; product_id: number | null; qty: number | string; cost_price: number | string | null; unit_multiplier: number | string | null; modifiers: unknown }>;
+        oldItems: Array<{
+          id: number;
+          product_id: number | null;
+          qty: number | string;
+          cost_price: number | string | null;
+          unit_multiplier: number | string | null;
+          modifiers: unknown;
+        }>;
         restoredQtyBySaleItemId: Map<number, number>;
       };
     },
@@ -235,7 +279,13 @@ export class SalesAndReturnsPostingService {
     return this.postSaleEditService.postSaleEdit(queryable, saleId, auth, reason, options);
   }
 
-  async reverseSaleJournal(queryable: DbOrTx, saleId: number, reason: string, auth: AuthContext, options?: { isPreparedWaste?: boolean; preparedWasteCogsExclusion?: number }): Promise<{ reversed: boolean; journalEntryId: number | null }> {
+  async reverseSaleJournal(
+    queryable: DbOrTx,
+    saleId: number,
+    reason: string,
+    auth: AuthContext,
+    options?: { isPreparedWaste?: boolean; preparedWasteCogsExclusion?: number },
+  ): Promise<{ reversed: boolean; journalEntryId: number | null }> {
     return this.reverseSaleJournalService.reverseSaleJournal(queryable, saleId, reason, auth, options);
   }
 
@@ -258,11 +308,7 @@ export class SalesAndReturnsPostingService {
     return this.salesReturnReliefService.priorSalesReturnRelief(queryable, tenantId, saleId, excludeReturnId);
   }
 
-  async priorSalesReturnReceivableCredit(
-    queryable: DbOrTx,
-    tenantId: string,
-    saleId: number,
-  ): Promise<number> {
+  async priorSalesReturnReceivableCredit(queryable: DbOrTx, tenantId: string, saleId: number): Promise<number> {
     return this.salesReturnReliefService.priorSalesReturnReceivableCredit(queryable, tenantId, saleId);
   }
 
@@ -279,15 +325,17 @@ export class SalesAndReturnsPostingService {
     saleId: number,
     repId: number,
     auth: AuthContext,
-  ): Promise<{ posted: boolean; journalEntryId: number | null; amount: number; customerId: number | null; docNo: string }> {
+  ): Promise<{
+    posted: boolean;
+    journalEntryId: number | null;
+    amount: number;
+    customerId: number | null;
+    docNo: string;
+  }> {
     return this.deliveryCustodyService.postDeliveryCustodyReclassification(queryable, saleId, repId, auth);
   }
 
-  async hasDeliveryCustodyReclassification(
-    queryable: DbOrTx,
-    saleId: number,
-    auth: AuthContext,
-  ): Promise<boolean> {
+  async hasDeliveryCustodyReclassification(queryable: DbOrTx, saleId: number, auth: AuthContext): Promise<boolean> {
     return this.deliveryCustodyService.hasDeliveryCustodyReclassification(queryable, saleId, auth);
   }
 
@@ -298,27 +346,47 @@ export class SalesAndReturnsPostingService {
     return this.deliveryCustodyService.deliveryCustodyPartner(queryable, saleId);
   }
 
-  async getRepCustodyBalance(
-    queryable: DbOrTx,
-    repId: number,
-    auth: AuthContext,
-  ): Promise<number> {
+  async getRepCustodyBalance(queryable: DbOrTx, repId: number, auth: AuthContext): Promise<number> {
     return this.deliveryCustodyService.getRepCustodyBalance(queryable, repId, auth);
   }
 
   async computeSalesReturnRelief(
     queryable: DbOrTx,
     tenantId: string,
-    sale: { id: number; subtotal?: unknown; discount?: unknown; tip_amount?: unknown; delivery_fee?: unknown; delivery_fee_mode?: unknown; service_charge?: unknown; tax_amount?: unknown; prices_include_tax?: unknown } | null | undefined,
+    sale:
+      | {
+          id: number;
+          subtotal?: unknown;
+          discount?: unknown;
+          tip_amount?: unknown;
+          delivery_fee?: unknown;
+          delivery_fee_mode?: unknown;
+          service_charge?: unknown;
+          tax_amount?: unknown;
+          prices_include_tax?: unknown;
+        }
+      | null
+      | undefined,
     returnTotal: number,
     netReturnAmount: number,
     excludeReturnId: number | null,
   ): Promise<{ tipRelief: number; courierRelief: number; totalRelief: number }> {
-    return this.salesReturnReliefService.computeSalesReturnRelief(queryable, tenantId, sale, returnTotal, netReturnAmount, excludeReturnId);
+    return this.salesReturnReliefService.computeSalesReturnRelief(
+      queryable,
+      tenantId,
+      sale,
+      returnTotal,
+      netReturnAmount,
+      excludeReturnId,
+    );
   }
 
-  async postSalesReturn(queryable: Transaction<Database>, returnId: number, auth: AuthContext,
-    collectExchangeLines?: (lines: JournalLineDraft[]) => void): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postSalesReturn(
+    queryable: Transaction<Database>,
+    returnId: number,
+    auth: AuthContext,
+    collectExchangeLines?: (lines: JournalLineDraft[]) => void,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.postSalesReturnService.postSalesReturn(queryable, returnId, auth, collectExchangeLines);
   }
 }

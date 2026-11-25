@@ -49,12 +49,21 @@ export class ReturnsReadsService {
     // or 'N أصناف'; refundTotal is roundMoney(total + tipRelief +
     // courierRelief, 3) per doc). The filter is NOT lowercased; q is
     // trim().toLowerCase() over the derived fields.
-    const q = String(query.search || query.q || '').trim().toLowerCase();
+    const q = String(query.search || query.q || '')
+      .trim()
+      .toLowerCase();
     const filter = String(query.filter || query.view || 'all').trim();
-    const employee = String(query.employee || query.employeeName || '').trim().toLowerCase();
+    const employee = String(query.employee || query.employeeName || '')
+      .trim()
+      .toLowerCase();
     const docs = sql<{
-      id: number; doc_no: string; return_type: string; note: string;
-      created_by_name: string; date_key: string; refund_total: string;
+      id: number;
+      doc_no: string;
+      return_type: string;
+      note: string;
+      created_by_name: string;
+      date_key: string;
+      refund_total: string;
       product_name: string;
     }>`
       SELECT rd.id,
@@ -72,7 +81,14 @@ export class ReturnsReadsService {
       GROUP BY rd.id, rd.doc_no, rd.return_type, rd.note, rd.created_at, u.username
     `;
     const outerWhere = sql<boolean>`true${filter === 'sales' ? sql` AND d.return_type = 'sale'` : sql``}${filter === 'purchase' ? sql` AND d.return_type = 'purchase'` : sql``}${filter === 'today' ? sql` AND d.date_key = ${today}::date` : sql``}${employee ? sql` AND strpos(lower(d.created_by_name), ${employee}) > 0` : sql``}${q ? sql` AND (strpos(lower(d.doc_no), ${q}) > 0 OR strpos(lower(d.product_name), ${q}) > 0 OR strpos(lower(d.note), ${q}) > 0 OR strpos(lower(d.return_type), ${q}) > 0 OR strpos(lower(d.created_by_name), ${q}) > 0)` : sql``}`;
-    const counts = await sql<{ total_items: string; total_amount: string; sales_returns: string; purchase_returns: string; today_count: string; latest_doc_no: string | null }>`
+    const counts = await sql<{
+      total_items: string;
+      total_amount: string;
+      sales_returns: string;
+      purchase_returns: string;
+      today_count: string;
+      latest_doc_no: string | null;
+    }>`
       SELECT COUNT(*) AS total_items,
         coalesce(SUM(d.refund_total), 0) AS total_amount,
         COUNT(*) FILTER (WHERE d.return_type = 'sale') AS sales_returns,
@@ -91,42 +107,65 @@ export class ReturnsReadsService {
       SELECT d.id FROM (${docs}) d WHERE ${outerWhere} ORDER BY d.id DESC LIMIT ${pageSize} OFFSET ${offset}
     `.execute(this.db);
     const ids = pageIds.rows.map((row) => Number(row.id || 0)).filter((id) => id > 0);
-    const rows = ids.length ? await this.db.selectFrom('return_items as ri')
-      .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
-      .leftJoin('users as u', (join) => join.onRef('u.id', '=', 'rd.created_by').onRef('u.tenant_id', '=', 'rd.tenant_id'))
-      .leftJoin('sales as s', (join) => join.on('rd.return_type', '=', 'sale').onRef('s.id', '=', 'rd.invoice_id').onRef('s.tenant_id', '=', 'rd.tenant_id'))
-      .leftJoin('customers as c', (join) => join.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 'rd.tenant_id'))
-      .leftJoin('purchases as p', (join) => join.on('rd.return_type', '=', 'purchase').onRef('p.id', '=', 'rd.invoice_id').onRef('p.tenant_id', '=', 'rd.tenant_id'))
-      .leftJoin('suppliers as sup', (join) => join.onRef('sup.id', '=', 'p.supplier_id').onRef('sup.tenant_id', '=', 'rd.tenant_id'))
-      .select([
-        'ri.id',
-        'rd.id as return_document_id',
-        'rd.doc_no',
-        'rd.return_type',
-        'rd.invoice_id',
-        'ri.product_id',
-        'ri.product_name',
-        'ri.qty',
-        'ri.line_total',
-        'rd.note',
-        'rd.settlement_mode',
-        'rd.refund_method',
-        'rd.refund_allocations',
-        'rd.tip_relief',
-        'rd.courier_relief',
-        'rd.created_at',
-        'rd.created_by',
-        'u.username as created_by_name',
-        sql<string>`coalesce(s.doc_no, p.doc_no, '')`.as('invoice_doc_no'),
-        sql<string>`coalesce(c.name, sup.name, case when rd.return_type = 'sale' then 'عميل نقدي' else 'مورد' end)`.as('party_name'),
-        sql<string>`coalesce(s.order_type, '')`.as('order_type'),
-      ])
-      .where('rd.id', 'in', ids)
-      .where(this.tenantPredicate(auth, 'rd'))
-      .where(this.tenantPredicate(auth, 'ri'))
-      .orderBy('rd.id', 'desc')
-      .orderBy('ri.id', 'asc')
-      .execute() : [];
+    const rows = ids.length
+      ? await this.db
+          .selectFrom('return_items as ri')
+          .innerJoin('return_documents as rd', (join) =>
+            join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'),
+          )
+          .leftJoin('users as u', (join) =>
+            join.onRef('u.id', '=', 'rd.created_by').onRef('u.tenant_id', '=', 'rd.tenant_id'),
+          )
+          .leftJoin('sales as s', (join) =>
+            join
+              .on('rd.return_type', '=', 'sale')
+              .onRef('s.id', '=', 'rd.invoice_id')
+              .onRef('s.tenant_id', '=', 'rd.tenant_id'),
+          )
+          .leftJoin('customers as c', (join) =>
+            join.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 'rd.tenant_id'),
+          )
+          .leftJoin('purchases as p', (join) =>
+            join
+              .on('rd.return_type', '=', 'purchase')
+              .onRef('p.id', '=', 'rd.invoice_id')
+              .onRef('p.tenant_id', '=', 'rd.tenant_id'),
+          )
+          .leftJoin('suppliers as sup', (join) =>
+            join.onRef('sup.id', '=', 'p.supplier_id').onRef('sup.tenant_id', '=', 'rd.tenant_id'),
+          )
+          .select([
+            'ri.id',
+            'rd.id as return_document_id',
+            'rd.doc_no',
+            'rd.return_type',
+            'rd.invoice_id',
+            'ri.product_id',
+            'ri.product_name',
+            'ri.qty',
+            'ri.line_total',
+            'rd.note',
+            'rd.settlement_mode',
+            'rd.refund_method',
+            'rd.refund_allocations',
+            'rd.tip_relief',
+            'rd.courier_relief',
+            'rd.created_at',
+            'rd.created_by',
+            'u.username as created_by_name',
+            sql<string>`coalesce(s.doc_no, p.doc_no, '')`.as('invoice_doc_no'),
+            sql<string>`coalesce(c.name, sup.name, case when rd.return_type = 'sale' then 'عميل نقدي' else 'مورد' end)`.as(
+              'party_name',
+            ),
+            sql<string>`coalesce(s.order_type, '')`.as('order_type'),
+          ])
+          .where('rd.id', 'in', ids)
+          .where(this.tenantPredicate(auth, 'rd'))
+          .where(this.tenantPredicate(auth, 'ri'))
+          .orderBy('rd.id', 'desc')
+          .orderBy('ri.id', 'asc')
+          .execute()
+      : [];
     const mapped = mapReturnRows(rows as Array<Record<string, unknown>>);
     // The summary is exact over the FULL filtered set, never page-scoped.
     const summary = {
@@ -137,7 +176,12 @@ export class ReturnsReadsService {
       todayCount: Number(counts.rows[0]?.today_count || 0),
       latestDocNo: counts.rows[0]?.latest_doc_no || '',
     };
-    return { returns: mapped, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary, scope: this.scope(auth) };
+    return {
+      returns: mapped,
+      pagination: { page: safePage, pageSize, totalItems, totalPages },
+      summary,
+      scope: this.scope(auth),
+    };
   }
 
   /* INV-STATEMENT-RETURN-ROW-DETAILS: single return-document read for the
@@ -157,13 +201,33 @@ export class ReturnsReadsService {
     const scope = requireTenantScope(auth);
     const row = await this.db
       .selectFrom('return_documents as rd')
-      .leftJoin('sales as s', (join) => join.on('rd.return_type', '=', 'sale').onRef('s.id', '=', 'rd.invoice_id').onRef('s.tenant_id', '=', 'rd.tenant_id'))
-      .leftJoin('customers as c', (join) => join.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 'rd.tenant_id'))
-      .leftJoin('purchases as p', (join) => join.on('rd.return_type', '=', 'purchase').onRef('p.id', '=', 'rd.invoice_id').onRef('p.tenant_id', '=', 'rd.tenant_id'))
-      .leftJoin('suppliers as sup', (join) => join.onRef('sup.id', '=', 'p.supplier_id').onRef('sup.tenant_id', '=', 'rd.tenant_id'))
-      .leftJoin('branches as b', (join) => join.onRef('b.id', '=', 'rd.branch_id').onRef('b.tenant_id', '=', 'rd.tenant_id'))
-      .leftJoin('stock_locations as l', (join) => join.onRef('l.id', '=', 'rd.location_id').onRef('l.tenant_id', '=', 'rd.tenant_id'))
-      .leftJoin('users as u', (join) => join.onRef('u.id', '=', 'rd.created_by').onRef('u.tenant_id', '=', 'rd.tenant_id'))
+      .leftJoin('sales as s', (join) =>
+        join
+          .on('rd.return_type', '=', 'sale')
+          .onRef('s.id', '=', 'rd.invoice_id')
+          .onRef('s.tenant_id', '=', 'rd.tenant_id'),
+      )
+      .leftJoin('customers as c', (join) =>
+        join.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 'rd.tenant_id'),
+      )
+      .leftJoin('purchases as p', (join) =>
+        join
+          .on('rd.return_type', '=', 'purchase')
+          .onRef('p.id', '=', 'rd.invoice_id')
+          .onRef('p.tenant_id', '=', 'rd.tenant_id'),
+      )
+      .leftJoin('suppliers as sup', (join) =>
+        join.onRef('sup.id', '=', 'p.supplier_id').onRef('sup.tenant_id', '=', 'rd.tenant_id'),
+      )
+      .leftJoin('branches as b', (join) =>
+        join.onRef('b.id', '=', 'rd.branch_id').onRef('b.tenant_id', '=', 'rd.tenant_id'),
+      )
+      .leftJoin('stock_locations as l', (join) =>
+        join.onRef('l.id', '=', 'rd.location_id').onRef('l.tenant_id', '=', 'rd.tenant_id'),
+      )
+      .leftJoin('users as u', (join) =>
+        join.onRef('u.id', '=', 'rd.created_by').onRef('u.tenant_id', '=', 'rd.tenant_id'),
+      )
       .select([
         'rd.id',
         'rd.doc_no',
@@ -265,25 +329,52 @@ export class ReturnsReadsService {
   /** Unpaginated invoice-return history, used only to guide the UI.
    * Transactional posting independently checks quantities with invoice locks.
    */
-  async getInvoiceReturnedQuantities(type: string, invoiceId: number, auth: AuthContext):
-    Promise<{ returnedQtyByLine: Record<string, number>; blockedProductIds: string[] }> {
+  async getInvoiceReturnedQuantities(
+    type: string,
+    invoiceId: number,
+    auth: AuthContext,
+  ): Promise<{ returnedQtyByLine: Record<string, number>; blockedProductIds: string[] }> {
     if (!['sale', 'purchase'].includes(type)) {
       throw new AppError('Invalid return type', 'RETURN_TYPE_INVALID', 400);
     }
-    if (!Number.isSafeInteger(invoiceId) || invoiceId <= 0) throw new AppError('Invalid invoice', 'INVOICE_NOT_FOUND', 404);
+    if (!Number.isSafeInteger(invoiceId) || invoiceId <= 0)
+      throw new AppError('Invalid invoice', 'INVOICE_NOT_FOUND', 404);
     const tenantId = this.scope(auth).tenantId;
     const returnType = type as 'sale' | 'purchase';
-    const parent = returnType === 'sale'
-      ? await this.db.selectFrom('sales').select('id').where('id', '=', invoiceId).where('tenant_id', '=', tenantId).where('status', '=', 'posted').executeTakeFirst()
-      : await this.db.selectFrom('purchases').select('id').where('id', '=', invoiceId).where('tenant_id', '=', tenantId).where('status', '=', 'posted').executeTakeFirst();
+    const parent =
+      returnType === 'sale'
+        ? await this.db
+            .selectFrom('sales')
+            .select('id')
+            .where('id', '=', invoiceId)
+            .where('tenant_id', '=', tenantId)
+            .where('status', '=', 'posted')
+            .executeTakeFirst()
+        : await this.db
+            .selectFrom('purchases')
+            .select('id')
+            .where('id', '=', invoiceId)
+            .where('tenant_id', '=', tenantId)
+            .where('status', '=', 'posted')
+            .executeTakeFirst();
     if (!parent) throw new AppError('Invoice not found', 'INVOICE_NOT_FOUND', 404);
-    const rows = await this.db.selectFrom('return_items as ri')
-      .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
-      .select(['ri.product_id', 'ri.sale_item_id', 'ri.purchase_item_id',
-        (eb) => eb.fn.sum<number>('ri.qty').as('returned_qty')])
-      .where('rd.return_type', '=', returnType).where('rd.invoice_id', '=', invoiceId)
-      .where('rd.tenant_id', '=', tenantId).where('ri.tenant_id', '=', tenantId)
-      .groupBy(['ri.product_id', 'ri.sale_item_id', 'ri.purchase_item_id']).execute();
+    const rows = await this.db
+      .selectFrom('return_items as ri')
+      .innerJoin('return_documents as rd', (join) =>
+        join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'),
+      )
+      .select([
+        'ri.product_id',
+        'ri.sale_item_id',
+        'ri.purchase_item_id',
+        (eb) => eb.fn.sum<number>('ri.qty').as('returned_qty'),
+      ])
+      .where('rd.return_type', '=', returnType)
+      .where('rd.invoice_id', '=', invoiceId)
+      .where('rd.tenant_id', '=', tenantId)
+      .where('ri.tenant_id', '=', tenantId)
+      .groupBy(['ri.product_id', 'ri.sale_item_id', 'ri.purchase_item_id'])
+      .execute();
     return buildInvoiceReturnedQuantities(returnType, rows);
   }
 }

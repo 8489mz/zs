@@ -67,7 +67,13 @@ export class DeliveryCustodyService {
     saleId: number,
     repId: number,
     auth: AuthContext,
-  ): Promise<{ posted: boolean; journalEntryId: number | null; amount: number; customerId: number | null; docNo: string }> {
+  ): Promise<{
+    posted: boolean;
+    journalEntryId: number | null;
+    amount: number;
+    customerId: number | null;
+    docNo: string;
+  }> {
     this.assertTransaction(queryable, 'postDeliveryCustodyReclassification');
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
@@ -83,14 +89,24 @@ export class DeliveryCustodyService {
     if (!sale) throw new AppError('Order not found', 'ORDER_NOT_FOUND', 404);
     const docNo = (sale as any).doc_no || `Z-${saleId}`;
     if (String((sale as any).delivery_status || '') !== 'out_for_delivery') {
-      throw new AppError('Only a dispatched delivery order can move its receivable to courier custody', 'DELIVERY_CUSTODY_RECLASSIFICATION_INVALID', 409);
+      throw new AppError(
+        'Only a dispatched delivery order can move its receivable to courier custody',
+        'DELIVERY_CUSTODY_RECLASSIFICATION_INVALID',
+        409,
+      );
     }
     if (Number((sale as any).delivery_rep_id || 0) !== Number(repId)) {
-      throw new AppError('Order is not in this representative\'s custody', 'DELIVERY_CUSTODY_RECLASSIFICATION_INVALID', 409);
+      throw new AppError(
+        "Order is not in this representative's custody",
+        'DELIVERY_CUSTODY_RECLASSIFICATION_INVALID',
+        409,
+      );
     }
     const customerId = (sale as any).customer_id ? Number((sale as any).customer_id) : null;
 
-    const existing = await queryable.selectFrom('journal_entries').select('id')
+    const existing = await queryable
+      .selectFrom('journal_entries')
+      .select('id')
       .where('source_type', '=', 'delivery_custody_reclassification')
       .where('source_id', '=', saleId)
       .where('tenant_id', '=', scope.tenantId)
@@ -151,13 +167,11 @@ export class DeliveryCustodyService {
    * when this is true, so a pre-dispatch settle or return keeps the
    * old customer-leg behaviour.
    */
-  async hasDeliveryCustodyReclassification(
-    queryable: DbOrTx,
-    saleId: number,
-    auth: AuthContext,
-  ): Promise<boolean> {
+  async hasDeliveryCustodyReclassification(queryable: DbOrTx, saleId: number, auth: AuthContext): Promise<boolean> {
     const scope = requireTenantScope(auth);
-    const existing = await queryable.selectFrom('journal_entries').select('id')
+    const existing = await queryable
+      .selectFrom('journal_entries')
+      .select('id')
       .where('source_type', '=', 'delivery_custody_reclassification')
       .where('source_id', '=', saleId)
       .where('tenant_id', '=', scope.tenantId)
@@ -181,13 +195,16 @@ export class DeliveryCustodyService {
     queryable: DbOrTx,
     saleId: number,
   ): Promise<{ partnerType: 'rep' | 'none'; partnerId: number | null }> {
-    const entry = await queryable.selectFrom('journal_entries').select('id')
+    const entry = await queryable
+      .selectFrom('journal_entries')
+      .select('id')
       .where('source_type', '=', 'delivery_custody_reclassification')
       .where('source_id', '=', saleId)
       .where('status', '=', 'posted')
       .executeTakeFirst();
     if (!entry) return { partnerType: 'none', partnerId: null };
-    const leg = await queryable.selectFrom('journal_entry_lines')
+    const leg = await queryable
+      .selectFrom('journal_entry_lines')
       .select(['partner_type', 'partner_id'])
       .where('journal_entry_id', '=', Number(entry.id))
       .where('debit', '>', 0)
@@ -210,19 +227,15 @@ export class DeliveryCustodyService {
    * legs and is not attributed to any rep here (the aggregate 1130
    * balance still reconciles in total). A rep with no custody reads 0.
    */
-  async getRepCustodyBalance(
-    queryable: DbOrTx,
-    repId: number,
-    auth: AuthContext,
-  ): Promise<number> {
+  async getRepCustodyBalance(queryable: DbOrTx, repId: number, auth: AuthContext): Promise<number> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const customerAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, null, '1130');
     const row = await queryable
       .selectFrom('journal_entry_lines as l')
-      .innerJoin('journal_entries as j', (join) => join
-        .onRef('j.id', '=', 'l.journal_entry_id')
-        .onRef('j.tenant_id', '=', 'l.tenant_id'))
+      .innerJoin('journal_entries as j', (join) =>
+        join.onRef('j.id', '=', 'l.journal_entry_id').onRef('j.tenant_id', '=', 'l.tenant_id'),
+      )
       .select(sql<number>`coalesce(sum(l.debit - l.credit), 0)`.as('balance'))
       .where('l.tenant_id', '=', scope.tenantId)
       .where('l.account_id', '=', customerAccountId)

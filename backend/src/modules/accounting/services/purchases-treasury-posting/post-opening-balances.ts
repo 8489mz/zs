@@ -36,7 +36,13 @@ export class PostOpeningBalancesService {
     // One opening-balance journal per customer: the race-window index is
     // the floor, this SELECT is the fast path (same shape as the other
     // one-journal post methods).
-    const existingCustomerOpening = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'customer_opening_balance').where('source_id', '=', customerId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+    const existingCustomerOpening = await queryable
+      .selectFrom('journal_entries')
+      .select('id')
+      .where('source_type', '=', 'customer_opening_balance')
+      .where('source_id', '=', customerId)
+      .where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
     if (existingCustomerOpening) return { posted: false, journalEntryId: Number(existingCustomerOpening.id) };
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
@@ -114,13 +120,18 @@ export class PostOpeningBalancesService {
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_race_window_uniq')) {
-        const existing = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'customer_opening_balance').where('source_id', '=', customerId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+        const existing = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'customer_opening_balance')
+          .where('source_id', '=', customerId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
         return { posted: false, journalEntryId: Number(existing?.id || 0) };
       }
       throw e;
     }
   }
-
 
   /**
    * Supplier opening balance double-entry posting
@@ -142,7 +153,13 @@ export class PostOpeningBalancesService {
 
     // One opening-balance journal per supplier: same shape as the
     // customer opening balance above.
-    const existingSupplierOpening = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'supplier_opening_balance').where('source_id', '=', supplierId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+    const existingSupplierOpening = await queryable
+      .selectFrom('journal_entries')
+      .select('id')
+      .where('source_type', '=', 'supplier_opening_balance')
+      .where('source_id', '=', supplierId)
+      .where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
     if (existingSupplierOpening) return { posted: false, journalEntryId: Number(existingSupplierOpening.id) };
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
@@ -220,7 +237,13 @@ export class PostOpeningBalancesService {
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_race_window_uniq')) {
-        const existing = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'supplier_opening_balance').where('source_id', '=', supplierId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+        const existing = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'supplier_opening_balance')
+          .where('source_id', '=', supplierId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
         return { posted: false, journalEntryId: Number(existing?.id || 0) };
       }
       throw e;

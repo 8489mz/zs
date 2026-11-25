@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { RequirePermissions } from '../../core/auth/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
@@ -46,7 +57,18 @@ export class ReturnsController {
    * create route; it takes the same body shape as a create. */
   @Post('returns/preview')
   @RequirePermissions('returns')
-  previewReturnRelief(@Body() payload: CreateReturnDto, @Req() req: RequestWithAuth): Promise<{ goodsTotal: number; originalGoodsTotal: number; tipRelief: number; courierRelief: number; totalRelief: number; refundTotal: number; forfeit?: ConditionalDiscountForfeitBreakdown }> {
+  previewReturnRelief(
+    @Body() payload: CreateReturnDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<{
+    goodsTotal: number;
+    originalGoodsTotal: number;
+    tipRelief: number;
+    courierRelief: number;
+    totalRelief: number;
+    refundTotal: number;
+    forfeit?: ConditionalDiscountForfeitBreakdown;
+  }> {
     return this.returnsService.previewReturnRelief(payload, req.authContext!);
   }
 

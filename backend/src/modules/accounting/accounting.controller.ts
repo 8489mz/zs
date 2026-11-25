@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { RequireAnyPermission, RequirePermissions } from '../../core/auth/decorators/permissions.decorator';
@@ -31,7 +44,11 @@ import { TrialBalanceService } from './services/trial-balance.service';
 import { CashFlowService } from './services/cash-flow.service';
 import { AgedDebtsService } from './services/aged-debts.service';
 import { PdcChequesService, CreatePdcChequeDto, UpdateChequeStatusDto } from './services/pdc-cheques.service';
-import { WithholdingTaxService, CreateWhtTransactionDto, ExtractFromPurchasesDto } from './services/withholding-tax.service';
+import {
+  WithholdingTaxService,
+  CreateWhtTransactionDto,
+  ExtractFromPurchasesDto,
+} from './services/withholding-tax.service';
 import { PaymentAllocationService, AllocatePaymentDto } from './services/payment-allocation.service';
 import {
   FiscalYearService,
@@ -94,7 +111,11 @@ export class AccountingController {
   }
 
   @Put('accounts/:id')
-  updateAccount(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateAccountDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  updateAccount(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateAccountDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.updateAccount(id, dto, req.authContext!);
   }
 
@@ -104,7 +125,10 @@ export class AccountingController {
   }
 
   @Get('accounts/generate-code')
-  generateNextAccountCode(@Query() query: GenerateCodeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  generateNextAccountCode(
+    @Query() query: GenerateCodeQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.generateNextAccountCode(query.parentId, req.authContext!);
   }
 
@@ -119,17 +143,26 @@ export class AccountingController {
   }
 
   @Get('journal-entries')
-  listJournalEntries(@Query() query: JournalEntriesQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  listJournalEntries(
+    @Query() query: JournalEntriesQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.listJournalEntries(query, req.authContext!);
   }
 
   @Post('journal-entries')
-  createJournalEntry(@Body() dto: CreateManualJournalEntryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  createJournalEntry(
+    @Body() dto: CreateManualJournalEntryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.createManualJournalEntry(dto, req.authContext!);
   }
 
   @Get('journal-entries/:id')
-  getJournalEntry(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  getJournalEntry(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.getJournalEntry(id, req.authContext!);
   }
 
@@ -137,18 +170,24 @@ export class AccountingController {
   reverseJournalEntry(
     @Param('id', ParseIntPipe) id: number,
     @Body('reason') reason: string,
-    @Req() req: RequestWithAuth
+    @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.accountingService.reverseJournalEntry(id, reason, req.authContext!);
   }
 
   @Get('reports/financial-summary')
-  getFinancialSummary(@Query() query: FinancialSummaryQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  getFinancialSummary(
+    @Query() query: FinancialSummaryQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.getFinancialSummary(query, req.authContext!);
   }
 
   @Get('reports/receivables-payables')
-  getReceivablesPayables(@Query() query: ReceivablesPayablesQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  getReceivablesPayables(
+    @Query() query: ReceivablesPayablesQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.getReceivablesPayables(query, req.authContext!);
   }
 
@@ -158,7 +197,10 @@ export class AccountingController {
   }
 
   @Get('reports/inventory-value')
-  getInventoryValue(@Query() query: InventoryValueQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  getInventoryValue(
+    @Query() query: InventoryValueQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.getInventoryValue(query, req.authContext!);
   }
 
@@ -246,12 +288,18 @@ export class AccountingController {
   }
 
   @Get('opening-balances/preview')
-  previewOpeningBalances(@Query() query: OpeningBalancesPreviewQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  previewOpeningBalances(
+    @Query() query: OpeningBalancesPreviewQueryDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.previewOpeningBalances(query, req.authContext!);
   }
 
   @Post('opening-balances/post')
-  postOpeningBalances(@Body() body: PostOpeningBalancesDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  postOpeningBalances(
+    @Body() body: PostOpeningBalancesDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.postOpeningBalances(body, req.authContext!);
   }
 
@@ -262,7 +310,16 @@ export class AccountingController {
 
   @Post('cost-centers')
   createCostCenter(
-    @Body() body: { code: string; name: string; dimension?: string; budgetAmount?: number; parentId?: number | null; description?: string; isActive?: boolean },
+    @Body()
+    body: {
+      code: string;
+      name: string;
+      dimension?: string;
+      budgetAmount?: number;
+      parentId?: number | null;
+      description?: string;
+      isActive?: boolean;
+    },
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.accountingService.createCostCenter(body, req.authContext!);
@@ -271,14 +328,26 @@ export class AccountingController {
   @Put('cost-centers/:id')
   updateCostCenter(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { code?: string; name?: string; dimension?: string; budgetAmount?: number; parentId?: number | null; description?: string; isActive?: boolean },
+    @Body()
+    body: {
+      code?: string;
+      name?: string;
+      dimension?: string;
+      budgetAmount?: number;
+      parentId?: number | null;
+      description?: string;
+      isActive?: boolean;
+    },
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.accountingService.updateCostCenter(id, body, req.authContext!);
   }
 
   @Delete('cost-centers/:id')
-  deleteCostCenter(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  deleteCostCenter(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.deleteCostCenter(id, req.authContext!);
   }
 
@@ -314,7 +383,11 @@ export class AccountingController {
   }
 
   @Post('cost-centers/allocations/:id/calculate')
-  calculateCostCenterSplit(@Param('id') id: string, @Body() body: { amount: number }, @Req() req: RequestWithAuth): Promise<any> {
+  calculateCostCenterSplit(
+    @Param('id') id: string,
+    @Body() body: { amount: number },
+    @Req() req: RequestWithAuth,
+  ): Promise<any> {
     return this.costCenterAllocations.calculateSplitAmounts(id, Number(body.amount || 0), req.authContext!);
   }
 
@@ -335,17 +408,27 @@ export class AccountingController {
   }
 
   @Delete('fixed-assets/:id')
-  deleteFixedAsset(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  deleteFixedAsset(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.deleteFixedAsset(id, req.authContext!);
   }
 
   @Post('fixed-assets/depreciate-all')
-  depreciateAllFixedAssets(@Body() body: { months?: number; note?: string }, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  depreciateAllFixedAssets(
+    @Body() body: { months?: number; note?: string },
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.depreciateAllFixedAssets(body, req.authContext!);
   }
 
   @Post('fixed-assets/:id/depreciate')
-  depreciateFixedAsset(@Param('id', ParseIntPipe) id: number, @Body() body: { months?: number; note?: string }, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  depreciateFixedAsset(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { months?: number; note?: string },
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.depreciateFixedAsset(id, body, req.authContext!);
   }
 
@@ -355,7 +438,10 @@ export class AccountingController {
   }
 
   @Get('fixed-assets/:id/logs')
-  listAssetDepreciationLogs(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  listAssetDepreciationLogs(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.listAssetDepreciationLogs(id, req.authContext!);
   }
 
@@ -365,13 +451,22 @@ export class AccountingController {
   }
 
   @Post('fixed-assets/auto-depreciate/toggle')
-  toggleAutoDepreciation(@Body() body: { enabled: boolean }, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
-    return this.fixedAssetsScheduler.setAutoDepreciationEnabled(requireTenantScope(req.authContext).tenantId, Boolean(body.enabled));
+  toggleAutoDepreciation(
+    @Body() body: { enabled: boolean },
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
+    return this.fixedAssetsScheduler.setAutoDepreciationEnabled(
+      requireTenantScope(req.authContext).tenantId,
+      Boolean(body.enabled),
+    );
   }
 
   @Post('fixed-assets/auto-depreciate/trigger')
   triggerAutoDepreciation(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
-    return this.fixedAssetsScheduler.triggerImmediateRun(requireTenantScope(req.authContext).tenantId, req.authContext!);
+    return this.fixedAssetsScheduler.triggerImmediateRun(
+      requireTenantScope(req.authContext).tenantId,
+      req.authContext!,
+    );
   }
 
   // --- Multi-Currency (العملات المتعددة وأسعار الصرف) ---
@@ -381,12 +476,19 @@ export class AccountingController {
   }
 
   @Post('currencies')
-  upsertCurrency(@Body() body: { currencyCode: string; currencyName: string; exchangeRate: number; isBase?: boolean; symbol?: string }, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  upsertCurrency(
+    @Body()
+    body: { currencyCode: string; currencyName: string; exchangeRate: number; isBase?: boolean; symbol?: string },
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.upsertCurrency(body, req.authContext!);
   }
 
   @Post('currencies/convert')
-  convertCurrency(@Body() body: { amount: number; fromCurrency: string; toCurrency: string; asOf?: string }, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  convertCurrency(
+    @Body() body: { amount: number; fromCurrency: string; toCurrency: string; asOf?: string },
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.accountingService.convertCurrency(body, req.authContext!);
   }
 
@@ -402,7 +504,10 @@ export class AccountingController {
   }
 
   @Post('currencies/revaluations/preview')
-  previewForexRevaluation(@Body() body: { periodDate: string; currencyCode: string; closingRate: number }, @Req() req: RequestWithAuth): Promise<any> {
+  previewForexRevaluation(
+    @Body() body: { periodDate: string; currencyCode: string; closingRate: number },
+    @Req() req: RequestWithAuth,
+  ): Promise<any> {
     return this.forexRevaluation.previewRevaluation(body, req.authContext!);
   }
 
@@ -438,7 +543,10 @@ export class AccountingController {
   }
 
   @Post('bank-statements/unreconcile')
-  unreconcileMatch(@Body('statementLineId', ParseIntPipe) statementLineId: number, @Req() req: RequestWithAuth): Promise<any> {
+  unreconcileMatch(
+    @Body('statementLineId', ParseIntPipe) statementLineId: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<any> {
     return this.accountingService.unreconcileMatch(statementLineId, req.authContext!);
   }
 
@@ -514,18 +622,12 @@ export class AccountingController {
   }
 
   @Post('withholding-tax')
-  createWhtTransaction(
-    @Body() dto: CreateWhtTransactionDto,
-    @Req() req: RequestWithAuth,
-  ): Promise<any> {
+  createWhtTransaction(@Body() dto: CreateWhtTransactionDto, @Req() req: RequestWithAuth): Promise<any> {
     return this.withholdingTaxService.createTransaction(req.authContext!, dto);
   }
 
   @Post('withholding-tax/extract-from-purchases')
-  extractWhtFromPurchases(
-    @Body() dto: ExtractFromPurchasesDto,
-    @Req() req: RequestWithAuth,
-  ): Promise<any> {
+  extractWhtFromPurchases(@Body() dto: ExtractFromPurchasesDto, @Req() req: RequestWithAuth): Promise<any> {
     return this.withholdingTaxService.extractFromPurchases(req.authContext!, dto);
   }
 
@@ -539,10 +641,7 @@ export class AccountingController {
   }
 
   @Delete('withholding-tax/:id')
-  deleteWhtTransaction(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth,
-  ): Promise<any> {
+  deleteWhtTransaction(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<any> {
     return this.withholdingTaxService.deleteTransaction(req.authContext!, id);
   }
 
@@ -566,10 +665,7 @@ export class AccountingController {
   }
 
   @Post('payment-allocations/allocate')
-  allocatePayment(
-    @Body() dto: AllocatePaymentDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  allocatePayment(@Body() dto: AllocatePaymentDto, @Req() req: RequestWithAuth) {
     return this.paymentAllocationService.allocatePayment(dto, req.authContext!);
   }
 
@@ -578,7 +674,12 @@ export class AccountingController {
     @Body() body: { partnerType: 'customer' | 'supplier'; partnerId: number; paymentId: number },
     @Req() req: RequestWithAuth,
   ) {
-    return this.paymentAllocationService.autoAllocateFIFO(body.partnerType, body.partnerId, body.paymentId, req.authContext!);
+    return this.paymentAllocationService.autoAllocateFIFO(
+      body.partnerType,
+      body.partnerId,
+      body.paymentId,
+      req.authContext!,
+    );
   }
 
   @Get('payment-allocations/invoice')
@@ -635,18 +736,12 @@ export class AccountingController {
   }
   // --- Monthly Fiscal Periods Engine (الفترات المحاسبية الشهرية وإقفال الشهور — البند O6) ---
   @Get('fiscal-years/:id/periods')
-  listFiscalPeriods(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth,
-  ) {
+  listFiscalPeriods(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.fiscalYearService.listFiscalPeriods(req.authContext!, id);
   }
 
   @Post('fiscal-years/:id/periods/generate')
-  generateFiscalPeriods(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth,
-  ) {
+  generateFiscalPeriods(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.fiscalYearService.generateFiscalPeriods(req.authContext!, id);
   }
 

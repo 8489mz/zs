@@ -110,7 +110,7 @@ export class CatalogProductStyleCodeService {
           .values({
             tenant_id: tenantId,
             scope: 'fashion',
-            next_value: seedValue
+            next_value: seedValue,
           })
           .onConflict((oc) => oc.columns(['tenant_id', 'scope']).doNothing())
           .execute();
@@ -128,9 +128,13 @@ export class CatalogProductStyleCodeService {
       // Manual product codes can be created after the counter was seeded.
       // Never suggest a style code that is already in use by this tenant.
       while (allocated <= 2_000_000_000) {
-        const taken = await trx.selectFrom('products').select('id')
+        const taken = await trx
+          .selectFrom('products')
+          .select('id')
           .where('style_code', '=', String(allocated))
-          .where('is_active', '=', true).where(this.tenantPredicate(actor)).executeTakeFirst();
+          .where('is_active', '=', true)
+          .where(this.tenantPredicate(actor))
+          .executeTakeFirst();
         if (!taken) break;
         allocated++;
       }
@@ -189,7 +193,7 @@ export class CatalogProductStyleCodeService {
       throw new AppError('هذا الكود مستخدم بالفعل في صنف سابق', 'STYLE_CODE_EXISTS', 400);
     }
 
-    const hasNonFashion = existingRows.some(row => row.item_kind !== 'fashion');
+    const hasNonFashion = existingRows.some((row) => row.item_kind !== 'fashion');
     if (hasNonFashion) {
       throw new AppError('هذا الكود مستخدم بالفعل في صنف غير ملابس', 'STYLE_CODE_EXISTS', 400);
     }

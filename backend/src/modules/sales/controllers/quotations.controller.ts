@@ -25,11 +25,7 @@ export class QuotationsController {
   }
 
   @Put(':id')
-  updateQuotation(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateQuotationDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  updateQuotation(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateQuotationDto, @Req() req: RequestWithAuth) {
     return this.quotationsService.updateQuotation(id, dto, req.authContext!);
   }
 

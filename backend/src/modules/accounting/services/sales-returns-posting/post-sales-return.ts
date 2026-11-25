@@ -38,8 +38,12 @@ export class PostSalesReturnService {
     private readonly ensureTenantFoundation: (queryable: DbOrTx, auth: AuthContext) => Promise<void>,
   ) {}
 
-  async postSalesReturn(queryable: Transaction<Database>, returnId: number, auth: AuthContext,
-    collectExchangeLines?: (lines: JournalLineDraft[]) => void): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postSalesReturn(
+    queryable: Transaction<Database>,
+    returnId: number,
+    auth: AuthContext,
+    collectExchangeLines?: (lines: JournalLineDraft[]) => void,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     this.assertTransaction(queryable, 'postSalesReturn');
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
@@ -78,16 +82,28 @@ export class PostSalesReturnService {
 
     const sale = returnDocument.invoice_id
       ? await queryable
-        .selectFrom('sales')
-        // R6-E (INV-REST-SALE-MONEY-TRUTH-2): the relief below needs
-        // the sale's money columns — the return document carries
-        // none of them (no tip/delivery columns exist on it).
-        .select(['id', 'doc_no', 'payment_type', 'customer_id', 'tax_amount', 'total',
-          'subtotal', 'discount', 'tip_amount', 'delivery_fee', 'delivery_fee_mode',
-          'service_charge', 'prices_include_tax'])
-        .where('id', '=', Number(returnDocument.invoice_id))
-        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
-        .executeTakeFirst()
+          .selectFrom('sales')
+          // R6-E (INV-REST-SALE-MONEY-TRUTH-2): the relief below needs
+          // the sale's money columns — the return document carries
+          // none of them (no tip/delivery columns exist on it).
+          .select([
+            'id',
+            'doc_no',
+            'payment_type',
+            'customer_id',
+            'tax_amount',
+            'total',
+            'subtotal',
+            'discount',
+            'tip_amount',
+            'delivery_fee',
+            'delivery_fee_mode',
+            'service_charge',
+            'prices_include_tax',
+          ])
+          .where('id', '=', Number(returnDocument.invoice_id))
+          .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+          .executeTakeFirst()
       : null;
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
@@ -99,34 +115,88 @@ export class PostSalesReturnService {
       .where('tenant_id', '=', scope.tenantId)
       .where('code', '=', '4400')
       .executeTakeFirst();
-    const fallbackRevenueAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.sales_revenue_account_id, '4100');
-    const salesReturnsAccountId = Number(salesReturnsAccount?.id || 0) > 0 ? Number(salesReturnsAccount?.id || 0) : fallbackRevenueAccountId;
+    const fallbackRevenueAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.sales_revenue_account_id,
+      '4100',
+    );
+    const salesReturnsAccountId =
+      Number(salesReturnsAccount?.id || 0) > 0 ? Number(salesReturnsAccount?.id || 0) : fallbackRevenueAccountId;
     if (!(Number(salesReturnsAccount?.id || 0) > 0) && fallbackRevenueAccountId > 0) {
-      this.logger.warn(`Sales returns account code 4400 not found for return ${returnId}; falling back to sales revenue account ${fallbackRevenueAccountId}`);
+      this.logger.warn(
+        `Sales returns account code 4400 not found for return ${returnId}; falling back to sales revenue account ${fallbackRevenueAccountId}`,
+      );
     }
 
-    const rawRefundAllocations: unknown = typeof returnDocument.refund_allocations === 'string'
-      ? JSON.parse(returnDocument.refund_allocations) : returnDocument.refund_allocations;
-    const refundAllocations = Array.isArray(rawRefundAllocations) ? rawRefundAllocations as Array<{ tender: string; amount: number }> : null;
-    if (returnDocument.refund_allocations != null && (!refundAllocations || refundAllocations.some((entry) =>
-      !entry || !['cash', 'card', 'store_credit', 'receivable'].includes(entry.tender) ||
-      !Number.isFinite(Number(entry.amount)) || Number(entry.amount) <= 0))) {
+    const rawRefundAllocations: unknown =
+      typeof returnDocument.refund_allocations === 'string'
+        ? JSON.parse(returnDocument.refund_allocations)
+        : returnDocument.refund_allocations;
+    const refundAllocations = Array.isArray(rawRefundAllocations)
+      ? (rawRefundAllocations as Array<{ tender: string; amount: number }>)
+      : null;
+    if (
+      returnDocument.refund_allocations != null &&
+      (!refundAllocations ||
+        refundAllocations.some(
+          (entry) =>
+            !entry ||
+            !['cash', 'card', 'store_credit', 'receivable'].includes(entry.tender) ||
+            !Number.isFinite(Number(entry.amount)) ||
+            Number(entry.amount) <= 0,
+        ))
+    ) {
       throw new Error(`Invalid refund tender allocation for return ${returnId}`);
     }
-    const cashAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.cash_account_id, '1110');
-    const bankAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.bank_account_id, '1120');
-    const customerAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.customer_receivable_account_id, '1130');
-    const storeCreditAccountId = returnDocument.settlement_mode === 'store_credit' || refundAllocations?.some((entry) => entry.tender === 'store_credit')
-      ? await this.resolveAccountWithFallback(queryable, scope.tenantId, null, '2150') : 0;
-    const salesTaxAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.sales_tax_account_id, '2120');
-    const cogsAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.cogs_account_id, '5100');
-    const inventoryAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.inventory_account_id, '1140');
+    const cashAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.cash_account_id,
+      '1110',
+    );
+    const bankAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.bank_account_id,
+      '1120',
+    );
+    const customerAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.customer_receivable_account_id,
+      '1130',
+    );
+    const storeCreditAccountId =
+      returnDocument.settlement_mode === 'store_credit' ||
+      refundAllocations?.some((entry) => entry.tender === 'store_credit')
+        ? await this.resolveAccountWithFallback(queryable, scope.tenantId, null, '2150')
+        : 0;
+    const salesTaxAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.sales_tax_account_id,
+      '2120',
+    );
+    const cogsAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.cogs_account_id,
+      '5100',
+    );
+    const inventoryAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.inventory_account_id,
+      '1140',
+    );
 
     const total = toBookMoney(returnDocument.total);
     const originalSaleTotal = Number(sale?.total || 0);
     const originalSaleTax = Number(sale?.tax_amount || 0);
-    const taxRatio = originalSaleTotal > 0 && originalSaleTax > 0 ? (originalSaleTax / originalSaleTotal) : 0;
-    const returnTax = await queryable.selectFrom('return_items')
+    const taxRatio = originalSaleTotal > 0 && originalSaleTax > 0 ? originalSaleTax / originalSaleTotal : 0;
+    const returnTax = await queryable
+      .selectFrom('return_items')
       .select([
         sql<number>`coalesce(sum(allocated_tax), 0)`.as('allocated_tax'),
         sql<number>`count(*) filter (where allocated_tax is null)`.as('unallocated_lines'),
@@ -134,8 +204,10 @@ export class PostSalesReturnService {
       .where('return_document_id', '=', returnId)
       .where('tenant_id', '=', scope.tenantId)
       .executeTakeFirst();
-    const taxAmount = Number(returnTax?.unallocated_lines || 0) === 0
-      ? toBookMoney(returnTax?.allocated_tax || 0) : toBookMoney(total * taxRatio);
+    const taxAmount =
+      Number(returnTax?.unallocated_lines || 0) === 0
+        ? toBookMoney(returnTax?.allocated_tax || 0)
+        : toBookMoney(total * taxRatio);
     const netReturnAmount = toBookMoney(Math.max(0, total - taxAmount));
 
     // R6-E (INV-REST-SALE-MONEY-TRUTH-2): relieve the tip /
@@ -173,7 +245,12 @@ export class PostSalesReturnService {
     // needs the same numbers BEFORE its payout loop). The base /
     // funding / cumulative-cap rules are documented on that method.
     const { tipRelief, courierRelief, totalRelief } = await this.computeSalesReturnRelief(
-      queryable, scope.tenantId, sale, total, netReturnAmount, returnId,
+      queryable,
+      scope.tenantId,
+      sale,
+      total,
+      netReturnAmount,
+      returnId,
     );
 
     const customerPartnerId = sale?.customer_id ? Number(sale.customer_id) : null;
@@ -188,9 +265,8 @@ export class PostSalesReturnService {
     // M12 (INV-REP-CUSTODY-LEDGER): a receivable-tender return of a
     // dispatched sale credits the SAME custody partner the dispatch
     // posted (deliveryCustodyPartner), so the per-rep balance nets.
-    const custodyPartner = saleInCourierCustody && sale?.id
-      ? await this.deliveryCustodyPartner(queryable, Number(sale.id))
-      : null;
+    const custodyPartner =
+      saleInCourierCustody && sale?.id ? await this.deliveryCustodyPartner(queryable, Number(sale.id)) : null;
     const lines: JournalLineDraft[] = [];
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
     const branchId = returnDocument.branch_id ? Number(returnDocument.branch_id) : null;
@@ -258,9 +334,15 @@ export class PostSalesReturnService {
       });
     }
 
-    const settlementMode = String(returnDocument.settlement_mode || '').trim().toLowerCase();
-    const refundMethod = String(returnDocument.refund_method || '').trim().toLowerCase();
-    const originalSalePaymentType = String(sale?.payment_type || '').trim().toLowerCase();
+    const settlementMode = String(returnDocument.settlement_mode || '')
+      .trim()
+      .toLowerCase();
+    const refundMethod = String(returnDocument.refund_method || '')
+      .trim()
+      .toLowerCase();
+    const originalSalePaymentType = String(sale?.payment_type || '')
+      .trim()
+      .toLowerCase();
 
     if (total > 0) {
       // R6-E (INV-REST-SALE-MONEY-TRUTH-2): the refund covers the
@@ -277,38 +359,52 @@ export class PostSalesReturnService {
       // total); anything else fails closed below. The stored
       // document itself is not rewritten here.
       const refundTarget = toBookMoney(total + totalRelief);
-      const allocations = refundAllocations ?? [{
-        tender: settlementMode === 'store_credit' ? 'store_credit'
-          : originalSalePaymentType === 'credit' ? 'receivable'
-            : refundMethod === 'cash' ? 'cash' : 'card',
-        amount: refundTarget,
-      }];
+      const allocations = refundAllocations ?? [
+        {
+          tender:
+            settlementMode === 'store_credit'
+              ? 'store_credit'
+              : originalSalePaymentType === 'credit'
+                ? 'receivable'
+                : refundMethod === 'cash'
+                  ? 'cash'
+                  : 'card',
+          amount: refundTarget,
+        },
+      ];
       let effectiveAllocations = allocations;
       if (refundAllocations && totalRelief > 0) {
         const storedSum = toBookMoney(allocations.reduce((sum, entry) => sum + Number(entry.amount || 0), 0));
         if (Math.abs(storedSum - refundTarget) <= this.maxAllowedDifference(bookDigits)) {
           effectiveAllocations = allocations;
         } else if (Math.abs(storedSum - total) <= this.maxAllowedDifference(bookDigits)) {
-          effectiveAllocations = allocations.map((entry, index) => index === allocations.length - 1
-            ? { ...entry, amount: toBookMoney(Number(entry.amount || 0) + totalRelief) }
-            : entry);
+          effectiveAllocations = allocations.map((entry, index) =>
+            index === allocations.length - 1
+              ? { ...entry, amount: toBookMoney(Number(entry.amount || 0) + totalRelief) }
+              : entry,
+          );
         }
       }
       const rawAllocated = effectiveAllocations.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
       if (Math.abs(rawAllocated - refundTarget) > this.maxAllowedDifference(bookDigits)) {
-        throw new Error(`Refund tenders do not balance for return ${returnId}: allocated=${rawAllocated} total=${refundTarget}`);
+        throw new Error(
+          `Refund tenders do not balance for return ${returnId}: allocated=${rawAllocated} total=${refundTarget}`,
+        );
       }
       let allocatedTotalSoFar = 0;
       for (let i = 0; i < effectiveAllocations.length; i++) {
         const allocation = effectiveAllocations[i];
         const isLast = i === effectiveAllocations.length - 1;
-        const lineAmount = isLast
-          ? toBookMoney(refundTarget - allocatedTotalSoFar)
-          : toBookMoney(allocation.amount);
+        const lineAmount = isLast ? toBookMoney(refundTarget - allocatedTotalSoFar) : toBookMoney(allocation.amount);
         allocatedTotalSoFar = toBookMoney(allocatedTotalSoFar + lineAmount);
-        const accountId = allocation.tender === 'store_credit' ? storeCreditAccountId
-          : allocation.tender === 'receivable' ? customerAccountId
-            : allocation.tender === 'cash' ? cashAccountId : bankAccountId;
+        const accountId =
+          allocation.tender === 'store_credit'
+            ? storeCreditAccountId
+            : allocation.tender === 'receivable'
+              ? customerAccountId
+              : allocation.tender === 'cash'
+                ? cashAccountId
+                : bankAccountId;
         const partner = allocation.tender === 'store_credit' || allocation.tender === 'receivable';
         const custodyReceivable = allocation.tender === 'receivable' && saleInCourierCustody;
         addBookLine({
@@ -316,8 +412,14 @@ export class PostSalesReturnService {
           description: `تسوية مرتجع فاتورة رقم ${invoiceNo} - ${allocation.tender}`,
           debit: 0,
           credit: lineAmount,
-          partnerType: custodyReceivable && custodyPartner ? custodyPartner.partnerType : (partner && customerPartnerId ? 'customer' : 'none'),
-          partnerId: custodyReceivable && custodyPartner ? custodyPartner.partnerId : (partner ? customerPartnerId : null),
+          partnerType:
+            custodyReceivable && custodyPartner
+              ? custodyPartner.partnerType
+              : partner && customerPartnerId
+                ? 'customer'
+                : 'none',
+          partnerId:
+            custodyReceivable && custodyPartner ? custodyPartner.partnerId : partner ? customerPartnerId : null,
           branchId,
           locationId,
         });
@@ -334,20 +436,27 @@ export class PostSalesReturnService {
 
     const saleItems = sale?.id
       ? await queryable
-        .selectFrom('sale_items')
-        .select(['id', 'product_id', 'cost_price', 'unit_multiplier', 'modifiers'])
-        .where('sale_id', '=', Number(sale.id))
-        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
-        .execute()
+          .selectFrom('sale_items')
+          .select(['id', 'product_id', 'cost_price', 'unit_multiplier', 'modifiers'])
+          .where('sale_id', '=', Number(sale.id))
+          .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+          .execute()
       : [];
 
     // INV-SALES-RETURN-COGS-RESIDUAL-MIRROR: reverse COGS on the same
     // residual basis the sale posted it; the legacy plain product is
     // kept for every shape the mirror does not cover (see
     // salesReturnCogsAmount).
-    const inventoryReversalAmount = toBookMoney(await this.salesReturnCogsAmount(
-      queryable, scope.tenantId, sale ? { id: Number(sale.id) } : null, returnItems, saleItems, bookDigits,
-    ));
+    const inventoryReversalAmount = toBookMoney(
+      await this.salesReturnCogsAmount(
+        queryable,
+        scope.tenantId,
+        sale ? { id: Number(sale.id) } : null,
+        returnItems,
+        saleItems,
+        bookDigits,
+      ),
+    );
 
     if (inventoryReversalAmount > 0) {
       addBookLine({
@@ -372,18 +481,29 @@ export class PostSalesReturnService {
       });
     }
 
-    const accountMap = await this.getActiveAccountMap(queryable, scope.tenantId, lines.map((line) => line.accountId));
+    const accountMap = await this.getActiveAccountMap(
+      queryable,
+      scope.tenantId,
+      lines.map((line) => line.accountId),
+    );
     for (const line of lines) {
-      if (!(line.accountId > 0)) throw new Error(`Invalid accounting setting account id while posting sales return ${returnId}`);
-      if (!accountMap.has(line.accountId)) throw new Error(`Configured account ${line.accountId} was not found while posting sales return ${returnId}`);
-      if (!accountMap.get(line.accountId)) throw new Error(`Configured account ${line.accountId} is inactive while posting sales return ${returnId}`);
+      if (!(line.accountId > 0))
+        throw new Error(`Invalid accounting setting account id while posting sales return ${returnId}`);
+      if (!accountMap.has(line.accountId))
+        throw new Error(`Configured account ${line.accountId} was not found while posting sales return ${returnId}`);
+      if (!accountMap.get(line.accountId))
+        throw new Error(`Configured account ${line.accountId} is inactive while posting sales return ${returnId}`);
     }
 
-    const normalizedLines = lines.map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) })).filter((line) => line.debit > 0 || line.credit > 0);
+    const normalizedLines = lines
+      .map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) }))
+      .filter((line) => line.debit > 0 || line.credit > 0);
     const totalDebit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > this.maxAllowedDifference(bookDigits)) {
-      throw new Error(`Unbalanced sales return journal for return ${returnId}: debit=${totalDebit} credit=${totalCredit}`);
+      throw new Error(
+        `Unbalanced sales return journal for return ${returnId}: debit=${totalDebit} credit=${totalCredit}`,
+      );
     }
 
     if (collectExchangeLines) {
@@ -391,10 +511,15 @@ export class PostSalesReturnService {
       // return row (migration 0311), so a later return's cumulative
       // cap counts it via priorSalesReturnRelief. The return has no
       // journal of its own — these columns are its only record.
-      await queryable.updateTable('return_documents').set({
-        exchange_tip_relief: tipRelief,
-        exchange_courier_relief: courierRelief,
-      }).where('id', '=', returnId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+      await queryable
+        .updateTable('return_documents')
+        .set({
+          exchange_tip_relief: tipRelief,
+          exchange_courier_relief: courierRelief,
+        })
+        .where('id', '=', returnId)
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .execute();
       collectExchangeLines(normalizedLines);
       return { posted: false, journalEntryId: null };
     }

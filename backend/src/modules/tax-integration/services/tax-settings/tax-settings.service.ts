@@ -64,7 +64,7 @@ export class TaxSettingsService {
           tax_id: payload.tax_id ?? existing.tax_id,
           environment: payload.environment ?? existing.environment,
           is_active: payload.is_active ?? existing.is_active,
-          updated_at: new Date()
+          updated_at: new Date(),
         })
         .where('id', '=', existing.id)
         .where('tenant_id', '=', tenantId)

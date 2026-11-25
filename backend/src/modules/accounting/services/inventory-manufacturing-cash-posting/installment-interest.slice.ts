@@ -86,7 +86,6 @@ export class InstallmentInterestSlice {
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
 
-
     const plan = await queryable
       .selectFrom('customer_installment_plans')
       .selectAll()
@@ -138,9 +137,19 @@ export class InstallmentInterestSlice {
       postedBy: auth.userId,
       lines,
     });
-    const installments = await queryable.selectFrom('customer_installments').select(['id', 'amount', 'due_date'])
-      .where('tenant_id', '=', scope.tenantId).where('plan_id', '=', planId).orderBy('installment_number').execute();
-    const allocations = allocateInstallmentInterest(Number(plan.financed_amount), installments.map(item => Number(item.amount)), interest, bookDigits);
+    const installments = await queryable
+      .selectFrom('customer_installments')
+      .select(['id', 'amount', 'due_date'])
+      .where('tenant_id', '=', scope.tenantId)
+      .where('plan_id', '=', planId)
+      .orderBy('installment_number')
+      .execute();
+    const allocations = allocateInstallmentInterest(
+      Number(plan.financed_amount),
+      installments.map((item) => Number(item.amount)),
+      interest,
+      bookDigits,
+    );
     // The plan-creation floor is the tenant-local business day of the creation
     // instant, not its UTC day.
     const createdDay = await resolveBusinessDateKey(queryable, scope.tenantId, new Date(plan.created_at));
@@ -152,9 +161,8 @@ export class InstallmentInterestSlice {
       // from the UTC slice -- the old slice recognised the interest
       // one day early on any host east of UTC, and the floor below
       // compares against the tenant-resolved createdDay.
-      const dueDay = item.due_date instanceof Date
-        ? formatLocalCalendarDay(item.due_date)
-        : String(item.due_date).slice(0, 10);
+      const dueDay =
+        item.due_date instanceof Date ? formatLocalCalendarDay(item.due_date) : String(item.due_date).slice(0, 10);
       const recognitionDay = dueDay < createdDay ? createdDay : dueDay;
       await sql`insert into accounting_installment_interest (tenant_id, plan_id, installment_id, recognition_date, amount, account_id)
         values (${scope.tenantId}, ${planId}, ${item.id}, ${recognitionDay}, ${amount}, ${scope.accountId})
@@ -164,13 +172,27 @@ export class InstallmentInterestSlice {
   }
 
   /** Daily and closing callers share one locked accrual path; no historical plan is guessed. */
-  async recognizeInstallmentInterest(queryable: DbOrTx, tenantId: string, throughDate: string, createdBy: number | null = null): Promise<void> {
-    if (!queryable.isTransaction) return queryable.transaction().execute(trx => this.recognizeInstallmentInterest(trx, tenantId, throughDate, createdBy));
+  async recognizeInstallmentInterest(
+    queryable: DbOrTx,
+    tenantId: string,
+    throughDate: string,
+    createdBy: number | null = null,
+  ): Promise<void> {
+    if (!queryable.isTransaction)
+      return queryable
+        .transaction()
+        .execute((trx) => this.recognizeInstallmentInterest(trx, tenantId, throughDate, createdBy));
     await lockAccountingPeriod(queryable, tenantId);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
 
-    const pending = await sql<{ id: number; amount: number; recognition_date: string | Date; account_id: string; branch_id: number | null }>`
+    const pending = await sql<{
+      id: number;
+      amount: number;
+      recognition_date: string | Date;
+      account_id: string;
+      branch_id: number | null;
+    }>`
       select i.id, i.amount, i.recognition_date, i.account_id, p.branch_id from accounting_installment_interest i
       join customer_installment_plans p on p.id = i.plan_id and p.tenant_id = i.tenant_id
       where i.tenant_id = ${tenantId} and i.journal_entry_id is null and i.recognition_date <= ${throughDate}::date
@@ -181,11 +203,34 @@ export class InstallmentInterestSlice {
     const revenue = await this.resolveSystemAccountByCode(queryable, tenantId, '7100');
     for (const item of pending.rows) {
       const amount = toBookMoney(item.amount);
-      const entryId = await this.postDomainJournal(queryable, { tenantId, accountId: item.account_id || tenantId, sourceType: 'installment_interest_accrual', sourceId: Number(item.id),
-        entryDate: new Date(item.recognition_date), branchId: item.branch_id, description: 'استحقاق إيراد فوائد التمويل وفق العائد الفعلي', createdBy,
+      const entryId = await this.postDomainJournal(queryable, {
+        tenantId,
+        accountId: item.account_id || tenantId,
+        sourceType: 'installment_interest_accrual',
+        sourceId: Number(item.id),
+        entryDate: new Date(item.recognition_date),
+        branchId: item.branch_id,
+        description: 'استحقاق إيراد فوائد التمويل وفق العائد الفعلي',
+        createdBy,
         lines: [
-          { accountId: deferred, description: 'تحرير فوائد التمويل المكتسبة', debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId: item.branch_id },
-          { accountId: revenue, description: 'إيراد تمويل مكتسب', debit: 0, credit: amount, partnerType: 'none', partnerId: null, branchId: item.branch_id },
+          {
+            accountId: deferred,
+            description: 'تحرير فوائد التمويل المكتسبة',
+            debit: amount,
+            credit: 0,
+            partnerType: 'none',
+            partnerId: null,
+            branchId: item.branch_id,
+          },
+          {
+            accountId: revenue,
+            description: 'إيراد تمويل مكتسب',
+            debit: 0,
+            credit: amount,
+            partnerType: 'none',
+            partnerId: null,
+            branchId: item.branch_id,
+          },
         ],
       });
       await sql`update accounting_installment_interest set journal_entry_id = ${entryId}

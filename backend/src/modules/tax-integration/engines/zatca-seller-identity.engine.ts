@@ -36,7 +36,9 @@ export function resolveZatcaSellerIdentity(input: {
   }
   const taxId = typeof input.taxId === 'string' ? input.taxId.trim() : '';
   if (!/^\d{15}$/.test(taxId)) {
-    throw new BadRequestException('ZATCA seller VAT number is not configured; set a 15-digit ZATCA tax ID before signing invoices.');
+    throw new BadRequestException(
+      'ZATCA seller VAT number is not configured; set a 15-digit ZATCA tax ID before signing invoices.',
+    );
   }
   const sellerName =
     parseSettingsText(input.companyName) ||

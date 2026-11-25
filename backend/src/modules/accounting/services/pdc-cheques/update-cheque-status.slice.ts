@@ -14,8 +14,24 @@ import type { UpdateChequeStatusDto, PdcChequeRecord } from './pdc-cheques.types
 export interface UpdateChequeStatusBoundDeps {
   toMoney(value: unknown, digits: MoneyDigits): number;
   formatDate(date: any): string;
-  syncCustomerSubLedger(trx: any, auth: AuthContext, customerId: number, amount: number, entryType: string, note: string, chequeId: number): Promise<void>;
-  syncSupplierSubLedger(trx: any, auth: AuthContext, supplierId: number, amount: number, entryType: string, note: string, chequeId: number): Promise<void>;
+  syncCustomerSubLedger(
+    trx: any,
+    auth: AuthContext,
+    customerId: number,
+    amount: number,
+    entryType: string,
+    note: string,
+    chequeId: number,
+  ): Promise<void>;
+  syncSupplierSubLedger(
+    trx: any,
+    auth: AuthContext,
+    supplierId: number,
+    amount: number,
+    entryType: string,
+    note: string,
+    chequeId: number,
+  ): Promise<void>;
 }
 
 export class UpdateChequeStatusSlice {
@@ -80,52 +96,122 @@ export class UpdateChequeStatusSlice {
         throw new NotFoundException('الشيك غير موجود');
       }
 
-      if (actionDto.depositBankId && !await trx.selectFrom('accounting_accounts').select('id').where('tenant_id', '=', tenantId).where('id', '=', actionDto.depositBankId).where('is_active', '=', true).where('is_cash_bank', '=', true).where('code', 'not in', ['1121', '1122']).executeTakeFirst()) throw new BadRequestException('حساب البنك لا يتبع المنشأة أو غير صالح.');
+      if (
+        actionDto.depositBankId &&
+        !(await trx
+          .selectFrom('accounting_accounts')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', actionDto.depositBankId)
+          .where('is_active', '=', true)
+          .where('is_cash_bank', '=', true)
+          .where('code', 'not in', ['1121', '1122'])
+          .executeTakeFirst())
+      )
+        throw new BadRequestException('حساب البنك لا يتبع المنشأة أو غير صالح.');
       if (actionDto.action === 'endorse') {
         let supplierId = actionDto.endorsedToSupplierId;
         if (!supplierId && actionDto.endorsedToSupplierName) {
-          const matches = await trx.selectFrom('suppliers').select('id').where('tenant_id', '=', tenantId).where('name', '=', actionDto.endorsedToSupplierName.trim()).where('is_active', '=', true).limit(2).execute();
+          const matches = await trx
+            .selectFrom('suppliers')
+            .select('id')
+            .where('tenant_id', '=', tenantId)
+            .where('name', '=', actionDto.endorsedToSupplierName.trim())
+            .where('is_active', '=', true)
+            .limit(2)
+            .execute();
           if (matches.length === 1) supplierId = Number(matches[0].id);
         }
-        if (!supplierId || !await trx.selectFrom('suppliers').select('id').where('tenant_id', '=', tenantId).where('id', '=', supplierId).executeTakeFirst()) throw new BadRequestException('يجب تحديد مورد مسجل من نفس المنشأة للتظهير.');
+        if (
+          !supplierId ||
+          !(await trx
+            .selectFrom('suppliers')
+            .select('id')
+            .where('tenant_id', '=', tenantId)
+            .where('id', '=', supplierId)
+            .executeTakeFirst())
+        )
+          throw new BadRequestException('يجب تحديد مورد مسجل من نفس المنشأة للتظهير.');
         actionDto = { ...actionDto, endorsedToSupplierId: supplierId };
       }
-      try { assertPdcTransition(existing.type, existing.status, actionDto.action); } catch (error) { throw new BadRequestException((error as Error).message); }
+      try {
+        assertPdcTransition(existing.type, existing.status, actionDto.action);
+      } catch (error) {
+        throw new BadRequestException((error as Error).message);
+      }
       if (existing.base_amount == null) {
         const base = await tenantBaseCurrency(trx, tenantId);
-        if (existing.currency !== base) throw new BadRequestException('الشيك الأجنبي القديم يحتاج مطابقة وتصحيح القيمة الدفترية أولاً.');
+        if (existing.currency !== base)
+          throw new BadRequestException('الشيك الأجنبي القديم يحتاج مطابقة وتصحيح القيمة الدفترية أولاً.');
         existing.base_amount = Number(existing.amount);
-        await trx.updateTable('accounting_cheques').set({ base_amount: existing.base_amount, exchange_rate: 1, base_currency: existing.currency }).where('tenant_id', '=', tenantId).where('id', '=', id).execute();
+        await trx
+          .updateTable('accounting_cheques')
+          .set({ base_amount: existing.base_amount, exchange_rate: 1, base_currency: existing.currency })
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', id)
+          .execute();
       }
       const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
       const bookAmount = pdcBookAmount(existing, bookDigits);
       const today = await resolveBusinessDateKey(trx, tenantId, new Date());
       const actionDate = actionDto.actionDate || today;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(actionDate) || !Number.isFinite(new Date(actionDate).getTime()) || new Date(actionDate).toISOString().slice(0, 10) !== actionDate) throw new BadRequestException('تاريخ إجراء الشيك غير صالح.');
-      if (actionDate < this.formatDate(existing.last_action_date || existing.issue_date)) throw new BadRequestException('تاريخ الإجراء يسبق آخر حركة مثبتة للشيك.');
-      if (actionDto.bouncedFee != null && (!Number.isFinite(Number(actionDto.bouncedFee)) || Number(actionDto.bouncedFee) < 0)) throw new BadRequestException('عمولة الارتداد غير صالحة.');
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(actionDate) ||
+        !Number.isFinite(new Date(actionDate).getTime()) ||
+        new Date(actionDate).toISOString().slice(0, 10) !== actionDate
+      )
+        throw new BadRequestException('تاريخ إجراء الشيك غير صالح.');
+      if (actionDate < this.formatDate(existing.last_action_date || existing.issue_date))
+        throw new BadRequestException('تاريخ الإجراء يسبق آخر حركة مثبتة للشيك.');
+      if (
+        actionDto.bouncedFee != null &&
+        (!Number.isFinite(Number(actionDto.bouncedFee)) || Number(actionDto.bouncedFee) < 0)
+      )
+        throw new BadRequestException('عمولة الارتداد غير صالحة.');
       // The bounce fee is stored raw on the cheque row and posted as a
       // book amount; a sub-minor fee would silently diverge the two.
       // Strict, like treasury transfers and expenses: reject, don't round.
       if (actionDto.bouncedFee != null) {
-        try { toMinorUnits(Number(actionDto.bouncedFee), bookDigits); } catch { throw new BadRequestException('عمولة الارتداد يجب أن تطابق دقة العملة.'); }
+        try {
+          toMinorUnits(Number(actionDto.bouncedFee), bookDigits);
+        } catch {
+          throw new BadRequestException('عمولة الارتداد يجب أن تطابق دقة العملة.');
+        }
       }
       let settlementBase = bookAmount;
       let settlementSnapshot: { flagged_rate_variance: boolean; registered_exchange_rate: number | null } | null = null;
       if (['collect', 'clear'].includes(actionDto.action)) {
-        const snapshot = await pdcCurrencySnapshot(trx, tenantId, existing.currency, Number(existing.amount), actionDto.settlementExchangeRate);
+        const snapshot = await pdcCurrencySnapshot(
+          trx,
+          tenantId,
+          existing.currency,
+          Number(existing.amount),
+          actionDto.settlementExchangeRate,
+        );
         settlementBase = snapshot.base_amount;
         // A settlement re-rates the cheque, so the variance flag and
         // its reference rate follow the settlement snapshot — a clean
         // settlement rate clears a flag set at creation.
-        settlementSnapshot = { flagged_rate_variance: snapshot.flagged_rate_variance, registered_exchange_rate: snapshot.registered_exchange_rate };
+        settlementSnapshot = {
+          flagged_rate_variance: snapshot.flagged_rate_variance,
+          registered_exchange_rate: snapshot.registered_exchange_rate,
+        };
       }
-      const settlementUpdate: Record<string, any> = { last_action_date: actionDate, settlement_base_amount: settlementBase, posting_sequence: sql`posting_sequence + 1` };
+      const settlementUpdate: Record<string, any> = {
+        last_action_date: actionDate,
+        settlement_base_amount: settlementBase,
+        posting_sequence: sql`posting_sequence + 1`,
+      };
       if (settlementSnapshot) {
         settlementUpdate.flagged_rate_variance = settlementSnapshot.flagged_rate_variance;
         settlementUpdate.registered_exchange_rate = settlementSnapshot.registered_exchange_rate;
       }
-      await trx.updateTable('accounting_cheques').set(settlementUpdate).where('tenant_id', '=', tenantId).where('id', '=', id).execute();
+      await trx
+        .updateTable('accounting_cheques')
+        .set(settlementUpdate)
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id)
+        .execute();
       const updateFields: Record<string, any> = {
         updated_at: sql`CURRENT_TIMESTAMP`,
       };
@@ -232,9 +318,7 @@ export class UpdateChequeStatusSlice {
       }
 
       if (actionDto.notes && actionDto.action !== 'return') {
-        updateFields.notes = existing.notes
-          ? `${existing.notes} | ${actionDto.notes}`
-          : actionDto.notes;
+        updateFields.notes = existing.notes ? `${existing.notes} | ${actionDto.notes}` : actionDto.notes;
       }
 
       // Execute GL posting for financial state transitions
@@ -246,21 +330,34 @@ export class UpdateChequeStatusSlice {
         }
         // Deposit must post: advancing to under_collection without a journal
         // leaves the cheque in the wrong custody account in the GL.
-        if (!postRes.journalEntryId) throw new BadRequestException('إيداع الشيك لم ينتج قيداً محاسبياً؛ لم يتم تغيير الحالة.');
+        if (!postRes.journalEntryId)
+          throw new BadRequestException('إيداع الشيك لم ينتج قيداً محاسبياً؛ لم يتم تغيير الحالة.');
       } else if (actionDto.action === 'collect') {
-        const postRes = await this.accountingPostingService.postPdcChequeCollect(trx, id, actionDto.depositBankId || null, authContext);
+        const postRes = await this.accountingPostingService.postPdcChequeCollect(
+          trx,
+          id,
+          actionDto.depositBankId || null,
+          authContext,
+        );
         if (postRes.posted && postRes.journalEntryId) {
           nextJournalId = postRes.journalEntryId;
           updateFields.journal_entry_id = nextJournalId;
         }
-        if (!postRes.journalEntryId) throw new BadRequestException('تحصيل الشيك لم ينتج قيداً محاسبياً؛ لم يتم تغيير الحالة.');
+        if (!postRes.journalEntryId)
+          throw new BadRequestException('تحصيل الشيك لم ينتج قيداً محاسبياً؛ لم يتم تغيير الحالة.');
       } else if (actionDto.action === 'clear') {
-        const postRes = await this.accountingPostingService.postPdcChequeClear(trx, id, actionDto.depositBankId || null, authContext);
+        const postRes = await this.accountingPostingService.postPdcChequeClear(
+          trx,
+          id,
+          actionDto.depositBankId || null,
+          authContext,
+        );
         if (postRes.posted && postRes.journalEntryId) {
           nextJournalId = postRes.journalEntryId;
           updateFields.journal_entry_id = nextJournalId;
         }
-        if (!postRes.journalEntryId) throw new BadRequestException('صرف الشيك لم ينتج قيداً محاسبياً؛ لم يتم تغيير الحالة.');
+        if (!postRes.journalEntryId)
+          throw new BadRequestException('صرف الشيك لم ينتج قيداً محاسبياً؛ لم يتم تغيير الحالة.');
       } else if (actionDto.action === 'bounce') {
         if (existing.type === 'receivable') {
           const postRes = await this.accountingPostingService.postPdcChequeBounce(
@@ -276,7 +373,8 @@ export class UpdateChequeStatusSlice {
           }
           // The subledger sync below must never run without the bounce
           // journal: that pairing is exactly the GL/subledger divergence.
-          if (!postRes.journalEntryId) throw new BadRequestException('ارتداد الشيك لم ينتج قيداً محاسبياً؛ لم يتم تغيير الحالة.');
+          if (!postRes.journalEntryId)
+            throw new BadRequestException('ارتداد الشيك لم ينتج قيداً محاسبياً؛ لم يتم تغيير الحالة.');
           if (existing.partner_id) {
             await this.syncCustomerSubLedger(
               trx,
@@ -294,7 +392,8 @@ export class UpdateChequeStatusSlice {
             nextJournalId = postRes.journalEntryId;
             updateFields.journal_entry_id = nextJournalId;
           }
-          if (!postRes.journalEntryId) throw new BadRequestException('ارتداد شيك الدفع لم ينتج قيداً محاسبياً؛ لم يتم تغيير الحالة.');
+          if (!postRes.journalEntryId)
+            throw new BadRequestException('ارتداد شيك الدفع لم ينتج قيداً محاسبياً؛ لم يتم تغيير الحالة.');
           if (existing.partner_id) {
             await this.syncSupplierSubLedger(
               trx,
@@ -320,7 +419,8 @@ export class UpdateChequeStatusSlice {
         }
         // The supplier subledger sync below must never run without the
         // endorse journal.
-        if (!postRes.journalEntryId) throw new BadRequestException('تظهير الشيك لم ينتج قيداً محاسبياً؛ لم يتم تغيير الحالة.');
+        if (!postRes.journalEntryId)
+          throw new BadRequestException('تظهير الشيك لم ينتج قيداً محاسبياً؛ لم يتم تغيير الحالة.');
         if (actionDto.endorsedToSupplierId) {
           await this.syncSupplierSubLedger(
             trx,
@@ -440,7 +540,8 @@ export class UpdateChequeStatusSlice {
         endorsed_to_supplier_id: updated.endorsed_to_supplier_id,
         endorsed_to_supplier_name: updated.endorsed_to_supplier_name,
         flagged_rate_variance: Boolean(updated.flagged_rate_variance),
-        registered_exchange_rate: updated.registered_exchange_rate == null ? null : Number(updated.registered_exchange_rate),
+        registered_exchange_rate:
+          updated.registered_exchange_rate == null ? null : Number(updated.registered_exchange_rate),
         journal_entry_id: updated.journal_entry_id,
         notes: updated.notes,
         created_by: updated.created_by,

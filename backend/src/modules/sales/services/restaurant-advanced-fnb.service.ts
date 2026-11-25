@@ -4,8 +4,20 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Kysely, type Transaction } from 'kysely';
 import { AppError } from '../../../common/errors/app-error';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
-import type { TenantScope, Toggle86ItemDto, CalculateTipPoolDto, SaveTableZoneDto, GeneratePrepSheetDto } from './restaurant-fnb/restaurant-fnb-types';
-export type { TenantScope, Toggle86ItemDto, CalculateTipPoolDto, SaveTableZoneDto, GeneratePrepSheetDto } from './restaurant-fnb/restaurant-fnb-types';
+import type {
+  TenantScope,
+  Toggle86ItemDto,
+  CalculateTipPoolDto,
+  SaveTableZoneDto,
+  GeneratePrepSheetDto,
+} from './restaurant-fnb/restaurant-fnb-types';
+export type {
+  TenantScope,
+  Toggle86ItemDto,
+  CalculateTipPoolDto,
+  SaveTableZoneDto,
+  GeneratePrepSheetDto,
+} from './restaurant-fnb/restaurant-fnb-types';
 import { RestaurantFnbGates86Slice } from './restaurant-fnb/restaurant-fnb-gates-86';
 import { RestaurantFnbTipsReadSlice } from './restaurant-fnb/restaurant-fnb-tips-read';
 import { RestaurantFnbTipsCreateSlice } from './restaurant-fnb/restaurant-fnb-tips-create';
@@ -45,7 +57,12 @@ export class RestaurantAdvancedFnbService {
     this.confirmZones = new RestaurantFnbConfirmZonesSlice(this.db, this.assertManagerCaller.bind(this));
     this.prep = new RestaurantFnbPrepSlice(this.db);
     this.stampsCosting = new RestaurantFnbStampsCostingSlice(this.db);
-    this.managerComp = new RestaurantFnbManagerCompSlice(this.db, this.assertManagerCaller.bind(this), this.resolveCompAccount.bind(this), this.accountingPosting);
+    this.managerComp = new RestaurantFnbManagerCompSlice(
+      this.db,
+      this.assertManagerCaller.bind(this),
+      this.resolveCompAccount.bind(this),
+      this.accountingPosting,
+    );
     this.ratingsDriveThru = new RestaurantFnbRatingsDriveThruSlice(this.db);
     this.upsellLayouts = new RestaurantFnbUpsellLayoutsSlice(this.db, this.assertManagerCaller.bind(this));
   }
@@ -123,26 +140,32 @@ export class RestaurantAdvancedFnbService {
     return this.stampsCosting.getManagerComps(scope);
   }
 
-  async recordManagerComp(scope: TenantScope, dto: {
-    saleId?: number;
-    tableNumber?: string;
-    compType: 'vip_guest' | 'customer_complaint' | 'staff_meal' | 'promotional_tasting';
-    managerName: string;
-    managerPin?: string;
-    amount: number;
-    itemsSummary?: string;
-    notes?: string;
-  }) {
+  async recordManagerComp(
+    scope: TenantScope,
+    dto: {
+      saleId?: number;
+      tableNumber?: string;
+      compType: 'vip_guest' | 'customer_complaint' | 'staff_meal' | 'promotional_tasting';
+      managerName: string;
+      managerPin?: string;
+      amount: number;
+      itemsSummary?: string;
+      notes?: string;
+    },
+  ) {
     return this.managerComp.recordManagerComp(scope, dto);
   }
 
-  async recordTableRating(scope: TenantScope, dto: {
-    tableNumber: string;
-    saleId?: number;
-    rating: number;
-    feedbackCategory?: string;
-    notes?: string;
-  }) {
+  async recordTableRating(
+    scope: TenantScope,
+    dto: {
+      tableNumber: string;
+      saleId?: number;
+      rating: number;
+      feedbackCategory?: string;
+      notes?: string;
+    },
+  ) {
     return this.ratingsDriveThru.recordTableRating(scope, dto);
   }
 
@@ -158,16 +181,23 @@ export class RestaurantAdvancedFnbService {
     return this.ratingsDriveThru.getDriveThruOrders(scope);
   }
 
-  async createDriveThruOrder(scope: TenantScope, dto: {
-    vehiclePlate: string;
-    vehicleDesc?: string;
-    totalAmount?: number;
-    notes?: string;
-  }) {
+  async createDriveThruOrder(
+    scope: TenantScope,
+    dto: {
+      vehiclePlate: string;
+      vehicleDesc?: string;
+      totalAmount?: number;
+      notes?: string;
+    },
+  ) {
     return this.ratingsDriveThru.createDriveThruOrder(scope, dto);
   }
 
-  async updateDriveThruStatus(scope: TenantScope, id: number, status: 'order_taken' | 'at_window' | 'completed' | 'cancelled') {
+  async updateDriveThruStatus(
+    scope: TenantScope,
+    id: number,
+    status: 'order_taken' | 'at_window' | 'completed' | 'cancelled',
+  ) {
     return this.ratingsDriveThru.updateDriveThruStatus(scope, id, status);
   }
 
@@ -175,14 +205,17 @@ export class RestaurantAdvancedFnbService {
     return this.upsellLayouts.getUpsellRecommendations(scope, triggerProductId, categoryName);
   }
 
-  async createUpsellRule(scope: TenantScope, dto: {
-    triggerProductId?: number;
-    triggerCategoryName?: string;
-    suggestedProductId: number;
-    suggestedProductName: string;
-    title: string;
-    discountAmount?: number;
-  }) {
+  async createUpsellRule(
+    scope: TenantScope,
+    dto: {
+      triggerProductId?: number;
+      triggerCategoryName?: string;
+      suggestedProductId: number;
+      suggestedProductName: string;
+      title: string;
+      discountAmount?: number;
+    },
+  ) {
     return this.upsellLayouts.createUpsellRule(scope, dto);
   }
 
@@ -234,11 +267,9 @@ export async function assertProductsNot86ed(
   branchId: number | null | undefined,
   items: Array<{ productId: number | string; name?: string }>,
 ): Promise<void> {
-  const ids = [...new Set(
-    items
-      .map((item) => Number(item.productId))
-      .filter((id) => Number.isSafeInteger(id) && id > 0),
-  )];
+  const ids = [
+    ...new Set(items.map((item) => Number(item.productId)).filter((id) => Number.isSafeInteger(id) && id > 0)),
+  ];
   if (ids.length === 0) return;
   const rows = await queryable
     .selectFrom('restaurant_86_items')
@@ -247,9 +278,7 @@ export async function assertProductsNot86ed(
     .where('is_86ed', '=', true)
     .where('product_id', 'in', ids)
     .where((eb) =>
-      branchId
-        ? eb.or([eb('branch_id', '=', branchId), eb('branch_id', 'is', null)])
-        : eb('branch_id', 'is', null),
+      branchId ? eb.or([eb('branch_id', '=', branchId), eb('branch_id', 'is', null)]) : eb('branch_id', 'is', null),
     )
     .execute();
   if (rows.length === 0) return;

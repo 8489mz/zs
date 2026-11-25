@@ -33,7 +33,12 @@ export class PostVanFieldCollectionSlice {
     return this.bound.resolveSystemAccountByCode(queryable, tenantId, code);
   }
 
-  private async resolveAccountWithFallback(queryable: DbOrTx, tenantId: string, configuredId: number | null | undefined, fallbackCode: string): Promise<number> {
+  private async resolveAccountWithFallback(
+    queryable: DbOrTx,
+    tenantId: string,
+    configuredId: number | null | undefined,
+    fallbackCode: string,
+  ): Promise<number> {
     return this.bound.resolveAccountWithFallback(queryable, tenantId, configuredId, fallbackCode);
   }
 
@@ -59,16 +64,23 @@ export class PostVanFieldCollectionSlice {
   }
 
   /**
-     * A field debt collection is also cash sitting with the rep until the trip is settled, so it
-     * cannot go straight to the cash account either. It moves the amount out of the customer's own
-     * receivable and into the same pooled "none"-partner receivable that postVanTripSettlement later
-     * clears against cash — the mirror image of postSale crediting a customer's receivable into that
-     * same pool at sale time.
-     */
-async postVanFieldCollection(
+   * A field debt collection is also cash sitting with the rep until the trip is settled, so it
+   * cannot go straight to the cash account either. It moves the amount out of the customer's own
+   * receivable and into the same pooled "none"-partner receivable that postVanTripSettlement later
+   * clears against cash — the mirror image of postSale crediting a customer's receivable into that
+   * same pool at sale time.
+   */
+  async postVanFieldCollection(
     queryable: DbOrTx,
     collectionId: number,
-    params: { amount: number; customerId: number; branchId: number | null; locationId: number | null; paymentMethod?: string; transferReference?: string },
+    params: {
+      amount: number;
+      customerId: number;
+      branchId: number | null;
+      locationId: number | null;
+      paymentMethod?: string;
+      transferReference?: string;
+    },
     auth: AuthContext,
   ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
@@ -76,11 +88,11 @@ async postVanFieldCollection(
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
 
-
     const amount = toBookMoney(params.amount);
     if (!(amount > 0)) return { posted: false, journalEntryId: null };
 
-    const existing = await queryable.selectFrom('journal_entries')
+    const existing = await queryable
+      .selectFrom('journal_entries')
       .select('id')
       .where('source_type', '=', 'van_field_collection')
       .where('source_id', '=', collectionId)
@@ -92,7 +104,8 @@ async postVanFieldCollection(
     if (!settings) throw new Error(`Accounting settings missing while posting van field collection ${collectionId}`);
 
     let receivableAccountId = Number(settings.customer_receivable_account_id || 0);
-    if (!(receivableAccountId > 0)) receivableAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1130');
+    if (!(receivableAccountId > 0))
+      receivableAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1130');
 
     const branchId = params.branchId;
     const locationId = params.locationId;
@@ -111,10 +124,30 @@ async postVanFieldCollection(
         );
       }
     }
-    const debitAccountId = electronic ? await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.bank_account_id, '1120') : receivableAccountId;
+    const debitAccountId = electronic
+      ? await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.bank_account_id, '1120')
+      : receivableAccountId;
     const lines: JournalLineDraft[] = [
-      { accountId: debitAccountId, description: electronic ? 'تحصيل ميداني إلكتروني إلى البنك' : 'تحصيل ميداني بواسطة مندوب - عهدة نقدية', debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId },
-      { accountId: receivableAccountId, description: `تحصيل ميداني بواسطة مندوب - سداد مديونية عميل`, debit: 0, credit: amount, partnerType: 'customer', partnerId: params.customerId, branchId, locationId },
+      {
+        accountId: debitAccountId,
+        description: electronic ? 'تحصيل ميداني إلكتروني إلى البنك' : 'تحصيل ميداني بواسطة مندوب - عهدة نقدية',
+        debit: amount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      },
+      {
+        accountId: receivableAccountId,
+        description: `تحصيل ميداني بواسطة مندوب - سداد مديونية عميل`,
+        debit: 0,
+        credit: amount,
+        partnerType: 'customer',
+        partnerId: params.customerId,
+        branchId,
+        locationId,
+      },
     ];
 
     try {
@@ -134,7 +167,13 @@ async postVanFieldCollection(
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_van_sales_uniq')) {
-        const existing2 = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'van_field_collection').where('source_id', '=', collectionId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+        const existing2 = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'van_field_collection')
+          .where('source_id', '=', collectionId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
         return { posted: false, journalEntryId: Number(existing2?.id || 0) };
       }
       throw e;

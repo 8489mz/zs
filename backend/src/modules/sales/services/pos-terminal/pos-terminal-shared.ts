@@ -10,7 +10,9 @@ export const execAsync = promisify(exec);
  */
 export function derivePosBridgeKey(masterSecret: string, tenantId: string): string {
   if (masterSecret.length < 32 || !tenantId.trim()) throw new Error('POS bridge master secret/tenant not provisioned');
-  return createHmac('sha256', masterSecret).update('zs-pos-bridge:v1:' + tenantId.trim()).digest('hex');
+  return createHmac('sha256', masterSecret)
+    .update('zs-pos-bridge:v1:' + tenantId.trim())
+    .digest('hex');
 }
 
 export interface PosTerminalInfo {
@@ -27,7 +29,10 @@ export interface PosTerminalInfo {
 
 export function isPrivateSubnetIp(ip: string): boolean {
   if (!ip) return false;
-  const clean = ip.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  const clean = ip
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '');
   if (clean === 'localhost' || clean === '::1' || clean === '0.0.0.0') return true;
   if (clean.startsWith('127.')) return true; // all loopback addresses
   if (clean.startsWith('169.254.')) return true; // link-local & cloud metadata
@@ -42,7 +47,10 @@ export function isPrivateSubnetIp(ip: string): boolean {
   return false;
 }
 
-export function parseTerminalHostAndPort(rawHost: string, fallbackPort = 8080): { host: string; port: number; protocol: 'http' | 'https' } {
+export function parseTerminalHostAndPort(
+  rawHost: string,
+  fallbackPort = 8080,
+): { host: string; port: number; protocol: 'http' | 'https' } {
   if (!rawHost) return { host: '192.168.1.150', port: fallbackPort, protocol: 'http' };
 
   let clean = rawHost.trim();
@@ -104,9 +112,9 @@ export function translateBankResponseCode(rawCode?: string, fallbackMessage?: st
     '94': 'معاملة مكررة',
     '96': 'تم الرفض: عطل مؤقت في نظام البنك المعالج، يرجى المحاولة لاحقاً',
     '99': 'تم إلغاء العملية بواسطة حامل البطاقة',
-    'CANCELLED': 'تم إلغاء العملية بواسطة العميل',
-    'CANCELED': 'تم إلغاء العملية بواسطة العميل',
-    'TIMEOUT': 'انتهت مهلة إدخال البطاقة أو الرقم السري',
+    CANCELLED: 'تم إلغاء العملية بواسطة العميل',
+    CANCELED: 'تم إلغاء العملية بواسطة العميل',
+    TIMEOUT: 'انتهت مهلة إدخال البطاقة أو الرقم السري',
   };
 
   return codeMap[clean] || fallbackMessage || `تم رفض العملية من البنك (رمز الاستجابة: ${clean})`;

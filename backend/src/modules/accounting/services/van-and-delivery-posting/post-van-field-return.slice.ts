@@ -30,7 +30,16 @@ export class PostVanFieldReturnSlice {
     queryable: Transaction<Database>,
     tenantId: string,
     saleId: number,
-  ): Promise<Array<{ id: number; product_id: number | null; qty: number | string; cost_price: number | string | null; unit_multiplier: number | string | null; modifiers: unknown }>> {
+  ): Promise<
+    Array<{
+      id: number;
+      product_id: number | null;
+      qty: number | string;
+      cost_price: number | string | null;
+      unit_multiplier: number | string | null;
+      modifiers: unknown;
+    }>
+  > {
     return this.bound.readSaleResidualLines(queryable, tenantId, saleId);
   }
 
@@ -82,30 +91,30 @@ export class PostVanFieldReturnSlice {
   }
 
   /*
-     * INV-VAN-FIELD-RETURN-COGS-RESIDUAL-MIRROR: a LINKED field return
-     * reverses COGS on the same residual basis the sale posted it — the
-     * returned quantity per original sale line is fed through the shared
-     * residual grouping (salesReturnCogsResidual) at the FROZEN sale-line
-     * costs, with the post-sale remaining quantity reconstructed from the
-     * post-restock stock read, so sequential field returns telescope to
-     * the posted COGS and a full return nets COGS to zero. The caller
-     * supplies the current product cost per item; the mirror ignores it
-     * in favour of the frozen cost, because the current cost is what
-     * stranded the divergence this mirror closes. Eligibility is
-     * deliberately narrow: a linked sale whose every returned item
-     * resolves to exactly one sale line (by saleItemId, or by a unique
-     * product line), and a non-damaged restock. Anything else — no
-     * linked sale, a damaged-location restock, an unresolvable or
-     * ambiguous line (including several sale lines at differing frozen
-     * costs with no saleItemId to disambiguate), or a missing sale —
-     * keeps the legacy plain qty x caller cost computation. A resolved
-     * line whose frozen cost is missing or invalid fails closed with
-     * VAN_FIELD_RETURN_FROZEN_COST_INVALID instead of silently
-     * falling back to the current product cost. A zero frozen cost
-     * (prepared composite) contributes nothing, as in the sales-return
-     * mirror, and its COGS stays expensed.
-     */
-private async vanFieldReturnCogsAmount(
+   * INV-VAN-FIELD-RETURN-COGS-RESIDUAL-MIRROR: a LINKED field return
+   * reverses COGS on the same residual basis the sale posted it — the
+   * returned quantity per original sale line is fed through the shared
+   * residual grouping (salesReturnCogsResidual) at the FROZEN sale-line
+   * costs, with the post-sale remaining quantity reconstructed from the
+   * post-restock stock read, so sequential field returns telescope to
+   * the posted COGS and a full return nets COGS to zero. The caller
+   * supplies the current product cost per item; the mirror ignores it
+   * in favour of the frozen cost, because the current cost is what
+   * stranded the divergence this mirror closes. Eligibility is
+   * deliberately narrow: a linked sale whose every returned item
+   * resolves to exactly one sale line (by saleItemId, or by a unique
+   * product line), and a non-damaged restock. Anything else — no
+   * linked sale, a damaged-location restock, an unresolvable or
+   * ambiguous line (including several sale lines at differing frozen
+   * costs with no saleItemId to disambiguate), or a missing sale —
+   * keeps the legacy plain qty x caller cost computation. A resolved
+   * line whose frozen cost is missing or invalid fails closed with
+   * VAN_FIELD_RETURN_FROZEN_COST_INVALID instead of silently
+   * falling back to the current product cost. A zero frozen cost
+   * (prepared composite) contributes nothing, as in the sales-return
+   * mirror, and its COGS stays expensed.
+   */
+  private async vanFieldReturnCogsAmount(
     queryable: DbOrTx,
     tenantId: string,
     params: {
@@ -115,7 +124,7 @@ private async vanFieldReturnCogsAmount(
     },
     bookDigits: MoneyDigits,
   ): Promise<number> {
-    const legacy = params.items.reduce((sum, it) => sum + (Number(it.qty || 0) * Number(it.costPrice || 0)), 0);
+    const legacy = params.items.reduce((sum, it) => sum + Number(it.qty || 0) * Number(it.costPrice || 0), 0);
     const saleId = params.saleId ? Number(params.saleId) : 0;
     if (!(saleId > 0) || params.isDamaged) return legacy;
     // The residual grouping reads stock on a transaction handle; the
@@ -170,14 +179,14 @@ private async vanFieldReturnCogsAmount(
   }
 
   /**
-     * An approved field return reverses the two things the original sale posted: the revenue (net of
-     * whatever discount the return price itself already reflects) and the COGS/inventory pair, using
-     * the product's actual cost — not the return's unit price, which is a selling price, not a cost.
-     * The receivable side always credits the named customer (submitFieldReturn requires one), whether
-     * the original sale was cash-via-rep-custody or a real customer credit sale, matching what
-     * approveFieldReturn already writes to customers.balance/customer_ledger for every return.
-     */
-async postVanFieldReturn(
+   * An approved field return reverses the two things the original sale posted: the revenue (net of
+   * whatever discount the return price itself already reflects) and the COGS/inventory pair, using
+   * the product's actual cost — not the return's unit price, which is a selling price, not a cost.
+   * The receivable side always credits the named customer (submitFieldReturn requires one), whether
+   * the original sale was cash-via-rep-custody or a real customer credit sale, matching what
+   * approveFieldReturn already writes to customers.balance/customer_ledger for every return.
+   */
+  async postVanFieldReturn(
     queryable: DbOrTx,
     returnId: number,
     params: {
@@ -198,11 +207,11 @@ async postVanFieldReturn(
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
 
-
     const amount = toBookMoney(params.totalAmount);
     if (!(amount > 0)) return { posted: false, journalEntryId: null };
 
-    const existing = await queryable.selectFrom('journal_entries')
+    const existing = await queryable
+      .selectFrom('journal_entries')
       .select('id')
       .where('source_type', '=', 'van_field_return')
       .where('source_id', '=', returnId)
@@ -253,22 +262,52 @@ async postVanFieldReturn(
     if (!settings) throw new Error(`Accounting settings missing while posting van field return ${returnId}`);
 
     let revenueAccountId = Number(settings.sales_revenue_account_id || 0);
-    if (!(revenueAccountId > 0)) revenueAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '4100');
+    if (!(revenueAccountId > 0))
+      revenueAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '4100');
     let receivableAccountId = Number(settings.customer_receivable_account_id || 0);
-    if (!(receivableAccountId > 0)) receivableAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1130');
+    if (!(receivableAccountId > 0))
+      receivableAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1130');
     let cogsAccountId = Number(settings.cogs_account_id || 0);
     if (!(cogsAccountId > 0)) cogsAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '5100');
     let inventoryAccountId = Number(settings.inventory_account_id || 0);
-    if (!(inventoryAccountId > 0)) inventoryAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1140');
+    if (!(inventoryAccountId > 0))
+      inventoryAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1140');
 
     const branchId = params.branchId;
     const locationId = params.locationId;
     const isCashRefund = params.refundMethod === 'cash';
     const lines: JournalLineDraft[] = [
-      { accountId: revenueAccountId, description: `عكس إيراد مبيعات - مرتجع ميداني #${returnId}`, debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId },
+      {
+        accountId: revenueAccountId,
+        description: `عكس إيراد مبيعات - مرتجع ميداني #${returnId}`,
+        debit: amount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      },
       isCashRefund
-        ? { accountId: receivableAccountId, description: `تخفيض عهدة نقدية مندوب - مرتجع ميداني مسدد نقداً #${returnId}`, debit: 0, credit: amount, partnerType: 'none', partnerId: null, branchId, locationId }
-        : { accountId: receivableAccountId, description: `تخفيض مديونية عميل - مرتجع ميداني #${returnId}`, debit: 0, credit: amount, partnerType: 'customer', partnerId: params.customerId, branchId, locationId },
+        ? {
+            accountId: receivableAccountId,
+            description: `تخفيض عهدة نقدية مندوب - مرتجع ميداني مسدد نقداً #${returnId}`,
+            debit: 0,
+            credit: amount,
+            partnerType: 'none',
+            partnerId: null,
+            branchId,
+            locationId,
+          }
+        : {
+            accountId: receivableAccountId,
+            description: `تخفيض مديونية عميل - مرتجع ميداني #${returnId}`,
+            debit: 0,
+            credit: amount,
+            partnerType: 'customer',
+            partnerId: params.customerId,
+            branchId,
+            locationId,
+          },
     ];
 
     // INV-VAN-FIELD-RETURN-COGS-RESIDUAL-MIRROR: linked returns reverse
@@ -277,8 +316,26 @@ async postVanFieldReturn(
     // vanFieldReturnCogsAmount).
     const cogsAmount = toBookMoney(await this.vanFieldReturnCogsAmount(queryable, scope.tenantId, params, bookDigits));
     if (cogsAmount > 0) {
-      addBookLine({ accountId: inventoryAccountId, description: `إعادة بضاعة للمخزون - مرتجع ميداني #${returnId}`, debit: cogsAmount, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
-      addBookLine({ accountId: cogsAccountId, description: `عكس تكلفة البضاعة المباعة - مرتجع ميداني #${returnId}`, debit: 0, credit: cogsAmount, partnerType: 'none', partnerId: null, branchId, locationId });
+      addBookLine({
+        accountId: inventoryAccountId,
+        description: `إعادة بضاعة للمخزون - مرتجع ميداني #${returnId}`,
+        debit: cogsAmount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
+      addBookLine({
+        accountId: cogsAccountId,
+        description: `عكس تكلفة البضاعة المباعة - مرتجع ميداني #${returnId}`,
+        debit: 0,
+        credit: cogsAmount,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     }
 
     try {
@@ -298,7 +355,13 @@ async postVanFieldReturn(
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_race_window_uniq')) {
-        const existing2 = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'van_field_return').where('source_id', '=', returnId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+        const existing2 = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'van_field_return')
+          .where('source_id', '=', returnId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
         return { posted: false, journalEntryId: Number(existing2?.id || 0) };
       }
       throw e;

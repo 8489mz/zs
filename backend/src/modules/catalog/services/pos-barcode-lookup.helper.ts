@@ -62,7 +62,9 @@ export function buildPosBarcodeLookupVariants(rawBarcode: string): {
   exactLower: string;
   fallbackCandidates: string[];
 } {
-  const exactLower = String(rawBarcode || '').trim().toLowerCase();
+  const exactLower = String(rawBarcode || '')
+    .trim()
+    .toLowerCase();
   if (!exactLower) {
     return { exactLower: '', fallbackCandidates: [] };
   }
@@ -97,7 +99,7 @@ export async function findPosProductsByBarcodeWithDb<Row = Record<string, unknow
   const { exactLower, fallbackCandidates } = buildPosBarcodeLookupVariants(barcode);
   if (!exactLower) return [];
 
-  let productMatches = await db
+  let productMatches = (await db
     .selectFrom('products as p')
     .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
     .select([...POS_PRODUCT_BASE_COLS])
@@ -106,20 +108,22 @@ export async function findPosProductsByBarcodeWithDb<Row = Record<string, unknow
     .where(tenantPredicate('p'))
     .orderBy('p.id', 'asc')
     .limit(limit)
-    .execute() as Row[];
+    .execute()) as Row[];
 
   // Prefer the physical barcode; a SKU is a fallback, not a competing code.
   if (!productMatches.length) {
-    productMatches = await db
+    productMatches = (await db
       .selectFrom('products as p')
-      .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
+      .leftJoin('manufacturing_boms as b', (join) =>
+        join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true),
+      )
       .select([...POS_PRODUCT_BASE_COLS])
       .where('p.is_active', '=', true)
       .where(sql<boolean>`LOWER(p.sku) = ${exactLower}`)
       .where(tenantPredicate('p'))
       .orderBy('p.id', 'asc')
       .limit(limit)
-      .execute() as Row[];
+      .execute()) as Row[];
   }
 
   const seenProductIds = productMatches.map((product: any) => Number(product.id));
@@ -127,22 +131,21 @@ export async function findPosProductsByBarcodeWithDb<Row = Record<string, unknow
 
   let serialMatches: Row[] = [];
   if (remaining > 0) {
-    const serialRows = await db
+    const serialRows = (await db
       .selectFrom('product_serials as ps')
       .innerJoin('products as p', 'p.id', 'ps.product_id')
-      .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
+      .leftJoin('manufacturing_boms as b', (join) =>
+        join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true),
+      )
       .select([...POS_PRODUCT_BASE_COLS, 'ps.serial_number as matched_serial_number'])
       .where('p.is_active', '=', true)
       .where('ps.status', '=', 'in_stock')
       .where(tenantPredicate('ps'))
       .where((eb) =>
-        eb.or([
-          sql<boolean>`LOWER(ps.serial_number) = ${exactLower}`,
-          sql<boolean>`LOWER(ps.imei_2) = ${exactLower}`,
-        ]),
+        eb.or([sql<boolean>`LOWER(ps.serial_number) = ${exactLower}`, sql<boolean>`LOWER(ps.imei_2) = ${exactLower}`]),
       )
       .limit(remaining)
-      .execute() as Row[];
+      .execute()) as Row[];
     serialMatches = serialRows;
     for (const sm of serialMatches as any[]) seenProductIds.push(Number(sm.id));
     remaining = limit - productMatches.length - serialMatches.length;
@@ -153,7 +156,9 @@ export async function findPosProductsByBarcodeWithDb<Row = Record<string, unknow
     let unitQuery = db
       .selectFrom('product_units as pu')
       .innerJoin('products as p', 'p.id', 'pu.product_id')
-      .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
+      .leftJoin('manufacturing_boms as b', (join) =>
+        join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true),
+      )
       .select([
         ...POS_PRODUCT_BASE_COLS,
         'pu.id as matched_unit_id',
@@ -167,10 +172,7 @@ export async function findPosProductsByBarcodeWithDb<Row = Record<string, unknow
 
     if (seenProductIds.length) unitQuery = unitQuery.where('p.id', 'not in', seenProductIds);
 
-    unitMatches = await unitQuery
-      .orderBy('p.id', 'asc')
-      .limit(remaining)
-      .execute() as Row[];
+    unitMatches = (await unitQuery.orderBy('p.id', 'asc').limit(remaining).execute()) as Row[];
   }
 
   const exactCombined = [...productMatches, ...serialMatches, ...unitMatches];
@@ -182,7 +184,7 @@ export async function findPosProductsByBarcodeWithDb<Row = Record<string, unknow
   // accidental surrounding spaces, Arabic digits, or PLU codes stored in style_code.
   const candidateSql = sql.join(fallbackCandidates);
 
-  const fallbackBarcodeMatches = await db
+  const fallbackBarcodeMatches = (await db
     .selectFrom('products as p')
     .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
     .select([...POS_PRODUCT_BASE_COLS])
@@ -191,10 +193,10 @@ export async function findPosProductsByBarcodeWithDb<Row = Record<string, unknow
     .where(tenantPredicate('p'))
     .orderBy('p.id', 'asc')
     .limit(limit)
-    .execute() as Row[];
+    .execute()) as Row[];
   if (fallbackBarcodeMatches.length) return fallbackBarcodeMatches;
 
-  const fallbackSkuMatches = await db
+  const fallbackSkuMatches = (await db
     .selectFrom('products as p')
     .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
     .select([...POS_PRODUCT_BASE_COLS])
@@ -203,10 +205,10 @@ export async function findPosProductsByBarcodeWithDb<Row = Record<string, unknow
     .where(tenantPredicate('p'))
     .orderBy('p.id', 'asc')
     .limit(limit)
-    .execute() as Row[];
+    .execute()) as Row[];
   if (fallbackSkuMatches.length) return fallbackSkuMatches;
 
-  const fallbackUnitMatches = await db
+  const fallbackUnitMatches = (await db
     .selectFrom('product_units as pu')
     .innerJoin('products as p', 'p.id', 'pu.product_id')
     .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
@@ -222,7 +224,7 @@ export async function findPosProductsByBarcodeWithDb<Row = Record<string, unknow
     .where(tenantPredicate('p'))
     .orderBy('p.id', 'asc')
     .limit(limit)
-    .execute() as Row[];
+    .execute()) as Row[];
   if (fallbackUnitMatches.length) return fallbackUnitMatches;
 
   return (await db

@@ -35,10 +35,20 @@ export class PostTradeInPurchaseService {
   async postTradeInCashPurchase(queryable: DbOrTx, tradeInId: number, auth: AuthContext): Promise<number | null> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
-    const source = await queryable.selectFrom('trade_in_transactions')
-      .select(['id', 'agreed_purchase_price', 'transaction_type', 'payment_method',
-        'created_product_id', 'branch_id', 'location_id', 'created_at'])
-      .where('tenant_id', '=', scope.tenantId).where('id', '=', tradeInId)
+    const source = await queryable
+      .selectFrom('trade_in_transactions')
+      .select([
+        'id',
+        'agreed_purchase_price',
+        'transaction_type',
+        'payment_method',
+        'created_product_id',
+        'branch_id',
+        'location_id',
+        'created_at',
+      ])
+      .where('tenant_id', '=', scope.tenantId)
+      .where('id', '=', tradeInId)
       .executeTakeFirst();
     if (!source) throw new AppError('Trade-in document not found for posting', 'TRADEIN_SOURCE_NOT_FOUND', 404);
     const sourceDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
@@ -46,50 +56,105 @@ export class PostTradeInPurchaseService {
     if (amount < 0) throw new AppError('Invalid trade-in cost', 'TRADEIN_COST_INVALID', 400);
     if (amount === 0) return null;
     const paymentMethod = source.payment_method || 'cash';
-    if (source.transaction_type !== 'cash_purchase' ||
-        !['cash', 'bank'].includes(paymentMethod) || !source.created_product_id) {
-      throw new AppError('Trade-in requires a stocked immediate cash/bank purchase before posting',
-        'TRADEIN_POSTING_UNSUPPORTED', 422);
+    if (
+      source.transaction_type !== 'cash_purchase' ||
+      !['cash', 'bank'].includes(paymentMethod) ||
+      !source.created_product_id
+    ) {
+      throw new AppError(
+        'Trade-in requires a stocked immediate cash/bank purchase before posting',
+        'TRADEIN_POSTING_UNSUPPORTED',
+        422,
+      );
     }
-    const movements = await queryable.selectFrom('stock_movements')
+    const movements = await queryable
+      .selectFrom('stock_movements')
       .select(['id', 'product_id', 'qty', 'total_cost'])
       .where('tenant_id', '=', scope.tenantId)
-      .where('reference_type', '=', 'trade_in').where('reference_id', '=', tradeInId)
-      .where('movement_type', '=', 'tradein_in').execute();
-    if (movements.length !== 1 || Number(movements[0].product_id) !== Number(source.created_product_id) ||
-        Number(movements[0].qty) !== 1 || Math.abs(Number(movements[0].total_cost) - amount) > 0.000001) {
-      throw new AppError('Trade-in stock receipt and acquisition value do not reconcile', 'TRADEIN_STOCK_LEDGER_MISMATCH', 409);
+      .where('reference_type', '=', 'trade_in')
+      .where('reference_id', '=', tradeInId)
+      .where('movement_type', '=', 'tradein_in')
+      .execute();
+    if (
+      movements.length !== 1 ||
+      Number(movements[0].product_id) !== Number(source.created_product_id) ||
+      Number(movements[0].qty) !== 1 ||
+      Math.abs(Number(movements[0].total_cost) - amount) > 0.000001
+    ) {
+      throw new AppError(
+        'Trade-in stock receipt and acquisition value do not reconcile',
+        'TRADEIN_STOCK_LEDGER_MISMATCH',
+        409,
+      );
     }
-    const payouts = await queryable.selectFrom('treasury_transactions')
-      .select(['amount', 'payment_channel', 'txn_type']).where('tenant_id', '=', scope.tenantId)
-      .where('reference_type', '=', 'trade_in').where('reference_id', '=', tradeInId).execute();
-    if (payouts.length !== 1 || payouts[0].txn_type !== 'expense' ||
-        payouts[0].payment_channel !== paymentMethod ||
-        toMinorUnits(Number(payouts[0].amount), sourceDigits) !== -toMinorUnits(amount, sourceDigits)) {
-      throw new AppError('Trade-in payout amount/channel and inventory acquisition do not reconcile',
-        'TRADEIN_PAYOUT_LEDGER_MISMATCH', 409);
+    const payouts = await queryable
+      .selectFrom('treasury_transactions')
+      .select(['amount', 'payment_channel', 'txn_type'])
+      .where('tenant_id', '=', scope.tenantId)
+      .where('reference_type', '=', 'trade_in')
+      .where('reference_id', '=', tradeInId)
+      .execute();
+    if (
+      payouts.length !== 1 ||
+      payouts[0].txn_type !== 'expense' ||
+      payouts[0].payment_channel !== paymentMethod ||
+      toMinorUnits(Number(payouts[0].amount), sourceDigits) !== -toMinorUnits(amount, sourceDigits)
+    ) {
+      throw new AppError(
+        'Trade-in payout amount/channel and inventory acquisition do not reconcile',
+        'TRADEIN_PAYOUT_LEDGER_MISMATCH',
+        409,
+      );
     }
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
-    const inventoryAccount = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings?.inventory_account_id, '1140');
-    const payoutAccount = paymentMethod === 'bank'
-      ? await this.resolveAccountWithFallback(queryable, scope.tenantId, settings?.bank_account_id, '1120')
-      : await this.resolveAccountWithFallback(queryable, scope.tenantId, settings?.cash_account_id, '1110');
+    const inventoryAccount = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings?.inventory_account_id,
+      '1140',
+    );
+    const payoutAccount =
+      paymentMethod === 'bank'
+        ? await this.resolveAccountWithFallback(queryable, scope.tenantId, settings?.bank_account_id, '1120')
+        : await this.resolveAccountWithFallback(queryable, scope.tenantId, settings?.cash_account_id, '1110');
     return this.postDomainJournal(queryable, {
-      sourceType: 'trade_in', sourceId: tradeInId, tenantId: scope.tenantId, accountId: scope.accountId,
+      sourceType: 'trade_in',
+      sourceId: tradeInId,
+      tenantId: scope.tenantId,
+      accountId: scope.accountId,
       entryDate: source.created_at ? new Date(source.created_at) : new Date(),
       description: `Acquisition of used inventory - trade-in #${tradeInId}`,
       branchId: source.branch_id ? Number(source.branch_id) : null,
       locationId: source.location_id ? Number(source.location_id) : null,
-      createdBy: auth.userId, postedBy: auth.userId,
+      createdBy: auth.userId,
+      postedBy: auth.userId,
       lines: [
-        {accountId:inventoryAccount, description:'Trade-in inventory acquisition', debit:amount, credit:0, partnerType:'none', partnerId:null},
-        {accountId:payoutAccount, description:paymentMethod === 'bank' ? 'Bank payout for used stock purchase' : 'Cash payout for used stock purchase', debit:0, credit:amount, partnerType:'none', partnerId:null},
+        {
+          accountId: inventoryAccount,
+          description: 'Trade-in inventory acquisition',
+          debit: amount,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+        },
+        {
+          accountId: payoutAccount,
+          description:
+            paymentMethod === 'bank' ? 'Bank payout for used stock purchase' : 'Cash payout for used stock purchase',
+          debit: 0,
+          credit: amount,
+          partnerType: 'none',
+          partnerId: null,
+        },
       ],
     });
   }
 
-
-  async postPurchase(queryable: Transaction<Database>, purchaseId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number }> {
+  async postPurchase(
+    queryable: Transaction<Database>,
+    purchaseId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number }> {
     this.assertTransaction(queryable, 'postPurchase');
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
@@ -101,9 +166,24 @@ export class PostTradeInPurchaseService {
     const purchase = await queryable
       .selectFrom('purchases')
       .select([
-        'id', 'doc_no', 'payment_type', 'subtotal', 'discount', 'tax_rate', 'tax_amount', 'total',
-        'branch_id', 'location_id', 'created_by', 'created_at', 'supplier_id',
-        'grn_id', 'po_id', 'lifecycle_status', 'three_way_match_status', 'prices_include_tax',
+        'id',
+        'doc_no',
+        'payment_type',
+        'subtotal',
+        'discount',
+        'tax_rate',
+        'tax_amount',
+        'total',
+        'branch_id',
+        'location_id',
+        'created_by',
+        'created_at',
+        'supplier_id',
+        'grn_id',
+        'po_id',
+        'lifecycle_status',
+        'three_way_match_status',
+        'prices_include_tax',
       ])
       .where('id', '=', purchaseId)
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
@@ -117,10 +197,30 @@ export class PostTradeInPurchaseService {
     const branchId = purchase.branch_id ? Number(purchase.branch_id) : null;
     const locationId = purchase.location_id ? Number(purchase.location_id) : null;
 
-    const inventoryAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.inventory_account_id, '1140');
-    const purchaseTaxAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.purchase_tax_account_id, '1150');
-    const supplierPayableAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.supplier_payable_account_id, '2110');
-    const cashAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.cash_account_id, '1110');
+    const inventoryAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.inventory_account_id,
+      '1140',
+    );
+    const purchaseTaxAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.purchase_tax_account_id,
+      '1150',
+    );
+    const supplierPayableAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.supplier_payable_account_id,
+      '2110',
+    );
+    const cashAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.cash_account_id,
+      '1110',
+    );
 
     // Reliable inventory value source: purchase_items qty * unit_cost from the purchase document.
     const purchaseItems = await queryable
@@ -181,7 +281,11 @@ export class PostTradeInPurchaseService {
         .where('status', '=', 'posted')
         .executeTakeFirst();
       if (!linkedGrn) {
-        throw new AppError(`Posted goods receipt ${purchase.grn_id} is missing for purchase ${purchaseId}`, 'PURCHASE_GRN_NOT_POSTED', 422);
+        throw new AppError(
+          `Posted goods receipt ${purchase.grn_id} is missing for purchase ${purchaseId}`,
+          'PURCHASE_GRN_NOT_POSTED',
+          422,
+        );
       }
     }
 
@@ -202,22 +306,31 @@ export class PostTradeInPurchaseService {
       .executeTakeFirst();
 
     const isGrnBill = purchase.lifecycle_status === 'grn_bill';
-    if ((linkedGrn || isGrnBill) && !grniAccount) throw new AppError(`GRNI account 2125 is missing for purchase ${purchaseId}`, 'ACCOUNT_NOT_FOUND', 400);
+    if ((linkedGrn || isGrnBill) && !grniAccount)
+      throw new AppError(`GRNI account 2125 is missing for purchase ${purchaseId}`, 'ACCOUNT_NOT_FOUND', 400);
     if ((linkedGrn || isGrnBill) && grniAccount) {
       // Goods already received via GRN! Clear GRNI (2125) and route price variance to PPV (5190)
-      if (isGrnBill && (!purchase.po_id || purchaseItems.length === 0 ||
-        purchaseItems.some((item) => !item.grn_line_id || item.grni_amount == null))) {
+      if (
+        isGrnBill &&
+        (!purchase.po_id ||
+          purchaseItems.length === 0 ||
+          purchaseItems.some((item) => !item.grn_line_id || item.grni_amount == null))
+      ) {
         throw new AppError('GRN bill has incomplete receipt allocations', 'GRNI_BILL_INCOMPLETE', 422);
       }
-      const grnLines = isGrnBill ? [] : await queryable
-        .selectFrom('goods_receipt_lines')
-        .select(['accepted_qty', 'unit_cost'])
-        .where('grn_id', '=', linkedGrn!.id)
-        .where('tenant_id', '=', scope.tenantId)
-        .execute();
+      const grnLines = isGrnBill
+        ? []
+        : await queryable
+            .selectFrom('goods_receipt_lines')
+            .select(['accepted_qty', 'unit_cost'])
+            .where('grn_id', '=', linkedGrn!.id)
+            .where('tenant_id', '=', scope.tenantId)
+            .execute();
       const grniBookedAmount = isGrnBill
         ? toBookMoney(purchaseItems.reduce((sum, item) => sum + Number(item.grni_amount), 0))
-        : toBookMoney(grnLines.reduce((sum, line) => sum + Number(line.accepted_qty || 0) * Number(line.unit_cost || 0), 0));
+        : toBookMoney(
+            grnLines.reduce((sum, line) => sum + Number(line.accepted_qty || 0) * Number(line.unit_cost || 0), 0),
+          );
 
       const netInvoiceAmount = toBookMoney(Math.max(0, total - taxAmount));
       const priceVariance = toBookMoney(netInvoiceAmount - grniBookedAmount);
@@ -233,7 +346,8 @@ export class PostTradeInPurchaseService {
         locationId,
       });
 
-      if (Math.abs(priceVariance) > 0.0001 && !ppvAccount) throw new AppError(`PPV account 5190 is missing for purchase ${purchaseId}`, 'ACCOUNT_NOT_FOUND', 400);
+      if (Math.abs(priceVariance) > 0.0001 && !ppvAccount)
+        throw new AppError(`PPV account 5190 is missing for purchase ${purchaseId}`, 'ACCOUNT_NOT_FOUND', 400);
       if (Math.abs(priceVariance) > 0.0001 && ppvAccount) {
         if (priceVariance > 0) {
           // Unfavorable variance (invoice cost > GRN cost) -> Debit PPV (Expense)
@@ -333,24 +447,37 @@ export class PostTradeInPurchaseService {
       });
     }
 
-    const accountMap = await this.getActiveAccountMap(queryable, scope.tenantId, lines.map((line) => line.accountId));
+    const accountMap = await this.getActiveAccountMap(
+      queryable,
+      scope.tenantId,
+      lines.map((line) => line.accountId),
+    );
     for (const line of lines) {
-      if (!(line.accountId > 0)) throw new Error(`Invalid accounting setting account id while posting purchase ${purchaseId}`);
-      if (!accountMap.has(line.accountId)) throw new Error(`Configured account ${line.accountId} was not found while posting purchase ${purchaseId}`);
-      if (!accountMap.get(line.accountId)) throw new Error(`Configured account ${line.accountId} is inactive while posting purchase ${purchaseId}`);
+      if (!(line.accountId > 0))
+        throw new Error(`Invalid accounting setting account id while posting purchase ${purchaseId}`);
+      if (!accountMap.has(line.accountId))
+        throw new Error(`Configured account ${line.accountId} was not found while posting purchase ${purchaseId}`);
+      if (!accountMap.get(line.accountId))
+        throw new Error(`Configured account ${line.accountId} is inactive while posting purchase ${purchaseId}`);
     }
 
-    const normalizedLines = lines.map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) })).filter((line) => line.debit > 0 || line.credit > 0);
+    const normalizedLines = lines
+      .map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) }))
+      .filter((line) => line.debit > 0 || line.credit > 0);
 
     if (normalizedLines.length === 0) {
-      this.logger.warn(`Purchase ${purchaseId} resulted in empty journal lines (possibly 100% discount with no tax), skipping journal posting.`);
+      this.logger.warn(
+        `Purchase ${purchaseId} resulted in empty journal lines (possibly 100% discount with no tax), skipping journal posting.`,
+      );
       return { posted: false, journalEntryId: 0 };
     }
 
     const totalDebit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > this.maxAllowedDifference(bookDigits)) {
-      throw new Error(`Unbalanced purchase journal for purchase ${purchaseId}: debit=${totalDebit} credit=${totalCredit}`);
+      throw new Error(
+        `Unbalanced purchase journal for purchase ${purchaseId}: debit=${totalDebit} credit=${totalCredit}`,
+      );
     }
 
     const entryId = await this.insertPostedJournal(queryable, {

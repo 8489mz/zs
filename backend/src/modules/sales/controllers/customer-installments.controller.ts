@@ -1,24 +1,10 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  ParseIntPipe,
-  Post,
-  Query,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
 import { RequireAnyPermission } from '../../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { CustomerInstallmentsService } from '../services/customer-installments.service';
-import {
-  CreateInstallmentPlanDto,
-  PayInstallmentDto,
-  ListInstallmentsQueryDto,
-} from '../dto/customer-installment.dto';
+import { CreateInstallmentPlanDto, PayInstallmentDto, ListInstallmentsQueryDto } from '../dto/customer-installment.dto';
 
 @Controller('api/installments')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -32,10 +18,7 @@ export class CustomerInstallmentsController {
   }
 
   @Get('plans')
-  listPlans(
-    @Query() query: { customerId?: number; status?: string; search?: string },
-    @Req() req: RequestWithAuth,
-  ) {
+  listPlans(@Query() query: { customerId?: number; status?: string; search?: string }, @Req() req: RequestWithAuth) {
     return this.installmentsService.listPlans(query, req.authContext!);
   }
 
@@ -55,11 +38,7 @@ export class CustomerInstallmentsController {
   }
 
   @Post(':id/pay')
-  payInstallment(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: PayInstallmentDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  payInstallment(@Param('id', ParseIntPipe) id: number, @Body() dto: PayInstallmentDto, @Req() req: RequestWithAuth) {
     return this.installmentsService.payInstallment(id, dto, req.authContext!);
   }
 }

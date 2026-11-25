@@ -74,17 +74,17 @@ export class MarginProtectionService {
     return Number.isFinite(n) ? roundMoney(n, digits) : 0;
   }
 
-  async analyzePurchaseMargins(purchaseId: number, targetMargin = 25, auth: AuthContext): Promise<MarginProtectionAnalysisResponse> {
+  async analyzePurchaseMargins(
+    purchaseId: number,
+    targetMargin = 25,
+    auth: AuthContext,
+  ): Promise<MarginProtectionAnalysisResponse> {
     const scope = requireTenantScope(auth);
 
     const purchase = await this.db
       .selectFrom('purchases as p')
       .leftJoin('suppliers as s', 's.id', 'p.supplier_id')
-      .select([
-        'p.id',
-        'p.doc_no',
-        's.name as supplier_name',
-      ])
+      .select(['p.id', 'p.doc_no', 's.name as supplier_name'])
       .where('p.id', '=', purchaseId)
       .where('p.tenant_id', '=', scope.tenantId)
       .executeTakeFirst();
@@ -124,17 +124,16 @@ export class MarginProtectionService {
       const currentWholesalePrice = Number(row.wholesale_price || 0);
 
       // We focus on items where cost increased or current retail yields low/negative margin
-      const costChangePercent = previousCost > 0
-        ? Number((((newCost - previousCost) / previousCost) * 100).toFixed(1))
-        : (newCost > 0 ? 100 : 0);
+      const costChangePercent =
+        previousCost > 0 ? Number((((newCost - previousCost) / previousCost) * 100).toFixed(1)) : newCost > 0 ? 100 : 0;
 
-      const currentMarginPercent = currentRetailPrice > 0
-        ? Number((((currentRetailPrice - newCost) / currentRetailPrice) * 100).toFixed(1))
-        : 0;
+      const currentMarginPercent =
+        currentRetailPrice > 0 ? Number((((currentRetailPrice - newCost) / currentRetailPrice) * 100).toFixed(1)) : 0;
 
-      const previousMarginPercent = currentRetailPrice > 0 && previousCost > 0
-        ? Number((((currentRetailPrice - previousCost) / currentRetailPrice) * 100).toFixed(1))
-        : 0;
+      const previousMarginPercent =
+        currentRetailPrice > 0 && previousCost > 0
+          ? Number((((currentRetailPrice - previousCost) / currentRetailPrice) * 100).toFixed(1))
+          : 0;
 
       const isLossMaking = currentRetailPrice <= newCost;
       const isMarginCompressed = currentMarginPercent < 15;
@@ -144,11 +143,11 @@ export class MarginProtectionService {
 
       // Recommended price to achieve target margin %: Cost / (1 - Margin%)
       const safeTargetMargin = Math.min(80, Math.max(5, targetMargin));
-      const recommendedRetailPrice = this.toBookMoney(newCost / (1 - (safeTargetMargin / 100)), bookDigits);
+      const recommendedRetailPrice = this.toBookMoney(newCost / (1 - safeTargetMargin / 100), bookDigits);
 
       // Recommended wholesale margin is typically around 60% of retail margin
       const wholesaleTargetMargin = Math.min(50, Math.max(3, safeTargetMargin * 0.6));
-      const recommendedWholesalePrice = this.toBookMoney(newCost / (1 - (wholesaleTargetMargin / 100)), bookDigits);
+      const recommendedWholesalePrice = this.toBookMoney(newCost / (1 - wholesaleTargetMargin / 100), bookDigits);
 
       analysisItems.push({
         productId,
@@ -181,7 +180,11 @@ export class MarginProtectionService {
     };
   }
 
-  async applyRepricing(purchaseId: number, payload: ApplyRepricingPayload, auth: AuthContext): Promise<{ ok: boolean; updatedCount: number; message: string }> {
+  async applyRepricing(
+    purchaseId: number,
+    payload: ApplyRepricingPayload,
+    auth: AuthContext,
+  ): Promise<{ ok: boolean; updatedCount: number; message: string }> {
     const scope = requireTenantScope(auth);
     if (!payload.items || !payload.items.length) {
       return { ok: true, updatedCount: 0, message: 'لم يتم تحديد أصناف لتحديث أسعارها' };
@@ -234,13 +237,20 @@ export class MarginProtectionService {
           .executeTakeFirst();
 
         if (tenant?.owner_phone) {
-          const sampleList = updatedProductNames.slice(0, 4).map((n) => `  • ${n}`).join('\n');
-          const moreCount = updatedProductNames.length > 4 ? `\n  _وغيرها (${updatedProductNames.length - 4} صنفاً آخر)_` : '';
+          const sampleList = updatedProductNames
+            .slice(0, 4)
+            .map((n) => `  • ${n}`)
+            .join('\n');
+          const moreCount =
+            updatedProductNames.length > 4 ? `\n  _وغيرها (${updatedProductNames.length - 4} صنفاً آخر)_` : '';
 
-          const text = `📈 *تنبيه حماية هامش الربح وتحديث الأسعار*\n` +
+          const text =
+            `📈 *تنبيه حماية هامش الربح وتحديث الأسعار*\n` +
             `🏢 *${tenant.business_name || 'إدارة المتجر'}*\n` +
             `تم بنجاح تحديث أسعار البيع في الكاشير لـ *${updatedProductNames.length} صنفاً* لحماية أرباحك بعد ارتفاع تكلفة المورد في فاتورة #${purchaseId}:\n` +
-            sampleList + moreCount + `\n\n` +
+            sampleList +
+            moreCount +
+            `\n\n` +
             `_تم التحديث آلياً عبر منظومة Z-Systems المؤسسية_`;
 
           await this.whatsappService.sendRawMessage(scope.tenantId, tenant.owner_phone, text);

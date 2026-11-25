@@ -137,17 +137,18 @@ export function calculateReorderItemSuggestion(
     urgency = 'out_of_stock';
   } else if (daysRemaining <= leadTimeDays || currentStock <= minStock) {
     urgency = 'critical';
-  } else if (daysRemaining <= (leadTimeDays + 7) || currentStock <= reorderPoint) {
+  } else if (daysRemaining <= leadTimeDays + 7 || currentStock <= reorderPoint) {
     urgency = 'warning';
   } else if (daysRemaining > 60 && currentStock > 50) {
     urgency = 'overstocked';
   }
 
-  const needsReorder = urgency === 'out_of_stock' || urgency === 'critical' || urgency === 'warning' || currentStock <= reorderPoint;
+  const needsReorder =
+    urgency === 'out_of_stock' || urgency === 'critical' || urgency === 'warning' || currentStock <= reorderPoint;
 
   let suggestedQty = 0;
   if (dailyRunRate > 0) {
-    const targetBuffer = (dailyRunRate * targetCoverageDays) + safetyStock;
+    const targetBuffer = dailyRunRate * targetCoverageDays + safetyStock;
     suggestedQty = Math.max(0, Math.ceil(targetBuffer - currentStock));
   } else if (currentStock < minStock) {
     suggestedQty = Math.max(0, Math.ceil(minStock - currentStock));
@@ -179,7 +180,7 @@ export function calculateReorderItemSuggestion(
     needsReorder,
     suggestedQty,
     estimatedTotalCost,
-    supplierId: supplier ? Number(supplier.id) : (product.supplier_id ? Number(product.supplier_id) : null),
+    supplierId: supplier ? Number(supplier.id) : product.supplier_id ? Number(product.supplier_id) : null,
     supplierName: supplier?.name || 'مورد غير محدد',
     supplierPhone: supplier?.phone || '',
     defaultLocationId: product.default_location_id ? Number(product.default_location_id) : null,

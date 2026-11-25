@@ -27,11 +27,14 @@ export class ReorderingSchedulerService implements OnApplicationBootstrap, OnMod
     }, 45000);
 
     // Periodic evaluation every 6 hours (matches enterprise procurement cycles)
-    this.timer = setInterval(() => {
-      this.checkAndRunAutoReordering().catch((err) => {
-        this.logger.warn(`Periodic auto-reordering check error: ${err?.message}`);
-      });
-    }, 6 * 60 * 60 * 1000);
+    this.timer = setInterval(
+      () => {
+        this.checkAndRunAutoReordering().catch((err) => {
+          this.logger.warn(`Periodic auto-reordering check error: ${err?.message}`);
+        });
+      },
+      6 * 60 * 60 * 1000,
+    );
   }
 
   onModuleDestroy() {
@@ -75,10 +78,7 @@ export class ReorderingSchedulerService implements OnApplicationBootstrap, OnMod
         };
 
         try {
-          const result = await this.reorderingService.runEvaluation(
-            { autoCreateOrders: true },
-            systemActor,
-          );
+          const result = await this.reorderingService.runEvaluation({ autoCreateOrders: true }, systemActor);
 
           if (result.generatedOrdersCount > 0) {
             this.logger.log(

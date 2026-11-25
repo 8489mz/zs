@@ -60,16 +60,21 @@ export class ZatcaOnboardingService {
 
     // Build and sign a real PKCS#10 CSR. The previous base64 subject string was not a CSR.
     const commonName = dto.customId || `EGS-${dto.deviceName.replace(/\s+/g, '-').slice(0, 20)}`;
-    const tenant = env === 'production' ? await this.db.selectFrom('tenants').select('business_name')
-      .where('id', '=', tenantId).executeTakeFirst() : null;
+    const tenant =
+      env === 'production'
+        ? await this.db.selectFrom('tenants').select('business_name').where('id', '=', tenantId).executeTakeFirst()
+        : null;
     const organization = String(tenant?.business_name || (env === 'production' ? '' : 'Z-Systems Demo')).trim();
     if (!organization) throw new BadRequestException('اسم المنشأة القانوني مطلوب لشهادة الإنتاج.');
     const orgUnit = `Branch-${dto.branchId || 1}`;
     const serialNumber = `1-ZS|2-${dto.customId || 'POS'}|3-${deviceUuid}`;
 
     const csrPem = createPkcs10Csr(privateKey, [
-      ['2.5.4.6', 'SA'], ['2.5.4.10', organization], ['2.5.4.11', orgUnit],
-      ['2.5.4.3', commonName], ['2.5.4.5', serialNumber],
+      ['2.5.4.6', 'SA'],
+      ['2.5.4.10', organization],
+      ['2.5.4.11', orgUnit],
+      ['2.5.4.3', commonName],
+      ['2.5.4.5', serialNumber],
       ...(vatNumber ? [['0.9.2342.19200300.100.1.1', vatNumber] as [string, string]] : []),
     ]);
     const csrPayload = Buffer.from(csrPem, 'utf8').toString('base64');
@@ -131,10 +136,10 @@ export class ZatcaOnboardingService {
       const response = await fetch(`${baseUrl}/compliance`, {
         method: 'POST',
         headers: {
-          'OTP': dto.otp.trim(),
+          OTP: dto.otp.trim(),
           'Accept-Version': 'V2',
           'Content-Type': 'application/json',
-          'Authorization': authHeader,
+          Authorization: authHeader,
         },
         body: JSON.stringify({
           csr: egs.csr_content,
@@ -215,7 +220,7 @@ export class ZatcaOnboardingService {
         headers: {
           'Accept-Version': 'V2',
           'Content-Type': 'application/json',
-          'Authorization': authHeader,
+          Authorization: authHeader,
         },
         body: JSON.stringify({
           compliance_request_id: egs.compliance_request_id,

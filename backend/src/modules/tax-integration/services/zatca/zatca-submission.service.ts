@@ -67,7 +67,7 @@ export class ZatcaSubmissionService {
         eb.or([
           eb('zatca_status', 'is', null),
           eb('zatca_status', 'in', ['not_submitted', 'generated', 'failed', 'rejected']),
-        ])
+        ]),
       )
       .select([
         'id',
@@ -142,7 +142,9 @@ export class ZatcaSubmissionService {
           .selectFrom('zatca_egs_units')
           .selectAll()
           .where('tenant_id', '=', tenantId)
-          .where((eb) => sale.branch_id == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', Number(sale.branch_id)))
+          .where((eb) =>
+            sale.branch_id == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', Number(sale.branch_id)),
+          )
           .orderBy('id', 'asc')
           .executeTakeFirst();
     if (!egs || (sale.zatca_egs_id && Number(egs.id) !== Number(sale.zatca_egs_id))) {
@@ -156,21 +158,21 @@ export class ZatcaSubmissionService {
     const secret = egs?.production_secret || egs?.compliance_secret || 'SIMULATED_SECRET_KEY';
 
     if (env === 'production' && (!egs?.production_csid || egs.status !== 'production_active')) {
-      throw new BadRequestException('وحدة الـ EGS غير مفعلة بشهادة إنتاج معتمدة من هيئة الزكاة. يرجى إتمام خطوات الامتثال والتسجيل أولاً.');
+      throw new BadRequestException(
+        'وحدة الـ EGS غير مفعلة بشهادة إنتاج معتمدة من هيئة الزكاة. يرجى إتمام خطوات الامتثال والتسجيل أولاً.',
+      );
     }
 
     const authHeader = `Basic ${Buffer.from(`${csid}:${secret}`).toString('base64')}`;
 
     // 4. Prepare ZATCA API URL & Headers
-    const endpoint = isB2B
-      ? `${baseUrl}/invoices/clearance/single`
-      : `${baseUrl}/invoices/reporting/single`;
+    const endpoint = isB2B ? `${baseUrl}/invoices/clearance/single` : `${baseUrl}/invoices/reporting/single`;
 
     const requestHeaders: Record<string, string> = {
       'Accept-Language': 'ar',
       'Accept-Version': 'V2',
       'Content-Type': 'application/json',
-      'Authorization': authHeader,
+      Authorization: authHeader,
     };
 
     if (isB2B) {
@@ -379,19 +381,13 @@ export class ZatcaSubmissionService {
    * Retrieves transmission audit logs for inspection and reporting
    */
   async getTransmissionLogs(tenantId: string, saleId?: number, limit = 50) {
-    let query = this.db
-      .selectFrom('zatca_transmission_logs')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('zatca_transmission_logs').selectAll().where('tenant_id', '=', tenantId);
 
     if (saleId) {
       query = query.where('sale_id', '=', saleId);
     }
 
-    const rows = await query
-      .orderBy('id', 'desc')
-      .limit(limit)
-      .execute();
+    const rows = await query.orderBy('id', 'desc').limit(limit).execute();
 
     return rows.map((r) => ({
       id: r.id,

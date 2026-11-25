@@ -45,7 +45,15 @@ import { RestaurantAdvancedFnbController } from './controllers/restaurant-advanc
 import { RestaurantAdvancedFnbService } from './services/restaurant-advanced-fnb.service';
 
 @Module({
-  imports: [DatabaseModule, AuditModule, AuthFoundationModule, AccountingModule, SettingsModule, ReturnsModule, CashDrawerModule],
+  imports: [
+    DatabaseModule,
+    AuditModule,
+    AuthFoundationModule,
+    AccountingModule,
+    SettingsModule,
+    ReturnsModule,
+    CashDrawerModule,
+  ],
   controllers: [
     PriceListsController,
     PosTerminalController,
@@ -105,5 +113,3 @@ import { RestaurantAdvancedFnbService } from './services/restaurant-advanced-fnb
   ],
 })
 export class SalesModule {}
-
-

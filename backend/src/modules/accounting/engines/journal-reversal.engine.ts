@@ -21,15 +21,24 @@ import type { MoneyDigits } from './money-minor-units.engine';
  * false instead of throwing, because this predicate gates a link, not a
  * posting; the posting itself still fails closed on non-finite amounts.
  */
-export function areOppositeJournalLines(original: ReversalLine[], opposite: ReversalLine[], digits: MoneyDigits): boolean {
+export function areOppositeJournalLines(
+  original: ReversalLine[],
+  opposite: ReversalLine[],
+  digits: MoneyDigits,
+): boolean {
   const factor = 10 ** digits;
   const net = new Map<string, number>();
   for (const line of [...original, ...opposite]) {
     if (![line.debit, line.credit].every(Number.isFinite)) return false;
-    const key = JSON.stringify([Number(line.accountId), line.partnerType || 'none', line.partnerId == null ? null : Number(line.partnerId),
-      line.branchId == null ? null : Number(line.branchId), line.locationId == null ? null : Number(line.locationId),
-      line.costCenterId == null ? null : Number(line.costCenterId)]);
+    const key = JSON.stringify([
+      Number(line.accountId),
+      line.partnerType || 'none',
+      line.partnerId == null ? null : Number(line.partnerId),
+      line.branchId == null ? null : Number(line.branchId),
+      line.locationId == null ? null : Number(line.locationId),
+      line.costCenterId == null ? null : Number(line.costCenterId),
+    ]);
     net.set(key, (net.get(key) || 0) + Math.round(line.debit * factor) - Math.round(line.credit * factor));
   }
-  return original.length > 0 && opposite.length > 0 && [...net.values()].every(amount => amount === 0);
+  return original.length > 0 && opposite.length > 0 && [...net.values()].every((amount) => amount === 0);
 }

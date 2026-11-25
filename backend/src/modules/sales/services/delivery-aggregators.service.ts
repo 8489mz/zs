@@ -55,7 +55,12 @@ export class DeliveryAggregatorsService {
     { code: 'elmenus', name: 'المنيوز (Elmenus)', name_en: 'Elmenus', commission_rate: 15.0 },
     { code: 'noon_food', name: 'نون فود (Noon Food)', name_en: 'Noon Food', commission_rate: 14.0 },
     { code: 'mrsool', name: 'مرسول مصر (Mrsool)', name_en: 'Mrsool', commission_rate: 12.0 },
-    { code: 'direct_delivery', name: 'خدمة التوصيل المباشر (دليفري المطعم)', name_en: 'Direct Delivery', commission_rate: 0.0 },
+    {
+      code: 'direct_delivery',
+      name: 'خدمة التوصيل المباشر (دليفري المطعم)',
+      name_en: 'Direct Delivery',
+      commission_rate: 0.0,
+    },
   ];
 
   private static readonly DEFAULT_KUWAIT_CHANNELS = [
@@ -92,14 +97,26 @@ export class DeliveryAggregatorsService {
     let rawCurrency = '';
     for (const r of settingsRows) {
       if (r.key === 'country') {
-        try { rawCountry = JSON.parse(r.value); } catch { rawCountry = String(r.value); }
+        try {
+          rawCountry = JSON.parse(r.value);
+        } catch {
+          rawCountry = String(r.value);
+        }
       }
       if (r.key === 'currency') {
-        try { rawCurrency = JSON.parse(r.value); } catch { rawCurrency = String(r.value); }
+        try {
+          rawCurrency = JSON.parse(r.value);
+        } catch {
+          rawCurrency = String(r.value);
+        }
       }
     }
-    const cleanCountry = String(rawCountry || '').trim().toUpperCase();
-    const cleanCurrency = String(rawCurrency || '').trim().toUpperCase();
+    const cleanCountry = String(rawCountry || '')
+      .trim()
+      .toUpperCase();
+    const cleanCurrency = String(rawCurrency || '')
+      .trim()
+      .toUpperCase();
     let country = cleanCountry;
     if (!country) {
       if (cleanCurrency === 'KWD') country = 'KW';
@@ -108,11 +125,12 @@ export class DeliveryAggregatorsService {
       else country = 'EG';
     }
 
-    const defaultChannels = country === 'KW'
-      ? DeliveryAggregatorsService.DEFAULT_KUWAIT_CHANNELS
-      : country === 'SA'
-      ? DeliveryAggregatorsService.DEFAULT_SAUDI_CHANNELS
-      : DeliveryAggregatorsService.DEFAULT_EGYPT_CHANNELS;
+    const defaultChannels =
+      country === 'KW'
+        ? DeliveryAggregatorsService.DEFAULT_KUWAIT_CHANNELS
+        : country === 'SA'
+          ? DeliveryAggregatorsService.DEFAULT_SAUDI_CHANNELS
+          : DeliveryAggregatorsService.DEFAULT_EGYPT_CHANNELS;
 
     let rows = await this.db
       .selectFrom('pos_delivery_aggregators')
@@ -209,7 +227,8 @@ export class DeliveryAggregatorsService {
       updated_at: new Date(),
     };
     if (payload.commission_rate !== undefined) updateObj.commission_rate = payload.commission_rate;
-    if (payload.price_markup_percentage !== undefined) updateObj.price_markup_percentage = payload.price_markup_percentage;
+    if (payload.price_markup_percentage !== undefined)
+      updateObj.price_markup_percentage = payload.price_markup_percentage;
     if (payload.price_markup_fixed !== undefined) updateObj.price_markup_fixed = payload.price_markup_fixed;
     if (payload.is_active !== undefined) updateObj.is_active = payload.is_active;
     if (payload.auto_accept_orders !== undefined) updateObj.auto_accept_orders = payload.auto_accept_orders;
@@ -286,55 +305,65 @@ export class DeliveryAggregatorsService {
 
     return this.db.transaction().execute(async (trx) => {
       // Serialize provider retries across backend instances without a new migration.
-      await trx.selectFrom('tenants').select('id').where('id','=',scope.tenantId)
-        .forUpdate().executeTakeFirstOrThrow();
-      const existing = await trx.selectFrom('pos_aggregator_orders')
-        .select(['id','status','display_number','subtotal','delivery_fee','aggregator_commission','net_payout'])
-        .where('tenant_id','=',scope.tenantId)
-        .where('aggregator_id','=',Number(aggregator.id))
-        .where('external_order_id','=',externalOrderId).executeTakeFirst();
+      await trx
+        .selectFrom('tenants')
+        .select('id')
+        .where('id', '=', scope.tenantId)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      const existing = await trx
+        .selectFrom('pos_aggregator_orders')
+        .select(['id', 'status', 'display_number', 'subtotal', 'delivery_fee', 'aggregator_commission', 'net_payout'])
+        .where('tenant_id', '=', scope.tenantId)
+        .where('aggregator_id', '=', Number(aggregator.id))
+        .where('external_order_id', '=', externalOrderId)
+        .executeTakeFirst();
       if (existing) {
-        if (Math.abs(Number(existing.subtotal)-subtotal)>0.01 ||
-            Math.abs(Number(existing.delivery_fee)-deliveryFee)>0.01) {
+        if (
+          Math.abs(Number(existing.subtotal) - subtotal) > 0.01 ||
+          Math.abs(Number(existing.delivery_fee) - deliveryFee) > 0.01
+        ) {
           throw new BadRequestException('معرف طلب التوصيل موجود بمبالغ مختلفة؛ يحتاج مراجعة');
         }
         return {
-          orderId:Number(existing.id),status:existing.status,
-          displayNumber:existing.display_number,netPayout:Number(existing.net_payout),
-          commissionAmount:Number(existing.aggregator_commission),
+          orderId: Number(existing.id),
+          status: existing.status,
+          displayNumber: existing.display_number,
+          netPayout: Number(existing.net_payout),
+          commissionAmount: Number(existing.aggregator_commission),
         };
       }
       const inserted = await trx
-      .insertInto('pos_aggregator_orders')
-      .values({
-        tenant_id: scope.tenantId,
-        account_id: scope.accountId,
-        aggregator_id: Number(aggregator.id),
-        external_order_id: externalOrderId,
-        display_number: dto.displayNumber || `${dto.aggregatorCode.toUpperCase()}-${dto.externalOrderId.slice(-4)}`,
-        branch_id: dto.branchId ? Number(dto.branchId) : null,
-        status: initialStatus,
-        customer_name: dto.customerName || 'عميل تطبيق التوصيل',
-        customer_phone: dto.customerPhone,
-        delivery_address: dto.deliveryAddress,
-        rider_name: dto.riderName,
-        rider_phone: dto.riderPhone,
-        subtotal: subtotal,
-        delivery_fee: deliveryFee,
-        aggregator_commission: commissionAmount,
-        net_payout: netPayout,
-        order_payload: dto as any,
-      })
-      .returning('id')
-      .executeTakeFirstOrThrow();
+        .insertInto('pos_aggregator_orders')
+        .values({
+          tenant_id: scope.tenantId,
+          account_id: scope.accountId,
+          aggregator_id: Number(aggregator.id),
+          external_order_id: externalOrderId,
+          display_number: dto.displayNumber || `${dto.aggregatorCode.toUpperCase()}-${dto.externalOrderId.slice(-4)}`,
+          branch_id: dto.branchId ? Number(dto.branchId) : null,
+          status: initialStatus,
+          customer_name: dto.customerName || 'عميل تطبيق التوصيل',
+          customer_phone: dto.customerPhone,
+          delivery_address: dto.deliveryAddress,
+          rider_name: dto.riderName,
+          rider_phone: dto.riderPhone,
+          subtotal: subtotal,
+          delivery_fee: deliveryFee,
+          aggregator_commission: commissionAmount,
+          net_payout: netPayout,
+          order_payload: dto as any,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
 
-    return {
-      orderId: Number(inserted.id),
-      status: initialStatus,
-      displayNumber: dto.displayNumber || `${dto.aggregatorCode.toUpperCase()}-${dto.externalOrderId.slice(-4)}`,
-      netPayout,
-      commissionAmount,
-    };
+      return {
+        orderId: Number(inserted.id),
+        status: initialStatus,
+        displayNumber: dto.displayNumber || `${dto.aggregatorCode.toUpperCase()}-${dto.externalOrderId.slice(-4)}`,
+        netPayout,
+        commissionAmount,
+      };
     });
   }
 

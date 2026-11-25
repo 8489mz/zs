@@ -127,7 +127,12 @@ export class FiscalYearPeriodCloseService {
       }
 
       const today = await resolveBusinessDateKey(trx, tenantId, new Date());
-      await this.accountingPosting.recognizeInstallmentInterest(trx, tenantId, endDateStr < today ? endDateStr : today, auth.userId || null);
+      await this.accountingPosting.recognizeInstallmentInterest(
+        trx,
+        tenantId,
+        endDateStr < today ? endDateStr : today,
+        auth.userId || null,
+      );
       await assertAccountingCloseReady(trx, tenantId, startDateStr, endDateStr);
 
       // 2. التحقق من القيود المعلقة (Draft entries)
@@ -184,9 +189,16 @@ export class FiscalYearPeriodCloseService {
       } else {
         await trx
           .insertInto('accounting_settings')
-          .values({ id: 1, tenant_id: tenantId, lock_date_all: endDateStr as any, updated_at: sql`NOW()` as any } as any)
+          .values({
+            id: 1,
+            tenant_id: tenantId,
+            lock_date_all: endDateStr as any,
+            updated_at: sql`NOW()` as any,
+          } as any)
           .onConflict((oc) =>
-            oc.columns(['tenant_id', 'id']).doUpdateSet({ lock_date_all: endDateStr as any, updated_at: sql`NOW()` as any } as any),
+            oc
+              .columns(['tenant_id', 'id'])
+              .doUpdateSet({ lock_date_all: endDateStr as any, updated_at: sql`NOW()` as any } as any),
           )
           .execute();
       }

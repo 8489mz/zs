@@ -45,14 +45,23 @@ export class SalesEditAndCancelService {
       deps.lockProductRow,
       deps.lockSaleStockRows,
       deps.getCurrentProductOffers,
-      this.preparedWasteAndShiftRefreshService.detectPreparedWasteSale.bind(
-        this.preparedWasteAndShiftRefreshService,
-      ),
+      this.preparedWasteAndShiftRefreshService.detectPreparedWasteSale.bind(this.preparedWasteAndShiftRefreshService),
       this.preparedWasteAndShiftRefreshService.refreshClosedShiftForPostCloseChange.bind(
         this.preparedWasteAndShiftRefreshService,
       ),
     );
-    this.adjustSalePaymentsService = new AdjustSalePaymentsService(deps.db, deps.tx, deps.audit, deps.authz, deps.finance, deps.query, deps.accountingPosting, this.preparedWasteAndShiftRefreshService.refreshClosedShiftForPostCloseChange.bind(this.preparedWasteAndShiftRefreshService));
+    this.adjustSalePaymentsService = new AdjustSalePaymentsService(
+      deps.db,
+      deps.tx,
+      deps.audit,
+      deps.authz,
+      deps.finance,
+      deps.query,
+      deps.accountingPosting,
+      this.preparedWasteAndShiftRefreshService.refreshClosedShiftForPostCloseChange.bind(
+        this.preparedWasteAndShiftRefreshService,
+      ),
+    );
     this.cancelSaleService = new CancelSaleService(
       deps.db,
       deps.tx,
@@ -66,9 +75,7 @@ export class SalesEditAndCancelService {
       deps.restoreSalePharmacyBatches,
       deps.restoreSaleInventoryBatches,
       deps.lockSaleStockRows,
-      this.preparedWasteAndShiftRefreshService.detectPreparedWasteSale.bind(
-        this.preparedWasteAndShiftRefreshService,
-      ),
+      this.preparedWasteAndShiftRefreshService.detectPreparedWasteSale.bind(this.preparedWasteAndShiftRefreshService),
       this.preparedWasteAndShiftRefreshService.refreshClosedShiftForPostCloseChange.bind(
         this.preparedWasteAndShiftRefreshService,
       ),
@@ -79,7 +86,11 @@ export class SalesEditAndCancelService {
     return this.updateSaleService.updateSale(saleId, payload, auth);
   }
 
-  async adjustSalePayments(saleId: number, payload: AdjustSalePaymentsDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async adjustSalePayments(
+    saleId: number,
+    payload: AdjustSalePaymentsDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.adjustSalePaymentsService.adjustSalePayments(saleId, payload, auth);
   }
 
@@ -100,7 +111,15 @@ export class SalesEditAndCancelService {
     auth: AuthContext,
     tenantId: string,
   ): Promise<void> {
-    return this.preparedWasteAndShiftRefreshService.refreshClosedShiftsForBackdatedOfflineSale(trx, offlineCreatedAt, saleId, branchId, locationId, auth, tenantId);
+    return this.preparedWasteAndShiftRefreshService.refreshClosedShiftsForBackdatedOfflineSale(
+      trx,
+      offlineCreatedAt,
+      saleId,
+      branchId,
+      locationId,
+      auth,
+      tenantId,
+    );
   }
 
   private async refreshClosedShiftForPostCloseChange(
@@ -111,10 +130,22 @@ export class SalesEditAndCancelService {
     reason: string,
     auth: AuthContext,
   ): Promise<void> {
-    return this.preparedWasteAndShiftRefreshService.refreshClosedShiftForPostCloseChange(trx, shiftId, saleId, kind, reason, auth);
+    return this.preparedWasteAndShiftRefreshService.refreshClosedShiftForPostCloseChange(
+      trx,
+      shiftId,
+      saleId,
+      kind,
+      reason,
+      auth,
+    );
   }
 
-  async cancelSale(saleId: number, reason: string, managerPin: string, auth: AuthContext): Promise<Record<string, unknown>> {
+  async cancelSale(
+    saleId: number,
+    reason: string,
+    managerPin: string,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.cancelSaleService.cancelSale(saleId, reason, managerPin, auth);
   }
 }

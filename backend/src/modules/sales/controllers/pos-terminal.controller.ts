@@ -12,10 +12,7 @@ export class PosTerminalController {
   @Post('test-connection')
   @UseGuards(SessionAuthGuard, PermissionsGuard)
   @RequireAnyPermission('sales', 'canManageSettings')
-  async testConnection(
-    @Req() req: RequestWithAuth,
-    @Body() body: { ip?: string; port?: number; provider?: string }
-  ) {
+  async testConnection(@Req() req: RequestWithAuth, @Body() body: { ip?: string; port?: number; provider?: string }) {
     const result = await this.terminalService.testConnection(String(req.authContext!.tenantId), body);
     return {
       success: true,
@@ -30,7 +27,7 @@ export class PosTerminalController {
     const terminals = await this.terminalService.getTerminals(String(req.authContext!.tenantId));
     return {
       success: true,
-      data: terminals
+      data: terminals,
     };
   }
 
@@ -41,7 +38,7 @@ export class PosTerminalController {
     const session = await this.terminalService.initiatePayment(String(req.authContext!.tenantId), body);
     return {
       success: true,
-      data: session
+      data: session,
     };
   }
 
@@ -52,7 +49,7 @@ export class PosTerminalController {
     const session = await this.terminalService.getPaymentStatus(String(req.authContext!.tenantId), transactionId);
     return {
       success: true,
-      data: session
+      data: session,
     };
   }
 
@@ -63,14 +60,17 @@ export class PosTerminalController {
     const session = await this.terminalService.cancelPayment(String(req.authContext!.tenantId), transactionId);
     return {
       success: true,
-      data: session
+      data: session,
     };
   }
 
   // --- Hardware Bridge Outbound Relay Endpoints ---
 
   @Post('bridge/poll')
-  async pollBridge(@Body() body: { tenantId: string; machineName?: string; bridgeVersion?: string }, @Headers('x-zs-bridge-key') bridgeKey?: string) {
+  async pollBridge(
+    @Body() body: { tenantId: string; machineName?: string; bridgeVersion?: string },
+    @Headers('x-zs-bridge-key') bridgeKey?: string,
+  ) {
     if (!body?.tenantId) throw new BadRequestException('tenantId is required');
     this.terminalService.assertBridgeAuthenticated(String(body.tenantId).trim(), bridgeKey);
     const result = await this.terminalService.pollBridge(String(body.tenantId).trim());
@@ -81,16 +81,20 @@ export class PosTerminalController {
   }
 
   @Post('bridge/callback')
-  async bridgeCallback(@Body() body: {
-    tenantId: string;
-    jobId: string;
-    status: string;
-    authCode?: string;
-    rrn?: string;
-    cardScheme?: string;
-    cardLastFour?: string;
-    message?: string;
-  }, @Headers('x-zs-bridge-key') bridgeKey?: string) {
+  async bridgeCallback(
+    @Body()
+    body: {
+      tenantId: string;
+      jobId: string;
+      status: string;
+      authCode?: string;
+      rrn?: string;
+      cardScheme?: string;
+      cardLastFour?: string;
+      message?: string;
+    },
+    @Headers('x-zs-bridge-key') bridgeKey?: string,
+  ) {
     if (!body?.jobId || !body?.tenantId) throw new BadRequestException('jobId and tenantId are required');
     this.terminalService.assertBridgeAuthenticated(String(body.tenantId).trim(), bridgeKey);
     const success = await this.terminalService.handleBridgeCallback(String(body.tenantId).trim(), body);
@@ -99,4 +103,3 @@ export class PosTerminalController {
     };
   }
 }
-

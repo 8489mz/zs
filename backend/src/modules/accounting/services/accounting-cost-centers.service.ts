@@ -53,7 +53,9 @@ export class AccountingCostCentersService {
     const scope = requireTenantScope(auth);
     const rows = await (this.db as any)
       .selectFrom('cost_centers as cc')
-      .leftJoin('cost_centers as p', (join: any) => join.onRef('cc.parent_id', '=', 'p.id').onRef('cc.tenant_id', '=', 'p.tenant_id'))
+      .leftJoin('cost_centers as p', (join: any) =>
+        join.onRef('cc.parent_id', '=', 'p.id').onRef('cc.tenant_id', '=', 'p.tenant_id'),
+      )
       .select([
         'cc.id',
         'cc.code',
@@ -85,15 +87,31 @@ export class AccountingCostCentersService {
   }
 
   async createCostCenter(
-    body: { code: string; name: string; dimension?: string; budgetAmount?: number; parentId?: number | null; description?: string; isActive?: boolean },
+    body: {
+      code: string;
+      name: string;
+      dimension?: string;
+      budgetAmount?: number;
+      parentId?: number | null;
+      description?: string;
+      isActive?: boolean;
+    },
     auth: AuthContext,
   ) {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
     return this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, scope.tenantId);
-      await assertHierarchyParent(trx, 'cost_centers', scope.tenantId, null, body.parentId == null ? null : Number(body.parentId));
-      const code = String(body.code || '').trim().toUpperCase();
+      await assertHierarchyParent(
+        trx,
+        'cost_centers',
+        scope.tenantId,
+        null,
+        body.parentId == null ? null : Number(body.parentId),
+      );
+      const code = String(body.code || '')
+        .trim()
+        .toUpperCase();
       const name = String(body.name || '').trim();
       if (!code || !name) {
         throw new BadRequestException('كود واسم مركز التكلفة مطلوبان.');
@@ -135,14 +153,28 @@ export class AccountingCostCentersService {
 
   async updateCostCenter(
     id: number,
-    body: { code?: string; name?: string; dimension?: string; budgetAmount?: number; parentId?: number | null; description?: string; isActive?: boolean },
+    body: {
+      code?: string;
+      name?: string;
+      dimension?: string;
+      budgetAmount?: number;
+      parentId?: number | null;
+      description?: string;
+      isActive?: boolean;
+    },
     auth: AuthContext,
   ) {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
     return this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, scope.tenantId);
-      await assertHierarchyParent(trx, 'cost_centers', scope.tenantId, id, body.parentId == null ? null : Number(body.parentId));
+      await assertHierarchyParent(
+        trx,
+        'cost_centers',
+        scope.tenantId,
+        id,
+        body.parentId == null ? null : Number(body.parentId),
+      );
       const updates: Record<string, unknown> = {
         updated_at: sql`NOW()`,
       };
@@ -151,7 +183,8 @@ export class AccountingCostCentersService {
       if (body.dimension !== undefined) updates.dimension = String(body.dimension).trim();
       if (body.budgetAmount !== undefined) updates.budget_amount = Number(body.budgetAmount);
       if (body.parentId !== undefined) updates.parent_id = body.parentId ? Number(body.parentId) : null;
-      if (body.description !== undefined) updates.description = body.description ? String(body.description).trim() : null;
+      if (body.description !== undefined)
+        updates.description = body.description ? String(body.description).trim() : null;
       if (body.isActive !== undefined) updates.is_active = Boolean(body.isActive);
 
       const updated = await trx
@@ -201,11 +234,7 @@ export class AccountingCostCentersService {
       return { ok: true, message: 'تم تعطيل مركز التكلفة لارتباطه بحركات محاسبية سابقة.' };
     }
 
-    await this.db
-      .deleteFrom('cost_centers')
-      .where('id', '=', id)
-      .where('tenant_id', '=', scope.tenantId)
-      .execute();
+    await this.db.deleteFrom('cost_centers').where('id', '=', id).where('tenant_id', '=', scope.tenantId).execute();
 
     return { ok: true, message: 'تم حذف مركز التكلفة بنجاح.' };
   }

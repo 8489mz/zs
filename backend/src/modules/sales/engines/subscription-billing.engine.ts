@@ -37,10 +37,7 @@ export interface SubscriptionEvaluationResult {
 /**
  * Calculates next billing date advancing from given base date according to cycle period
  */
-export function calculateNextBillingDate(
-  baseDate: Date | string,
-  period: BillingPeriod,
-): string {
+export function calculateNextBillingDate(baseDate: Date | string, period: BillingPeriod): string {
   // A Date here is a stored DATE column value: pg returns DATE columns
   // as local-midnight Dates, so the UTC slice renders the previous day
   // on hosts east of UTC. Local parts recover the stored calendar day.

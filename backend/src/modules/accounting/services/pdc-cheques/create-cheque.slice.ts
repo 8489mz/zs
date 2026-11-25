@@ -12,8 +12,24 @@ import type { CreatePdcChequeDto, PdcChequeRecord } from './pdc-cheques.types';
 export interface CreateChequeBoundDeps {
   toMoney(value: unknown, digits: MoneyDigits): number;
   formatDate(date: any): string;
-  syncCustomerSubLedger(trx: any, auth: AuthContext, customerId: number, amount: number, entryType: string, note: string, chequeId: number): Promise<void>;
-  syncSupplierSubLedger(trx: any, auth: AuthContext, supplierId: number, amount: number, entryType: string, note: string, chequeId: number): Promise<void>;
+  syncCustomerSubLedger(
+    trx: any,
+    auth: AuthContext,
+    customerId: number,
+    amount: number,
+    entryType: string,
+    note: string,
+    chequeId: number,
+  ): Promise<void>;
+  syncSupplierSubLedger(
+    trx: any,
+    auth: AuthContext,
+    supplierId: number,
+    amount: number,
+    entryType: string,
+    note: string,
+    chequeId: number,
+  ): Promise<void>;
 }
 
 export class CreateChequeSlice {
@@ -31,11 +47,27 @@ export class CreateChequeSlice {
     return this.bound.formatDate(date);
   }
 
-  private syncCustomerSubLedger(trx: any, auth: AuthContext, customerId: number, amount: number, entryType: string, note: string, chequeId: number): Promise<void> {
+  private syncCustomerSubLedger(
+    trx: any,
+    auth: AuthContext,
+    customerId: number,
+    amount: number,
+    entryType: string,
+    note: string,
+    chequeId: number,
+  ): Promise<void> {
     return this.bound.syncCustomerSubLedger(trx, auth, customerId, amount, entryType, note, chequeId);
   }
 
-  private syncSupplierSubLedger(trx: any, auth: AuthContext, supplierId: number, amount: number, entryType: string, note: string, chequeId: number): Promise<void> {
+  private syncSupplierSubLedger(
+    trx: any,
+    auth: AuthContext,
+    supplierId: number,
+    amount: number,
+    entryType: string,
+    note: string,
+    chequeId: number,
+  ): Promise<void> {
     return this.bound.syncSupplierSubLedger(trx, auth, supplierId, amount, entryType, note, chequeId);
   }
   /**
@@ -59,10 +91,16 @@ export class CreateChequeSlice {
     // its face amount. pdcCurrencySnapshot re-validates the same rule
     // inside the transaction; this fail-fast check keeps the error at the
     // DTO boundary, before the period lock and the insert.
-    const requestedCurrency = String(dto.currency || await tenantBaseCurrency(this.db, tenantId)).trim().toUpperCase();
+    const requestedCurrency = String(dto.currency || (await tenantBaseCurrency(this.db, tenantId)))
+      .trim()
+      .toUpperCase();
     const amount = Number(dto.amount);
     let amountIsMinorExact = Number.isFinite(amount) && amount > 0;
-    try { if (amountIsMinorExact) toMinorUnits(amount, currencyMoneyDigits(requestedCurrency)); } catch { amountIsMinorExact = false; }
+    try {
+      if (amountIsMinorExact) toMinorUnits(amount, currencyMoneyDigits(requestedCurrency));
+    } catch {
+      amountIsMinorExact = false;
+    }
     if (!amountIsMinorExact) {
       throw new BadRequestException('مبلغ الشيك يجب أن يكون أكبر من صفر');
     }
@@ -71,7 +109,12 @@ export class CreateChequeSlice {
     }
 
     for (const day of [dto.issueDate, dto.dueDate]) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(new Date(day).getTime()) || new Date(day).toISOString().slice(0, 10) !== day) throw new BadRequestException('تاريخ الشيك غير صالح.');
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+        !Number.isFinite(new Date(day).getTime()) ||
+        new Date(day).toISOString().slice(0, 10) !== day
+      )
+        throw new BadRequestException('تاريخ الشيك غير صالح.');
     }
     if (dto.dueDate < dto.issueDate) throw new BadRequestException('الاستحقاق يسبق تحرير الشيك.');
     const type = dto.type === 'payable' ? 'payable' : 'receivable';
@@ -79,17 +122,47 @@ export class CreateChequeSlice {
     const status = dto.status || defaultStatus;
     if (status !== defaultStatus) throw new BadRequestException('الشيك الجديد يبدأ من حالة الاستلام أو الإصدار فقط.');
     const partnerType = type === 'receivable' ? 'customer' : 'supplier';
-    if (dto.partnerType && dto.partnerType !== partnerType) throw new BadRequestException('نوع الشريك لا يطابق نوع الشيك.');
+    if (dto.partnerType && dto.partnerType !== partnerType)
+      throw new BadRequestException('نوع الشريك لا يطابق نوع الشيك.');
 
     return this.db.transaction().execute(async (trx: any) => {
       await lockAccountingPeriod(trx, tenantId);
       if (!dto.partnerId) {
-        const matches = await trx.selectFrom(type === 'receivable' ? 'customers' : 'suppliers').select('id').where('tenant_id', '=', tenantId).where('name', '=', dto.partnerName.trim()).where('is_active', '=', true).limit(2).execute();
-        if (matches.length !== 1) throw new BadRequestException('يجب اختيار عميل أو مورد مسجل وفريد؛ الاسم وحده لا يكفي لربط الشيك.');
+        const matches = await trx
+          .selectFrom(type === 'receivable' ? 'customers' : 'suppliers')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('name', '=', dto.partnerName.trim())
+          .where('is_active', '=', true)
+          .limit(2)
+          .execute();
+        if (matches.length !== 1)
+          throw new BadRequestException('يجب اختيار عميل أو مورد مسجل وفريد؛ الاسم وحده لا يكفي لربط الشيك.');
         dto = { ...dto, partnerId: Number(matches[0].id) };
       }
-      if (dto.partnerId && !await trx.selectFrom(type === 'receivable' ? 'customers' : 'suppliers').select('id').where('tenant_id', '=', tenantId).where('id', '=', Number(dto.partnerId)).executeTakeFirst()) throw new BadRequestException('الشريك لا يتبع المنشأة.');
-      if (dto.depositBankId && !await trx.selectFrom('accounting_accounts').select('id').where('tenant_id', '=', tenantId).where('id', '=', dto.depositBankId).where('is_active', '=', true).where('is_cash_bank', '=', true).where('code', 'not in', ['1121', '1122']).executeTakeFirst()) throw new BadRequestException('حساب البنك لا يتبع المنشأة أو غير صالح.');
+      if (
+        dto.partnerId &&
+        !(await trx
+          .selectFrom(type === 'receivable' ? 'customers' : 'suppliers')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', Number(dto.partnerId))
+          .executeTakeFirst())
+      )
+        throw new BadRequestException('الشريك لا يتبع المنشأة.');
+      if (
+        dto.depositBankId &&
+        !(await trx
+          .selectFrom('accounting_accounts')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', dto.depositBankId)
+          .where('is_active', '=', true)
+          .where('is_cash_bank', '=', true)
+          .where('code', 'not in', ['1121', '1122'])
+          .executeTakeFirst())
+      )
+        throw new BadRequestException('حساب البنك لا يتبع المنشأة أو غير صالح.');
       const currency = requestedCurrency;
       const snapshot = await pdcCurrencySnapshot(trx, tenantId, currency, amount, dto.exchangeRate);
       const inserted = await trx
@@ -193,7 +266,8 @@ export class CreateChequeSlice {
         endorsed_to_supplier_id: inserted.endorsed_to_supplier_id,
         endorsed_to_supplier_name: inserted.endorsed_to_supplier_name,
         flagged_rate_variance: Boolean(inserted.flagged_rate_variance),
-        registered_exchange_rate: inserted.registered_exchange_rate == null ? null : Number(inserted.registered_exchange_rate),
+        registered_exchange_rate:
+          inserted.registered_exchange_rate == null ? null : Number(inserted.registered_exchange_rate),
         journal_entry_id: journalEntryId,
         notes: inserted.notes,
         created_by: inserted.created_by,

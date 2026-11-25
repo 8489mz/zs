@@ -1,15 +1,37 @@
 import { Kysely } from '../../database/kysely';
 import { Database } from '../../database/database.types';
-import { recoverWacBeforeQty, revalueStockPool, weightedReceiptCost, weightedReturnCost } from './engines/inventory-valuation.engine';
+import {
+  recoverWacBeforeQty,
+  revalueStockPool,
+  weightedReceiptCost,
+  weightedReturnCost,
+} from './engines/inventory-valuation.engine';
 
 /** Called after applyStockDelta, while its product row lock is still held. */
-export async function valueStockReceipt(db: Kysely<Database>, tenantId: string, productId: number, afterQty: number, qty: number, value: number): Promise<void> {
-  const product = await db.selectFrom('products').select('cost_price').where('tenant_id', '=', tenantId).where('id', '=', productId).executeTakeFirstOrThrow();
+export async function valueStockReceipt(
+  db: Kysely<Database>,
+  tenantId: string,
+  productId: number,
+  afterQty: number,
+  qty: number,
+  value: number,
+): Promise<void> {
+  const product = await db
+    .selectFrom('products')
+    .select('cost_price')
+    .where('tenant_id', '=', tenantId)
+    .where('id', '=', productId)
+    .executeTakeFirstOrThrow();
   // applyStockDelta can reconcile a stale cached total. Its corrected globalAfter
   // is authoritative; subtract this receipt to recover the true prior quantity.
   const beforeQty = recoverWacBeforeQty(afterQty, qty);
   const cost = weightedReceiptCost(beforeQty, Number(product.cost_price), qty, value);
-  await db.updateTable('products').set({ cost_price: cost }).where('tenant_id', '=', tenantId).where('id', '=', productId).execute();
+  await db
+    .updateTable('products')
+    .set({ cost_price: cost })
+    .where('tenant_id', '=', tenantId)
+    .where('id', '=', productId)
+    .execute();
 }
 
 /**
@@ -27,11 +49,28 @@ export async function valueStockReceipt(db: Kysely<Database>, tenantId: string, 
  * called from postPurchaseReturn: recovery re-posts journals for
  * already-created documents and must never reprice stock a second time.
  */
-export async function revalueStockReturn(db: Kysely<Database>, tenantId: string, productId: number, globalAfter: number, returnedQty: number, returnedValue: number): Promise<void> {
-  const product = await db.selectFrom('products').select('cost_price').where('tenant_id', '=', tenantId).where('id', '=', productId).executeTakeFirstOrThrow();
+export async function revalueStockReturn(
+  db: Kysely<Database>,
+  tenantId: string,
+  productId: number,
+  globalAfter: number,
+  returnedQty: number,
+  returnedValue: number,
+): Promise<void> {
+  const product = await db
+    .selectFrom('products')
+    .select('cost_price')
+    .where('tenant_id', '=', tenantId)
+    .where('id', '=', productId)
+    .executeTakeFirstOrThrow();
   const beforeQty = Number((globalAfter + returnedQty).toFixed(3));
   const cost = weightedReturnCost(beforeQty, Number(product.cost_price), returnedQty, returnedValue);
-  await db.updateTable('products').set({ cost_price: cost }).where('tenant_id', '=', tenantId).where('id', '=', productId).execute();
+  await db
+    .updateTable('products')
+    .set({ cost_price: cost })
+    .where('tenant_id', '=', tenantId)
+    .where('id', '=', productId)
+    .execute();
 }
 
 /**
@@ -44,8 +83,24 @@ export async function revalueStockReturn(db: Kysely<Database>, tenantId: string,
  * policy (cached counter for landed costs, company-wide on-hand for
  * late shipment expenses) — and must be positive.
  */
-export async function revalueStockCost(db: Kysely<Database>, tenantId: string, productId: number, beforeQty: number, additionalValue: number): Promise<void> {
-  const product = await db.selectFrom('products').select('cost_price').where('tenant_id', '=', tenantId).where('id', '=', productId).executeTakeFirstOrThrow();
+export async function revalueStockCost(
+  db: Kysely<Database>,
+  tenantId: string,
+  productId: number,
+  beforeQty: number,
+  additionalValue: number,
+): Promise<void> {
+  const product = await db
+    .selectFrom('products')
+    .select('cost_price')
+    .where('tenant_id', '=', tenantId)
+    .where('id', '=', productId)
+    .executeTakeFirstOrThrow();
   const cost = revalueStockPool(beforeQty, Number(product.cost_price), additionalValue);
-  await db.updateTable('products').set({ cost_price: cost, updated_at: new Date() }).where('tenant_id', '=', tenantId).where('id', '=', productId).execute();
+  await db
+    .updateTable('products')
+    .set({ cost_price: cost, updated_at: new Date() })
+    .where('tenant_id', '=', tenantId)
+    .where('id', '=', productId)
+    .execute();
 }

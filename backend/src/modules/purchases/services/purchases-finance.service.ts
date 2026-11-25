@@ -10,25 +10,34 @@ type DbOrTx = Kysely<Database> | Transaction<Database>;
 @Injectable()
 export class PurchasesFinanceService {
   async assertNoBlockingThreeWayMatch(queryable: DbOrTx, supplierId: number, tenantId: string): Promise<void> {
-    const blocking = await queryable.selectFrom('purchases')
+    const blocking = await queryable
+      .selectFrom('purchases')
       .select(['doc_no', 'three_way_match_status'])
       .where('tenant_id', '=', tenantId)
       .where('supplier_id', '=', supplierId)
       .where('status', '!=', 'cancelled')
-      .where((eb) => eb.or([
-        eb('three_way_match_status', 'in', [
-          'quantity_mismatch', 'price_mismatch', 'tolerance_exceeded', 'unmatched_grn', 'service_rejected',
+      .where((eb) =>
+        eb.or([
+          eb('three_way_match_status', 'in', [
+            'quantity_mismatch',
+            'price_mismatch',
+            'tolerance_exceeded',
+            'unmatched_grn',
+            'service_rejected',
+          ]),
+          eb.and([
+            eb.or([eb('po_id', 'is not', null), eb('grn_id', 'is not', null)]),
+            eb.or([eb('three_way_match_status', 'is', null), eb('three_way_match_status', '=', 'unmatched')]),
+          ]),
         ]),
-        eb.and([
-          eb.or([eb('po_id', 'is not', null), eb('grn_id', 'is not', null)]),
-          eb.or([eb('three_way_match_status', 'is', null), eb('three_way_match_status', '=', 'unmatched')]),
-        ]),
-      ]))
-      .limit(1).executeTakeFirst();
+      )
+      .limit(1)
+      .executeTakeFirst();
     if (blocking) {
       throw new AppError(
         `لا يمكن السداد: فاتورة المورد رقم (${blocking.doc_no || '—'}) لم تجتز المطابقة الثلاثية (الحالة: ${blocking.three_way_match_status}).`,
-        'THREE_WAY_MATCH_BLOCKING', 400,
+        'THREE_WAY_MATCH_BLOCKING',
+        400,
       );
     }
   }

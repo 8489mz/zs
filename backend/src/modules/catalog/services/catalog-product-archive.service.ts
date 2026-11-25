@@ -163,16 +163,24 @@ export class CatalogProductArchiveService {
     options?: { zeroStock?: boolean; archiveEntireGroup?: boolean },
   ): Promise<Record<string, unknown>> {
     const result = await this.db.transaction().execute(async (trx) => {
-      const initialProduct = await trx.selectFrom('products').selectAll()
-        .where('id', '=', id).where(this.tenantPredicate(actor)).executeTakeFirst();
+      const initialProduct = await trx
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', id)
+        .where(this.tenantPredicate(actor))
+        .executeTakeFirst();
       if (!initialProduct) throw new AppError('Product not found', 'PRODUCT_NOT_FOUND', 404);
       const nextActive = !initialProduct.is_active;
 
       let targetProductIds = [id];
-      const isFashionGroupTarget = Boolean(options?.archiveEntireGroup && initialProduct.item_kind === 'fashion' && initialProduct.style_code);
+      const isFashionGroupTarget = Boolean(
+        options?.archiveEntireGroup && initialProduct.item_kind === 'fashion' && initialProduct.style_code,
+      );
 
       if (isFashionGroupTarget) {
-        const siblings = await trx.selectFrom('products').select('id')
+        const siblings = await trx
+          .selectFrom('products')
+          .select('id')
           .where('style_code', '=', initialProduct.style_code)
           .where('item_kind', '=', 'fashion')
           .where('is_active', '=', initialProduct.is_active)
@@ -184,7 +192,9 @@ export class CatalogProductArchiveService {
       // Canonical lock order: sort product IDs ascending to prevent deadlocks
       targetProductIds.sort((a, b) => a - b);
 
-      const targetProducts = await trx.selectFrom('products').selectAll()
+      const targetProducts = await trx
+        .selectFrom('products')
+        .selectAll()
         .where('id', 'in', targetProductIds)
         .where(this.tenantPredicate(actor))
         .orderBy('id', 'asc')
@@ -198,7 +208,9 @@ export class CatalogProductArchiveService {
       if (!nextActive) {
         // Fetch active fallback warehouse once for the tenant
         let fallbackLocationId: number | null = null;
-        const activeLoc = await trx.selectFrom('stock_locations').select('id')
+        const activeLoc = await trx
+          .selectFrom('stock_locations')
+          .select('id')
           .where('is_active', '=', true)
           .where((eb) => eb.or([eb('location_type', 'is', null), eb('location_type', '!=', 'in_transit')]))
           .where(this.tenantPredicate(actor))
@@ -219,14 +231,23 @@ export class CatalogProductArchiveService {
 
           if (options?.zeroStock && Math.abs(Number(product.stock_qty || 0)) > 0.0001) {
             if (!this.hasPermission(actor, 'canAdjustInventory')) {
-              throw new AppError('Stock zeroing requires canAdjustInventory permission', 'INVENTORY_ADJUSTMENT_FORBIDDEN', 403);
+              throw new AppError(
+                'Stock zeroing requires canAdjustInventory permission',
+                'INVENTORY_ADJUSTMENT_FORBIDDEN',
+                403,
+              );
             }
-            const locStocks = await trx.selectFrom('product_location_stock')
-              .selectAll().where('product_id', '=', product.id)
-              .where('qty', '>', 0).where(this.tenantPredicate(actor)).execute();
+            const locStocks = await trx
+              .selectFrom('product_location_stock')
+              .selectAll()
+              .where('product_id', '=', product.id)
+              .where('qty', '>', 0)
+              .where(this.tenantPredicate(actor))
+              .execute();
             assertFashionRemovedStockSafe(product, locStocks, undefined, { allowMismatchForZeroing: true });
             for (const locStock of locStocks) {
-              if (locStock.location_id != null) await this.inventoryScope.assertLocationScope(Number(locStock.location_id), actor, false, 'write', trx);
+              if (locStock.location_id != null)
+                await this.inventoryScope.assertLocationScope(Number(locStock.location_id), actor, false, 'write', trx);
             }
 
             const unitCost = Number(product.cost_price || 0);
@@ -238,7 +259,8 @@ export class CatalogProductArchiveService {
                 if (qtyToDeduct <= 0) continue;
 
                 const rawLocId = ls.location_id != null && Number(ls.location_id) > 0 ? Number(ls.location_id) : null;
-                const effectiveLocId = rawLocId || (product.default_location_id ? Number(product.default_location_id) : fallbackLocationId);
+                const effectiveLocId =
+                  rawLocId || (product.default_location_id ? Number(product.default_location_id) : fallbackLocationId);
 
                 await applyStockDelta(trx, {
                   productId: Number(product.id),
@@ -251,23 +273,27 @@ export class CatalogProductArchiveService {
                   allowNegative: true,
                 });
 
-                const insertedMovement = await trx.insertInto('stock_movements').values({
-                  product_id: product.id,
-                  movement_type: 'deduct',
-                  qty: -qtyToDeduct,
-                  before_qty: qtyToDeduct,
-                  after_qty: 0,
-                  unit_cost: unitCost,
-                  total_cost: stockMovementTotal(qtyToDeduct, unitCost, bookDigits),
-                  reason: 'archive_stock_zeroing',
-                  note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
-                  reference_type: 'inventory_adjustment',
-                  reference_id: product.id,
-                  location_id: effectiveLocId || null,
-                  branch_id: ls.branch_id ? Number(ls.branch_id) : undefined,
-                  created_by: actor.userId,
-                  ...this.tenantFields(actor),
-                } as any).returning('id').executeTakeFirst();
+                const insertedMovement = await trx
+                  .insertInto('stock_movements')
+                  .values({
+                    product_id: product.id,
+                    movement_type: 'deduct',
+                    qty: -qtyToDeduct,
+                    before_qty: qtyToDeduct,
+                    after_qty: 0,
+                    unit_cost: unitCost,
+                    total_cost: stockMovementTotal(qtyToDeduct, unitCost, bookDigits),
+                    reason: 'archive_stock_zeroing',
+                    note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
+                    reference_type: 'inventory_adjustment',
+                    reference_id: product.id,
+                    location_id: effectiveLocId || null,
+                    branch_id: ls.branch_id ? Number(ls.branch_id) : undefined,
+                    created_by: actor.userId,
+                    ...this.tenantFields(actor),
+                  } as any)
+                  .returning('id')
+                  .executeTakeFirst();
 
                 if (insertedMovement?.id && this.accountingPosting) {
                   await this.accountingPosting.postInventoryAdjustment(trx, Number(insertedMovement.id), actor);
@@ -275,7 +301,9 @@ export class CatalogProductArchiveService {
               }
             } else {
               const globalQty = Number(product.stock_qty || 0);
-              const effectiveLocId = product.default_location_id ? Number(product.default_location_id) : fallbackLocationId;
+              const effectiveLocId = product.default_location_id
+                ? Number(product.default_location_id)
+                : fallbackLocationId;
 
               await applyStockDelta(trx, {
                 productId: Number(product.id),
@@ -287,22 +315,26 @@ export class CatalogProductArchiveService {
                 allowNegative: true,
               });
 
-              const insertedMovement = await trx.insertInto('stock_movements').values({
-                product_id: product.id,
-                movement_type: 'deduct',
-                qty: -globalQty,
-                before_qty: globalQty,
-                after_qty: 0,
-                unit_cost: unitCost,
-                total_cost: stockMovementTotal(globalQty, unitCost, bookDigits),
-                reason: 'archive_stock_zeroing',
-                note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
-                reference_type: 'inventory_adjustment',
-                reference_id: product.id,
-                location_id: effectiveLocId || null,
-                created_by: actor.userId,
-                ...this.tenantFields(actor),
-              } as any).returning('id').executeTakeFirst();
+              const insertedMovement = await trx
+                .insertInto('stock_movements')
+                .values({
+                  product_id: product.id,
+                  movement_type: 'deduct',
+                  qty: -globalQty,
+                  before_qty: globalQty,
+                  after_qty: 0,
+                  unit_cost: unitCost,
+                  total_cost: stockMovementTotal(globalQty, unitCost, bookDigits),
+                  reason: 'archive_stock_zeroing',
+                  note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
+                  reference_type: 'inventory_adjustment',
+                  reference_id: product.id,
+                  location_id: effectiveLocId || null,
+                  created_by: actor.userId,
+                  ...this.tenantFields(actor),
+                } as any)
+                .returning('id')
+                .executeTakeFirst();
 
               if (insertedMovement?.id && this.accountingPosting) {
                 await this.accountingPosting.postInventoryAdjustment(trx, Number(insertedMovement.id), actor);
@@ -328,22 +360,26 @@ export class CatalogProductArchiveService {
                 // mirroring the sibling deduct rows above (same type,
                 // reason, reference, cost and posting call). Before
                 // this row the balance moved with no audit trail.
-                const insertedMovement = await trx.insertInto('stock_movements').values({
-                  product_id: product.id,
-                  movement_type: 'deduct',
-                  qty: -remainingGlobal,
-                  before_qty: remainingGlobal,
-                  after_qty: 0,
-                  unit_cost: unitCost,
-                  total_cost: stockMovementTotal(remainingGlobal, unitCost, bookDigits),
-                  reason: 'archive_stock_zeroing',
-                  note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
-                  reference_type: 'inventory_adjustment',
-                  reference_id: product.id,
-                  location_id: fallbackLocationId || null,
-                  created_by: actor.userId,
-                  ...this.tenantFields(actor),
-                } as any).returning('id').executeTakeFirst();
+                const insertedMovement = await trx
+                  .insertInto('stock_movements')
+                  .values({
+                    product_id: product.id,
+                    movement_type: 'deduct',
+                    qty: -remainingGlobal,
+                    before_qty: remainingGlobal,
+                    after_qty: 0,
+                    unit_cost: unitCost,
+                    total_cost: stockMovementTotal(remainingGlobal, unitCost, bookDigits),
+                    reason: 'archive_stock_zeroing',
+                    note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
+                    reference_type: 'inventory_adjustment',
+                    reference_id: product.id,
+                    location_id: fallbackLocationId || null,
+                    created_by: actor.userId,
+                    ...this.tenantFields(actor),
+                  } as any)
+                  .returning('id')
+                  .executeTakeFirst();
 
                 if (insertedMovement?.id && this.accountingPosting) {
                   await this.accountingPosting.postInventoryAdjustment(trx, Number(insertedMovement.id), actor);
@@ -351,13 +387,15 @@ export class CatalogProductArchiveService {
               }
             }
 
-            await trx.updateTable('products')
+            await trx
+              .updateTable('products')
               .set({ catalog_updated_at: sql`NOW()`, updated_at: sql`NOW()` })
               .where('id', '=', product.id)
               .where(this.tenantPredicate(actor))
               .execute();
 
-            await trx.updateTable('product_location_stock')
+            await trx
+              .updateTable('product_location_stock')
               .set({ qty: 0, updated_at: sql`NOW()` })
               .where('product_id', '=', product.id)
               .where(this.tenantPredicate(actor))
@@ -367,32 +405,53 @@ export class CatalogProductArchiveService {
       } else {
         // Re-activating: check collisions
         for (const product of targetProducts) {
-          const taken = await trx.selectFrom('products').select('id')
-            .where('id', 'not in', targetProductIds).where('is_active', '=', true)
-            .where(this.tenantPredicate(actor)).where((eb) => eb.or([
-              sql<boolean>`LOWER(name) = ${String(product.name || '').toLowerCase()}`,
-              ...(product.barcode ? [sql<boolean>`LOWER(barcode) = ${String(product.barcode).toLowerCase()}`] : []),
-              ...(product.sku ? [sql<boolean>`LOWER(sku) = ${String(product.sku).toLowerCase()}`] : []),
-            ])).executeTakeFirst();
+          const taken = await trx
+            .selectFrom('products')
+            .select('id')
+            .where('id', 'not in', targetProductIds)
+            .where('is_active', '=', true)
+            .where(this.tenantPredicate(actor))
+            .where((eb) =>
+              eb.or([
+                sql<boolean>`LOWER(name) = ${String(product.name || '').toLowerCase()}`,
+                ...(product.barcode ? [sql<boolean>`LOWER(barcode) = ${String(product.barcode).toLowerCase()}`] : []),
+                ...(product.sku ? [sql<boolean>`LOWER(sku) = ${String(product.sku).toLowerCase()}`] : []),
+              ]),
+            )
+            .executeTakeFirst();
           if (taken) {
-            throw new AppError(`لا يمكن إعادة تنشيط الصنف (${product.name}): الاسم أو الباركود أو SKU مستخدم بالفعل`, 'PRODUCT_IDENTITY_CONFLICT', 409);
+            throw new AppError(
+              `لا يمكن إعادة تنشيط الصنف (${product.name}): الاسم أو الباركود أو SKU مستخدم بالفعل`,
+              'PRODUCT_IDENTITY_CONFLICT',
+              409,
+            );
           }
 
           if (product.item_kind === 'fashion' && product.style_code) {
-            const duplicate = await trx.selectFrom('products').select('id')
-              .where('id', 'not in', targetProductIds).where('style_code', '=', product.style_code)
-              .where('item_kind', '=', 'fashion').where('is_active', '=', true)
+            const duplicate = await trx
+              .selectFrom('products')
+              .select('id')
+              .where('id', 'not in', targetProductIds)
+              .where('style_code', '=', product.style_code)
+              .where('item_kind', '=', 'fashion')
+              .where('is_active', '=', true)
               .where(this.tenantPredicate(actor))
               .where(sql`LOWER(COALESCE(color, ''))`, '=', String(product.color || '').toLowerCase())
-              .where(sql`LOWER(COALESCE(size, ''))`, '=', String(product.size || '').toLowerCase()).executeTakeFirst();
+              .where(sql`LOWER(COALESCE(size, ''))`, '=', String(product.size || '').toLowerCase())
+              .executeTakeFirst();
             if (duplicate) {
-              throw new AppError(`اللون والمقاس للصنف (${product.name}) موجودان بالفعل في هذا الموديل النشط`, 'VARIANT_EXISTS', 409);
+              throw new AppError(
+                `اللون والمقاس للصنف (${product.name}) موجودان بالفعل في هذا الموديل النشط`,
+                'VARIANT_EXISTS',
+                409,
+              );
             }
           }
         }
       }
 
-      await trx.updateTable('products')
+      await trx
+        .updateTable('products')
         .set({ is_active: nextActive, catalog_updated_at: sql`NOW()`, updated_at: sql`NOW()` })
         .where('id', 'in', targetProductIds)
         .where(this.tenantPredicate(actor))
@@ -409,8 +468,12 @@ export class CatalogProductArchiveService {
 
     (await import('../../storefront/storefront.service')).StorefrontService.invalidateGlobalCatalogCache();
     const actionLabel = result.nextActive
-      ? (result.isFashionGroup ? 'تنشيط موديل كامل' : 'تنشيط صنف')
-      : (result.isFashionGroup ? 'أرشفة موديل كامل' : 'أرشفة صنف');
+      ? result.isFashionGroup
+        ? 'تنشيط موديل كامل'
+        : 'تنشيط صنف'
+      : result.isFashionGroup
+        ? 'أرشفة موديل كامل'
+        : 'أرشفة صنف';
 
     const auditLabel = result.isFashionGroup
       ? `${result.nextActive ? 'تم تنشيط' : 'تم أرشفة'} كامل موديل (${result.name} - كود ${result.styleCode}) بعدد ${result.count} متغيرات بواسطة ${actor.username}`
@@ -419,12 +482,12 @@ export class CatalogProductArchiveService {
     await this.audit.log(actionLabel, auditLabel, actor);
 
     const message = result.isFashionGroup
-      ? (result.nextActive
-          ? `تم تنشيط الموديل بالكامل بنجاح (${result.count} صنف/متغير)`
-          : `تم أرشفة وتعطيل الموديل بالكامل بنجاح (${result.count} صنف/متغير)`)
-      : (result.nextActive
-          ? 'تم تنشيط الصنف بنجاح وإعادته لدليل الأصناف النشطة'
-          : 'تم أرشفة وتعطيل الصنف بنجاح');
+      ? result.nextActive
+        ? `تم تنشيط الموديل بالكامل بنجاح (${result.count} صنف/متغير)`
+        : `تم أرشفة وتعطيل الموديل بالكامل بنجاح (${result.count} صنف/متغير)`
+      : result.nextActive
+        ? 'تم تنشيط الصنف بنجاح وإعادته لدليل الأصناف النشطة'
+        : 'تم أرشفة وتعطيل الصنف بنجاح';
 
     return {
       ok: true,
@@ -441,9 +504,51 @@ export class CatalogProductArchiveService {
 
     const product = await this.db
       .selectFrom('products')
-      .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'products.id').onRef('b.tenant_id', '=', 'products.tenant_id').on('b.is_active', '=', true))
-      .leftJoin('stock_locations as sl', (join) => join.onRef('sl.id', '=', 'products.default_location_id').on(this.tenantPredicate(actor, 'sl')))
-      .select(['products.id', 'products.name', 'products.name_en', 'products.barcode', 'products.sku', 'products.catalog_updated_at', 'products.item_type', 'products.item_kind', 'products.style_code', 'products.color', 'products.size', 'products.bin_location', 'products.track_serials', 'products.category_id', 'products.supplier_id', 'products.cost_price', 'products.retail_price', 'products.wholesale_price', 'products.credit_price', 'products.consumer_price', 'products.min_selling_price', 'products.stock_qty', 'products.min_stock_qty', 'sl.id as default_location_id', 'products.notes', 'products.metadata', 'b.id as bom_id', 'sl.name as default_location_name', 'products.is_active', 'products.calories', 'products.allergens', 'products.is_spicy', 'products.is_vegetarian', 'products.is_gluten_free'])
+      .leftJoin('manufacturing_boms as b', (join) =>
+        join
+          .onRef('b.product_id', '=', 'products.id')
+          .onRef('b.tenant_id', '=', 'products.tenant_id')
+          .on('b.is_active', '=', true),
+      )
+      .leftJoin('stock_locations as sl', (join) =>
+        join.onRef('sl.id', '=', 'products.default_location_id').on(this.tenantPredicate(actor, 'sl')),
+      )
+      .select([
+        'products.id',
+        'products.name',
+        'products.name_en',
+        'products.barcode',
+        'products.sku',
+        'products.catalog_updated_at',
+        'products.item_type',
+        'products.item_kind',
+        'products.style_code',
+        'products.color',
+        'products.size',
+        'products.bin_location',
+        'products.track_serials',
+        'products.category_id',
+        'products.supplier_id',
+        'products.cost_price',
+        'products.retail_price',
+        'products.wholesale_price',
+        'products.credit_price',
+        'products.consumer_price',
+        'products.min_selling_price',
+        'products.stock_qty',
+        'products.min_stock_qty',
+        'sl.id as default_location_id',
+        'products.notes',
+        'products.metadata',
+        'b.id as bom_id',
+        'sl.name as default_location_name',
+        'products.is_active',
+        'products.calories',
+        'products.allergens',
+        'products.is_spicy',
+        'products.is_vegetarian',
+        'products.is_gluten_free',
+      ])
       .where('products.id', '=', id)
       .where(this.tenantPredicate(actor, 'products'))
       .executeTakeFirst();
@@ -467,7 +572,10 @@ export class CatalogProductArchiveService {
     return mapped[0];
   }
 
-  async bulkUpdateIcons(updates: Array<{ id: number; icon: string }>, actor: AuthContext): Promise<{ ok: boolean; updated: number }> {
+  async bulkUpdateIcons(
+    updates: Array<{ id: number; icon: string }>,
+    actor: AuthContext,
+  ): Promise<{ ok: boolean; updated: number }> {
     if (!updates || !updates.length) return { ok: true, updated: 0 };
     let count = 0;
     await this.db.transaction().execute(async (trx) => {
@@ -482,7 +590,9 @@ export class CatalogProductArchiveService {
 
         let meta: Record<string, any> = {};
         if (typeof prod.metadata === 'string') {
-          try { meta = JSON.parse(prod.metadata); } catch {}
+          try {
+            meta = JSON.parse(prod.metadata);
+          } catch {}
         } else if (prod.metadata && typeof prod.metadata === 'object') {
           meta = { ...(prod.metadata as Record<string, any>) };
         }

@@ -77,11 +77,17 @@ export class AgedDebtsService {
     return Number.isFinite(n) ? roundMoney(n, digits) : 0;
   }
 
-  getAgedReceivables(auth: AuthContext, params: { asOfDate?: string; branchId?: number; page?: number; pageSize?: number; search?: string; risk?: string }) {
+  getAgedReceivables(
+    auth: AuthContext,
+    params: { asOfDate?: string; branchId?: number; page?: number; pageSize?: number; search?: string; risk?: string },
+  ) {
     return this.report(auth, params, 'receivables');
   }
 
-  getAgedPayables(auth: AuthContext, params: { asOfDate?: string; branchId?: number; page?: number; pageSize?: number; search?: string; risk?: string }) {
+  getAgedPayables(
+    auth: AuthContext,
+    params: { asOfDate?: string; branchId?: number; page?: number; pageSize?: number; search?: string; risk?: string },
+  ) {
     return this.report(auth, params, 'payables');
   }
 
@@ -90,7 +96,9 @@ export class AgedDebtsService {
     params: { asOfDate?: string; branchId?: number; page?: number; pageSize?: number; search?: string; risk?: string },
     kind: 'receivables' | 'payables',
   ): Promise<AgedDebtsSummary> {
-    const asOfDay = params.asOfDate ? params.asOfDate.slice(0, 10) : await resolveBusinessDateKey(this.db, auth.tenantId ?? '', new Date());
+    const asOfDay = params.asOfDate
+      ? params.asOfDate.slice(0, 10)
+      : await resolveBusinessDateKey(this.db, auth.tenantId ?? '', new Date());
     // Invoice ages are counted in the TENANT's calendar days: the
     // ledger instant is converted to a date in the tenant zone, never
     // UTC — a 00:30 Cairo invoice is 0 days old on the Cairo as-of
@@ -103,8 +111,11 @@ export class AgedDebtsService {
     // a real 0.005 KWD balance is aged instead of dropped.
     const dust = 10 ** -digits;
     let asOfDate: Date;
-    try { asOfDate = nextAccountingDay(asOfDay); }
-    catch { throw new BadRequestException('Invalid asOfDate'); }
+    try {
+      asOfDate = nextAccountingDay(asOfDay);
+    } catch {
+      throw new BadRequestException('Invalid asOfDate');
+    }
     const page = Math.min(10_000, Math.max(1, Math.trunc(Number(params.page) || 1)));
     const pageSize = Math.min(200, Math.max(1, Math.trunc(Number(params.pageSize) || 50)));
     const offset = (page - 1) * pageSize;
@@ -115,14 +126,19 @@ export class AgedDebtsService {
     const partnerFk = sql.ref(kind === 'receivables' ? 'l.customer_id' : 'l.supplier_id');
     const creditLimit = kind === 'receivables' ? sql`p.credit_limit` : sql`null::numeric`;
     const branchFilter = params.branchId ? sql`and l.branch_id = ${params.branchId}` : sql``;
-    const order = kind === 'receivables'
-      ? sql`risk_weight desc, total_balance desc, partner_id asc`
-      : sql`total_balance desc, partner_id asc`;
-    const search = String(params.search || '').trim().slice(0, 100);
+    const order =
+      kind === 'receivables'
+        ? sql`risk_weight desc, total_balance desc, partner_id asc`
+        : sql`total_balance desc, partner_id asc`;
+    const search = String(params.search || '')
+      .trim()
+      .slice(0, 100);
     const riskWeights: Record<string, number> = { current: 0, low: 1, medium: 2, high: 3, critical: 4 };
-    const riskWeight = params.risk && Object.prototype.hasOwnProperty.call(riskWeights, params.risk)
-      ? riskWeights[params.risk] : null;
-    const searchFilter = search ? sql`and (partner_name ilike ${`%${search}%`} or phone ilike ${`%${search}%`})` : sql``;
+    const riskWeight =
+      params.risk && Object.prototype.hasOwnProperty.call(riskWeights, params.risk) ? riskWeights[params.risk] : null;
+    const searchFilter = search
+      ? sql`and (partner_name ilike ${`%${search}%`} or phone ilike ${`%${search}%`})`
+      : sql``;
     const riskFilter = riskWeight === null ? sql`` : sql`and risk_weight = ${riskWeight}`;
 
     // Positive historical charges are retained newest-first: credits extinguish
@@ -201,33 +217,56 @@ export class AgedDebtsService {
       const days61To90 = this.money(p.days_61_to_90, digits);
       const days91Plus = this.money(p.days_91_plus, digits);
       const balance = this.money(p.total_balance, digits);
-      const riskLevel: AgedPartnerRow['riskLevel'] = p.risk_weight === 4 ? 'critical'
-        : p.risk_weight === 3 ? 'high' : p.risk_weight === 2 ? 'medium'
-          : p.risk_weight === 1 ? 'low' : 'current';
+      const riskLevel: AgedPartnerRow['riskLevel'] =
+        p.risk_weight === 4
+          ? 'critical'
+          : p.risk_weight === 3
+            ? 'high'
+            : p.risk_weight === 2
+              ? 'medium'
+              : p.risk_weight === 1
+                ? 'low'
+                : 'current';
       const cleanPhone = String(p.phone || '').replace(/[^\d+]/g, '');
       const overdue = this.money(days1To30 + days31To60 + days61To90 + days91Plus, digits);
-      const message = encodeURIComponent(`مرحباً ${p.partner_name}، نود تذكيركم بوجود رصيد مستحق بقيمة ${balance.toLocaleString('ar-EG')} ج.م (منها ${overdue.toLocaleString('ar-EG')} ج.م متأخرة). يرجى التكرم بالسداد في أقرب وقت. شاكرين حسن تعاونكم.`);
+      const message = encodeURIComponent(
+        `مرحباً ${p.partner_name}، نود تذكيركم بوجود رصيد مستحق بقيمة ${balance.toLocaleString('ar-EG')} ج.م (منها ${overdue.toLocaleString('ar-EG')} ج.م متأخرة). يرجى التكرم بالسداد في أقرب وقت. شاكرين حسن تعاونكم.`,
+      );
       return {
-        partnerId: Number(p.partner_id), partnerName: p.partner_name,
+        partnerId: Number(p.partner_id),
+        partnerName: p.partner_name,
         phone: p.phone || undefined,
         creditLimit: p.credit_limit == null ? undefined : this.money(p.credit_limit, digits),
-        totalBalance: balance, currentAmount: this.money(p.current_amount, digits),
-        days1To30, days31To60, days61To90, days91Plus,
-        oldestInvoiceDate: p.oldest_invoice_date ? todayTenantDate(tenantTz, new Date(p.oldest_invoice_date)) : undefined,
+        totalBalance: balance,
+        currentAmount: this.money(p.current_amount, digits),
+        days1To30,
+        days31To60,
+        days61To90,
+        days91Plus,
+        oldestInvoiceDate: p.oldest_invoice_date
+          ? todayTenantDate(tenantTz, new Date(p.oldest_invoice_date))
+          : undefined,
         oldestInvoiceDays: Number(p.oldest_invoice_days || 0),
         riskLevel,
-        whatsAppUrl: kind === 'receivables' && cleanPhone.length >= 8
-          ? `https://wa.me/${cleanPhone.startsWith('+') ? cleanPhone.slice(1) : cleanPhone}?text=${message}` : undefined,
+        whatsAppUrl:
+          kind === 'receivables' && cleanPhone.length >= 8
+            ? `https://wa.me/${cleanPhone.startsWith('+') ? cleanPhone.slice(1) : cleanPhone}?text=${message}`
+            : undefined,
       };
     });
     return {
-      asOfDate: asOfDay, page, pageSize,
+      asOfDate: asOfDay,
+      page,
+      pageSize,
       totalPartnersCount: Number(row?.total_partners_count || 0),
       filteredPartnersCount: Number(row?.filtered_partners_count || 0),
       overduePartnersCount: Number(row?.overdue_partners_count || 0),
-      totalBalance: this.money(row?.total_balance, digits), totalCurrent: this.money(row?.total_current, digits),
-      total1To30: this.money(row?.total_1_to_30, digits), total31To60: this.money(row?.total_31_to_60, digits),
-      total61To90: this.money(row?.total_61_to_90, digits), total91Plus: this.money(row?.total_91_plus, digits),
+      totalBalance: this.money(row?.total_balance, digits),
+      totalCurrent: this.money(row?.total_current, digits),
+      total1To30: this.money(row?.total_1_to_30, digits),
+      total31To60: this.money(row?.total_31_to_60, digits),
+      total61To90: this.money(row?.total_61_to_90, digits),
+      total91Plus: this.money(row?.total_91_plus, digits),
       partners,
     };
   }

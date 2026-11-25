@@ -56,21 +56,13 @@ export function formatJournalEntryNo(sequence: number): string {
 export async function allocateJournalNumber(queryable: Kysely<Database>): Promise<number> {
   const handle = queryable as unknown as { isTransaction?: boolean };
   if (!handle?.isTransaction) {
-    throw new AppError(
-      'Journal numbering requires a transaction handle',
-      'JOURNAL_NUMBER_REQUIRES_TRANSACTION',
-      500,
-    );
+    throw new AppError('Journal numbering requires a transaction handle', 'JOURNAL_NUMBER_REQUIRES_TRANSACTION', 500);
   }
   try {
     await sql`SELECT pg_advisory_xact_lock(hashtext('journal-number'))`.execute(queryable);
   } catch (err) {
     if (err instanceof AppError) throw err;
-    throw new AppError(
-      'Journal number lock failed; the journal was not numbered',
-      'JOURNAL_NUMBER_LOCK_FAILED',
-      500,
-    );
+    throw new AppError('Journal number lock failed; the journal was not numbered', 'JOURNAL_NUMBER_LOCK_FAILED', 500);
   }
   const result = await sql<{ last_no: string | null }>`
     SELECT MAX(entry_no) AS last_no FROM journal_entries

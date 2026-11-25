@@ -53,7 +53,16 @@ export type VanAndDeliveryPostingDeps = {
     queryable: Transaction<Database>,
     tenantId: string,
     saleId: number,
-  ) => Promise<Array<{ id: number; product_id: number | null; qty: number | string; cost_price: number | string | null; unit_multiplier: number | string | null; modifiers: unknown }>>;
+  ) => Promise<
+    Array<{
+      id: number;
+      product_id: number | null;
+      qty: number | string;
+      cost_price: number | string | null;
+      unit_multiplier: number | string | null;
+      modifiers: unknown;
+    }>
+  >;
   salesReturnCogsResidual: (
     queryable: Transaction<Database>,
     tenantId: string,

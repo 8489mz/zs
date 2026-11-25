@@ -12,7 +12,10 @@ export type PurchaseRepricingCandidate = {
   wholesalePrice: number;
 };
 
-export type PurchaseRepricingProduct = Pick<Selectable<Database['products']>, 'id' | 'name' | 'item_kind' | 'style_code' | 'cost_price' | 'retail_price' | 'wholesale_price'>;
+export type PurchaseRepricingProduct = Pick<
+  Selectable<Database['products']>,
+  'id' | 'name' | 'item_kind' | 'style_code' | 'cost_price' | 'retail_price' | 'wholesale_price'
+>;
 
 export type PurchaseRepricingInsights = {
   purchaseId: number;

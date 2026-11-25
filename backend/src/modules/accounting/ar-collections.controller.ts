@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Put,
-  Query,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { AccountingAccessGuard } from '../../core/auth/guards/accounting-access.guard';
@@ -37,10 +27,7 @@ export class ArCollectionsController {
   }
 
   @Get('cases')
-  async getCases(
-    @Req() req: RequestWithAuth,
-    @Query() query: ArCollectionsQueryDto,
-  ) {
+  async getCases(@Req() req: RequestWithAuth, @Query() query: ArCollectionsQueryDto) {
     return this.collectionsService.getCases(req.authContext!, query);
   }
 
@@ -51,7 +38,10 @@ export class ArCollectionsController {
     @Query('page') page: string,
     @Query('pageSize') pageSize: string,
   ) {
-    return this.collectionsService.getCaseDetails(req.authContext!, id, { page: Number(page), pageSize: Number(pageSize) });
+    return this.collectionsService.getCaseDetails(req.authContext!, id, {
+      page: Number(page),
+      pageSize: Number(pageSize),
+    });
   }
 
   @Post('sync')
@@ -60,29 +50,17 @@ export class ArCollectionsController {
   }
 
   @Post('cases/:id/logs')
-  async logInteraction(
-    @Req() req: RequestWithAuth,
-    @Param('id') id: string,
-    @Body() dto: CreateCollectionLogDto,
-  ) {
+  async logInteraction(@Req() req: RequestWithAuth, @Param('id') id: string, @Body() dto: CreateCollectionLogDto) {
     return this.collectionsService.logInteraction(req.authContext!, id, dto);
   }
 
   @Post('cases/:id/promise-to-pay')
-  async recordPromiseToPay(
-    @Req() req: RequestWithAuth,
-    @Param('id') id: string,
-    @Body() dto: RecordPromiseToPayDto,
-  ) {
+  async recordPromiseToPay(@Req() req: RequestWithAuth, @Param('id') id: string, @Body() dto: RecordPromiseToPayDto) {
     return this.collectionsService.recordPromiseToPay(req.authContext!, id, dto);
   }
 
   @Post('cases/:id/toggle-credit-block')
-  async toggleCreditBlock(
-    @Req() req: RequestWithAuth,
-    @Param('id') id: string,
-    @Body() dto: ToggleCreditBlockDto,
-  ) {
+  async toggleCreditBlock(@Req() req: RequestWithAuth, @Param('id') id: string, @Body() dto: ToggleCreditBlockDto) {
     return this.collectionsService.toggleCreditBlock(req.authContext!, id, dto);
   }
 
@@ -92,11 +70,7 @@ export class ArCollectionsController {
   }
 
   @Put('dunning-levels/:id')
-  async updateDunningLevel(
-    @Req() req: RequestWithAuth,
-    @Param('id') id: string,
-    @Body() dto: UpdateDunningLevelDto,
-  ) {
+  async updateDunningLevel(@Req() req: RequestWithAuth, @Param('id') id: string, @Body() dto: UpdateDunningLevelDto) {
     return this.collectionsService.updateDunningLevel(req.authContext!, id, dto);
   }
 }

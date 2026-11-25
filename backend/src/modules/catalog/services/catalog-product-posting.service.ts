@@ -79,26 +79,56 @@ export class CatalogProductPostingService {
     return currencyMoneyDigits(await tenantBaseCurrency(executor, this.tenantId(actor)));
   }
 
-  public async postOpeningStock(trx: ProductWriteExecutor, productId: number, qty: number, unitCost: number,
-    locationId: number | null, actor: AuthContext): Promise<void> {
+  public async postOpeningStock(
+    trx: ProductWriteExecutor,
+    productId: number,
+    qty: number,
+    unitCost: number,
+    locationId: number | null,
+    actor: AuthContext,
+  ): Promise<void> {
     const amount = stockMovementTotal(qty, unitCost, await this.bookDigits(trx, actor));
     if (amount <= 0) return;
-    const accounts = await trx.selectFrom('accounting_accounts').select(['id', 'code'])
-      .where('tenant_id', '=', this.tenantId(actor)).where('code', 'in', ['1140', '3100'])
-      .where('is_active', '=', true).execute();
+    const accounts = await trx
+      .selectFrom('accounting_accounts')
+      .select(['id', 'code'])
+      .where('tenant_id', '=', this.tenantId(actor))
+      .where('code', 'in', ['1140', '3100'])
+      .where('is_active', '=', true)
+      .execute();
     const byCode = new Map(accounts.map((account) => [account.code, Number(account.id)]));
     if (!byCode.get('1140') || !byCode.get('3100')) {
       throw new AppError('Inventory or opening capital account is unavailable', 'OPENING_STOCK_ACCOUNT_MISSING', 422);
     }
     await this.accountingPosting!.postDomainJournal(trx, {
-      sourceType: 'catalog_opening_stock', sourceId: productId,
-      tenantId: this.tenantId(actor), accountId: this.accountId(actor), entryDate: new Date(),
-      description: `رصيد افتتاحي للصنف ${productId}`, createdBy: actor.userId,
+      sourceType: 'catalog_opening_stock',
+      sourceId: productId,
+      tenantId: this.tenantId(actor),
+      accountId: this.accountId(actor),
+      entryDate: new Date(),
+      description: `رصيد افتتاحي للصنف ${productId}`,
+      createdBy: actor.userId,
       lines: [
-        { accountId: byCode.get('1140')!, debit: amount, credit: 0, description: 'إثبات مخزون افتتاحي',
-          partnerType: 'none', partnerId: null, branchId: null, locationId },
-        { accountId: byCode.get('3100')!, debit: 0, credit: amount, description: 'مقابل المخزون الافتتاحي ضمن رأس المال',
-          partnerType: 'none', partnerId: null, branchId: null, locationId },
+        {
+          accountId: byCode.get('1140')!,
+          debit: amount,
+          credit: 0,
+          description: 'إثبات مخزون افتتاحي',
+          partnerType: 'none',
+          partnerId: null,
+          branchId: null,
+          locationId,
+        },
+        {
+          accountId: byCode.get('3100')!,
+          debit: 0,
+          credit: amount,
+          description: 'مقابل المخزون الافتتاحي ضمن رأس المال',
+          partnerType: 'none',
+          partnerId: null,
+          branchId: null,
+          locationId,
+        },
       ],
     });
   }

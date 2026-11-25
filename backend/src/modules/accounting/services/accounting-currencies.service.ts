@@ -42,7 +42,7 @@ export class AccountingCurrenciesService {
 
   async listCurrencies(auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
-    return this.db.transaction().execute(async trx => {
+    return this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, scope.tenantId);
       let rows = await trx
         .selectFrom('currency_exchange_rates')
@@ -55,7 +55,9 @@ export class AccountingCurrenciesService {
       const baseCurrency = await tenantBaseCurrency(trx, scope.tenantId);
       if (rows.length === 0) {
         // Never seed sample market rates into live financial conversion tables.
-        const defaultCurrencies = [{ code: baseCurrency, name: baseCurrency, rate: 1, isBase: true, symbol: baseCurrency }];
+        const defaultCurrencies = [
+          { code: baseCurrency, name: baseCurrency, rate: 1, isBase: true, symbol: baseCurrency },
+        ];
 
         for (const c of defaultCurrencies) {
           await trx
@@ -101,7 +103,9 @@ export class AccountingCurrenciesService {
     auth: AuthContext,
   ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
-    const code = String(body.currencyCode || '').trim().toUpperCase();
+    const code = String(body.currencyCode || '')
+      .trim()
+      .toUpperCase();
     if (!/^[A-Z]{3}$/.test(code)) throw new BadRequestException('رمز العملة مطلوب.');
 
     const name = String(body.currencyName || code).trim();
@@ -114,7 +118,8 @@ export class AccountingCurrenciesService {
     return this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, scope.tenantId);
       const baseCurrency = await tenantBaseCurrency(trx, scope.tenantId);
-      if (isBase !== (code === baseCurrency)) throw new BadRequestException('عملة الأساس تحدد من الإعدادات العامة قبل تسجيل أي عملة أو حركة مالية.');
+      if (isBase !== (code === baseCurrency))
+        throw new BadRequestException('عملة الأساس تحدد من الإعدادات العامة قبل تسجيل أي عملة أو حركة مالية.');
 
       const row = await trx
         .insertInto('currency_exchange_rates')
@@ -134,7 +139,7 @@ export class AccountingCurrenciesService {
             is_base: isBase,
             symbol,
             updated_at: sql`NOW()`,
-          })
+          }),
         )
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -149,11 +154,16 @@ export class AccountingCurrenciesService {
   ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const baseCurrency = await tenantBaseCurrency(this.db, scope.tenantId);
-    const fromCode = String(body.fromCurrency || '').trim().toUpperCase();
-    const toCode = String(body.toCurrency || '').trim().toUpperCase();
+    const fromCode = String(body.fromCurrency || '')
+      .trim()
+      .toUpperCase();
+    const toCode = String(body.toCurrency || '')
+      .trim()
+      .toUpperCase();
     const amount = Number(body.amount || 0);
 
-    if (!Number.isFinite(amount) || !/^[A-Z]{3}$/.test(fromCode) || !/^[A-Z]{3}$/.test(toCode)) throw new BadRequestException('مبلغ أو رمز عملة غير صالح.');
+    if (!Number.isFinite(amount) || !/^[A-Z]{3}$/.test(fromCode) || !/^[A-Z]{3}$/.test(toCode))
+      throw new BadRequestException('مبلغ أو رمز عملة غير صالح.');
 
     // INV-FX-RATE-HISTORY-CONSUMER: the first production consumer of
     // the append-only rate history. With an asOf moment both legs
@@ -192,7 +202,8 @@ export class AccountingCurrenciesService {
       if (!fromRow || !toRow) throw new BadRequestException('العملة غير مسجلة؛ لا يجوز افتراض سعر صرف.');
       fromRate = Number(fromRow.exchange_rate);
       toRate = Number(toRow.exchange_rate);
-      if (![fromRate, toRate].every(rate => Number.isFinite(rate) && rate > 0)) throw new BadRequestException('سعر صرف مسجل غير صالح.');
+      if (![fromRate, toRate].every((rate) => Number.isFinite(rate) && rate > 0))
+        throw new BadRequestException('سعر صرف مسجل غير صالح.');
       fromIsBase = Boolean(fromRow.is_base);
       toIsBase = Boolean(toRow.is_base);
     }

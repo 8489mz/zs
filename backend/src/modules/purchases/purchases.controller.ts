@@ -1,4 +1,24 @@
-import { Body, Controller, Get, Headers, Param, ParseIntPipe, Post, Put, Query, Req, Res, UseGuards, UseInterceptors, UploadedFile, BadRequestException, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator, Optional } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
+  Optional,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
@@ -9,8 +29,15 @@ import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.interceptor';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
-import { ApplySupplierAdvanceDto, CreateCustomerPaymentDto, CreateSupplierPaymentDto } from './dto/create-party-payment.dto';
-import { CreateSupplierPaymentScheduleDto, PaySupplierScheduleInstallmentDto } from './dto/supplier-payment-schedule.dto';
+import {
+  ApplySupplierAdvanceDto,
+  CreateCustomerPaymentDto,
+  CreateSupplierPaymentDto,
+} from './dto/create-party-payment.dto';
+import {
+  CreateSupplierPaymentScheduleDto,
+  PaySupplierScheduleInstallmentDto,
+} from './dto/supplier-payment-schedule.dto';
 import { CreateSupplierBillDto } from './dto/supplier-bill.dto';
 import { SupplierBillsService } from './services/supplier-bills.service';
 import { UpsertPurchaseDto } from './dto/upsert-purchase.dto';
@@ -33,13 +60,19 @@ export class PurchasesController {
 
   @Get('purchases')
   @RequirePermissions('purchases')
-  listPurchases(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  listPurchases(
+    @Query() query: Record<string, unknown>,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.purchasesService.listPurchases(query, req.authContext!);
   }
 
   @Get('purchases/reorder/suggestions')
   @RequirePermissions('purchases')
-  getReorderSuggestions(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  getReorderSuggestions(
+    @Query() query: Record<string, unknown>,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.purchasesService.getReorderSuggestions(query, req.authContext!);
   }
 
@@ -52,7 +85,10 @@ export class PurchasesController {
 
   @Get('purchases/check-duplicate')
   @RequirePermissions('purchases')
-  checkDuplicateBill(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  checkDuplicateBill(
+    @Query() query: Record<string, unknown>,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.purchasesService.checkDuplicateBill(
       {
         supplierId: Number(query.supplierId || 0),
@@ -84,15 +120,28 @@ export class PurchasesController {
   @Put('purchases/:id')
   @RequirePermissions('canEditInvoices')
   @UseInterceptors(IdempotencyInterceptor)
-  updatePurchase(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertPurchaseDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  updatePurchase(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpsertPurchaseDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.purchasesService.updatePurchase(id, payload, req.authContext!);
   }
 
   @Post('purchases/:id/cancel')
   @RequirePermissions('canEditInvoices')
   @UseInterceptors(IdempotencyInterceptor)
-  cancelPurchase(@Param('id', ParseIntPipe) id: number, @Body() body: { reason?: string; managerPin?: string }, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
-    return this.purchasesService.cancelPurchase(id, String(body?.reason || ''), req.authContext!, String(body?.managerPin || ''));
+  cancelPurchase(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { reason?: string; managerPin?: string },
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
+    return this.purchasesService.cancelPurchase(
+      id,
+      String(body?.reason || ''),
+      req.authContext!,
+      String(body?.managerPin || ''),
+    );
   }
 
   @Post('purchases/:id/receive-goods')
@@ -108,33 +157,52 @@ export class PurchasesController {
 
   @Get('purchases/:id/payment-schedule')
   @RequirePermissions('purchases')
-  listPurchasePaymentSchedule(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  listPurchasePaymentSchedule(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.scheduleService.listForPurchase(id, req.authContext!);
   }
 
   @Post('purchases/:id/payment-schedule')
   @RequirePermissions('accounts')
   @UseInterceptors(IdempotencyInterceptor)
-  createPurchasePaymentSchedule(@Param('id', ParseIntPipe) id: number, @Body() payload: CreateSupplierPaymentScheduleDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  createPurchasePaymentSchedule(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: CreateSupplierPaymentScheduleDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.scheduleService.createForPurchase(id, payload, req.authContext!);
   }
 
   @Get('suppliers/:id/payment-schedule')
   @RequirePermissions('accounts')
-  listSupplierPaymentSchedule(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  listSupplierPaymentSchedule(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.scheduleService.listForSupplier(id, req.authContext!);
   }
 
   @Post('suppliers/:id/payment-schedule')
   @RequirePermissions('accounts')
   @UseInterceptors(IdempotencyInterceptor)
-  createSupplierPaymentSchedule(@Param('id', ParseIntPipe) id: number, @Body() payload: CreateSupplierPaymentScheduleDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  createSupplierPaymentSchedule(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: CreateSupplierPaymentScheduleDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.scheduleService.createForSupplier(id, payload, req.authContext!);
   }
 
   @Post('supplier-payment-schedules/:id/settle')
   @RequirePermissions('accounts')
-  settleSupplierSchedule(@Param('id', ParseIntPipe) id: number, @Body() payload: PaySupplierScheduleInstallmentDto, @Req() req: RequestWithAuth, @Headers('x-idempotency-key') idempotencyKey?: string): Promise<Record<string, unknown>> {
+  settleSupplierSchedule(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: PaySupplierScheduleInstallmentDto,
+    @Req() req: RequestWithAuth,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<Record<string, unknown>> {
     return this.scheduleService.payInstallment(id, payload, req.authContext!, idempotencyKey);
   }
 
@@ -168,19 +236,29 @@ export class PurchasesController {
 
   @Get('supplier-payments')
   @RequirePermissions('accounts')
-  listSupplierPayments(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  listSupplierPayments(
+    @Query() query: Record<string, unknown>,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.purchasesService.listSupplierPayments(req.authContext!, query);
   }
 
   @Get('supplier-payments/:id')
   @RequirePermissions('accounts')
-  getSupplierPayment(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  getSupplierPayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.purchasesService.getSupplierPaymentById(id, req.authContext!);
   }
 
   @Post('supplier-payments')
   @RequirePermissions('accounts')
-  createSupplierPayment(@Body() payload: CreateSupplierPaymentDto, @Req() req: RequestWithAuth, @Headers('x-idempotency-key') idempotencyKey?: string): Promise<Record<string, unknown>> {
+  createSupplierPayment(
+    @Body() payload: CreateSupplierPaymentDto,
+    @Req() req: RequestWithAuth,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<Record<string, unknown>> {
     return this.purchasesService.createSupplierPayment(payload, req.authContext!, idempotencyKey);
   }
 
@@ -192,7 +270,11 @@ export class PurchasesController {
    * will call once it gains an advance toggle + apply action. */
   @Post('supplier-payments/:id/apply-advance')
   @RequirePermissions('accounts')
-  applySupplierAdvance(@Param('id', ParseIntPipe) id: number, @Body() payload: ApplySupplierAdvanceDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  applySupplierAdvance(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: ApplySupplierAdvanceDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.purchasesService.applySupplierAdvance(id, payload, req.authContext!);
   }
 
@@ -201,7 +283,10 @@ export class PurchasesController {
    * and scheduling flows settle. No stock movement of any kind. */
   @Get('supplier-bills')
   @RequirePermissions('purchases')
-  listSupplierBills(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  listSupplierBills(
+    @Query() query: Record<string, unknown>,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     if (!this.supplierBillsService) {
       throw new BadRequestException('Supplier bills service unavailable');
     }
@@ -210,7 +295,11 @@ export class PurchasesController {
 
   @Post('supplier-bills')
   @RequirePermissions('purchases')
-  createSupplierBill(@Body() payload: CreateSupplierBillDto, @Req() req: RequestWithAuth, @Headers('x-idempotency-key') idempotencyKey?: string): Promise<Record<string, unknown>> {
+  createSupplierBill(
+    @Body() payload: CreateSupplierBillDto,
+    @Req() req: RequestWithAuth,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<Record<string, unknown>> {
     if (!this.supplierBillsService) {
       throw new BadRequestException('Supplier bills service unavailable');
     }
@@ -219,23 +308,29 @@ export class PurchasesController {
 
   @Post('customer-payments')
   @RequirePermissions('accounts')
-  createCustomerPayment(@Body() payload: CreateCustomerPaymentDto, @Req() req: RequestWithAuth, @Headers('x-idempotency-key') idempotencyKey?: string): Promise<Record<string, unknown>> {
+  createCustomerPayment(
+    @Body() payload: CreateCustomerPaymentDto,
+    @Req() req: RequestWithAuth,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<Record<string, unknown>> {
     return this.purchasesService.createCustomerPayment(payload, req.authContext!, idempotencyKey);
   }
 
   @Post('purchases/attachments/upload')
   @RequirePermissions('purchases')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: './uploads/purchases',
-      filename: (req: any, file: any, cb: any) => {
-        // Strip out any potentially dangerous characters or multiple extensions from the original name
-        const ext = extname(file.originalname).toLowerCase();
-        // Server generated completely random name to prevent path traversal
-        cb(null, randomUUID() + ext);
-      }
-    })
-  }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads/purchases',
+        filename: (req: any, file: any, cb: any) => {
+          // Strip out any potentially dangerous characters or multiple extensions from the original name
+          const ext = extname(file.originalname).toLowerCase();
+          // Server generated completely random name to prevent path traversal
+          cb(null, randomUUID() + ext);
+        },
+      }),
+    }),
+  )
   uploadAttachment(
     @UploadedFile(
       new ParseFilePipe({
@@ -245,7 +340,8 @@ export class PurchasesController {
         ],
         fileIsRequired: true,
       }),
-    ) file: Express.Multer.File
+    )
+    file: Express.Multer.File,
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
 
@@ -263,7 +359,7 @@ export class PurchasesController {
       fileName: file.originalname,
       fileUrl: file.filename,
       fileSize: file.size,
-      fileType: file.mimetype
+      fileType: file.mimetype,
     };
   }
 
@@ -273,9 +369,13 @@ export class PurchasesController {
     @Param('purchaseId', ParseIntPipe) purchaseId: number,
     @Param('attachmentId', ParseIntPipe) attachmentId: number,
     @Req() req: RequestWithAuth,
-    @Res() res: Response
+    @Res() res: Response,
   ) {
-    const { attachment } = await this.purchasesService.getPurchaseAttachment(purchaseId, attachmentId, req.authContext!);
+    const { attachment } = await this.purchasesService.getPurchaseAttachment(
+      purchaseId,
+      attachmentId,
+      req.authContext!,
+    );
     const fileUrl = String((attachment as Record<string, unknown>).file_url || '').trim();
 
     // Safety check against path traversal stored in DB
@@ -289,7 +389,10 @@ export class PurchasesController {
 
   @Get('purchases/:id/landed-costs')
   @RequirePermissions('purchases')
-  getPurchaseLandedCosts(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  getPurchaseLandedCosts(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     if (!this.landedCostsService) throw new BadRequestException('خدمة تكلفة الوصول غير مفعلة');
     return this.landedCostsService.getPurchaseLandedCosts(id, req.authContext!);
   }

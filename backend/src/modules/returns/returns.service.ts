@@ -12,7 +12,10 @@ import { CreateReturnDto } from './dto/create-return.dto';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { IdempotencyService } from '../../core/idempotency/idempotency.service';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
-import { type ConditionalDiscountForfeitBreakdown, type ConditionalDiscountForfeitResult } from './engines/conditional-header-discount-return.engine';
+import {
+  type ConditionalDiscountForfeitBreakdown,
+  type ConditionalDiscountForfeitResult,
+} from './engines/conditional-header-discount-return.engine';
 import { settlePosExchange } from '../sales/engines/pos-exchange.engine';
 import { ReturnsWriteHelpersService } from './returns-write-helpers.service';
 import type { ExchangeReturnContext, ReturnInputItem, ReturnDocumentInput } from './returns.types';
@@ -99,45 +102,163 @@ export class ReturnsService {
     });
   }
 
-  private scope(auth: AuthContext) { return requireTenantScope(auth); }
-  private tenantPredicate(auth: AuthContext, alias?: string) { const tenantId = this.scope(auth).tenantId; return alias ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}` : sql<boolean>`tenant_id = ${tenantId}`; }
-  private tenantFields(auth: AuthContext) { const scope = this.scope(auth); return { tenant_id: scope.tenantId, account_id: scope.accountId }; }
-
-  private async addTreasuryTransaction(trx: Kysely<Database>, txnType: string, amount: number, note: string, returnDocumentId: number, auth: AuthContext, branchId: number | null, locationId: number | null, cashRefund = false): Promise<void> {
-    return this.writeHelpers.addTreasuryTransaction(trx, txnType, amount, note, returnDocumentId, auth, branchId, locationId, cashRefund);
+  private scope(auth: AuthContext) {
+    return requireTenantScope(auth);
+  }
+  private tenantPredicate(auth: AuthContext, alias?: string) {
+    const tenantId = this.scope(auth).tenantId;
+    return alias ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}` : sql<boolean>`tenant_id = ${tenantId}`;
+  }
+  private tenantFields(auth: AuthContext) {
+    const scope = this.scope(auth);
+    return { tenant_id: scope.tenantId, account_id: scope.accountId };
   }
 
-  private async addCustomerLedgerEntry(trx: Kysely<Database>, customerId: number, amount: number, entryType: string, note: string, returnDocumentId: number, auth: AuthContext, branchId: number | null, locationId: number | null): Promise<void> {
-    return this.writeHelpers.addCustomerLedgerEntry(trx, customerId, amount, entryType, note, returnDocumentId, auth, branchId, locationId);
+  private async addTreasuryTransaction(
+    trx: Kysely<Database>,
+    txnType: string,
+    amount: number,
+    note: string,
+    returnDocumentId: number,
+    auth: AuthContext,
+    branchId: number | null,
+    locationId: number | null,
+    cashRefund = false,
+  ): Promise<void> {
+    return this.writeHelpers.addTreasuryTransaction(
+      trx,
+      txnType,
+      amount,
+      note,
+      returnDocumentId,
+      auth,
+      branchId,
+      locationId,
+      cashRefund,
+    );
   }
 
-  private async addSupplierLedgerEntry(trx: Kysely<Database>, supplierId: number, amount: number, entryType: string, note: string, returnDocumentId: number, auth: AuthContext, branchId: number | null, locationId: number | null): Promise<void> {
-    return this.writeHelpers.addSupplierLedgerEntry(trx, supplierId, amount, entryType, note, returnDocumentId, auth, branchId, locationId);
+  private async addCustomerLedgerEntry(
+    trx: Kysely<Database>,
+    customerId: number,
+    amount: number,
+    entryType: string,
+    note: string,
+    returnDocumentId: number,
+    auth: AuthContext,
+    branchId: number | null,
+    locationId: number | null,
+  ): Promise<void> {
+    return this.writeHelpers.addCustomerLedgerEntry(
+      trx,
+      customerId,
+      amount,
+      entryType,
+      note,
+      returnDocumentId,
+      auth,
+      branchId,
+      locationId,
+    );
   }
 
-  private async addStoreCredit(trx: Kysely<Database>, customerId: number, amount: number, auth: AuthContext): Promise<void> {
+  private async addSupplierLedgerEntry(
+    trx: Kysely<Database>,
+    supplierId: number,
+    amount: number,
+    entryType: string,
+    note: string,
+    returnDocumentId: number,
+    auth: AuthContext,
+    branchId: number | null,
+    locationId: number | null,
+  ): Promise<void> {
+    return this.writeHelpers.addSupplierLedgerEntry(
+      trx,
+      supplierId,
+      amount,
+      entryType,
+      note,
+      returnDocumentId,
+      auth,
+      branchId,
+      locationId,
+    );
+  }
+
+  private async addStoreCredit(
+    trx: Kysely<Database>,
+    customerId: number,
+    amount: number,
+    auth: AuthContext,
+  ): Promise<void> {
     return this.writeHelpers.addStoreCredit(trx, customerId, amount, auth);
   }
 
   private async restoreReturnedPharmacyBatches(
-    trx: Kysely<Database>, saleId: number, saleItemId: number, productId: number,
-    previousReturnedBaseQty: number, returnBaseQty: number, auth: AuthContext,
+    trx: Kysely<Database>,
+    saleId: number,
+    saleItemId: number,
+    productId: number,
+    previousReturnedBaseQty: number,
+    returnBaseQty: number,
+    auth: AuthContext,
   ): Promise<void> {
-    return this.writeHelpers.restoreReturnedPharmacyBatches(trx, saleId, saleItemId, productId, previousReturnedBaseQty, returnBaseQty, auth);
+    return this.writeHelpers.restoreReturnedPharmacyBatches(
+      trx,
+      saleId,
+      saleItemId,
+      productId,
+      previousReturnedBaseQty,
+      returnBaseQty,
+      auth,
+    );
   }
 
   private async restoreReturnedInventoryBatches(
-    trx: Kysely<Database>, saleId: number, saleItemId: number, productId: number,
-    previousReturnedBaseQty: number, returnBaseQty: number, auth: AuthContext,
+    trx: Kysely<Database>,
+    saleId: number,
+    saleItemId: number,
+    productId: number,
+    previousReturnedBaseQty: number,
+    returnBaseQty: number,
+    auth: AuthContext,
   ): Promise<void> {
-    return this.writeHelpers.restoreReturnedInventoryBatches(trx, saleId, saleItemId, productId, previousReturnedBaseQty, returnBaseQty, auth);
+    return this.writeHelpers.restoreReturnedInventoryBatches(
+      trx,
+      saleId,
+      saleItemId,
+      productId,
+      previousReturnedBaseQty,
+      returnBaseQty,
+      auth,
+    );
   }
 
-  private async insertReturnDocument(trx: Kysely<Database>, row: ReturnDocumentInput, auth: AuthContext): Promise<{ id: number; docNo: string }> {
+  private async insertReturnDocument(
+    trx: Kysely<Database>,
+    row: ReturnDocumentInput,
+    auth: AuthContext,
+  ): Promise<{ id: number; docNo: string }> {
     return this.writeHelpers.insertReturnDocument(trx, row, auth);
   }
 
-  private async insertReturnItem(trx: Kysely<Database>, row: { returnDocumentId: number; productId: number | null; productName: string; qty: number; unitTotal: number; lineTotal: number; allocatedTax?: number | null; costPrice?: number | null; saleItemId?: number; purchaseItemId?: number }, auth: AuthContext): Promise<void> {
+  private async insertReturnItem(
+    trx: Kysely<Database>,
+    row: {
+      returnDocumentId: number;
+      productId: number | null;
+      productName: string;
+      qty: number;
+      unitTotal: number;
+      lineTotal: number;
+      allocatedTax?: number | null;
+      costPrice?: number | null;
+      saleItemId?: number;
+      purchaseItemId?: number;
+    },
+    auth: AuthContext,
+  ): Promise<void> {
     return this.writeHelpers.insertReturnItem(trx, row, auth);
   }
 
@@ -149,14 +270,31 @@ export class ReturnsService {
     return this.reads.getReturnById(id, auth);
   }
 
-  async getInvoiceReturnedQuantities(type: string, invoiceId: number, auth: AuthContext):
-    Promise<{ returnedQtyByLine: Record<string, number>; blockedProductIds: string[] }> {
+  async getInvoiceReturnedQuantities(
+    type: string,
+    invoiceId: number,
+    auth: AuthContext,
+  ): Promise<{ returnedQtyByLine: Record<string, number>; blockedProductIds: string[] }> {
     return this.reads.getInvoiceReturnedQuantities(type, invoiceId, auth);
   }
 
   private computeForfeitForReturn(args: {
-    sale: { discount: number | string | null; total: number | string | null; tax_amount: number | string | null; prices_include_tax: boolean | null };
-    saleItems: Array<{ id: number | string; qty: number | string | null; unit_price: number | string | null; line_total: number | string | null; line_discount?: number | string | null; net_line_total?: number | string | null; allocated_discount?: number | string | null; allocated_tax?: number | string | null }>;
+    sale: {
+      discount: number | string | null;
+      total: number | string | null;
+      tax_amount: number | string | null;
+      prices_include_tax: boolean | null;
+    };
+    saleItems: Array<{
+      id: number | string;
+      qty: number | string | null;
+      unit_price: number | string | null;
+      line_total: number | string | null;
+      line_discount?: number | string | null;
+      net_line_total?: number | string | null;
+      allocated_discount?: number | string | null;
+      allocated_tax?: number | string | null;
+    }>;
     returnedQtyByLine: Map<number, number>;
     returnedAmountByLine: Map<number, number>;
     items: ReturnInputItem[];
@@ -176,7 +314,18 @@ export class ReturnsService {
     return this.relief.applyRaisedGoodsTotal(lines, proRataTotal, requested, cap, moneyDigits);
   }
 
-  async previewReturnRelief(payload: CreateReturnDto, auth: AuthContext): Promise<{ goodsTotal: number; originalGoodsTotal: number; tipRelief: number; courierRelief: number; totalRelief: number; refundTotal: number; forfeit?: ConditionalDiscountForfeitBreakdown }> {
+  async previewReturnRelief(
+    payload: CreateReturnDto,
+    auth: AuthContext,
+  ): Promise<{
+    goodsTotal: number;
+    originalGoodsTotal: number;
+    tipRelief: number;
+    courierRelief: number;
+    totalRelief: number;
+    refundTotal: number;
+    forfeit?: ConditionalDiscountForfeitBreakdown;
+  }> {
     return this.relief.previewReturnRelief(payload, auth);
   }
 
@@ -195,21 +344,52 @@ export class ReturnsService {
     return this.createService.createReturn(payload, auth);
   }
 
-  async prepareExchangeReturn(trx: Transaction<Database>, payload: CreateReturnDto, auth: AuthContext): Promise<ExchangeReturnContext> {
+  async prepareExchangeReturn(
+    trx: Transaction<Database>,
+    payload: CreateReturnDto,
+    auth: AuthContext,
+  ): Promise<ExchangeReturnContext> {
     return this.createService.prepareExchangeReturn(trx, payload, auth);
   }
 
-  async settleExchangeReturn(trx: Transaction<Database>, context: ExchangeReturnContext, saleTotal: number,
-    requested: 'cash' | 'card' | 'store_credit', auth: AuthContext, managerPin?: string): Promise<ReturnType<typeof settlePosExchange>> {
+  async settleExchangeReturn(
+    trx: Transaction<Database>,
+    context: ExchangeReturnContext,
+    saleTotal: number,
+    requested: 'cash' | 'card' | 'store_credit',
+    auth: AuthContext,
+    managerPin?: string,
+  ): Promise<ReturnType<typeof settlePosExchange>> {
     return this.createService.settleExchangeReturn(trx, context, saleTotal, requested, auth, managerPin);
   }
 
-  private async createSaleReturn(trx: Transaction<Database>, payload: CreateReturnDto, items: ReturnInputItem[], auth: AuthContext, approvedByName?: string,
-    exchangePrepared?: (context: ExchangeReturnContext) => void, approvalRequest?: { secret: string; threshold: number }): Promise<number[]> {
-    return this.saleReturn.createSaleReturn(trx, payload, items, auth, approvedByName, exchangePrepared, approvalRequest);
+  private async createSaleReturn(
+    trx: Transaction<Database>,
+    payload: CreateReturnDto,
+    items: ReturnInputItem[],
+    auth: AuthContext,
+    approvedByName?: string,
+    exchangePrepared?: (context: ExchangeReturnContext) => void,
+    approvalRequest?: { secret: string; threshold: number },
+  ): Promise<number[]> {
+    return this.saleReturn.createSaleReturn(
+      trx,
+      payload,
+      items,
+      auth,
+      approvedByName,
+      exchangePrepared,
+      approvalRequest,
+    );
   }
 
-  private async createPurchaseReturn(trx: Transaction<Database>, payload: CreateReturnDto, items: ReturnInputItem[], auth: AuthContext, approvalRequest?: { secret: string; threshold: number }): Promise<number[]> {
+  private async createPurchaseReturn(
+    trx: Transaction<Database>,
+    payload: CreateReturnDto,
+    items: ReturnInputItem[],
+    auth: AuthContext,
+    approvalRequest?: { secret: string; threshold: number },
+  ): Promise<number[]> {
     return this.purchaseReturn.createPurchaseReturn(trx, payload, items, auth, approvalRequest);
   }
 }

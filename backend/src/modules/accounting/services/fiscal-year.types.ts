@@ -37,12 +37,24 @@ export interface ProposedClosingLine {
 }
 
 /** Shared classification for preview and the locked, live closing check. */
-export function fiscalProfitAndLossCategory(account: { code: string; account_type: string }): 'revenue' | 'expense' | null {
+export function fiscalProfitAndLossCategory(account: {
+  code: string;
+  account_type: string;
+}): 'revenue' | 'expense' | null {
   const code = String(account.code || '');
   const type = String(account.account_type || '').toLowerCase();
-  if (type === 'revenue' || type === 'contra_revenue' || code.startsWith('4') || code.startsWith('71')) return 'revenue';
-  if (type === 'expense' || type === 'operating_expenses' || type === 'cogs' || type === 'contra_expense' ||
-      code.startsWith('5') || code.startsWith('6') || code.startsWith('72')) return 'expense';
+  if (type === 'revenue' || type === 'contra_revenue' || code.startsWith('4') || code.startsWith('71'))
+    return 'revenue';
+  if (
+    type === 'expense' ||
+    type === 'operating_expenses' ||
+    type === 'cogs' ||
+    type === 'contra_expense' ||
+    code.startsWith('5') ||
+    code.startsWith('6') ||
+    code.startsWith('72')
+  )
+    return 'expense';
   return null;
 }
 
@@ -55,13 +67,11 @@ export function resolveClosingJournalAccounts(
   if (!Number.isSafeInteger(selectedRetainedId) || selectedRetainedId <= 0) {
     throw new BadRequestException('حساب الأرباح المحتجزة غير صالح.');
   }
-  return proposed.map((line) => (
-    defaultRetainedId != null &&
-    line.accountId === defaultRetainedId &&
-    line.description.includes('الأرباح المحتجزة')
+  return proposed.map((line) =>
+    defaultRetainedId != null && line.accountId === defaultRetainedId && line.description.includes('الأرباح المحتجزة')
       ? { ...line, accountId: selectedRetainedId }
-      : line
-  ));
+      : line,
+  );
 }
 
 export interface FiscalYearPreviewResult {

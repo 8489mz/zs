@@ -70,7 +70,7 @@ export class HeldSalesService {
     this.getCurrentProductOffers = deps.getCurrentProductOffers;
   }
 
-async saveHeldSale(payload: HeldSaleDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async saveHeldSale(payload: HeldSaleDto, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const heldSaleId = await this.tx.runInTransaction(this.db, async (trx) => {
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
@@ -86,7 +86,9 @@ async saveHeldSale(payload: HeldSaleDto, auth: AuthContext): Promise<Record<stri
           unitPrice: Number(item.price || 0),
           unitName: String(item.unitName || 'قطعة').trim() || 'قطعة',
           unitMultiplier: Number(item.unitMultiplier || 1) || 1,
-          priceType: (['retail', 'wholesale', 'half_wholesale', 'credit'].includes(item.priceType as string) ? item.priceType : 'retail') as 'retail' | 'wholesale' | 'half_wholesale' | 'credit',
+          priceType: (['retail', 'wholesale', 'half_wholesale', 'credit'].includes(item.priceType as string)
+            ? item.priceType
+            : 'retail') as 'retail' | 'wholesale' | 'half_wholesale' | 'credit',
           notes: String(item.notes || '').trim(),
           modifiers: item.modifiers || [],
           seatNumber: item.seatNumber ? Number(item.seatNumber) : undefined,
@@ -105,38 +107,53 @@ async saveHeldSale(payload: HeldSaleDto, auth: AuthContext): Promise<Record<stri
           lineDiscount: item.lineDiscount != null ? Number(item.lineDiscount) : undefined,
           offerName: item.offerName ? String(item.offerName) : undefined,
           isWeighted: item.isWeighted != null ? Boolean(item.isWeighted) : undefined,
-          quantityChunks: Array.isArray(item.quantityChunks) ? item.quantityChunks.map((entry) => Number(entry)) : undefined,
+          quantityChunks: Array.isArray(item.quantityChunks)
+            ? item.quantityChunks.map((entry) => Number(entry))
+            : undefined,
         }))
         .filter((entry) => entry.productId > 0 && entry.qty > 0);
 
-      if (!items.length) throw new AppError('Held draft must include at least one item', 'HELD_DRAFT_ITEMS_REQUIRED', 400);
+      if (!items.length)
+        throw new AppError('Held draft must include at least one item', 'HELD_DRAFT_ITEMS_REQUIRED', 400);
       /* INV-POS-LINE-DISCOUNT: the hold gate counts line discounts
        * exactly like createSale does — holding a discounted draft is
        * granting the discount, not deferring it. */
-      const heldLineDiscountTotal = roundMoney(items.reduce((sum, item) => sum + Number((item as { lineDiscount?: number }).lineDiscount || 0), 0), moneyDigits);
-      await this.assertDiscountChangeAllowed(trx, auth, roundMoney(Number(payload.discount || 0) + heldLineDiscountTotal, moneyDigits), payload.managerPin);
+      const heldLineDiscountTotal = roundMoney(
+        items.reduce((sum, item) => sum + Number((item as { lineDiscount?: number }).lineDiscount || 0), 0),
+        moneyDigits,
+      );
+      await this.assertDiscountChangeAllowed(
+        trx,
+        auth,
+        roundMoney(Number(payload.discount || 0) + heldLineDiscountTotal, moneyDigits),
+        payload.managerPin,
+      );
 
       for (const item of items) {
         let finalProductName = item.productName;
-        const product = await trx.selectFrom('products as p')
-          .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
+        const product = await trx
+          .selectFrom('products as p')
+          .leftJoin('manufacturing_boms as b', (join) =>
+            join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true),
+          )
           .select(['p.id', 'p.retail_price', 'p.wholesale_price', 'b.id as bom_id'])
           .where('p.id', '=', item.productId)
           .where(sql<boolean>`p.tenant_id = ${scope.tenantId}`)
           .where('p.is_active', '=', true)
           .executeTakeFirst();
-        
+
         if (!product) throw new AppError(`Product #${item.productId} not found`, 'PRODUCT_NOT_FOUND', 404);
 
         if (product.bom_id) {
-          const bomLines = await trx.selectFrom('manufacturing_bom_lines as l')
+          const bomLines = await trx
+            .selectFrom('manufacturing_bom_lines as l')
             .innerJoin('products as p', 'p.id', 'l.component_product_id')
             .select('p.name')
             .where('l.bom_id', '=', Number(product.bom_id))
             .execute();
-          
+
           if (bomLines.length > 0) {
-            finalProductName = `${item.productName} (${bomLines.map(l => l.name).join(' + ')})`;
+            finalProductName = `${item.productName} (${bomLines.map((l) => l.name).join(' + ')})`;
           }
         }
         item.productName = finalProductName;
@@ -151,37 +168,45 @@ async saveHeldSale(payload: HeldSaleDto, auth: AuthContext): Promise<Record<stri
           businessTimezone,
           moneyDigits,
         });
-        await this.assertUnitPriceChangeAllowed(trx, auth, item.unitPrice, allowedUnitPrice, item.productId, payload.managerPin);
+        await this.assertUnitPriceChangeAllowed(
+          trx,
+          auth,
+          item.unitPrice,
+          allowedUnitPrice,
+          item.productId,
+          payload.managerPin,
+        );
       }
 
       type SalePaymentChannel = 'cash' | 'card' | 'wallet' | 'instapay' | 'mixed' | 'credit';
       const rawRequestedChannel = String(payload.paymentChannel || '').trim();
-      const requestedChannel: SalePaymentChannel | '' = (['cash', 'card', 'wallet', 'instapay', 'mixed', 'credit'] as const)
-        .includes(rawRequestedChannel as SalePaymentChannel)
+      const requestedChannel: SalePaymentChannel | '' = (
+        ['cash', 'card', 'wallet', 'instapay', 'mixed', 'credit'] as const
+      ).includes(rawRequestedChannel as SalePaymentChannel)
         ? (rawRequestedChannel as SalePaymentChannel)
         : '';
       const paymentType = payload.paymentType === 'credit' ? 'credit' : 'cash';
       const cashAmount = paymentType === 'credit' ? 0 : Math.max(0, Number(payload.cashAmount || 0));
       const cardAmount = paymentType === 'credit' ? 0 : Math.max(0, Number(payload.cardAmount || 0));
       const transferAmount = paymentType === 'credit' ? 0 : Math.max(0, Number(payload.transferAmount || 0));
-      const paidAmount = paymentType === 'credit'
-        ? 0
-        : roundMoney(cashAmount + cardAmount + transferAmount, moneyDigits);
+      const paidAmount =
+        paymentType === 'credit' ? 0 : roundMoney(cashAmount + cardAmount + transferAmount, moneyDigits);
 
-      const paymentChannel: 'cash' | 'card' | 'wallet' | 'instapay' | 'mixed' | 'credit' = paymentType === 'credit'
-        ? 'credit'
-        : (() => {
-          if (requestedChannel === 'wallet' || requestedChannel === 'instapay') return requestedChannel;
-          const hasCash = cashAmount > 0.0001;
-          const hasCard = cardAmount > 0.0001;
-          const hasTransfer = transferAmount > 0.0001;
+      const paymentChannel: 'cash' | 'card' | 'wallet' | 'instapay' | 'mixed' | 'credit' =
+        paymentType === 'credit'
+          ? 'credit'
+          : (() => {
+              if (requestedChannel === 'wallet' || requestedChannel === 'instapay') return requestedChannel;
+              const hasCash = cashAmount > 0.0001;
+              const hasCard = cardAmount > 0.0001;
+              const hasTransfer = transferAmount > 0.0001;
 
-          if ((hasCash && hasCard) || (hasCash && hasTransfer) || (hasCard && hasTransfer)) return 'mixed';
-          if (hasCard) return 'card';
-          if (hasTransfer) return 'wallet';
-          if (requestedChannel === 'card') return 'card';
-          return 'cash';
-        })();
+              if ((hasCash && hasCard) || (hasCash && hasTransfer) || (hasCard && hasTransfer)) return 'mixed';
+              if (hasCard) return 'card';
+              if (hasTransfer) return 'wallet';
+              if (requestedChannel === 'card') return 'card';
+              return 'cash';
+            })();
 
       const heldTableNumber = String(payload.tableNumber || '').trim();
       // INV-REST-PAID-GATES-2 (R4-D, I42): one open held draft per
@@ -262,7 +287,9 @@ async saveHeldSale(payload: HeldSaleDto, auth: AuthContext): Promise<Record<stri
           ...(item.lineDiscount != null ? { lineDiscount: item.lineDiscount } : {}),
           ...(item.offerName ? { offerName: item.offerName } : {}),
           ...(item.isWeighted != null ? { isWeighted: item.isWeighted } : {}),
-          ...(Array.isArray(item.quantityChunks) && item.quantityChunks.length ? { quantityChunks: item.quantityChunks } : {}),
+          ...(Array.isArray(item.quantityChunks) && item.quantityChunks.length
+            ? { quantityChunks: item.quantityChunks }
+            : {}),
         };
         const hasHeldMeta = Object.keys(heldMeta).length > 0;
         const hasExtraMeta = item.seatNumber != null || Boolean(item.course) || hasHeldMeta;
@@ -301,7 +328,7 @@ async saveHeldSale(payload: HeldSaleDto, auth: AuthContext): Promise<Record<stri
     return { ok: true, heldSales: (await this.query.listHeldSales(auth)).heldSales };
   }
 
-async deleteHeldSale(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
+  async deleteHeldSale(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const heldSale = await this.db
       .selectFrom('held_sales')
@@ -313,12 +340,16 @@ async deleteHeldSale(id: number, auth: AuthContext): Promise<Record<string, unkn
       throw new AppError('Held sale not found', 'HELD_SALE_NOT_FOUND', 404);
     }
 
-    await this.db.deleteFrom('held_sales').where('id', '=', id).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+    await this.db
+      .deleteFrom('held_sales')
+      .where('id', '=', id)
+      .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+      .execute();
     await this.audit.log('حذف فاتورة معلقة', `تم حذف فاتورة معلقة #${id} بواسطة ${auth.username}`, auth);
     return { ok: true, heldSales: (await this.query.listHeldSales(auth)).heldSales };
   }
 
-async clearHeldSales(auth: AuthContext): Promise<Record<string, unknown>> {
+  async clearHeldSales(auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const canManageHeldSales = this.authz.canManageHeldSales(auth);
     const ownerUserId = this.authz.heldSaleOwnerUserId(auth);
@@ -330,7 +361,11 @@ async clearHeldSales(auth: AuthContext): Promise<Record<string, unknown>> {
     const deletedCount = Number(result?.[0]?.numDeletedRows ?? NaN);
     const scopeLabel = canManageHeldSales ? 'privileged broader management' : 'own held sales';
     const countLabel = Number.isFinite(deletedCount) ? ` | deletedCount=${deletedCount}` : '';
-    await this.audit.log('حذف كل الفواتير المعلقة', `تم حذف كل الفواتير المعلقة بواسطة ${auth.username} | scope=${scopeLabel}${countLabel}`, auth);
+    await this.audit.log(
+      'حذف كل الفواتير المعلقة',
+      `تم حذف كل الفواتير المعلقة بواسطة ${auth.username} | scope=${scopeLabel}${countLabel}`,
+      auth,
+    );
     return { ok: true, heldSales: (await this.query.listHeldSales(auth)).heldSales };
   }
 }

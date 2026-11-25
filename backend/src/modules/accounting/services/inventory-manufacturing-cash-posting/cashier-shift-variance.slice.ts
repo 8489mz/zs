@@ -89,7 +89,11 @@ export class CashierShiftVarianceSlice {
         .executeTakeFirst();
       if (row == null || row.value == null || String(row.value).trim() === '') return this.maxAllowedDifference(digits);
       let raw: unknown = row.value;
-      try { raw = JSON.parse(String(row.value)); } catch { /* plain scalar */ }
+      try {
+        raw = JSON.parse(String(row.value));
+      } catch {
+        /* plain scalar */
+      }
       const parsed = Number(raw);
       return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
     } catch {
@@ -97,11 +101,20 @@ export class CashierShiftVarianceSlice {
     }
   }
 
-  async postCashierShiftVariance(queryable: DbOrTx, shiftId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postCashierShiftVariance(
+    queryable: DbOrTx,
+    shiftId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
 
-    const shift = await queryable.selectFrom('cashier_shifts').selectAll().where('id', '=', shiftId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+    const shift = await queryable
+      .selectFrom('cashier_shifts')
+      .selectAll()
+      .where('id', '=', shiftId)
+      .where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
     if (!shift || shift.status !== 'closed') return { posted: false, journalEntryId: null };
 
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
@@ -131,28 +144,73 @@ export class CashierShiftVarianceSlice {
     let chargedToUserId: number | null = null;
 
     if (variance < 0) {
-       const amount = Math.abs(variance);
-       const custodianId = shift.opened_by ? Number(shift.opened_by) : null;
-       const chargeToCashier = amount > shortageTolerance && custodianId !== null && custodianId > 0;
+      const amount = Math.abs(variance);
+      const custodianId = shift.opened_by ? Number(shift.opened_by) : null;
+      const chargeToCashier = amount > shortageTolerance && custodianId !== null && custodianId > 0;
 
-       if (chargeToCashier) {
-         const receivableAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1135');
-         addBookLine({ accountId: receivableAccountId, description: `عجز وردية رقم #${shiftId} محمّل على أمين الصندوق`, debit: amount, credit: 0, partnerType: 'employee', partnerId: custodianId, branchId, locationId });
-         resolution = 'charged_to_cashier';
-         chargedToUserId = custodianId;
-       } else {
-         const shortageAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7210');
-         addBookLine({ accountId: shortageAccountId, description: `عجز وردية رقم #${shiftId} ضمن حد التسامح`, debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
-         resolution = 'within_tolerance';
-       }
-       addBookLine({ accountId: cashAccountId, description: `عجز وردية نقدية`, debit: 0, credit: amount, partnerType: 'none', partnerId: null, branchId, locationId });
+      if (chargeToCashier) {
+        const receivableAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1135');
+        addBookLine({
+          accountId: receivableAccountId,
+          description: `عجز وردية رقم #${shiftId} محمّل على أمين الصندوق`,
+          debit: amount,
+          credit: 0,
+          partnerType: 'employee',
+          partnerId: custodianId,
+          branchId,
+          locationId,
+        });
+        resolution = 'charged_to_cashier';
+        chargedToUserId = custodianId;
+      } else {
+        const shortageAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7210');
+        addBookLine({
+          accountId: shortageAccountId,
+          description: `عجز وردية رقم #${shiftId} ضمن حد التسامح`,
+          debit: amount,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        });
+        resolution = 'within_tolerance';
+      }
+      addBookLine({
+        accountId: cashAccountId,
+        description: `عجز وردية نقدية`,
+        debit: 0,
+        credit: amount,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     } else {
-       // Overage. Never netted against another shift's shortage: it lands on its own income account.
-       const overageAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7110');
-       const amount = variance;
-       addBookLine({ accountId: cashAccountId, description: `زيادة وردية رقم #${shiftId}`, debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
-       addBookLine({ accountId: overageAccountId, description: `زيادة وردية نقدية`, debit: 0, credit: amount, partnerType: 'none', partnerId: null, branchId, locationId });
-       resolution = 'surplus_recognized';
+      // Overage. Never netted against another shift's shortage: it lands on its own income account.
+      const overageAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7110');
+      const amount = variance;
+      addBookLine({
+        accountId: cashAccountId,
+        description: `زيادة وردية رقم #${shiftId}`,
+        debit: amount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
+      addBookLine({
+        accountId: overageAccountId,
+        description: `زيادة وردية نقدية`,
+        debit: 0,
+        credit: amount,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
+      resolution = 'surplus_recognized';
     }
 
     try {
@@ -186,8 +244,14 @@ export class CashierShiftVarianceSlice {
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_round1_uniq')) {
-         const existing = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'cashier_shift_variance').where('source_id', '=', shiftId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
-         return { posted: false, journalEntryId: Number(existing?.id || 0) };
+        const existing = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'cashier_shift_variance')
+          .where('source_id', '=', shiftId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
+        return { posted: false, journalEntryId: Number(existing?.id || 0) };
       }
       throw e;
     }

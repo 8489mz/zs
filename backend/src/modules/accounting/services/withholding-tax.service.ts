@@ -248,10 +248,10 @@ export class WithholdingTaxService {
     // Determine rate based on Egyptian law standard if not provided
     let rate = Number(dto.wht_rate);
     if (rate === undefined || isNaN(rate)) {
-      if (dto.wht_type === 'goods') rate = 1.00;
-      else if (dto.wht_type === 'services') rate = 3.00;
-      else if (dto.wht_type === 'professional') rate = 5.00;
-      else rate = 1.00;
+      if (dto.wht_type === 'goods') rate = 1.0;
+      else if (dto.wht_type === 'services') rate = 3.0;
+      else if (dto.wht_type === 'professional') rate = 5.0;
+      else rate = 1.0;
     }
 
     const period = this.determineQuarterAndYear(dto.invoice_date);
@@ -343,7 +343,7 @@ export class WithholdingTaxService {
       const fromDate = dto.fromDate;
       const toDate = dto.toDate;
       const whtType = dto.defaultWhtType || 'goods';
-      const rate = dto.defaultWhtRate !== undefined ? Number(dto.defaultWhtRate) : 1.00;
+      const rate = dto.defaultWhtRate !== undefined ? Number(dto.defaultWhtRate) : 1.0;
 
       if (!Number.isFinite(rate) || rate <= 0 || rate > 100) throw new BadRequestException('نسبة الخصم غير صالحة.');
 
@@ -365,7 +365,9 @@ export class WithholdingTaxService {
       // Fetch purchases that exceed 300 EGP and are not cancelled
       const purchases = await (trx as any)
         .selectFrom('purchases as p')
-        .leftJoin('suppliers as s', (join: any) => join.onRef('s.id', '=', 'p.supplier_id').onRef('s.tenant_id', '=', 'p.tenant_id'))
+        .leftJoin('suppliers as s', (join: any) =>
+          join.onRef('s.id', '=', 'p.supplier_id').onRef('s.tenant_id', '=', 'p.tenant_id'),
+        )
         .where('p.tenant_id', '=', tenantId)
         .where('p.status', '=', 'posted')
         .where(sql<boolean>`p.created_at >= ${fromDate}::date AND p.created_at < (${toDate}::date + interval '1 day')`)
@@ -387,10 +389,15 @@ export class WithholdingTaxService {
         .execute();
 
       if (purchases.length === 0) {
-        return { extracted_count: 0, total_tax_added: 0, message: 'لا توجد فواتير شراء خاضعة للخصم والإضافة في هذه الفترة' };
+        return {
+          extracted_count: 0,
+          total_tax_added: 0,
+          message: 'لا توجد فواتير شراء خاضعة للخصم والإضافة في هذه الفترة',
+        };
       }
 
-      if (purchases.some((purchase: any) => purchase.supplier_id && !purchase.owned_supplier_id)) throw new BadRequestException('توجد فاتورة بمورد خارج المنشأة؛ يلزم مطابقتها قبل استخراج الضريبة.');
+      if (purchases.some((purchase: any) => purchase.supplier_id && !purchase.owned_supplier_id))
+        throw new BadRequestException('توجد فاتورة بمورد خارج المنشأة؛ يلزم مطابقتها قبل استخراج الضريبة.');
 
       // Check existing extracted purchases to avoid duplication
       const purchaseIds = purchases.map((p: any) => p.purchase_id);
@@ -494,12 +501,7 @@ export class WithholdingTaxService {
 
       // When transitioning to 'paid', post remittance journal entry
       if (dto.status === 'paid' && existing.status !== 'paid') {
-        const postRes = await this.accountingPostingService.postWithholdingTaxRemittance(
-          trx,
-          id,
-          'bank',
-          auth,
-        );
+        const postRes = await this.accountingPostingService.postWithholdingTaxRemittance(trx, id, 'bank', auth);
         if (!postRes.journalEntryId) throw new BadRequestException('تعذر ترحيل قيد سداد ضريبة الاستقطاع.');
         // Gapless numbering (INV-JE-NUMBERING-GAP): the number no longer
         // equals the identity id -- read the stored number back instead
@@ -574,25 +576,31 @@ export class WithholdingTaxService {
     const partnerId = Number(tx.partner_id);
     const isSupplier = tx.direction === 'payable';
     const table = isSupplier ? 'suppliers' : 'customers';
-    const updated = await trx.updateTable(table)
+    const updated = await trx
+      .updateTable(table)
       .set({ balance: sql`COALESCE(balance, 0) + ${amount}`, updated_at: sql`NOW()` })
-      .where('id', '=', partnerId).where('tenant_id', '=', tenantId)
-      .returning(['balance']).executeTakeFirst();
+      .where('id', '=', partnerId)
+      .where('tenant_id', '=', tenantId)
+      .returning(['balance'])
+      .executeTakeFirst();
     if (!updated) throw new BadRequestException('الشريك المرتبط بمعاملة الخصم والإضافة غير موجود.');
-    await trx.insertInto(isSupplier ? 'supplier_ledger' : 'customer_ledger').values({
-      [isSupplier ? 'supplier_id' : 'customer_id']: partnerId,
-      entry_type: 'withholding_tax',
-      amount,
-      balance_after: Number(updated.balance),
-      note: `ضريبة خصم وإضافة - فاتورة #${tx.invoice_number}`,
-      reference_type: 'withholding_tax',
-      reference_id: Number(tx.id),
-      created_by: auth.userId ? Number(auth.userId) : null,
-      branch_id: null,
-      location_id: null,
-      tenant_id: tenantId,
-      account_id: accountId,
-    }).execute();
+    await trx
+      .insertInto(isSupplier ? 'supplier_ledger' : 'customer_ledger')
+      .values({
+        [isSupplier ? 'supplier_id' : 'customer_id']: partnerId,
+        entry_type: 'withholding_tax',
+        amount,
+        balance_after: Number(updated.balance),
+        note: `ضريبة خصم وإضافة - فاتورة #${tx.invoice_number}`,
+        reference_type: 'withholding_tax',
+        reference_id: Number(tx.id),
+        created_by: auth.userId ? Number(auth.userId) : null,
+        branch_id: null,
+        location_id: null,
+        tenant_id: tenantId,
+        account_id: accountId,
+      })
+      .execute();
   }
 
   /**

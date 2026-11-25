@@ -38,4 +38,3 @@ export interface CreatePurchaseOrderDto {
 export interface UpdatePurchaseOrderDto extends Partial<CreatePurchaseOrderDto> {
   status?: 'draft' | 'confirmed' | 'partially_received' | 'received' | 'converted_to_bill' | 'cancelled';
 }
-

@@ -300,10 +300,20 @@ export class FiscalYearCloseService {
     const tenantId = String(auth.tenantId || '');
     const userId = Number(auth.userId) || null;
 
-    const year = await this.db.selectFrom('accounting_fiscal_years').select('end_date').where('tenant_id', '=', tenantId).where('id', '=', id).executeTakeFirstOrThrow();
+    const year = await this.db
+      .selectFrom('accounting_fiscal_years')
+      .select('end_date')
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow();
     const recognitionEnd = this.formatDate(year.end_date);
     const today = await resolveBusinessDateKey(this.db, tenantId, new Date());
-    await this.accountingPosting.recognizeInstallmentInterest(this.db, tenantId, recognitionEnd < today ? recognitionEnd : today, userId);
+    await this.accountingPosting.recognizeInstallmentInterest(
+      this.db,
+      tenantId,
+      recognitionEnd < today ? recognitionEnd : today,
+      userId,
+    );
 
     // 1. Get preview and validation
     const preview = await this.previewFiscalYearClose(auth, id);
@@ -353,7 +363,8 @@ export class FiscalYearCloseService {
       if (lockedFy.status === 'closed') throw new BadRequestException('هذه السنة المالية مقفلة بالفعل.');
 
       await assertAccountingCloseReady(trx, tenantId, this.formatDate(fy.start_date), endDate);
-      const liveDrafts = await trx.selectFrom('journal_entries')
+      const liveDrafts = await trx
+        .selectFrom('journal_entries')
         .select(sql<number>`COUNT(*)`.as('count'))
         .where('tenant_id', '=', tenantId)
         .where('status', '=', 'draft')
@@ -388,12 +399,15 @@ export class FiscalYearCloseService {
       const actualBalances = new Map<number, number>();
       for (const account of recomputed.revenueAccounts) actualBalances.set(account.id, account.balance);
       for (const account of recomputed.expenseAccounts) actualBalances.set(account.id, account.balance);
-      if (expectedBalances.size !== actualBalances.size ||
-          [...expectedBalances].some(([accountId, balance]) =>
-            !actualBalances.has(accountId) || actualBalances.get(accountId) !== balance) ||
-          preview.totalRevenue !== recomputed.totalRevenue ||
-          preview.totalExpense !== recomputed.totalExpense ||
-          preview.netProfitLoss !== recomputed.netProfitLoss) {
+      if (
+        expectedBalances.size !== actualBalances.size ||
+        [...expectedBalances].some(
+          ([accountId, balance]) => !actualBalances.has(accountId) || actualBalances.get(accountId) !== balance,
+        ) ||
+        preview.totalRevenue !== recomputed.totalRevenue ||
+        preview.totalExpense !== recomputed.totalExpense ||
+        preview.netProfitLoss !== recomputed.netProfitLoss
+      ) {
         throw new BadRequestException(
           'تغير رصيد واحد أو أكثر من حسابات الأرباح والخسائر بعد المعاينة؛ يجب تحديث المعاينة قبل الإقفال.',
         );
@@ -422,15 +436,26 @@ export class FiscalYearCloseService {
 
         const description = `إقفال السنة المالية: ${fy.name} وترحيل صافي ${recomputed.isProfit ? 'الأرباح' : 'الخسائر'} (${Math.abs(recomputed.netProfitLoss).toFixed(postDigits)}) إلى حساب [${retainedAccount.code} - ${retainedAccount.name_ar}]`;
         const entryId = await this.accountingPosting.postDomainJournal(trx, {
-          sourceType: 'fiscal_year_closing', sourceId: fy.id, tenantId,
-          accountId: auth.accountId || tenantId, entryDate: new Date(endDate),
-          description, createdBy: userId,
+          sourceType: 'fiscal_year_closing',
+          sourceId: fy.id,
+          tenantId,
+          accountId: auth.accountId || tenantId,
+          entryDate: new Date(endDate),
+          description,
+          createdBy: userId,
           lines: resolveClosingJournalAccounts(
-            recomputed.proposedClosingLines, recomputed.retainedEarningsAccount?.id ?? null, retainedEarningsAccountId,
+            recomputed.proposedClosingLines,
+            recomputed.retainedEarningsAccount?.id ?? null,
+            retainedEarningsAccountId,
           ).map((line) => ({
-            accountId: line.accountId, description: line.description,
-            debit: line.debit, credit: line.credit,
-            partnerType: 'none' as const, partnerId: null, branchId: null, locationId: null,
+            accountId: line.accountId,
+            description: line.description,
+            debit: line.debit,
+            credit: line.credit,
+            partnerType: 'none' as const,
+            partnerId: null,
+            branchId: null,
+            locationId: null,
           })),
         });
         createdJournalEntryId = entryId;
@@ -446,7 +471,6 @@ export class FiscalYearCloseService {
           .where('id', '=', entryId)
           .where('tenant_id', '=', tenantId)
           .execute();
-
       }
 
       // Update fiscal year
@@ -495,9 +519,7 @@ export class FiscalYearCloseService {
       // this step exists to prevent. If the tenant has no settings row yet, create it rather than
       // silently skipping the lock.
       if (currentSettings) {
-        const curLock = currentSettings.lock_date_all
-          ? this.formatDate(currentSettings.lock_date_all)
-          : '';
+        const curLock = currentSettings.lock_date_all ? this.formatDate(currentSettings.lock_date_all) : '';
         // If current lock is empty or earlier than this fiscal year end date, advance the lock date
         if (!curLock || curLock < endDate) {
           await trx

@@ -23,28 +23,50 @@ export class PurchaseOrdersService {
     private readonly approvals: ApprovalWorkflowService,
   ) {}
 
-  private async assertOrderReferences(trx: Kysely<Database>, tenantId: string,
-    supplierId: number | null | undefined, warehouseId: number | null | undefined,
-    productIds: number[]): Promise<void> {
-    if (supplierId != null && !await trx.selectFrom('suppliers').select('id')
-      .where('tenant_id', '=', tenantId).where('id', '=', supplierId).executeTakeFirst()) {
+  private async assertOrderReferences(
+    trx: Kysely<Database>,
+    tenantId: string,
+    supplierId: number | null | undefined,
+    warehouseId: number | null | undefined,
+    productIds: number[],
+  ): Promise<void> {
+    if (
+      supplierId != null &&
+      !(await trx
+        .selectFrom('suppliers')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', supplierId)
+        .executeTakeFirst())
+    ) {
       throw new BadRequestException('المورد لا يتبع المنشأة.');
     }
-    if (warehouseId != null && !await trx.selectFrom('stock_locations').select('id')
-      .where('tenant_id', '=', tenantId).where('id', '=', warehouseId).executeTakeFirst()) {
+    if (
+      warehouseId != null &&
+      !(await trx
+        .selectFrom('stock_locations')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', warehouseId)
+        .executeTakeFirst())
+    ) {
       throw new BadRequestException('المخزن لا يتبع المنشأة.');
     }
     const ids = [...new Set(productIds.map(Number))];
-    if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new BadRequestException('أحد أصناف أمر الشراء غير صالح.');
-    if (ids.length && (await trx.selectFrom('products').select('id')
-      .where('tenant_id', '=', tenantId).where('id', 'in', ids).execute()).length !== ids.length) {
+    if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0))
+      throw new BadRequestException('أحد أصناف أمر الشراء غير صالح.');
+    if (
+      ids.length &&
+      (await trx.selectFrom('products').select('id').where('tenant_id', '=', tenantId).where('id', 'in', ids).execute())
+        .length !== ids.length
+    ) {
       throw new BadRequestException('أحد أصناف أمر الشراء لا يتبع المنشأة.');
     }
   }
 
   async listOrders(
     auth: AuthContext,
-    query?: { status?: string; search?: string; limit?: number; offset?: number }
+    query?: { status?: string; search?: string; limit?: number; offset?: number },
   ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     let qb = this.db
@@ -121,7 +143,9 @@ export class PurchaseOrdersService {
 
     const items = await this.db
       .selectFrom('purchase_order_items as poi')
-      .leftJoin('products as p', (j) => j.onRef('p.id', '=', 'poi.product_id').onRef('p.tenant_id', '=', 'poi.tenant_id'))
+      .leftJoin('products as p', (j) =>
+        j.onRef('p.id', '=', 'poi.product_id').onRef('p.tenant_id', '=', 'poi.tenant_id'),
+      )
       .select([
         'poi.id',
         'poi.purchase_order_id',
@@ -166,72 +190,97 @@ export class PurchaseOrdersService {
     // transaction's return value (never via outer lets: assignments
     // inside the callback are invisible to the caller's narrowing).
     const created = await this.db.transaction().execute(async (trx) => {
-    let approval: { requiresApproval: boolean } | null = null;
-    let finalStatus: 'draft' | 'confirmed' | 'pending_approval' = 'draft';
-    await this.assertOrderReferences(trx, scope.tenantId, payload.supplierId, payload.warehouseId,
-      payload.items.map((item) => item.productId));
-    const insertedOrder = await trx
-      .insertInto('purchase_orders')
-      .values({
-        tenant_id: scope.tenantId,
-        account_id: scope.accountId,
-        order_number: `PO-TMP-${randomUUID()}`,
-        supplier_id: payload.supplierId || null,
-        supplier_name: payload.supplierName,
-        supplier_phone: payload.supplierPhone || null,
-        warehouse_id: payload.warehouseId || null,
-        warehouse_name: payload.warehouseName || null,
-        subtotal: totals.subtotal,
-        tax_amount: totals.taxAmount,
-        discount_amount: totals.discountAmount,
-        total_amount: totals.totalAmount,
-        status: 'draft',
-        expected_delivery_date: payload.expectedDeliveryDate || null,
-        notes: payload.notes || null,
-        terms_conditions: payload.termsConditions || null,
-        created_by: auth.userId ? Number(auth.userId) : null,
-      })
-      .returning(['id', 'order_number'])
-      .executeTakeFirstOrThrow();
-
-    const orderId = Number(insertedOrder.id);
-    const orderNumber = formatDailyDocumentNumber('PO', orderId, new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
-    await trx.updateTable('purchase_orders').set({ order_number: orderNumber })
-      .where('id', '=', orderId).where('tenant_id', '=', scope.tenantId).execute();
-
-    for (const [index, item] of payload.items.entries()) {
-      await trx
-        .insertInto('purchase_order_items')
+      let approval: { requiresApproval: boolean } | null = null;
+      let finalStatus: 'draft' | 'confirmed' | 'pending_approval' = 'draft';
+      await this.assertOrderReferences(
+        trx,
+        scope.tenantId,
+        payload.supplierId,
+        payload.warehouseId,
+        payload.items.map((item) => item.productId),
+      );
+      const insertedOrder = await trx
+        .insertInto('purchase_orders')
         .values({
           tenant_id: scope.tenantId,
           account_id: scope.accountId,
-          purchase_order_id: orderId,
-          product_id: item.productId,
-          product_name: item.productName,
-          unit_name: item.unitName || null,
-          quantity: item.quantity,
-          received_quantity: 0,
-          unit_cost: item.unitCost,
-          tax_rate: item.taxRate || 0,
-          discount: item.discount || 0,
-          total: totals.lineTotals[index],
-          notes: item.notes || null,
+          order_number: `PO-TMP-${randomUUID()}`,
+          supplier_id: payload.supplierId || null,
+          supplier_name: payload.supplierName,
+          supplier_phone: payload.supplierPhone || null,
+          warehouse_id: payload.warehouseId || null,
+          warehouse_name: payload.warehouseName || null,
+          subtotal: totals.subtotal,
+          tax_amount: totals.taxAmount,
+          discount_amount: totals.discountAmount,
+          total_amount: totals.totalAmount,
+          status: 'draft',
+          expected_delivery_date: payload.expectedDeliveryDate || null,
+          notes: payload.notes || null,
+          terms_conditions: payload.termsConditions || null,
+          created_by: auth.userId ? Number(auth.userId) : null,
         })
+        .returning(['id', 'order_number'])
+        .executeTakeFirstOrThrow();
+
+      const orderId = Number(insertedOrder.id);
+      const orderNumber = formatDailyDocumentNumber(
+        'PO',
+        orderId,
+        new Date(),
+        4,
+        await getTenantTimezone(trx, scope.tenantId),
+      );
+      await trx
+        .updateTable('purchase_orders')
+        .set({ order_number: orderNumber })
+        .where('id', '=', orderId)
+        .where('tenant_id', '=', scope.tenantId)
         .execute();
-    }
 
-    if (payload.submitForApproval) {
-      approval = await this.approvals.checkAndInitiateApproval({
-        module: 'purchase_orders', recordId: orderId, recordRef: orderNumber,
-        amount: totals.totalAmount,
-      }, auth, trx);
-      finalStatus = approval.requiresApproval ? 'pending_approval' : 'confirmed';
-      await trx.updateTable('purchase_orders').set({ status: finalStatus, updated_at: new Date() })
-        .where('id', '=', orderId).where('tenant_id', '=', scope.tenantId)
-        .where('account_id', '=', scope.accountId).execute();
-    }
+      for (const [index, item] of payload.items.entries()) {
+        await trx
+          .insertInto('purchase_order_items')
+          .values({
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+            purchase_order_id: orderId,
+            product_id: item.productId,
+            product_name: item.productName,
+            unit_name: item.unitName || null,
+            quantity: item.quantity,
+            received_quantity: 0,
+            unit_cost: item.unitCost,
+            tax_rate: item.taxRate || 0,
+            discount: item.discount || 0,
+            total: totals.lineTotals[index],
+            notes: item.notes || null,
+          })
+          .execute();
+      }
 
-    return { orderId, orderNumber, approval, finalStatus };
+      if (payload.submitForApproval) {
+        approval = await this.approvals.checkAndInitiateApproval(
+          {
+            module: 'purchase_orders',
+            recordId: orderId,
+            recordRef: orderNumber,
+            amount: totals.totalAmount,
+          },
+          auth,
+          trx,
+        );
+        finalStatus = approval.requiresApproval ? 'pending_approval' : 'confirmed';
+        await trx
+          .updateTable('purchase_orders')
+          .set({ status: finalStatus, updated_at: new Date() })
+          .where('id', '=', orderId)
+          .where('tenant_id', '=', scope.tenantId)
+          .where('account_id', '=', scope.accountId)
+          .execute();
+      }
+
+      return { orderId, orderNumber, approval, finalStatus };
     });
     if (created.approval?.requiresApproval) {
       this.approvals.notifyPendingApproval(scope.tenantId, created.orderNumber, totals.totalAmount);
@@ -242,11 +291,12 @@ export class PurchaseOrdersService {
       id: created.orderId,
       orderNumber: created.orderNumber,
       status: created.finalStatus,
-      message: created.finalStatus === 'confirmed'
-        ? 'تم اعتماد أمر الشراء بنجاح'
-        : created.finalStatus === 'pending_approval'
-          ? 'أمر الشراء بانتظار موافقة مدير آخر'
-          : 'تم إنشاء أمر الشراء بنجاح',
+      message:
+        created.finalStatus === 'confirmed'
+          ? 'تم اعتماد أمر الشراء بنجاح'
+          : created.finalStatus === 'pending_approval'
+            ? 'أمر الشراء بانتظار موافقة مدير آخر'
+            : 'تم إنشاء أمر الشراء بنجاح',
     };
   }
 
@@ -269,26 +319,42 @@ export class PurchaseOrdersService {
       if (order.status !== 'draft') {
         throw new BadRequestException('يمكن تعديل أمر الشراء في حالة المسودة فقط');
       }
-      if (payload.status && payload.status !== 'draft') throw new BadRequestException('تغيير حالة أمر الشراء يتم عبر مسار الاعتماد فقط');
-      if (payload.items && !payload.items.length) throw new BadRequestException('أمر الشراء يحتاج بنداً واحداً على الأقل.');
-      await this.assertOrderReferences(trx, scope.tenantId,
+      if (payload.status && payload.status !== 'draft')
+        throw new BadRequestException('تغيير حالة أمر الشراء يتم عبر مسار الاعتماد فقط');
+      if (payload.items && !payload.items.length)
+        throw new BadRequestException('أمر الشراء يحتاج بنداً واحداً على الأقل.');
+      await this.assertOrderReferences(
+        trx,
+        scope.tenantId,
         payload.supplierId !== undefined ? payload.supplierId : order.supplier_id,
         payload.warehouseId !== undefined ? payload.warehouseId : order.warehouse_id,
-        (payload.items || []).map((item) => item.productId));
-      const itemsForTotals = payload.items || await trx.selectFrom('purchase_order_items')
-        .select(['quantity', 'unit_cost', 'tax_rate'])
-        .where('purchase_order_id', '=', id)
-        .where('tenant_id', '=', scope.tenantId)
-        .where('account_id', '=', scope.accountId)
-        .execute().then(rows => rows.map(item => ({
-          quantity: Number(item.quantity), unitCost: Number(item.unit_cost),
-          taxRate: Number(item.tax_rate || 0),
-        })));
+        (payload.items || []).map((item) => item.productId),
+      );
+      const itemsForTotals =
+        payload.items ||
+        (await trx
+          .selectFrom('purchase_order_items')
+          .select(['quantity', 'unit_cost', 'tax_rate'])
+          .where('purchase_order_id', '=', id)
+          .where('tenant_id', '=', scope.tenantId)
+          .where('account_id', '=', scope.accountId)
+          .execute()
+          .then((rows) =>
+            rows.map((item) => ({
+              quantity: Number(item.quantity),
+              unitCost: Number(item.unit_cost),
+              taxRate: Number(item.tax_rate || 0),
+            })),
+          ));
       if (!itemsForTotals) throw new BadRequestException('أمر الشراء يحتاج بنداً واحداً على الأقل.');
       // Book digits on the transaction handle (never the pool inside an
       // open transaction). Stored totals keep book precision.
       const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
-      const totals = calculatePurchaseOrderTotals(itemsForTotals, payload.discountAmount ?? Number(order.discount_amount || 0), digits);
+      const totals = calculatePurchaseOrderTotals(
+        itemsForTotals,
+        payload.discountAmount ?? Number(order.discount_amount || 0),
+        digits,
+      );
 
       const updated = await trx
         .updateTable('purchase_orders')
@@ -302,7 +368,9 @@ export class PurchaseOrdersService {
           tax_amount: totals.taxAmount,
           discount_amount: totals.discountAmount,
           total_amount: totals.totalAmount,
-          expected_delivery_date: payload.expectedDeliveryDate ? (payload.expectedDeliveryDate as any) : order.expected_delivery_date,
+          expected_delivery_date: payload.expectedDeliveryDate
+            ? (payload.expectedDeliveryDate as any)
+            : order.expected_delivery_date,
           notes: payload.notes !== undefined ? payload.notes : order.notes,
           terms_conditions: payload.termsConditions !== undefined ? payload.termsConditions : order.terms_conditions,
           status: 'draft',
@@ -316,7 +384,11 @@ export class PurchaseOrdersService {
       if (Number(updated.numUpdatedRows) !== 1) throw new BadRequestException('أمر الشراء لم يعد مسودة');
 
       if (payload.items && payload.items.length > 0) {
-        await trx.deleteFrom('purchase_order_items').where('purchase_order_id', '=', id).where('tenant_id', '=', scope.tenantId).execute();
+        await trx
+          .deleteFrom('purchase_order_items')
+          .where('purchase_order_id', '=', id)
+          .where('tenant_id', '=', scope.tenantId)
+          .execute();
         for (const [index, item] of payload.items.entries()) {
           await trx
             .insertInto('purchase_order_items')
@@ -346,24 +418,46 @@ export class PurchaseOrdersService {
   async confirmOrder(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const outcome = await this.db.transaction().execute(async (trx) => {
-      const order = await trx.selectFrom('purchase_orders').selectAll()
-        .where('id', '=', id).where('tenant_id', '=', scope.tenantId)
-        .where('account_id', '=', scope.accountId).forUpdate().executeTakeFirst();
+      const order = await trx
+        .selectFrom('purchase_orders')
+        .selectAll()
+        .where('id', '=', id)
+        .where('tenant_id', '=', scope.tenantId)
+        .where('account_id', '=', scope.accountId)
+        .forUpdate()
+        .executeTakeFirst();
       if (!order) throw new NotFoundException('أمر الشراء غير موجود');
       if (order.status !== 'draft') throw new BadRequestException('أمر الشراء ليس في حالة مسودة');
-      const approval = await this.approvals.checkAndInitiateApproval({
-        module: 'purchase_orders', recordId: id, recordRef: order.order_number,
-        amount: Number(order.total_amount),
-      }, auth, trx);
-      await trx.updateTable('purchase_orders').set({
-        status: approval.requiresApproval ? 'pending_approval' : 'confirmed', updated_at: new Date(),
-      }).where('id', '=', id).where('tenant_id', '=', scope.tenantId).where('account_id', '=', scope.accountId).execute();
+      const approval = await this.approvals.checkAndInitiateApproval(
+        {
+          module: 'purchase_orders',
+          recordId: id,
+          recordRef: order.order_number,
+          amount: Number(order.total_amount),
+        },
+        auth,
+        trx,
+      );
+      await trx
+        .updateTable('purchase_orders')
+        .set({
+          status: approval.requiresApproval ? 'pending_approval' : 'confirmed',
+          updated_at: new Date(),
+        })
+        .where('id', '=', id)
+        .where('tenant_id', '=', scope.tenantId)
+        .where('account_id', '=', scope.accountId)
+        .execute();
       return { approval, orderNumber: order.order_number, amount: Number(order.total_amount) };
     });
     if (outcome.approval.requiresApproval) {
       this.approvals.notifyPendingApproval(scope.tenantId, outcome.orderNumber, outcome.amount);
-      return { success: true, status: 'pending_approval', requestId: outcome.approval.requestId,
-        message: 'أمر الشراء بانتظار موافقة مدير آخر' };
+      return {
+        success: true,
+        status: 'pending_approval',
+        requestId: outcome.approval.requestId,
+        message: 'أمر الشراء بانتظار موافقة مدير آخر',
+      };
     }
     return { success: true, status: 'confirmed', message: 'تم اعتماد أمر الشراء بنجاح' };
   }
@@ -401,18 +495,34 @@ export class PurchaseOrdersService {
       throw new BadRequestException('أمر الشراء لا يحتوي على أصناف صالحة للتحويل');
     }
     if (!order.supplier_id) throw new BadRequestException('يجب تحديد مورد صالح قبل تحويل أمر الشراء');
-    if (items.some((item) => !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0
-      || !Number.isFinite(Number(item.unit_cost)) || Number(item.unit_cost) <= 0)) {
+    if (
+      items.some(
+        (item) =>
+          !Number.isFinite(Number(item.quantity)) ||
+          Number(item.quantity) <= 0 ||
+          !Number.isFinite(Number(item.unit_cost)) ||
+          Number(item.unit_cost) <= 0,
+      )
+    ) {
       throw new BadRequestException('بنود أمر الشراء تحتوي كمية أو تكلفة غير صالحة');
     }
     // Gate recomputation at book digits, matching the stored totals; the
     // 0.01 reconciliation tolerance is unchanged (policy band).
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
-    const subtotal = Number(items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_cost), 0).toFixed(digits));
+    const subtotal = Number(
+      items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_cost), 0).toFixed(digits),
+    );
     const discount = Number(order.discount_amount || 0);
     const taxAmount = Number(order.tax_amount || 0);
-    if (!Number.isFinite(subtotal) || !Number.isFinite(discount) || !Number.isFinite(taxAmount)
-      || !Number.isFinite(Number(order.total_amount)) || discount < 0 || discount > subtotal || taxAmount < 0) {
+    if (
+      !Number.isFinite(subtotal) ||
+      !Number.isFinite(discount) ||
+      !Number.isFinite(taxAmount) ||
+      !Number.isFinite(Number(order.total_amount)) ||
+      discount < 0 ||
+      discount > subtotal ||
+      taxAmount < 0
+    ) {
       throw new BadRequestException('إجماليات أمر الشراء غير صالحة');
     }
     const taxableBase = subtotal - discount;
@@ -446,45 +556,87 @@ export class PurchaseOrdersService {
 
     try {
       await this.db.transaction().execute(async (trx) => {
-        const lockedOrder = await trx.selectFrom('purchase_orders').select(['id', 'status'])
-          .where('id', '=', id).where('tenant_id', '=', scope.tenantId)
-          .where('account_id', '=', scope.accountId).forUpdate().executeTakeFirst();
+        const lockedOrder = await trx
+          .selectFrom('purchase_orders')
+          .select(['id', 'status'])
+          .where('id', '=', id)
+          .where('tenant_id', '=', scope.tenantId)
+          .where('account_id', '=', scope.accountId)
+          .forUpdate()
+          .executeTakeFirst();
         if (!lockedOrder || !['confirmed', 'partially_received', 'received'].includes(lockedOrder.status)) {
           throw new BadRequestException('تغيرت حالة أمر الشراء أثناء تحويل الفاتورة.');
         }
-        const existingReceiptBill = await trx.selectFrom('purchases').select('id')
-          .where('tenant_id', '=', scope.tenantId).where('po_id', '=', id)
-          .where('lifecycle_status', '=', 'grn_bill').where('status', '!=', 'cancelled')
+        const existingReceiptBill = await trx
+          .selectFrom('purchases')
+          .select('id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('po_id', '=', id)
+          .where('lifecycle_status', '=', 'grn_bill')
+          .where('status', '!=', 'cancelled')
           .executeTakeFirst();
         if (existingReceiptBill) throw new BadRequestException('أمر الشراء مرتبط بالفعل بفاتورة محاضر استلام.');
-        const linked = await trx.updateTable('purchases').set({ po_id: id })
-          .where('id', '=', createdPurchaseId).where('tenant_id', '=', scope.tenantId)
-          .where('account_id', '=', scope.accountId).execute();
-        if (Number(linked[0]?.numUpdatedRows || 0) !== 1) throw new BadRequestException('فاتورة المشتريات غير موجودة للربط');
-        const billItems = await trx.selectFrom('purchase_items').select(['id', 'product_id'])
-          .where('purchase_id', '=', createdPurchaseId).where('tenant_id', '=', scope.tenantId)
-          .orderBy('id', 'asc').execute();
+        const linked = await trx
+          .updateTable('purchases')
+          .set({ po_id: id })
+          .where('id', '=', createdPurchaseId)
+          .where('tenant_id', '=', scope.tenantId)
+          .where('account_id', '=', scope.accountId)
+          .execute();
+        if (Number(linked[0]?.numUpdatedRows || 0) !== 1)
+          throw new BadRequestException('فاتورة المشتريات غير موجودة للربط');
+        const billItems = await trx
+          .selectFrom('purchase_items')
+          .select(['id', 'product_id'])
+          .where('purchase_id', '=', createdPurchaseId)
+          .where('tenant_id', '=', scope.tenantId)
+          .orderBy('id', 'asc')
+          .execute();
         if (billItems.length !== items.length) throw new BadRequestException('تعذر ربط بنود الفاتورة بأمر الشراء');
         for (const [index, billItem] of billItems.entries()) {
           const source = items[index];
           if (!source || Number(source.product_id) !== Number(billItem.product_id)) {
             throw new BadRequestException('تعذر ربط بنود الفاتورة بأمر الشراء');
           }
-          await trx.updateTable('purchase_items').set({ po_item_id: source.id })
-            .where('id', '=', billItem.id).where('tenant_id', '=', scope.tenantId).execute();
+          await trx
+            .updateTable('purchase_items')
+            .set({ po_item_id: source.id })
+            .where('id', '=', billItem.id)
+            .where('tenant_id', '=', scope.tenantId)
+            .execute();
         }
-        const converted = await trx.updateTable('purchase_orders').set({
-          status: 'converted_to_bill', converted_purchase_id: createdPurchaseId, updated_at: new Date(),
-        }).where('id', '=', id).where('tenant_id', '=', scope.tenantId)
-          .where('account_id', '=', scope.accountId).where('status', '=', order.status).execute();
-        if (Number(converted[0]?.numUpdatedRows || 0) !== 1) throw new BadRequestException('تغيرت حالة أمر الشراء أثناء التحويل');
+        const converted = await trx
+          .updateTable('purchase_orders')
+          .set({
+            status: 'converted_to_bill',
+            converted_purchase_id: createdPurchaseId,
+            updated_at: new Date(),
+          })
+          .where('id', '=', id)
+          .where('tenant_id', '=', scope.tenantId)
+          .where('account_id', '=', scope.accountId)
+          .where('status', '=', order.status)
+          .execute();
+        if (Number(converted[0]?.numUpdatedRows || 0) !== 1)
+          throw new BadRequestException('تغيرت حالة أمر الشراء أثناء التحويل');
       });
     } catch (error) {
       // Clean up orphaned draft purchase if linking failed (ZS-062)
-      await this.db.transaction().execute(async (trx) => {
-        await trx.deleteFrom('purchase_items').where('purchase_id', '=', createdPurchaseId).where('tenant_id', '=', scope.tenantId).execute();
-        await trx.deleteFrom('purchases').where('id', '=', createdPurchaseId).where('tenant_id', '=', scope.tenantId).execute();
-      }).catch(() => undefined);
+      await this.db
+        .transaction()
+        .execute(async (trx) => {
+          await trx
+            .deleteFrom('purchase_items')
+            .where('purchase_id', '=', createdPurchaseId)
+            .where('tenant_id', '=', scope.tenantId)
+            .execute();
+          await trx
+            .deleteFrom('purchases')
+            .where('id', '=', createdPurchaseId)
+            .where('tenant_id', '=', scope.tenantId)
+            .execute();
+        })
+        .catch(() => undefined);
       throw error;
     }
 
@@ -545,15 +697,28 @@ export class PurchaseOrdersService {
     }
 
     await this.db.transaction().execute(async (trx) => {
-      const locked = await trx.selectFrom('purchase_orders').select('status')
-        .where('id', '=', id).where('tenant_id', '=', scope.tenantId)
-        .where('account_id', '=', scope.accountId).forUpdate().executeTakeFirst();
+      const locked = await trx
+        .selectFrom('purchase_orders')
+        .select('status')
+        .where('id', '=', id)
+        .where('tenant_id', '=', scope.tenantId)
+        .where('account_id', '=', scope.accountId)
+        .forUpdate()
+        .executeTakeFirst();
       if (!locked || !['draft', 'cancelled'].includes(locked.status)) {
         throw new BadRequestException('حالة أمر الشراء تغيرت؛ لا يمكن حذفه');
       }
-      await trx.deleteFrom('purchase_order_items').where('purchase_order_id', '=', id).where('tenant_id', '=', scope.tenantId).execute();
-      await trx.deleteFrom('purchase_orders').where('id', '=', id).where('tenant_id', '=', scope.tenantId)
-        .where('account_id', '=', scope.accountId).execute();
+      await trx
+        .deleteFrom('purchase_order_items')
+        .where('purchase_order_id', '=', id)
+        .where('tenant_id', '=', scope.tenantId)
+        .execute();
+      await trx
+        .deleteFrom('purchase_orders')
+        .where('id', '=', id)
+        .where('tenant_id', '=', scope.tenantId)
+        .where('account_id', '=', scope.accountId)
+        .execute();
     });
 
     return { success: true, message: 'تم حذف أمر الشراء بنجاح' };

@@ -36,7 +36,7 @@ export class EtaSignatureBridgeService {
    */
   async prepareCanonicalDocument(tenantId: string, saleId: number): Promise<CanonicalDocumentResult> {
     const rawDoc = await this.etaSerializer.serializeSaleToEtaFormat(tenantId, saleId);
-    
+
     // Canonicalize according to ETA specs: key-ordered string serialization
     const canonicalJson = this.serializeCanonical(rawDoc);
     const hashHex = crypto.createHash('sha256').update(canonicalJson, 'utf8').digest('hex');

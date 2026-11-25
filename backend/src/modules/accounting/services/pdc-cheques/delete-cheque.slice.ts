@@ -30,14 +30,12 @@ export class DeleteChequeSlice {
       }
 
       if (existing.journal_entry_id) {
-        throw new BadRequestException('لا يمكن حذف شيك له قيود محاسبية مسجلة، قم بإلغاء الشيك للحفاظ على التسلسل المالي');
+        throw new BadRequestException(
+          'لا يمكن حذف شيك له قيود محاسبية مسجلة، قم بإلغاء الشيك للحفاظ على التسلسل المالي',
+        );
       }
 
-      await trx
-        .deleteFrom('accounting_cheques')
-        .where('tenant_id', '=', tenantId)
-        .where('id', '=', id)
-        .execute();
+      await trx.deleteFrom('accounting_cheques').where('tenant_id', '=', tenantId).where('id', '=', id).execute();
 
       return { success: true };
     });

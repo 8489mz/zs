@@ -69,7 +69,11 @@ export class AccountingOpeningBalancesService {
   private readonly accountingPosting?: AccountingPostingService;
   private readonly assertAccountingAccess: (auth: AuthContext) => void;
   private readonly toBookMoney: (value: unknown, digits: MoneyDigits) => number;
-  private readonly normalizeDateInput: (value: string | null | undefined, db: Kysely<Database>, tenantId: string) => Promise<string>;
+  private readonly normalizeDateInput: (
+    value: string | null | undefined,
+    db: Kysely<Database>,
+    tenantId: string,
+  ) => Promise<string>;
   private readonly openingAmount: (value: unknown, digits: MoneyDigits) => number;
   private readonly assertNotInLockedPeriod: (
     tenantId: string,
@@ -92,7 +96,10 @@ export class AccountingOpeningBalancesService {
     this.assertNotInLockedPeriod = deps.assertNotInLockedPeriod;
   }
 
-  async getExistingOpeningBalanceEntry(auth: AuthContext, db: Kysely<Database> = this.db): Promise<{ id: number } | null> {
+  async getExistingOpeningBalanceEntry(
+    auth: AuthContext,
+    db: Kysely<Database> = this.db,
+  ): Promise<{ id: number } | null> {
     const scope = requireTenantScope(auth);
     const row = await db
       .selectFrom('journal_entries')
@@ -105,11 +112,28 @@ export class AccountingOpeningBalancesService {
     return row ? { id: Number(row.id) } : null;
   }
 
-  async resolveOpeningAccount(auth: AuthContext, code: string, expectedTypes: string[], db: Kysely<Database> = this.db): Promise<OpeningBalanceAccount> {
+  async resolveOpeningAccount(
+    auth: AuthContext,
+    code: string,
+    expectedTypes: string[],
+    db: Kysely<Database> = this.db,
+  ): Promise<OpeningBalanceAccount> {
     const scope = requireTenantScope(auth);
     const row = await db
       .selectFrom('accounting_accounts')
-      .select(['id', 'code', 'name_ar', 'account_type', 'is_active', 'allow_manual_entries', 'is_control_account', 'is_tax', 'is_receivable', 'is_payable', 'is_inventory'])
+      .select([
+        'id',
+        'code',
+        'name_ar',
+        'account_type',
+        'is_active',
+        'allow_manual_entries',
+        'is_control_account',
+        'is_tax',
+        'is_receivable',
+        'is_payable',
+        'is_inventory',
+      ])
       .where('tenant_id', '=', scope.tenantId)
       .where('code', '=', code)
       .executeTakeFirst();
@@ -138,7 +162,14 @@ export class AccountingOpeningBalancesService {
     };
   }
 
-  addOpeningLine(lines: OpeningBalanceLine[], account: OpeningBalanceAccount, description: string, debit: number, credit: number, digits: MoneyDigits): void {
+  addOpeningLine(
+    lines: OpeningBalanceLine[],
+    account: OpeningBalanceAccount,
+    description: string,
+    debit: number,
+    credit: number,
+    digits: MoneyDigits,
+  ): void {
     const normalizedDebit = this.toBookMoney(debit, digits);
     const normalizedCredit = this.toBookMoney(credit, digits);
     if (normalizedDebit <= 0 && normalizedCredit <= 0) return;
@@ -155,7 +186,11 @@ export class AccountingOpeningBalancesService {
     });
   }
 
-  async calculateOpeningOperationalTotals(auth: AuthContext, digits: MoneyDigits, db: Kysely<Database> = this.db): Promise<{
+  async calculateOpeningOperationalTotals(
+    auth: AuthContext,
+    digits: MoneyDigits,
+    db: Kysely<Database> = this.db,
+  ): Promise<{
     customerReceivables: number;
     supplierPayables: number;
     inventoryValue: number;
@@ -234,16 +269,31 @@ export class AccountingOpeningBalancesService {
     // Customer, supplier and inventory openings are posted by their source documents.
     // Current operational balances must never be posted a second time here.
 
-    const debitBeforeCapital = this.toBookMoney(lines.reduce((sum, line) => sum + line.debit, 0), digits);
-    const creditBeforeCapital = this.toBookMoney(lines.reduce((sum, line) => sum + line.credit, 0), digits);
+    const debitBeforeCapital = this.toBookMoney(
+      lines.reduce((sum, line) => sum + line.debit, 0),
+      digits,
+    );
+    const creditBeforeCapital = this.toBookMoney(
+      lines.reduce((sum, line) => sum + line.credit, 0),
+      digits,
+    );
     const balancingCapital = this.toBookMoney(debitBeforeCapital - creditBeforeCapital, digits);
     if (balancingCapital > 0) {
       this.addOpeningLine(lines, capital, 'موازنة الأرصدة الافتتاحية - رأس المال', 0, balancingCapital, digits);
     } else if (balancingCapital < 0) {
-      this.addOpeningLine(lines, capital, 'موازنة الأرصدة الافتتاحية - رأس المال', Math.abs(balancingCapital), 0, digits);
+      this.addOpeningLine(
+        lines,
+        capital,
+        'موازنة الأرصدة الافتتاحية - رأس المال',
+        Math.abs(balancingCapital),
+        0,
+        digits,
+      );
     }
 
-    const warnings: string[] = ['هذا القيد يثبت افتتاحية الخزينة والبنك فقط؛ افتتاحيات الشركاء والمخزون تثبت من مستنداتها.'];
+    const warnings: string[] = [
+      'هذا القيد يثبت افتتاحية الخزينة والبنك فقط؛ افتتاحيات الشركاء والمخزون تثبت من مستنداتها.',
+    ];
     if (!lines.length) {
       warnings.push('لا توجد أرصدة افتتاحية ذات قيمة للترحيل.');
     }
@@ -275,7 +325,10 @@ export class AccountingOpeningBalancesService {
     };
   }
 
-  async previewOpeningBalances(query: OpeningBalancesPreviewQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async previewOpeningBalances(
+    query: OpeningBalancesPreviewQueryDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     this.assertAccountingAccess(auth);
     await this.accountingTenantFoundation.ensureForAuth(this.db, auth);
     // Digits are the tenant's book digits, resolved on the caller's
@@ -314,8 +367,14 @@ export class AccountingOpeningBalancesService {
       throw new BadRequestException('لا توجد أرصدة افتتاحية كافية لإنشاء قيد متوازن.');
     }
 
-    const totalDebit = this.toBookMoney(preview.linesPreview.reduce((sum, line) => sum + line.debit, 0), digits);
-    const totalCredit = this.toBookMoney(preview.linesPreview.reduce((sum, line) => sum + line.credit, 0), digits);
+    const totalDebit = this.toBookMoney(
+      preview.linesPreview.reduce((sum, line) => sum + line.debit, 0),
+      digits,
+    );
+    const totalCredit = this.toBookMoney(
+      preview.linesPreview.reduce((sum, line) => sum + line.credit, 0),
+      digits,
+    );
     if (totalDebit !== totalCredit) {
       throw new BadRequestException('قيد الأرصدة الافتتاحية غير متوازن.');
     }
@@ -360,14 +419,25 @@ export class AccountingOpeningBalancesService {
         preview.linesPreview.length === recomputed.linesPreview.length &&
         preview.linesPreview.every((line, index) => {
           const actual = recomputed.linesPreview[index];
-          return actual && actual.accountId === line.accountId && actual.debit === line.debit && actual.credit === line.credit;
+          return (
+            actual &&
+            actual.accountId === line.accountId &&
+            actual.debit === line.debit &&
+            actual.credit === line.credit
+          );
         });
       if (!previewLinesMatch) {
         throw new BadRequestException('تغيرت الأرصدة الافتتاحية بعد المعاينة؛ يجب تحديث المعاينة قبل الترحيل.');
       }
 
-      const recomputedDebit = this.toBookMoney(recomputed.linesPreview.reduce((sum, line) => sum + line.debit, 0), postDigits);
-      const recomputedCredit = this.toBookMoney(recomputed.linesPreview.reduce((sum, line) => sum + line.credit, 0), postDigits);
+      const recomputedDebit = this.toBookMoney(
+        recomputed.linesPreview.reduce((sum, line) => sum + line.debit, 0),
+        postDigits,
+      );
+      const recomputedCredit = this.toBookMoney(
+        recomputed.linesPreview.reduce((sum, line) => sum + line.credit, 0),
+        postDigits,
+      );
       if (recomputedDebit !== recomputedCredit) {
         throw new BadRequestException('قيد الأرصدة الافتتاحية غير متوازن.');
       }

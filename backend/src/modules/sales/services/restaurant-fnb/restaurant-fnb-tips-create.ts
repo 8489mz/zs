@@ -48,11 +48,7 @@ export class RestaurantFnbTipsCreateSlice {
       : duplicateQuery.where('branch_id', 'is', null);
     const duplicate = await duplicateQuery.executeTakeFirst();
     if (duplicate) {
-      throw new AppError(
-        'يوجد مجمع إكراميات بالفعل لنفس الفرع وتاريخ الوردية',
-        'TIP_POOL_EXISTS',
-        409,
-      );
+      throw new AppError('يوجد مجمع إكراميات بالفعل لنفس الفرع وتاريخ الوردية', 'TIP_POOL_EXISTS', 409);
     }
 
     // INV-REST-FNB-CLAIMS-POST: every recipient must be a real, active
@@ -76,11 +72,7 @@ export class RestaurantFnbTipsCreateSlice {
     if (employees.length !== employeeIds.length) {
       const found = new Set(employees.map((e) => Number(e.id)));
       const missing = employeeIds.find((id) => !found.has(id));
-      throw new AppError(
-        `الموظف رقم ${missing} غير موجود أو غير نشط لدى هذه المنشأة`,
-        'UNKNOWN_EMPLOYEE',
-        422,
-      );
+      throw new AppError(`الموظف رقم ${missing} غير موجود أو غير نشط لدى هذه المنشأة`, 'UNKNOWN_EMPLOYEE', 422);
     }
 
     // INV-REST-FNB-CLAIMS-POST: the pool distributes ONLY the tips the

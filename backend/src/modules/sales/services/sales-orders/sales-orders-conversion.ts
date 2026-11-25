@@ -6,16 +6,40 @@ import type { SalesWriteService } from '../sales-write.service';
 import type { IdempotencyService } from '../../../../core/idempotency/idempotency.service';
 import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary';
 import { idempotencyStorage } from '../../../../core/idempotency/idempotency.context';
-import { conversionRecoverySaleId, decideConversionRecovery, resolveConversionDiscounts, resolveConversionPaymentTerms } from '../../helpers/sales-write.helper';
+import {
+  conversionRecoverySaleId,
+  decideConversionRecovery,
+  resolveConversionDiscounts,
+  resolveConversionPaymentTerms,
+} from '../../helpers/sales-write.helper';
 import { assertSalesOrderMoney, recomputeSalesOrderMoney } from '../../helpers/sales-order-money.helper';
 
 export class SalesOrdersConversion {
-  constructor(private readonly db: Kysely<Database>, private readonly salesWrite: SalesWriteService, private readonly idempotency: IdempotencyService, private readonly bound: { conversionOperationParams: (scope: { tenantId: string; accountId: string }, idemKey: string) => { tenantId: string; accountId: string; idempotencyKey: string; operationType: string }; markOrderConverted: (id: number, scope: { tenantId: string; accountId: string }, saleId: number) => Promise<void>; revertConvertingClaim: (id: number, scope: { tenantId: string; accountId: string }) => Promise<void> }) {}
+  constructor(
+    private readonly db: Kysely<Database>,
+    private readonly salesWrite: SalesWriteService,
+    private readonly idempotency: IdempotencyService,
+    private readonly bound: {
+      conversionOperationParams: (
+        scope: { tenantId: string; accountId: string },
+        idemKey: string,
+      ) => { tenantId: string; accountId: string; idempotencyKey: string; operationType: string };
+      markOrderConverted: (id: number, scope: { tenantId: string; accountId: string }, saleId: number) => Promise<void>;
+      revertConvertingClaim: (id: number, scope: { tenantId: string; accountId: string }) => Promise<void>;
+    },
+  ) {}
 
-  private conversionOperationParams(scope: { tenantId: string; accountId: string }, idemKey: string): { tenantId: string; accountId: string; idempotencyKey: string; operationType: string } {
+  private conversionOperationParams(
+    scope: { tenantId: string; accountId: string },
+    idemKey: string,
+  ): { tenantId: string; accountId: string; idempotencyKey: string; operationType: string } {
     return this.bound.conversionOperationParams(scope, idemKey);
   }
-  private async markOrderConverted(id: number, scope: { tenantId: string; accountId: string }, saleId: number): Promise<void> {
+  private async markOrderConverted(
+    id: number,
+    scope: { tenantId: string; accountId: string },
+    saleId: number,
+  ): Promise<void> {
     return this.bound.markOrderConverted(id, scope, saleId);
   }
   private async revertConvertingClaim(id: number, scope: { tenantId: string; accountId: string }): Promise<void> {
@@ -195,9 +219,10 @@ export class SalesOrdersConversion {
         .executeTakeFirst();
       locationId = branchRow?.default_stock_location_id ? Number(branchRow.default_stock_location_id) : null;
     }
-    const conversionRelease = releaseItems.length > 0
-      ? { salesOrderId: id, branchId: order.branch_id, locationId, items: releaseItems }
-      : undefined;
+    const conversionRelease =
+      releaseItems.length > 0
+        ? { salesOrderId: id, branchId: order.branch_id, locationId, items: releaseItems }
+        : undefined;
 
     // INV-CONVERSION-LINE-DISCOUNTS-PRESERVED: reconcile the stored
     // discount rows against each other BEFORE any sale is created
@@ -307,14 +332,15 @@ export class SalesOrdersConversion {
         paymentType: paymentTerms,
         paymentChannel: paymentTerms,
         source: 'dashboard',
-        payments: paymentTerms === 'credit'
-          ? []
-          : [
-              {
-                paymentChannel: 'cash',
-                amount: totalAmount,
-              },
-            ],
+        payments:
+          paymentTerms === 'credit'
+            ? []
+            : [
+                {
+                  paymentChannel: 'cash',
+                  amount: totalAmount,
+                },
+              ],
       };
 
       saleAttempted = true;

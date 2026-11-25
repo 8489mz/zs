@@ -7,7 +7,11 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import type { PurchaseRepricingCandidate, PurchaseRepricingInsights, PurchaseRepricingProduct } from './purchases-write.types';
+import type {
+  PurchaseRepricingCandidate,
+  PurchaseRepricingInsights,
+  PurchaseRepricingProduct,
+} from './purchases-write.types';
 
 @Injectable()
 export class PurchasesWriteRepricingService {
@@ -15,7 +19,12 @@ export class PurchasesWriteRepricingService {
     return Number(Number(value || 0).toFixed(digits));
   }
 
-  private buildRecommendedSellPrice(currentSellPrice: number, previousCost: number, newCost: number, digits: 2 | 3 = 2): number {
+  private buildRecommendedSellPrice(
+    currentSellPrice: number,
+    previousCost: number,
+    newCost: number,
+    digits: 2 | 3 = 2,
+  ): number {
     const safeCurrentSell = Number(currentSellPrice || 0);
     const safePreviousCost = Number(previousCost || 0);
     const safeNewCost = Number(newCost || 0);
@@ -57,10 +66,18 @@ export class PurchasesWriteRepricingService {
         const retailPrice = Number(candidate.retailPrice || 0);
         const wholesalePrice = Number(candidate.wholesalePrice || 0);
         const recommendedRetailPrice = this.buildRecommendedSellPrice(retailPrice, previousCost, newCost, moneyDigits);
-        const recommendedWholesalePrice = this.buildRecommendedSellPrice(wholesalePrice, previousCost, newCost, moneyDigits);
-        const costChangePercent = previousCost > 0
-          ? this.roundCurrency(((newCost - previousCost) / previousCost) * 100)
-          : (newCost > 0 ? 100 : 0);
+        const recommendedWholesalePrice = this.buildRecommendedSellPrice(
+          wholesalePrice,
+          previousCost,
+          newCost,
+          moneyDigits,
+        );
+        const costChangePercent =
+          previousCost > 0
+            ? this.roundCurrency(((newCost - previousCost) / previousCost) * 100)
+            : newCost > 0
+              ? 100
+              : 0;
         return {
           productId: Number(candidate.productId),
           name: candidate.name,

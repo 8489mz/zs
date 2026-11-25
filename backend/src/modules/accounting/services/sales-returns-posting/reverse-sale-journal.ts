@@ -23,7 +23,13 @@ export class ReverseSaleJournalService {
     private readonly ensureTenantFoundation: (queryable: DbOrTx, auth: AuthContext) => Promise<void>,
   ) {}
 
-  async reverseSaleJournal(queryable: DbOrTx, saleId: number, reason: string, auth: AuthContext, options?: { isPreparedWaste?: boolean; preparedWasteCogsExclusion?: number }): Promise<{ reversed: boolean; journalEntryId: number | null }> {
+  async reverseSaleJournal(
+    queryable: DbOrTx,
+    saleId: number,
+    reason: string,
+    auth: AuthContext,
+    options?: { isPreparedWaste?: boolean; preparedWasteCogsExclusion?: number },
+  ): Promise<{ reversed: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
@@ -43,20 +49,25 @@ export class ReverseSaleJournalService {
       .executeTakeFirst();
     const activePostings = Number(counts?.postings || 0) - Number(counts?.reversals || 0);
 
-    const sourceJournal = activePostings > 0 ? await queryable
-      .selectFrom('journal_entries')
-      .select(['id', 'branch_id', 'location_id', 'created_by'])
-      .where('source_type', 'in', ['sale', 'sale_edit'])
-      .where('source_id', '=', saleId)
-      .where('status', '=', 'posted')
-      .where('reversed_by_entry_id', 'is', null)
-      .where('tenant_id', '=', scope.tenantId)
-      .orderBy('id', 'desc')
-      .executeTakeFirst() : undefined;
+    const sourceJournal =
+      activePostings > 0
+        ? await queryable
+            .selectFrom('journal_entries')
+            .select(['id', 'branch_id', 'location_id', 'created_by'])
+            .where('source_type', 'in', ['sale', 'sale_edit'])
+            .where('source_id', '=', saleId)
+            .where('status', '=', 'posted')
+            .where('reversed_by_entry_id', 'is', null)
+            .where('tenant_id', '=', scope.tenantId)
+            .orderBy('id', 'desc')
+            .executeTakeFirst()
+        : undefined;
     if (!sourceJournal) {
       const existingReversal = await this.getExistingSaleReversalJournal(queryable, saleId, scope.tenantId);
       if (existingReversal) {
-        this.logger.warn(`Skipping duplicate sale reversal journal for sale ${saleId}; existing entry ${existingReversal.id}`);
+        this.logger.warn(
+          `Skipping duplicate sale reversal journal for sale ${saleId}; existing entry ${existingReversal.id}`,
+        );
         return { reversed: false, journalEntryId: Number(existingReversal.id) };
       }
       this.logger.warn(`No posted sale journal found for sale ${saleId}; skipping accounting reversal`);
@@ -73,7 +84,17 @@ export class ReverseSaleJournalService {
 
     const sourceLines = await queryable
       .selectFrom('journal_entry_lines')
-      .select(['account_id', 'cost_center_id', 'description', 'debit', 'credit', 'partner_type', 'partner_id', 'branch_id', 'location_id'])
+      .select([
+        'account_id',
+        'cost_center_id',
+        'description',
+        'debit',
+        'credit',
+        'partner_type',
+        'partner_id',
+        'branch_id',
+        'location_id',
+      ])
       .where('journal_entry_id', '=', Number(sourceJournal.id))
       .where('tenant_id', '=', scope.tenantId)
       .orderBy('id', 'asc')
@@ -86,20 +107,22 @@ export class ReverseSaleJournalService {
       const excludedIds = new Set<number>();
       if (invAccountId > 0) excludedIds.add(invAccountId);
       if (cogsAccountId > 0) excludedIds.add(cogsAccountId);
-      linesToReverse = sourceLines.filter(line => !excludedIds.has(Number(line.account_id)));
+      linesToReverse = sourceLines.filter((line) => !excludedIds.has(Number(line.account_id)));
     }
 
-    const reversalLines: JournalLineDraft[] = linesToReverse.map((line) => ({
-      accountId: Number(line.account_id),
-      costCenterId: line.cost_center_id ? Number(line.cost_center_id) : null,
-      description: `عكس: ${line.description || 'قيد بيع'}`,
-      debit: toBookMoney(line.credit),
-      credit: toBookMoney(line.debit),
-      partnerType: (line.partner_type as 'none' | 'customer' | 'supplier') || 'none',
-      partnerId: line.partner_id ? Number(line.partner_id) : null,
-      branchId: line.branch_id ? Number(line.branch_id) : null,
-      locationId: line.location_id ? Number(line.location_id) : null,
-    })).filter((line) => line.debit > 0 || line.credit > 0);
+    const reversalLines: JournalLineDraft[] = linesToReverse
+      .map((line) => ({
+        accountId: Number(line.account_id),
+        costCenterId: line.cost_center_id ? Number(line.cost_center_id) : null,
+        description: `عكس: ${line.description || 'قيد بيع'}`,
+        debit: toBookMoney(line.credit),
+        credit: toBookMoney(line.debit),
+        partnerType: (line.partner_type as 'none' | 'customer' | 'supplier') || 'none',
+        partnerId: line.partner_id ? Number(line.partner_id) : null,
+        branchId: line.branch_id ? Number(line.branch_id) : null,
+        locationId: line.location_id ? Number(line.location_id) : null,
+      }))
+      .filter((line) => line.debit > 0 || line.credit > 0);
 
     // INV-SALE-EDIT-PREPARED-WASTE: a partial exclusion reduces only
     // the COGS/inventory reversal lines, by the residual value of the
@@ -113,10 +136,18 @@ export class ReverseSaleJournalService {
       const cogsAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, null, '5100');
       const totals = new Map<number, number>();
       for (const line of reversalLines) {
-        totals.set(line.accountId, toBookMoney(Number(totals.get(line.accountId) || 0) + Number(line.debit || 0) + Number(line.credit || 0)));
+        totals.set(
+          line.accountId,
+          toBookMoney(Number(totals.get(line.accountId) || 0) + Number(line.debit || 0) + Number(line.credit || 0)),
+        );
       }
-      if (exclusion > Number(totals.get(invAccountId) || 0) + 0.0001 || exclusion > Number(totals.get(cogsAccountId) || 0) + 0.0001) {
-        throw new Error(`Prepared-waste COGS exclusion ${exclusion} exceeds the reversal COGS/inventory totals for sale ${saleId}`);
+      if (
+        exclusion > Number(totals.get(invAccountId) || 0) + 0.0001 ||
+        exclusion > Number(totals.get(cogsAccountId) || 0) + 0.0001
+      ) {
+        throw new Error(
+          `Prepared-waste COGS exclusion ${exclusion} exceeds the reversal COGS/inventory totals for sale ${saleId}`,
+        );
       }
       let remainingInventoryExclusion = exclusion;
       for (const line of reversalLines) {
@@ -127,7 +158,9 @@ export class ReverseSaleJournalService {
         remainingInventoryExclusion = Number((remainingInventoryExclusion - reducible).toFixed(3));
       }
       if (remainingInventoryExclusion > 0.001) {
-        throw new Error(`Prepared-waste COGS exclusion ${exclusion} could not be applied to the inventory reversal lines for sale ${saleId}`);
+        throw new Error(
+          `Prepared-waste COGS exclusion ${exclusion} could not be applied to the inventory reversal lines for sale ${saleId}`,
+        );
       }
       let remainingCogsExclusion = exclusion;
       for (const line of reversalLines) {
@@ -138,7 +171,9 @@ export class ReverseSaleJournalService {
         remainingCogsExclusion = Number((remainingCogsExclusion - reducible).toFixed(3));
       }
       if (remainingCogsExclusion > 0.001) {
-        throw new Error(`Prepared-waste COGS exclusion ${exclusion} could not be applied to the COGS reversal lines for sale ${saleId}`);
+        throw new Error(
+          `Prepared-waste COGS exclusion ${exclusion} could not be applied to the COGS reversal lines for sale ${saleId}`,
+        );
       }
       for (let i = reversalLines.length - 1; i >= 0; i--) {
         if (!(Number(reversalLines[i].debit) > 0 || Number(reversalLines[i].credit) > 0)) reversalLines.splice(i, 1);
@@ -152,7 +187,9 @@ export class ReverseSaleJournalService {
     // reversal also negates the reclassification journal's lines.
     // The pair is balanced, so the balance check below still holds.
     let reclassEntryId: number | null = null;
-    const reclassEntry = await queryable.selectFrom('journal_entries').select(['id'])
+    const reclassEntry = await queryable
+      .selectFrom('journal_entries')
+      .select(['id'])
       .where('source_type', '=', 'delivery_custody_reclassification')
       .where('source_id', '=', saleId)
       .where('status', '=', 'posted')
@@ -161,8 +198,19 @@ export class ReverseSaleJournalService {
       .executeTakeFirst();
     if (reclassEntry) {
       reclassEntryId = Number(reclassEntry.id);
-      const reclassLines = await queryable.selectFrom('journal_entry_lines')
-        .select(['account_id', 'cost_center_id', 'description', 'debit', 'credit', 'partner_type', 'partner_id', 'branch_id', 'location_id'])
+      const reclassLines = await queryable
+        .selectFrom('journal_entry_lines')
+        .select([
+          'account_id',
+          'cost_center_id',
+          'description',
+          'debit',
+          'credit',
+          'partner_type',
+          'partner_id',
+          'branch_id',
+          'location_id',
+        ])
         .where('journal_entry_id', '=', reclassEntryId)
         .where('tenant_id', '=', scope.tenantId)
         .orderBy('id', 'asc')
@@ -204,8 +252,12 @@ export class ReverseSaleJournalService {
     });
 
     if (reclassEntryId) {
-      await queryable.updateTable('journal_entries').set({ reversed_by_entry_id: entryId, updated_at: sql`NOW()` })
-        .where('id', '=', reclassEntryId).where('tenant_id', '=', scope.tenantId).execute();
+      await queryable
+        .updateTable('journal_entries')
+        .set({ reversed_by_entry_id: entryId, updated_at: sql`NOW()` })
+        .where('id', '=', reclassEntryId)
+        .where('tenant_id', '=', scope.tenantId)
+        .execute();
     }
 
     this.logger.warn(`Posted sale reversal journal for sale ${saleId} as entry ${entryId}`);
@@ -240,7 +292,16 @@ export class ReverseSaleJournalService {
     // already-reversed instead of attempting a second reversal.
     const sourceJournal = await queryable
       .selectFrom('journal_entries')
-      .select(['id', 'source_id', 'source_type', 'status', 'reversed_by_entry_id', 'branch_id', 'location_id', 'created_by'])
+      .select([
+        'id',
+        'source_id',
+        'source_type',
+        'status',
+        'reversed_by_entry_id',
+        'branch_id',
+        'location_id',
+        'created_by',
+      ])
       .where('id', '=', journalId)
       .where('tenant_id', '=', scope.tenantId)
       .forUpdate()
@@ -248,7 +309,10 @@ export class ReverseSaleJournalService {
     if (!sourceJournal) {
       return { reversed: false, journalEntryId: null };
     }
-    if (Number(sourceJournal.source_id) !== saleId || !['sale', 'sale_edit'].includes(String(sourceJournal.source_type))) {
+    if (
+      Number(sourceJournal.source_id) !== saleId ||
+      !['sale', 'sale_edit'].includes(String(sourceJournal.source_type))
+    ) {
       throw new AppError('Reversal journal does not belong to the requested sale', 'JOURNAL_REVERSAL_INVALID', 409);
     }
     if (sourceJournal.status !== 'posted') {
@@ -276,7 +340,17 @@ export class ReverseSaleJournalService {
 
     const sourceLines = await queryable
       .selectFrom('journal_entry_lines')
-      .select(['account_id', 'cost_center_id', 'description', 'debit', 'credit', 'partner_type', 'partner_id', 'branch_id', 'location_id'])
+      .select([
+        'account_id',
+        'cost_center_id',
+        'description',
+        'debit',
+        'credit',
+        'partner_type',
+        'partner_id',
+        'branch_id',
+        'location_id',
+      ])
       .where('journal_entry_id', '=', journalId)
       .where('tenant_id', '=', scope.tenantId)
       .orderBy('id', 'asc')
@@ -285,17 +359,19 @@ export class ReverseSaleJournalService {
     // Full mirror, exactly as reverseSaleJournal(): no isPreparedWaste
     // exclusion here. A remediation reversal must reverse COGS and
     // inventory as well, otherwise those accounts stay double-counted.
-    const reversalLines: JournalLineDraft[] = sourceLines.map((line) => ({
-      accountId: Number(line.account_id),
-      costCenterId: line.cost_center_id ? Number(line.cost_center_id) : null,
-      description: `عكس: ${line.description || 'قيد بيع'}`,
-      debit: toBookMoney(line.credit),
-      credit: toBookMoney(line.debit),
-      partnerType: (line.partner_type as 'none' | 'customer' | 'supplier') || 'none',
-      partnerId: line.partner_id ? Number(line.partner_id) : null,
-      branchId: line.branch_id ? Number(line.branch_id) : null,
-      locationId: line.location_id ? Number(line.location_id) : null,
-    })).filter((line) => line.debit > 0 || line.credit > 0);
+    const reversalLines: JournalLineDraft[] = sourceLines
+      .map((line) => ({
+        accountId: Number(line.account_id),
+        costCenterId: line.cost_center_id ? Number(line.cost_center_id) : null,
+        description: `عكس: ${line.description || 'قيد بيع'}`,
+        debit: toBookMoney(line.credit),
+        credit: toBookMoney(line.debit),
+        partnerType: (line.partner_type as 'none' | 'customer' | 'supplier') || 'none',
+        partnerId: line.partner_id ? Number(line.partner_id) : null,
+        branchId: line.branch_id ? Number(line.branch_id) : null,
+        locationId: line.location_id ? Number(line.location_id) : null,
+      }))
+      .filter((line) => line.debit > 0 || line.credit > 0);
 
     const totalDebit = toBookMoney(reversalLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(reversalLines.reduce((sum, line) => sum + line.credit, 0));
@@ -318,7 +394,9 @@ export class ReverseSaleJournalService {
       reversalOfEntryId: journalId,
     });
 
-    this.logger.warn(`Posted targeted sale reversal journal for sale ${saleId} (stale journal ${journalId}) as entry ${entryId}`);
+    this.logger.warn(
+      `Posted targeted sale reversal journal for sale ${saleId} (stale journal ${journalId}) as entry ${entryId}`,
+    );
     return { reversed: true, journalEntryId: entryId };
   }
 }

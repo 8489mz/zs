@@ -133,9 +133,7 @@ export function allocateCustomerOverdueFifo(
   }
 
   // Sort invoices ascending by creation date (oldest first for FIFO allocation)
-  const sorted = [...invoices].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-  );
+  const sorted = [...invoices].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   let remainingBalance = roundMoney(balance, moneyDigits);
   const overdueInvoices: OverdueInvoice[] = [];
@@ -200,10 +198,7 @@ export function allocateCustomerOverdueFifo(
  * Determines the matching dunning level based on the oldest overdue days.
  * Levels are ordered by days_past_due ascending.
  */
-export function determineDunningLevel(
-  oldestOverdueDays: number,
-  levels: DunningLevel[],
-): DunningLevel | null {
+export function determineDunningLevel(oldestOverdueDays: number, levels: DunningLevel[]): DunningLevel | null {
   if (oldestOverdueDays <= 0 || !levels.length) return null;
 
   const sortedLevels = [...levels].sort((a, b) => a.days_past_due - b.days_past_due);
@@ -250,10 +245,7 @@ export function renderDunningMessage(
 /**
  * Builds standard WhatsApp direct link with sanitized international phone number.
  */
-export function buildWhatsAppCollectionUrl(
-  phone: string | undefined | null,
-  message: string,
-): string | undefined {
+export function buildWhatsAppCollectionUrl(phone: string | undefined | null, message: string): string | undefined {
   if (!phone) return undefined;
   const cleaned = phone.replace(/[^\d+]/g, '');
   if (cleaned.length < 8) return undefined;
@@ -299,7 +291,14 @@ export function evaluateCustomerDunning(
   // 1. Allocate overdue amounts via FIFO
   const { overdueInvoices, totalOverdue, oldestOverdueDays } = input.overdueSummary
     ? { overdueInvoices: [], ...input.overdueSummary }
-    : allocateCustomerOverdueFifo(totalBalance, input.invoices, asOfDate, input.creditTermsDays ?? 0, moneyDigits, businessTimezone);
+    : allocateCustomerOverdueFifo(
+        totalBalance,
+        input.invoices,
+        asOfDate,
+        input.creditTermsDays ?? 0,
+        moneyDigits,
+        businessTimezone,
+      );
 
   // 2. Identify active dunning level
   const activeLevel = determineDunningLevel(oldestOverdueDays, levels);

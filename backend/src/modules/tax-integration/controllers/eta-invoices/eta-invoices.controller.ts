@@ -3,7 +3,10 @@ import { SessionAuthGuard } from '../../../../core/auth/guards/session-auth.guar
 import { PermissionsGuard } from '../../../../core/auth/guards/permissions.guard';
 import { RequirePermissions } from '../../../../core/auth/decorators/permissions.decorator';
 import { EtaSubmissionService } from '../../services/eta-submission/eta-submission.service';
-import { EtaSignatureBridgeService, AttachSignatureDto } from '../../services/eta-submission/eta-signature-bridge.service';
+import {
+  EtaSignatureBridgeService,
+  AttachSignatureDto,
+} from '../../services/eta-submission/eta-signature-bridge.service';
 import { RequestWithAuth } from '../../../../core/auth/interfaces/request-with-auth.interface';
 
 @Controller('api/tax-integration/eta/invoices')
@@ -44,7 +47,10 @@ export class EtaInvoicesController {
   @Get(':id/canonical')
   @RequirePermissions('canEditInvoices')
   async prepareCanonical(@Req() req: RequestWithAuth, @Param('id') id: string) {
-    const result = await this.etaSignatureBridge.prepareCanonicalDocument(String(req.authContext!.tenantId), Number(id));
+    const result = await this.etaSignatureBridge.prepareCanonicalDocument(
+      String(req.authContext!.tenantId),
+      Number(id),
+    );
     return { success: true, data: result };
   }
 

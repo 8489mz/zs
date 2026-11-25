@@ -37,7 +37,8 @@ export function allocateRefundTenders(input: {
     remaining -= used;
   };
   const debtAvailable = Math.max(0, toCents(input.originalDebt) - toCents(input.previousDebtReversed));
-  if (debtAvailable > 0 && !input.hasCustomer) throw new AppError('Credit return requires a customer', 'REFUND_CUSTOMER_REQUIRED', 400);
+  if (debtAvailable > 0 && !input.hasCustomer)
+    throw new AppError('Credit return requires a customer', 'REFUND_CUSTOMER_REQUIRED', 400);
   // Settle the outstanding receivable before creating a new store-credit liability.
   apply('receivable', debtAvailable);
   if (remaining === 0) return result;

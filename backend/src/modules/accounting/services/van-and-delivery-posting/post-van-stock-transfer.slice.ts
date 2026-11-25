@@ -54,9 +54,9 @@ export class PostVanStockTransferSlice {
   }
 
   /**
-     * Posts inventory movement journal entry between warehouse and mobile van location.
-     */
-async postVanStockTransfer(
+   * Posts inventory movement journal entry between warehouse and mobile van location.
+   */
+  async postVanStockTransfer(
     queryable: DbOrTx,
     tripId: number,
     params: {
@@ -73,7 +73,6 @@ async postVanStockTransfer(
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
 
-
     const cost = toBookMoney(params.totalCost);
     if (!(cost > 0)) return { posted: false, journalEntryId: null };
 
@@ -89,15 +88,35 @@ async postVanStockTransfer(
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
     let inventoryAccountId = Number(settings?.inventory_account_id || 0);
-    if (!(inventoryAccountId > 0)) inventoryAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1140');
+    if (!(inventoryAccountId > 0))
+      inventoryAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1140');
 
-    const descAr = params.type === 'load'
-      ? `تحميل بضاعة لسيارة التوزيع - رحلة #${tripId}`
-      : `تفريغ وإعادة بضاعة سيارة التوزيع للمستودع - رحلة #${tripId}`;
+    const descAr =
+      params.type === 'load'
+        ? `تحميل بضاعة لسيارة التوزيع - رحلة #${tripId}`
+        : `تفريغ وإعادة بضاعة سيارة التوزيع للمستودع - رحلة #${tripId}`;
 
     const lines: JournalLineDraft[] = [
-      { accountId: inventoryAccountId, description: `${descAr} (دخول)`, debit: cost, credit: 0, partnerType: 'none', partnerId: null, branchId: params.branchId ?? null, locationId: params.targetLocationId },
-      { accountId: inventoryAccountId, description: `${descAr} (خروج)`, debit: 0, credit: cost, partnerType: 'none', partnerId: null, branchId: params.branchId ?? null, locationId: params.sourceLocationId },
+      {
+        accountId: inventoryAccountId,
+        description: `${descAr} (دخول)`,
+        debit: cost,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId: params.branchId ?? null,
+        locationId: params.targetLocationId,
+      },
+      {
+        accountId: inventoryAccountId,
+        description: `${descAr} (خروج)`,
+        debit: 0,
+        credit: cost,
+        partnerType: 'none',
+        partnerId: null,
+        branchId: params.branchId ?? null,
+        locationId: params.sourceLocationId,
+      },
     ];
 
     try {
@@ -117,7 +136,13 @@ async postVanStockTransfer(
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_van_sales_uniq')) {
-        const existing2 = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', sourceType).where('source_id', '=', tripId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+        const existing2 = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', sourceType)
+          .where('source_id', '=', tripId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
         return { posted: false, journalEntryId: Number(existing2?.id || 0) };
       }
       throw e;

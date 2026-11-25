@@ -36,11 +36,7 @@ export class PurchaseOrdersController {
   }
 
   @Put(':id')
-  updateOrder(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdatePurchaseOrderDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  updateOrder(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePurchaseOrderDto, @Req() req: RequestWithAuth) {
     return this.purchaseOrdersService.updateOrder(id, dto, req.authContext!);
   }
 

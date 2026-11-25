@@ -21,20 +21,22 @@ export class SalesQueryService {
 
   private tenantPredicate(auth: AuthContext, alias?: string) {
     const { tenantId } = requireTenantScope(auth);
-    return alias
-      ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}`
-      : sql<boolean>`tenant_id = ${tenantId}`;
+    return alias ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}` : sql<boolean>`tenant_id = ${tenantId}`;
   }
 
-  private async fetchSaleBaseRows(auth: AuthContext, query?: Record<string, unknown>): Promise<{ rows: Array<Record<string, unknown>>, totalItems: number, nextCursor: string | null }> {
-    const search = typeof query?.search === 'string' ? query.search.trim() : (typeof query?.q === 'string' ? query.q.trim() : '');
+  private async fetchSaleBaseRows(
+    auth: AuthContext,
+    query?: Record<string, unknown>,
+  ): Promise<{ rows: Array<Record<string, unknown>>; totalItems: number; nextCursor: string | null }> {
+    const search =
+      typeof query?.search === 'string' ? query.search.trim() : typeof query?.q === 'string' ? query.q.trim() : '';
     const numericId = Number(search);
     const hasNumericId = Number.isInteger(numericId) && numericId > 0;
-    
+
     const filter = String(query?.paymentChannel || query?.filter || query?.view || 'all').toLowerCase();
     const cashier = String(query?.cashier || query?.createdBy || 'all').trim();
     const cashierLower = cashier.toLowerCase();
-    
+
     const page = Math.max(1, Number(query?.page || 1));
     const pageSize = Math.min(100, Math.max(1, Number(query?.pageSize || 30)));
     const lastSeenId = Number(query?.lastSeenId || query?.lastId || query?.cursor || 0);
@@ -59,26 +61,74 @@ export class SalesQueryService {
       .selectFrom('sales as s')
       .leftJoin('customers as c', (j) => j.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'))
       .leftJoin('branches as b', (j) => j.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id'))
-      .leftJoin('stock_locations as l', (j) => j.onRef('l.id', '=', 's.location_id').onRef('l.tenant_id', '=', 's.tenant_id'))
+      .leftJoin('stock_locations as l', (j) =>
+        j.onRef('l.id', '=', 's.location_id').onRef('l.tenant_id', '=', 's.tenant_id'),
+      )
       .leftJoin('users as u', (j) => j.onRef('u.id', '=', 's.created_by').onRef('u.tenant_id', '=', 's.tenant_id'))
-      .leftJoin('delivery_representatives as dr', (j) => j.onRef('dr.id', '=', 's.delivery_rep_id').onRef('dr.tenant_id', '=', 's.tenant_id'))
+      .leftJoin('delivery_representatives as dr', (j) =>
+        j.onRef('dr.id', '=', 's.delivery_rep_id').onRef('dr.tenant_id', '=', 's.tenant_id'),
+      )
       .select([
-        's.id', 's.doc_no', 's.customer_id', 'c.name as customer_name_ref', 'c.phone as customer_phone_ref', 'c.address as customer_address_ref', 's.customer_name', 's.customer_phone', 's.customer_address', 's.payment_type', 's.payment_channel',
-        's.subtotal', 's.discount', 's.tax_rate', 's.tax_amount', 's.prices_include_tax', 's.total', 's.paid_amount', 's.tendered_amount', 's.change_amount', 's.store_credit_used', 's.delivery_fee',
-        's.status', 's.note', 's.table_number', 's.order_type', 's.branch_id', 's.location_id', 's.created_by as created_by_id', 's.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name', 'u.username as created_by_username',
-        's.delivery_rep_id', 'dr.name as delivery_rep_name',
+        's.id',
+        's.doc_no',
+        's.customer_id',
+        'c.name as customer_name_ref',
+        'c.phone as customer_phone_ref',
+        'c.address as customer_address_ref',
+        's.customer_name',
+        's.customer_phone',
+        's.customer_address',
+        's.payment_type',
+        's.payment_channel',
+        's.subtotal',
+        's.discount',
+        's.tax_rate',
+        's.tax_amount',
+        's.prices_include_tax',
+        's.total',
+        's.paid_amount',
+        's.tendered_amount',
+        's.change_amount',
+        's.store_credit_used',
+        's.delivery_fee',
+        's.status',
+        's.note',
+        's.table_number',
+        's.order_type',
+        's.branch_id',
+        's.location_id',
+        's.created_by as created_by_id',
+        's.created_at',
+        'b.name as branch_name',
+        'l.name as location_name',
+        'u.username as created_by_name',
+        'u.username as created_by_username',
+        's.delivery_rep_id',
+        'dr.name as delivery_rep_name',
         // INV-REST-COD-UNPAID-POST-TRUTH (T12-H1): the mapper reads
         // collection_status / delivery_status / delivery_fee_mode off
         // the row — omitting them here made every sale render
         // collectionStatus null and the dialogs claim prepaid.
-        's.collection_status', 's.delivery_status', 's.delivery_fee_mode',
+        's.collection_status',
+        's.delivery_status',
+        's.delivery_fee_mode',
         sql<number>`COUNT(*) OVER()`.as('total_count'),
         sql<number>`COALESCE(SUM(s.total) OVER(), 0)`.as('agg_total_sales'),
-        sql<number>`COALESCE(SUM(CASE WHEN s.payment_type = 'cash' OR s.payment_channel = 'cash' THEN s.total ELSE 0 END) OVER(), 0)`.as('agg_cash_total'),
-        sql<number>`COALESCE(SUM(CASE WHEN s.payment_type = 'credit' OR s.payment_channel = 'credit' THEN s.total ELSE 0 END) OVER(), 0)`.as('agg_credit_total'),
-        sql<number>`COALESCE(SUM(CASE WHEN s.status = 'cancelled' THEN 1 ELSE 0 END) OVER(), 0)`.as('agg_cancelled_count'),
-        sql<number>`COALESCE(SUM(CASE WHEN DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey} THEN 1 ELSE 0 END) OVER(), 0)`.as('agg_today_sales_count'),
-        sql<number>`COALESCE(SUM(CASE WHEN DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey} THEN s.total ELSE 0 END) OVER(), 0)`.as('agg_today_sales_total')
+        sql<number>`COALESCE(SUM(CASE WHEN s.payment_type = 'cash' OR s.payment_channel = 'cash' THEN s.total ELSE 0 END) OVER(), 0)`.as(
+          'agg_cash_total',
+        ),
+        sql<number>`COALESCE(SUM(CASE WHEN s.payment_type = 'credit' OR s.payment_channel = 'credit' THEN s.total ELSE 0 END) OVER(), 0)`.as(
+          'agg_credit_total',
+        ),
+        sql<number>`COALESCE(SUM(CASE WHEN s.status = 'cancelled' THEN 1 ELSE 0 END) OVER(), 0)`.as(
+          'agg_cancelled_count',
+        ),
+        sql<number>`COALESCE(SUM(CASE WHEN DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey} THEN 1 ELSE 0 END) OVER(), 0)`.as(
+          'agg_today_sales_count',
+        ),
+        sql<number>`COALESCE(SUM(CASE WHEN DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey} THEN s.total ELSE 0 END) OVER(), 0)`.as(
+          'agg_today_sales_total',
+        ),
       ])
       .where(this.tenantPredicate(auth, 's'));
 
@@ -106,7 +156,12 @@ export class SalesQueryService {
 
     if (filter !== 'all') {
       if (filter === 'cash') {
-        qb = qb.where((eb) => eb.or([eb('s.payment_channel', '=', 'cash'), eb.and([eb('s.payment_type', '=', 'cash'), eb('s.payment_channel', 'is', null)])]));
+        qb = qb.where((eb) =>
+          eb.or([
+            eb('s.payment_channel', '=', 'cash'),
+            eb.and([eb('s.payment_type', '=', 'cash'), eb('s.payment_channel', 'is', null)]),
+          ]),
+        );
       } else if (filter === 'card') {
         qb = qb.where('s.payment_channel', '=', 'card');
       } else if (filter === 'credit') {
@@ -119,22 +174,21 @@ export class SalesQueryService {
     }
 
     if (cashierLower !== 'all') {
-      qb = qb.where((eb) => eb.or([
-        sql<boolean>`CAST(s.created_by AS TEXT) = ${cashier}`,
-        eb('u.username', '=', cashierLower)
-      ]));
+      qb = qb.where((eb) =>
+        eb.or([sql<boolean>`CAST(s.created_by AS TEXT) = ${cashier}`, eb('u.username', '=', cashierLower)]),
+      );
     }
 
     if (lastSeenId > 0) {
       qb = qb.where('s.id', '<', lastSeenId);
     }
 
-    const rows = await qb
+    const rows = (await qb
       .orderBy('s.id', 'desc')
       .limit(pageSize)
       .offset(lastSeenId > 0 ? 0 : (page - 1) * pageSize)
-      .execute() as unknown as Array<Record<string, unknown>>;
-      
+      .execute()) as unknown as Array<Record<string, unknown>>;
+
     const totalItems = rows.length > 0 ? Number(rows[0].total_count) : 0;
     const nextCursor = rows.length === pageSize ? String(rows[rows.length - 1].id) : null;
     return { rows, totalItems, nextCursor };
@@ -181,14 +235,35 @@ export class SalesQueryService {
     }));
   }
 
-  private async hydrateSales(sales: Array<Record<string, unknown>>, auth: AuthContext): Promise<Array<Record<string, unknown>>> {
+  private async hydrateSales(
+    sales: Array<Record<string, unknown>>,
+    auth: AuthContext,
+  ): Promise<Array<Record<string, unknown>>> {
     const saleIds = sales.map((sale) => Number(sale.id)).filter((id) => Number.isFinite(id) && id > 0);
     if (!saleIds.length) return [];
 
     const [items, payments, linkedReturns] = await Promise.all([
       this.db
         .selectFrom('sale_items')
-        .select(['id', 'sale_id', 'product_id', 'product_name', 'product_name_en', 'qty', 'unit_price', 'line_total', 'line_discount', 'net_line_total', 'allocated_tax', 'unit_name', 'unit_multiplier', 'cost_price', 'price_type', 'modifiers', 'serials'])
+        .select([
+          'id',
+          'sale_id',
+          'product_id',
+          'product_name',
+          'product_name_en',
+          'qty',
+          'unit_price',
+          'line_total',
+          'line_discount',
+          'net_line_total',
+          'allocated_tax',
+          'unit_name',
+          'unit_multiplier',
+          'cost_price',
+          'price_type',
+          'modifiers',
+          'serials',
+        ])
         .where('sale_id', 'in', saleIds)
         .where(this.tenantPredicate(auth))
         .orderBy('sale_id', 'asc')
@@ -212,9 +287,13 @@ export class SalesQueryService {
         .execute(),
     ]);
 
-    const canViewCostPrice = auth.role === 'super_admin'
-      || auth.role === 'admin'
-      || (auth.permissions && (auth.permissions.includes('canViewProfit') || auth.permissions.includes('reports') || auth.permissions.includes('purchases')));
+    const canViewCostPrice =
+      auth.role === 'super_admin' ||
+      auth.role === 'admin' ||
+      (auth.permissions &&
+        (auth.permissions.includes('canViewProfit') ||
+          auth.permissions.includes('reports') ||
+          auth.permissions.includes('purchases')));
 
     return mapSaleRows(
       sales,
@@ -244,7 +323,7 @@ export class SalesQueryService {
       creditTotal: baseSales.length > 0 ? roundMoney(Number(firstRow.agg_credit_total || 0), digits) : 0,
       cancelledCount: baseSales.length > 0 ? Number(firstRow.agg_cancelled_count || 0) : 0,
     };
-    
+
     const page = Math.max(1, Number(query.page || 1));
     const pageSize = Math.min(100, Math.max(1, Number(query.pageSize || 30)));
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -269,18 +348,56 @@ export class SalesQueryService {
       .selectFrom('sales as s')
       .leftJoin('customers as c', (j) => j.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'))
       .leftJoin('branches as b', (j) => j.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id'))
-      .leftJoin('stock_locations as l', (j) => j.onRef('l.id', '=', 's.location_id').onRef('l.tenant_id', '=', 's.tenant_id'))
+      .leftJoin('stock_locations as l', (j) =>
+        j.onRef('l.id', '=', 's.location_id').onRef('l.tenant_id', '=', 's.tenant_id'),
+      )
       .leftJoin('users as u', (j) => j.onRef('u.id', '=', 's.created_by').onRef('u.tenant_id', '=', 's.tenant_id'))
-      .leftJoin('delivery_representatives as dr', (j) => j.onRef('dr.id', '=', 's.delivery_rep_id').onRef('dr.tenant_id', '=', 's.tenant_id'))
+      .leftJoin('delivery_representatives as dr', (j) =>
+        j.onRef('dr.id', '=', 's.delivery_rep_id').onRef('dr.tenant_id', '=', 's.tenant_id'),
+      )
       .select([
-        's.id', 's.doc_no', 's.customer_id', 'c.name as customer_name_ref', 'c.phone as customer_phone_ref', 'c.address as customer_address_ref', 's.customer_name', 's.customer_phone', 's.customer_address', 's.payment_type', 's.payment_channel',
-        's.subtotal', 's.discount', 's.tax_rate', 's.tax_amount', 's.prices_include_tax', 's.total', 's.paid_amount', 's.tendered_amount', 's.change_amount', 's.store_credit_used', 's.delivery_fee',
-        's.status', 's.note', 's.table_number', 's.order_type', 's.branch_id', 's.location_id', 's.created_by as created_by_id', 's.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name', 'u.username as created_by_username',
-        's.delivery_rep_id', 'dr.name as delivery_rep_name',
+        's.id',
+        's.doc_no',
+        's.customer_id',
+        'c.name as customer_name_ref',
+        'c.phone as customer_phone_ref',
+        'c.address as customer_address_ref',
+        's.customer_name',
+        's.customer_phone',
+        's.customer_address',
+        's.payment_type',
+        's.payment_channel',
+        's.subtotal',
+        's.discount',
+        's.tax_rate',
+        's.tax_amount',
+        's.prices_include_tax',
+        's.total',
+        's.paid_amount',
+        's.tendered_amount',
+        's.change_amount',
+        's.store_credit_used',
+        's.delivery_fee',
+        's.status',
+        's.note',
+        's.table_number',
+        's.order_type',
+        's.branch_id',
+        's.location_id',
+        's.created_by as created_by_id',
+        's.created_at',
+        'b.name as branch_name',
+        'l.name as location_name',
+        'u.username as created_by_name',
+        'u.username as created_by_username',
+        's.delivery_rep_id',
+        'dr.name as delivery_rep_name',
         // INV-REST-COD-UNPAID-POST-TRUTH (T12-H1): same read as the
         // list query above — getSaleById must return the stored
         // collection_status or every sale renders prepaid.
-        's.collection_status', 's.delivery_status', 's.delivery_fee_mode',
+        's.collection_status',
+        's.delivery_status',
+        's.delivery_fee_mode',
       ])
       .where('s.id', '=', id)
       .where(this.tenantPredicate(auth, 's'))
@@ -300,30 +417,66 @@ export class SalesQueryService {
       .selectFrom('held_sales as hs')
       .leftJoin('customers as c', 'c.id', 'hs.customer_id')
       .select([
-        'hs.id', 'hs.customer_id', 'hs.payment_type', 'hs.payment_channel', 'hs.paid_amount', 'hs.cash_amount', 'hs.card_amount',
-        'hs.discount', 'hs.delivery_fee', 'hs.delivery_rep_id', 'hs.collection_status', 'hs.note', 'hs.search', 'hs.table_number', 'hs.order_type', 'hs.price_type', 'hs.branch_id', 'hs.location_id', 'hs.created_by', 'hs.created_at',
+        'hs.id',
+        'hs.customer_id',
+        'hs.payment_type',
+        'hs.payment_channel',
+        'hs.paid_amount',
+        'hs.cash_amount',
+        'hs.card_amount',
+        'hs.discount',
+        'hs.delivery_fee',
+        'hs.delivery_rep_id',
+        'hs.collection_status',
+        'hs.note',
+        'hs.search',
+        'hs.table_number',
+        'hs.order_type',
+        'hs.price_type',
+        'hs.branch_id',
+        'hs.location_id',
+        'hs.created_by',
+        'hs.created_at',
         /* INV-REST-HOLD-RECALL-TRUTH (R5-B, 0310 columns): the header
          * fields mapHeldSalesRows returns. Without them in the select the
          * mapper reads undefined and recall restores defaults. */
-        'hs.tip_amount', 'hs.loyalty_points_redeemed', 'hs.pager_number', 'hs.delivery_fee_mode', 'hs.online_order_id', 'hs.dining_course', 'hs.guest_count', 'hs.guest_check_printed_at', 'c.name as customer_name',
+        'hs.tip_amount',
+        'hs.loyalty_points_redeemed',
+        'hs.pager_number',
+        'hs.delivery_fee_mode',
+        'hs.online_order_id',
+        'hs.dining_course',
+        'hs.guest_count',
+        'hs.guest_check_printed_at',
+        'c.name as customer_name',
       ])
       .where(this.tenantPredicate(auth, 'hs'))
       .$if(!canManageHeldSales, (qb) => qb.where('hs.created_by', '=', ownerUserId ?? -1))
       .orderBy('hs.id', 'desc')
       .execute();
 
-    const heldSaleIds = rows
-      .map((row) => Number(row.id || 0))
-      .filter((id) => Number.isFinite(id) && id > 0);
+    const heldSaleIds = rows.map((row) => Number(row.id || 0)).filter((id) => Number.isFinite(id) && id > 0);
     const items = heldSaleIds.length
       ? await this.db
-        .selectFrom('held_sale_items')
-        .select(['id', 'held_sale_id', 'product_id', 'product_name', 'qty', 'unit_price', 'unit_name', 'unit_multiplier', 'price_type', 'modifiers', 'notes'])
-        .where('held_sale_id', 'in', heldSaleIds)
-        .where(this.tenantPredicate(auth))
-        .orderBy('held_sale_id', 'asc')
-        .orderBy('id', 'asc')
-        .execute()
+          .selectFrom('held_sale_items')
+          .select([
+            'id',
+            'held_sale_id',
+            'product_id',
+            'product_name',
+            'qty',
+            'unit_price',
+            'unit_name',
+            'unit_multiplier',
+            'price_type',
+            'modifiers',
+            'notes',
+          ])
+          .where('held_sale_id', 'in', heldSaleIds)
+          .where(this.tenantPredicate(auth))
+          .orderBy('held_sale_id', 'asc')
+          .orderBy('id', 'asc')
+          .execute()
       : [];
 
     return {

@@ -131,11 +131,7 @@ export class PriceListsService {
     return await this.db.transaction().execute(async (trx) => {
       if (dto.is_default) {
         // Reset previous default
-        await trx
-          .updateTable('price_lists')
-          .set({ is_default: false })
-          .where('tenant_id', '=', tenantId)
-          .execute();
+        await trx.updateTable('price_lists').set({ is_default: false }).where('tenant_id', '=', tenantId).execute();
       }
 
       const inserted = await trx
@@ -214,7 +210,10 @@ export class PriceListsService {
           code: code,
           currency: dto.currency || existing.currency,
           type: dto.type || existing.type,
-          default_discount_percent: dto.default_discount_percent !== undefined ? dto.default_discount_percent : existing.default_discount_percent,
+          default_discount_percent:
+            dto.default_discount_percent !== undefined
+              ? dto.default_discount_percent
+              : existing.default_discount_percent,
           is_default: dto.is_default !== undefined ? Boolean(dto.is_default) : existing.is_default,
           is_active: dto.is_active !== undefined ? Boolean(dto.is_active) : existing.is_active,
           notes: dto.notes !== undefined ? dto.notes : existing.notes,
@@ -273,11 +272,7 @@ export class PriceListsService {
         .where('price_list_id', '=', id)
         .execute();
 
-      await trx
-        .deleteFrom('price_lists')
-        .where('tenant_id', '=', tenantId)
-        .where('id', '=', id)
-        .execute();
+      await trx.deleteFrom('price_lists').where('tenant_id', '=', tenantId).where('id', '=', id).execute();
 
       return { success: true };
     });
@@ -308,5 +303,4 @@ export class PriceListsService {
     const context = await resolvePriceListContext(this.db, tenantId, customerId);
     return resolveListEffectivePrice(this.db, tenantId, context, productId, quantity, basePrice, options, moneyDigits);
   }
-
 }

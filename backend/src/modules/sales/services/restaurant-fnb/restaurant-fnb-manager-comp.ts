@@ -21,16 +21,19 @@ export class RestaurantFnbManagerCompSlice {
     private readonly accountingPosting?: AccountingPostingService,
   ) {}
 
-  async recordManagerComp(scope: TenantScope, dto: {
-    saleId?: number;
-    tableNumber?: string;
-    compType: 'vip_guest' | 'customer_complaint' | 'staff_meal' | 'promotional_tasting';
-    managerName: string;
-    managerPin?: string;
-    amount: number;
-    itemsSummary?: string;
-    notes?: string;
-  }) {
+  async recordManagerComp(
+    scope: TenantScope,
+    dto: {
+      saleId?: number;
+      tableNumber?: string;
+      compType: 'vip_guest' | 'customer_complaint' | 'staff_meal' | 'promotional_tasting';
+      managerName: string;
+      managerPin?: string;
+      amount: number;
+      itemsSummary?: string;
+      notes?: string;
+    },
+  ) {
     // INV-REST-FNB-CLAIMS-POST: only a manager caller may record a comp.
     this.assertManagerCaller(scope);
     const compTypes = ['vip_guest', 'customer_complaint', 'staff_meal', 'promotional_tasting'] as const;
@@ -61,17 +64,14 @@ export class RestaurantFnbManagerCompSlice {
       // client-supplied free-text name.
       const isAdminCaller = String(scope.role || '') === 'admin' || String(scope.role || '') === 'super_admin';
       const cleanPin = String(dto.managerPin || '').trim();
-      const approval = (!isAdminCaller || cleanPin)
-        ? await authorizeManagerSecret(
-            trx,
-            { tenantId: scope.tenantId, accountId } as AuthContext,
-            cleanPin,
-          )
-        : {
-            mode: 'account' as const,
-            authorizedById: Number(scope.userId || 0) || undefined,
-            authorizedByName: String(scope.username || 'المدير'),
-          };
+      const approval =
+        !isAdminCaller || cleanPin
+          ? await authorizeManagerSecret(trx, { tenantId: scope.tenantId, accountId } as AuthContext, cleanPin)
+          : {
+              mode: 'account' as const,
+              authorizedById: Number(scope.userId || 0) || undefined,
+              authorizedByName: String(scope.username || 'المدير'),
+            };
 
       // INV-REST-FNB-CLAIMS-POST: a comp on a named sale posts against a
       // REAL, POSTED sale of this tenant only. The sale must already have
@@ -86,7 +86,16 @@ export class RestaurantFnbManagerCompSlice {
         const saleId = Number(dto.saleId);
         const sale = await trx
           .selectFrom('sales')
-          .select(['id', 'doc_no', 'customer_id', 'total', 'paid_amount', 'store_credit_used', 'branch_id', 'location_id'])
+          .select([
+            'id',
+            'doc_no',
+            'customer_id',
+            'total',
+            'paid_amount',
+            'store_credit_used',
+            'branch_id',
+            'location_id',
+          ])
           .where('tenant_id', '=', scope.tenantId)
           .where('id', '=', saleId)
           .executeTakeFirst();
@@ -102,11 +111,7 @@ export class RestaurantFnbManagerCompSlice {
           .where('status', 'in', ['draft', 'posted'])
           .executeTakeFirst();
         if (!saleJournal) {
-          throw new AppError(
-            'الفاتورة لم تُرحَّل بعد؛ طبّق الضيافة على السلة قبل إتمام البيع',
-            'SALE_NOT_POSTED',
-            422,
-          );
+          throw new AppError('الفاتورة لم تُرحَّل بعد؛ طبّق الضيافة على السلة قبل إتمام البيع', 'SALE_NOT_POSTED', 422);
         }
         const priorCompRows = await trx
           .selectFrom('restaurant_manager_comps')
@@ -184,11 +189,7 @@ export class RestaurantFnbManagerCompSlice {
         );
         const customerId = sale.customer_id ? Number(sale.customer_id) : null;
         if (!this.accountingPosting) {
-          throw new AppError(
-            'الضيافة على فاتورة مسجلة تحتاج خدمة الترحيل المحاسبي',
-            'FNB_POSTING_UNAVAILABLE',
-            500,
-          );
+          throw new AppError('الضيافة على فاتورة مسجلة تحتاج خدمة الترحيل المحاسبي', 'FNB_POSTING_UNAVAILABLE', 500);
         }
         journalEntryId = await this.accountingPosting.postDomainJournal(trx, {
           sourceType: 'manager_comp',
@@ -197,7 +198,7 @@ export class RestaurantFnbManagerCompSlice {
           accountId,
           entryDate: new Date(),
           description: `ضيافة إدارة على الفاتورة ${saleDocNo} — ${dto.compType}`,
-          branchId: sale.branch_id ? Number(sale.branch_id) : (scope.branchId || null),
+          branchId: sale.branch_id ? Number(sale.branch_id) : scope.branchId || null,
           locationId: sale.location_id ? Number(sale.location_id) : null,
           createdBy: scope.userId || null,
           lines: [

@@ -11,9 +11,10 @@ export class EtaAuthService {
       throw new BadRequestException('ETA Settings not configured or inactive for this tenant');
     }
 
-    const authUrl = settings.environment === 'production' 
-      ? 'https://id.eta.gov.eg/connect/token' 
-      : 'https://id.preprod.eta.gov.eg/connect/token';
+    const authUrl =
+      settings.environment === 'production'
+        ? 'https://id.eta.gov.eg/connect/token'
+        : 'https://id.preprod.eta.gov.eg/connect/token';
 
     try {
       const response = await fetch(authUrl, {
@@ -25,8 +26,8 @@ export class EtaAuthService {
           grant_type: 'client_credentials',
           client_id: settings.client_id,
           client_secret: settings.client_secret,
-          scope: 'InvoicingAPI'
-        }).toString()
+          scope: 'InvoicingAPI',
+        }).toString(),
       });
 
       if (!response.ok) {
@@ -37,9 +38,14 @@ export class EtaAuthService {
         } catch {
           errorMsg = response.statusText;
         }
-        
+
         let friendlyMsg = errorMsg;
-        if (errorMsg === 'invalid_client' || errorMsg === 'Bad Request' || errorMsg.includes('invalid_client') || response.status === 400) {
+        if (
+          errorMsg === 'invalid_client' ||
+          errorMsg === 'Bad Request' ||
+          errorMsg.includes('invalid_client') ||
+          response.status === 400
+        ) {
           friendlyMsg = 'بيانات الربط (Client ID أو Secret) غير صحيحة أو غير صالحة للبيئة المختارة';
         } else if (response.status === 401 || response.status === 403) {
           friendlyMsg = 'غير مصرح بالوصول، يرجى مراجعة بيانات الربط الضريبي';

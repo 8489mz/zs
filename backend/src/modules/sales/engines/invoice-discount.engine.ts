@@ -52,9 +52,11 @@ export function allocateInvoiceDiscount(input: {
   let grossRemaining = subtotal;
   const discounted = lineCents.map((amount, index) => {
     grossRemaining -= amount;
-    const proportional = subtotal > 0 ? Math.round(discount * amount / subtotal) : 0;
-    const share = index === lineCents.length - 1 ? discountRemaining
-      : Math.min(amount, discountRemaining, Math.max(proportional, discountRemaining - grossRemaining));
+    const proportional = subtotal > 0 ? Math.round((discount * amount) / subtotal) : 0;
+    const share =
+      index === lineCents.length - 1
+        ? discountRemaining
+        : Math.min(amount, discountRemaining, Math.max(proportional, discountRemaining - grossRemaining));
     discountRemaining -= share;
     return { gross: amount, discount: share, base: amount - share };
   });
@@ -62,10 +64,16 @@ export function allocateInvoiceDiscount(input: {
   if (tax > 0 && taxableBase <= 0) throw new AppError('Tax requires a taxable base', 'INVALID_INVOICE_ALLOCATION', 400);
   let taxRemaining = tax;
   let lastTaxableIndex = -1;
-  discounted.forEach((line, index) => { if (line.base > 0) lastTaxableIndex = index; });
+  discounted.forEach((line, index) => {
+    if (line.base > 0) lastTaxableIndex = index;
+  });
   return discounted.map((line, index) => {
-    const taxShare = line.base <= 0 ? 0 : index === lastTaxableIndex ? taxRemaining
-      : Math.min(taxRemaining, Math.round(tax * line.base / taxableBase));
+    const taxShare =
+      line.base <= 0
+        ? 0
+        : index === lastTaxableIndex
+          ? taxRemaining
+          : Math.min(taxRemaining, Math.round((tax * line.base) / taxableBase));
     taxRemaining -= taxShare;
     const netCents = line.base - (input.pricesIncludeTax ? taxShare : 0);
     if (netCents < 0) throw new AppError('Allocated tax exceeds line value', 'INVALID_INVOICE_ALLOCATION', 400);

@@ -12,10 +12,7 @@ export class RestaurantFnbPrepSlice {
   // ==========================================
 
   async getPrepSheets(scope: TenantScope, prepDate?: string) {
-    let query = this.db
-      .selectFrom('restaurant_prep_sheets')
-      .selectAll()
-      .where('tenant_id', '=', scope.tenantId);
+    let query = this.db.selectFrom('restaurant_prep_sheets').selectAll().where('tenant_id', '=', scope.tenantId);
 
     if (prepDate) {
       query = query.where('prep_date', '=', prepDate);
@@ -66,15 +63,16 @@ export class RestaurantFnbPrepSlice {
       .execute();
 
     // Default prep templates if no items passed
-    const prepItems = dto.items && dto.items.length > 0
-      ? dto.items
-      : [
-          { productId: 101, productName: 'تتبيل شاورما ولحم البرجر', unitName: 'كجم', parLevel: 25 },
-          { productId: 102, productName: 'تحضير صوص الثومية والباربيكيو', unitName: 'لتر', parLevel: 15 },
-          { productId: 103, productName: 'تقطيع بطاطس وخضار السلطة', unitName: 'كجم', parLevel: 30 },
-          { productId: 104, productName: 'عجين البيتزا والمخبوزات', unitName: 'قطعة', parLevel: 50 },
-          { productId: 105, productName: 'تجهيز صوص الشوكولاتة والكراميل', unitName: 'لتر', parLevel: 8 },
-        ];
+    const prepItems =
+      dto.items && dto.items.length > 0
+        ? dto.items
+        : [
+            { productId: 101, productName: 'تتبيل شاورما ولحم البرجر', unitName: 'كجم', parLevel: 25 },
+            { productId: 102, productName: 'تحضير صوص الثومية والباربيكيو', unitName: 'لتر', parLevel: 15 },
+            { productId: 103, productName: 'تقطيع بطاطس وخضار السلطة', unitName: 'كجم', parLevel: 30 },
+            { productId: 104, productName: 'عجين البيتزا والمخبوزات', unitName: 'قطعة', parLevel: 50 },
+            { productId: 105, productName: 'تجهيز صوص الشوكولاتة والكراميل', unitName: 'لتر', parLevel: 8 },
+          ];
 
     const insertedItems = [];
     for (const item of prepItems) {

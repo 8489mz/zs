@@ -34,7 +34,10 @@ const HIERARCHY_RANKS: Record<PackageType, number> = {
  * Higher rank can contain equal or lower rank (e.g., Pallet rank 4 can contain Box rank 2).
  * Lower rank cannot contain higher rank (e.g., Box cannot contain Pallet).
  */
-export function validatePackageHierarchy(parentType: PackageType, childType: PackageType): {
+export function validatePackageHierarchy(
+  parentType: PackageType,
+  childType: PackageType,
+): {
   valid: boolean;
   reason?: string;
 } {
@@ -73,10 +76,7 @@ export function calculatePackageGrossWeight(
     return sum + qty * w;
   }, 0);
 
-  const childrenWeight = childPackagesGrossWeightKg.reduce(
-    (sum, w) => sum + Math.max(0, Number(w) || 0),
-    0,
-  );
+  const childrenWeight = childPackagesGrossWeightKg.reduce((sum, w) => sum + Math.max(0, Number(w) || 0), 0);
 
   return Math.round((safeTare + itemsWeight + childrenWeight) * 1000) / 1000;
 }

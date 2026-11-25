@@ -54,14 +54,17 @@ export class SalesOrdersService {
 
   private get creation(): SalesOrdersCreation {
     return (this._creation ??= new SalesOrdersCreation(this.db, {
-      resolveOrderWarehouse: (trx, scope, branchId, requestedLocationId) => this.availability.resolveOrderWarehouse(trx, scope, branchId, requestedLocationId),
-      loadServiceProductIds: (trx, scope, productIds) => this.availability.loadServiceProductIds(trx, scope, productIds),
+      resolveOrderWarehouse: (trx, scope, branchId, requestedLocationId) =>
+        this.availability.resolveOrderWarehouse(trx, scope, branchId, requestedLocationId),
+      loadServiceProductIds: (trx, scope, productIds) =>
+        this.availability.loadServiceProductIds(trx, scope, productIds),
     }));
   }
 
   private get confirmation(): SalesOrdersConfirmation {
     return (this._confirmation ??= new SalesOrdersConfirmation(this.db, {
-      loadServiceProductIds: (trx, scope, productIds) => this.availability.loadServiceProductIds(trx, scope, productIds),
+      loadServiceProductIds: (trx, scope, productIds) =>
+        this.availability.loadServiceProductIds(trx, scope, productIds),
     }));
   }
 
@@ -90,7 +93,7 @@ export class SalesOrdersService {
 
   async listOrders(
     auth: AuthContext,
-    query?: { status?: string; search?: string; limit?: number; offset?: number }
+    query?: { status?: string; search?: string; limit?: number; offset?: number },
   ): Promise<Record<string, unknown>> {
     return this.reads.listOrders(auth, query);
   }

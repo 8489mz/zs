@@ -85,7 +85,11 @@ export class AccountingJournalsWriteService {
     this.normalizePartnerType = deps.normalizePartnerType;
   }
 
-  async createManualJournalEntry(dto: CreateManualJournalEntryDto, auth: AuthContext, externalTrx?: Kysely<Database>): Promise<Record<string, unknown>> {
+  async createManualJournalEntry(
+    dto: CreateManualJournalEntryDto,
+    auth: AuthContext,
+    externalTrx?: Kysely<Database>,
+  ): Promise<Record<string, unknown>> {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
     await this.accountingTenantFoundation.ensureForAuth(this.db, auth);
@@ -148,7 +152,18 @@ export class AccountingJournalsWriteService {
     // Verify all accounts belong to tenant and allow manual entries
     const existingAccounts = await this.db
       .selectFrom('accounting_accounts')
-      .select(['id', 'code', 'name_ar', 'is_active', 'allow_manual_entries', 'is_control_account', 'is_tax', 'is_receivable', 'is_payable', 'is_inventory'])
+      .select([
+        'id',
+        'code',
+        'name_ar',
+        'is_active',
+        'allow_manual_entries',
+        'is_control_account',
+        'is_tax',
+        'is_receivable',
+        'is_payable',
+        'is_inventory',
+      ])
       .where('tenant_id', '=', scope.tenantId)
       .where('id', 'in', Array.from(accountIds))
       .execute();
@@ -161,7 +176,14 @@ export class AccountingJournalsWriteService {
       if (!acc.is_active) {
         throw new BadRequestException(`الحساب [${acc.code} - ${acc.name_ar}] غير نشط.`);
       }
-      if (acc.is_control_account || acc.is_receivable || acc.is_payable || acc.is_inventory || ['1130', '1140', '2110'].includes(acc.code)) throw new BadRequestException('الحساب الرقابي يُعدّل من مستند الشريك أو المخزون لضمان تطابق الأستاذ المساعد.');
+      if (
+        acc.is_control_account ||
+        acc.is_receivable ||
+        acc.is_payable ||
+        acc.is_inventory ||
+        ['1130', '1140', '2110'].includes(acc.code)
+      )
+        throw new BadRequestException('الحساب الرقابي يُعدّل من مستند الشريك أو المخزون لضمان تطابق الأستاذ المساعد.');
       if (!acc.allow_manual_entries) {
         throw new BadRequestException(`الحساب [${acc.code} - ${acc.name_ar}] لا يسمح بإدخال قيود يدوية.`);
       }
@@ -219,7 +241,9 @@ export class AccountingJournalsWriteService {
       // unit by float dust alone.
       const difference = this.toBookMoney(totalDebit - totalCredit, digits);
       if (Math.abs(difference) > maxDifference) {
-        throw new BadRequestException(`القيد غير متزن: إجمالي المدين (${totalDebit}) لا يساوي إجمالي الدائن (${totalCredit}). الفارق: ${Math.abs(difference).toFixed(digits)}`);
+        throw new BadRequestException(
+          `القيد غير متزن: إجمالي المدين (${totalDebit}) لا يساوي إجمالي الدائن (${totalCredit}). الفارق: ${Math.abs(difference).toFixed(digits)}`,
+        );
       }
 
       // Rounding plug, book-digit-relative: the boundary plugs a
@@ -228,38 +252,99 @@ export class AccountingJournalsWriteService {
       // difference is exactly one minor unit, so the plug fires
       // exactly when the rounded lines differ by one minor unit.
       if (Math.abs(difference) >= unit / 2) {
-        const roundingAccount = await trx.selectFrom('accounting_accounts')
-          .select(['id', 'is_active']).where('tenant_id', '=', scope.tenantId)
-          .where('code', '=', '7290').executeTakeFirst();
-        if (!roundingAccount?.is_active) throw new BadRequestException('حساب فروق التقريب المحاسبي 7290 غير موجود أو غير نشط.');
+        const roundingAccount = await trx
+          .selectFrom('accounting_accounts')
+          .select(['id', 'is_active'])
+          .where('tenant_id', '=', scope.tenantId)
+          .where('code', '=', '7290')
+          .executeTakeFirst();
+        if (!roundingAccount?.is_active)
+          throw new BadRequestException('حساب فروق التقريب المحاسبي 7290 غير موجود أو غير نشط.');
         const debit = difference < 0 ? Math.abs(difference) : 0;
         const credit = difference > 0 ? difference : 0;
-        validatedLines.push({ accountId: Number(roundingAccount.id), costCenterId: null, description: 'فروق تقريب القيد', debit, credit, partnerType: 'none', partnerId: null });
+        validatedLines.push({
+          accountId: Number(roundingAccount.id),
+          costCenterId: null,
+          description: 'فروق تقريب القيد',
+          debit,
+          credit,
+          partnerType: 'none',
+          partnerId: null,
+        });
         totalDebit = this.toBookMoney(totalDebit + debit, digits);
         totalCredit = this.toBookMoney(totalCredit + credit, digits);
       }
-      if (Math.abs(this.toBookMoney(totalDebit - totalCredit, digits)) >= unit / 2) throw new BadRequestException('القيد غير متزن بعد التسوية.');
+      if (Math.abs(this.toBookMoney(totalDebit - totalCredit, digits)) >= unit / 2)
+        throw new BadRequestException('القيد غير متزن بعد التسوية.');
 
       await lockAccountingPeriod(trx, scope.tenantId);
       await this.assertNotInLockedPeriod(scope.tenantId, entryDate, { auth, queryable: trx });
-      await assertTaxPeriodOpen(trx, scope.tenantId, entryDate, validatedLines.map((line) => line.accountId));
-      await this.assertJournalReferences(trx, scope.tenantId, validatedLines.map((line) => ({ ...line, branchId })));
-      const lockedAccounts = await trx.selectFrom('accounting_accounts')
-        .select(['id', 'code', 'name_ar', 'is_active', 'allow_manual_entries', 'is_control_account', 'is_tax', 'is_receivable', 'is_payable', 'is_inventory'])
+      await assertTaxPeriodOpen(
+        trx,
+        scope.tenantId,
+        entryDate,
+        validatedLines.map((line) => line.accountId),
+      );
+      await this.assertJournalReferences(
+        trx,
+        scope.tenantId,
+        validatedLines.map((line) => ({ ...line, branchId })),
+      );
+      const lockedAccounts = await trx
+        .selectFrom('accounting_accounts')
+        .select([
+          'id',
+          'code',
+          'name_ar',
+          'is_active',
+          'allow_manual_entries',
+          'is_control_account',
+          'is_tax',
+          'is_receivable',
+          'is_payable',
+          'is_inventory',
+        ])
         .where('tenant_id', '=', scope.tenantId)
-        .where('id', 'in', Array.from(accountIds).sort((a, b) => a - b))
-        .orderBy('id', 'asc').forUpdate().execute();
+        .where(
+          'id',
+          'in',
+          Array.from(accountIds).sort((a, b) => a - b),
+        )
+        .orderBy('id', 'asc')
+        .forUpdate()
+        .execute();
       if (lockedAccounts.length !== accountIds.size) {
         throw new BadRequestException('واحد أو أكثر من الحسابات المحددة غير موجود في شجرة الحسابات.');
       }
-      const mapping = await trx.selectFrom('accounting_settings').select(['customer_receivable_account_id', 'supplier_payable_account_id', 'inventory_account_id']).where('tenant_id', '=', scope.tenantId).where('id', '=', 1).executeTakeFirst();
+      const mapping = await trx
+        .selectFrom('accounting_settings')
+        .select(['customer_receivable_account_id', 'supplier_payable_account_id', 'inventory_account_id'])
+        .where('tenant_id', '=', scope.tenantId)
+        .where('id', '=', 1)
+        .executeTakeFirst();
       const mappedControls = new Set(Object.values(mapping || {}).map(Number));
       for (const account of lockedAccounts) {
-        if (!account.is_active || !account.allow_manual_entries || account.is_control_account || account.is_receivable || account.is_payable || account.is_inventory || mappedControls.has(Number(account.id))) {
-          throw new BadRequestException(`الحساب [${account.code} - ${account.name_ar}] غير نشط أو لا يسمح بقيود يدوية.`);
+        if (
+          !account.is_active ||
+          !account.allow_manual_entries ||
+          account.is_control_account ||
+          account.is_receivable ||
+          account.is_payable ||
+          account.is_inventory ||
+          mappedControls.has(Number(account.id))
+        ) {
+          throw new BadRequestException(
+            `الحساب [${account.code} - ${account.name_ar}] غير نشط أو لا يسمح بقيود يدوية.`,
+          );
         }
       }
-      await this.assertNotInLockedPeriod(scope.tenantId, entryDate, { auth, queryable: trx, isTaxOperation: lockedAccounts.some(account => account.is_tax || ['1150', '1155', '2120', '2126', '2146'].includes(account.code)) });
+      await this.assertNotInLockedPeriod(scope.tenantId, entryDate, {
+        auth,
+        queryable: trx,
+        isTaxOperation: lockedAccounts.some(
+          (account) => account.is_tax || ['1150', '1155', '2120', '2126', '2146'].includes(account.code),
+        ),
+      });
       // Post through the canonical posting boundary (P0-2 precedent):
       // it owns numbering, re-rounding, the balance/plug backstop and
       // the automated period lock. The manual validations above stay:
@@ -315,7 +400,11 @@ export class AccountingJournalsWriteService {
     };
   }
 
-  async reverseJournalEntry(entryId: number, reason: string, auth: AuthContext): Promise<{ ok: boolean; message: string; reversalEntryId: number; reversalEntryNo: string }> {
+  async reverseJournalEntry(
+    entryId: number,
+    reason: string,
+    auth: AuthContext,
+  ): Promise<{ ok: boolean; message: string; reversalEntryId: number; reversalEntryNo: string }> {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
     const userId = Number(auth.userId || 0) || null;
@@ -336,7 +425,8 @@ export class AccountingJournalsWriteService {
       throw new NotFoundException('القيد اليومي غير موجود');
     }
 
-    if (entry.source_type !== 'manual') throw new BadRequestException('يجب عكس القيد الآلي من المستند الأصلي لضمان تزامن المخزون والأستاذ المساعد.');
+    if (entry.source_type !== 'manual')
+      throw new BadRequestException('يجب عكس القيد الآلي من المستند الأصلي لضمان تزامن المخزون والأستاذ المساعد.');
 
     if (entry.status !== 'posted') {
       throw new BadRequestException('لا يمكن عكس قيد غير مرحل أو تم إلغاؤه مسبقاً');
@@ -347,7 +437,9 @@ export class AccountingJournalsWriteService {
     }
 
     if (entry.source_type !== 'manual' || entry.reversal_of_entry_id) {
-      throw new BadRequestException('يجب إلغاء أو تسوية القيد الآلي من المستند الأصلي للحفاظ على المخزون وأرصدة الأطراف. العكس المباشر متاح للقيود اليدوية فقط.');
+      throw new BadRequestException(
+        'يجب إلغاء أو تسوية القيد الآلي من المستند الأصلي للحفاظ على المخزون وأرصدة الأطراف. العكس المباشر متاح للقيود اليدوية فقط.',
+      );
     }
 
     const lines = await this.db
@@ -390,7 +482,8 @@ export class AccountingJournalsWriteService {
         .selectAll()
         .where('journal_entry_id', '=', entryId)
         .where('tenant_id', '=', scope.tenantId)
-        .orderBy('id', 'asc').forUpdate()
+        .orderBy('id', 'asc')
+        .forUpdate()
         .execute();
       if (!lockedLines.length) throw new BadRequestException('لا توجد سطور في هذا القيد لعكسها');
       if (lockedLines.some((line: any) => Boolean(line.is_reconciled))) {
@@ -399,16 +492,43 @@ export class AccountingJournalsWriteService {
 
       // A reversal is a new posting and must respect the period lock like any other. Without this,
       // reversing into a closed fiscal year silently rewrites that year's balances after sign-off.
-      const taxAccounts = await trx.selectFrom('accounting_accounts').select('id').where('tenant_id', '=', scope.tenantId).where('id', 'in', lines.map(line => Number(line.account_id))).where(eb => eb.or([eb('is_tax', '=', true), eb('code', 'in', ['1150', '1155', '2120', '2126', '2146'])])).execute();
+      const taxAccounts = await trx
+        .selectFrom('accounting_accounts')
+        .select('id')
+        .where('tenant_id', '=', scope.tenantId)
+        .where(
+          'id',
+          'in',
+          lines.map((line) => Number(line.account_id)),
+        )
+        .where((eb) => eb.or([eb('is_tax', '=', true), eb('code', 'in', ['1150', '1155', '2120', '2126', '2146'])]))
+        .execute();
       const isTaxOperation = taxAccounts.length > 0;
       const reversalDate = new Date();
-      await this.assertNotInLockedPeriod(scope.tenantId, lockedEntry.entry_date, { auth, queryable: trx, isTaxOperation });
+      await this.assertNotInLockedPeriod(scope.tenantId, lockedEntry.entry_date, {
+        auth,
+        queryable: trx,
+        isTaxOperation,
+      });
       await this.assertNotInLockedPeriod(scope.tenantId, reversalDate, { auth, queryable: trx, isTaxOperation });
-      await assertTaxPeriodOpen(trx, scope.tenantId, reversalDate, lockedLines.map((line) => Number(line.account_id)));
-      await trx.selectFrom('accounting_accounts').select('id')
+      await assertTaxPeriodOpen(
+        trx,
+        scope.tenantId,
+        reversalDate,
+        lockedLines.map((line) => Number(line.account_id)),
+      );
+      await trx
+        .selectFrom('accounting_accounts')
+        .select('id')
         .where('tenant_id', '=', scope.tenantId)
-        .where('id', 'in', Array.from(new Set(lockedLines.map((line) => Number(line.account_id)))).sort((a, b) => a - b))
-        .orderBy('id', 'asc').forUpdate().execute();
+        .where(
+          'id',
+          'in',
+          Array.from(new Set(lockedLines.map((line) => Number(line.account_id)))).sort((a, b) => a - b),
+        )
+        .orderBy('id', 'asc')
+        .forUpdate()
+        .execute();
 
       // Gapless numbering (INV-JE-NUMBERING-GAP): allocate before the
       // insert (and after every check above) so a failure below leaves
@@ -503,11 +623,21 @@ export class AccountingJournalsWriteService {
     const inserted = await this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, scope.tenantId);
       await this.assertNotInLockedPeriod(scope.tenantId, input.entryDate ?? new Date(), { auth, queryable: trx });
-      await assertTaxPeriodOpen(trx, scope.tenantId, input.entryDate ?? new Date(), validation.lines.map((line) => line.accountId));
-      await this.assertJournalReferences(trx, scope.tenantId, validation.lines.map((line) => ({
-        ...line, branchId: line.branchId ?? input.branchId ?? null,
-        locationId: line.locationId ?? input.locationId ?? null,
-      })));
+      await assertTaxPeriodOpen(
+        trx,
+        scope.tenantId,
+        input.entryDate ?? new Date(),
+        validation.lines.map((line) => line.accountId),
+      );
+      await this.assertJournalReferences(
+        trx,
+        scope.tenantId,
+        validation.lines.map((line) => ({
+          ...line,
+          branchId: line.branchId ?? input.branchId ?? null,
+          locationId: line.locationId ?? input.locationId ?? null,
+        })),
+      );
       // Gapless numbering (INV-JE-NUMBERING-GAP): allocate before the
       // insert (and after every check above) so a failure below leaves
       // no gap behind -- the number is computed from visible rows, never
@@ -531,24 +661,30 @@ export class AccountingJournalsWriteService {
         .returning('id')
         .executeTakeFirstOrThrow();
 
-      await trx.updateTable('journal_entries')
+      await trx
+        .updateTable('journal_entries')
         .set({ entry_no: formatJournalEntryNo(draftJournalNo), updated_at: sql`NOW()` } as any)
-        .where('id', '=', Number(entry.id)).where('tenant_id', '=', scope.tenantId).execute();
+        .where('id', '=', Number(entry.id))
+        .where('tenant_id', '=', scope.tenantId)
+        .execute();
 
       for (const line of validation.lines) {
-        await trx.insertInto('journal_entry_lines').values({
-          journal_entry_id: Number(entry.id),
-          tenant_id: scope.tenantId,
-          account_id: line.accountId,
-          cost_center_id: line.costCenterId ?? null,
-          description: line.description,
-          debit: line.debit,
-          credit: line.credit,
-          partner_type: line.partnerType,
-          partner_id: line.partnerId,
-          branch_id: line.branchId,
-          location_id: line.locationId,
-        } as any).execute();
+        await trx
+          .insertInto('journal_entry_lines')
+          .values({
+            journal_entry_id: Number(entry.id),
+            tenant_id: scope.tenantId,
+            account_id: line.accountId,
+            cost_center_id: line.costCenterId ?? null,
+            description: line.description,
+            debit: line.debit,
+            credit: line.credit,
+            partner_type: line.partnerType,
+            partner_id: line.partnerId,
+            branch_id: line.branchId,
+            location_id: line.locationId,
+          } as any)
+          .execute();
       }
 
       return Number(entry.id);
@@ -557,10 +693,15 @@ export class AccountingJournalsWriteService {
     return inserted;
   }
 
-  async validateBalancedLines(lines: DraftJournalLineInput[], auth?: AuthContext): Promise<{ ok: true; lines: Array<Required<DraftJournalLineInput>> } | { ok: false; message: string }> {
+  async validateBalancedLines(
+    lines: DraftJournalLineInput[],
+    auth?: AuthContext,
+  ): Promise<{ ok: true; lines: Array<Required<DraftJournalLineInput>> } | { ok: false; message: string }> {
     // Book digits from the tenant when scoped; without a tenant there is
     // no book to read, so the previous 2dp shaping is kept as fallback.
-    const digits: MoneyDigits = auth ? currencyMoneyDigits(await tenantBaseCurrency(this.db, requireTenantScope(auth).tenantId)) : 2;
+    const digits: MoneyDigits = auth
+      ? currencyMoneyDigits(await tenantBaseCurrency(this.db, requireTenantScope(auth).tenantId))
+      : 2;
     const unit = 10 ** -digits;
     if (!Array.isArray(lines) || lines.length < 2) {
       return { ok: false, message: 'Journal entry must include at least two lines.' };
@@ -575,7 +716,7 @@ export class AccountingJournalsWriteService {
       }
       return {
         accountId: Number(line.accountId || 0),
-        costCenterId: line.costCenterId ? Number(line.costCenterId) : null as any,
+        costCenterId: line.costCenterId ? Number(line.costCenterId) : (null as any),
         description: String(line.description || '').trim(),
         debit,
         credit,
@@ -590,10 +731,18 @@ export class AccountingJournalsWriteService {
       if (!(line.accountId > 0)) return { ok: false, message: 'Every line must reference an account.' };
       if (line.debit < 0 || line.credit < 0) return { ok: false, message: 'Debit and credit must be non-negative.' };
       if (line.debit > 0 && line.credit > 0) return { ok: false, message: 'A line cannot have both debit and credit.' };
-      if (!(line.debit > 0 || line.credit > 0)) return { ok: false, message: 'Each line must have debit or credit amount.' };
+      if (!(line.debit > 0 || line.credit > 0))
+        return { ok: false, message: 'Each line must have debit or credit amount.' };
     }
 
-    let accountsQuery = this.db.selectFrom('accounting_accounts').select(['id', 'is_active']).where('id', 'in', normalized.map((line) => line.accountId));
+    let accountsQuery = this.db
+      .selectFrom('accounting_accounts')
+      .select(['id', 'is_active'])
+      .where(
+        'id',
+        'in',
+        normalized.map((line) => line.accountId),
+      );
     if (auth) {
       const scope = requireTenantScope(auth);
       accountsQuery = accountsQuery.where('tenant_id', '=', scope.tenantId);
@@ -603,11 +752,18 @@ export class AccountingJournalsWriteService {
     const activeMap = new Map(accounts.map((row) => [Number(row.id), Boolean(row.is_active)]));
     for (const line of normalized) {
       if (!activeMap.has(line.accountId)) return { ok: false, message: 'One or more accounts do not exist.' };
-      if (!activeMap.get(line.accountId)) return { ok: false, message: 'Inactive accounts are not allowed in journal lines.' };
+      if (!activeMap.get(line.accountId))
+        return { ok: false, message: 'Inactive accounts are not allowed in journal lines.' };
     }
 
-    const totalDebit = this.toMoney(normalized.reduce((sum, line) => sum + line.debit, 0), digits);
-    const totalCredit = this.toMoney(normalized.reduce((sum, line) => sum + line.credit, 0), digits);
+    const totalDebit = this.toMoney(
+      normalized.reduce((sum, line) => sum + line.debit, 0),
+      digits,
+    );
+    const totalCredit = this.toMoney(
+      normalized.reduce((sum, line) => sum + line.credit, 0),
+      digits,
+    );
     const difference = this.toMoney(totalDebit - totalCredit, digits);
     if (Math.abs(difference) > 5 * unit) {
       return { ok: false, message: 'Total debit must equal total credit.' };
@@ -616,14 +772,24 @@ export class AccountingJournalsWriteService {
     if (Math.abs(difference) >= unit) {
       if (!auth) return { ok: false, message: 'Tenant scope is required to resolve the rounding account.' };
       const scope = requireTenantScope(auth);
-      const roundingAccount = await this.db.selectFrom('accounting_accounts').select(['id', 'is_active'])
-        .where('tenant_id', '=', scope.tenantId).where('code', '=', '7290').executeTakeFirst();
-      if (!roundingAccount?.is_active) return { ok: false, message: 'Rounding difference account 7290 is missing or inactive.' };
+      const roundingAccount = await this.db
+        .selectFrom('accounting_accounts')
+        .select(['id', 'is_active'])
+        .where('tenant_id', '=', scope.tenantId)
+        .where('code', '=', '7290')
+        .executeTakeFirst();
+      if (!roundingAccount?.is_active)
+        return { ok: false, message: 'Rounding difference account 7290 is missing or inactive.' };
       normalized.push({
-        accountId: Number(roundingAccount.id), costCenterId: null as any,
-        description: 'Rounding difference', debit: difference < 0 ? Math.abs(difference) : 0,
-        credit: difference > 0 ? difference : 0, partnerType: 'none', partnerId: null,
-        branchId: null, locationId: null,
+        accountId: Number(roundingAccount.id),
+        costCenterId: null as any,
+        description: 'Rounding difference',
+        debit: difference < 0 ? Math.abs(difference) : 0,
+        credit: difference > 0 ? difference : 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId: null,
+        locationId: null,
       });
     }
 

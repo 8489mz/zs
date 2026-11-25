@@ -89,7 +89,31 @@ export type ProductUnitReadRow = {
   is_purchase_unit_default: boolean;
 };
 
-export type PosProductLookupRow = Pick<ProductRow, 'id' | 'name' | 'name_en' | 'barcode' | 'sku' | 'item_type' | 'item_kind' | 'style_code' | 'color' | 'size' | 'retail_price' | 'wholesale_price' | 'credit_price' | 'half_wholesale_price' | 'consumer_price' | 'min_selling_price' | 'stock_qty' | 'min_stock_qty' | 'bom_id' | 'category_id' | 'track_serials' | 'metadata'> & {
+export type PosProductLookupRow = Pick<
+  ProductRow,
+  | 'id'
+  | 'name'
+  | 'name_en'
+  | 'barcode'
+  | 'sku'
+  | 'item_type'
+  | 'item_kind'
+  | 'style_code'
+  | 'color'
+  | 'size'
+  | 'retail_price'
+  | 'wholesale_price'
+  | 'credit_price'
+  | 'half_wholesale_price'
+  | 'consumer_price'
+  | 'min_selling_price'
+  | 'stock_qty'
+  | 'min_stock_qty'
+  | 'bom_id'
+  | 'category_id'
+  | 'track_serials'
+  | 'metadata'
+> & {
   calories?: number | null;
   allergens?: any;
   is_spicy?: boolean | null;

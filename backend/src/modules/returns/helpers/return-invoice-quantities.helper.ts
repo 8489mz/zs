@@ -9,7 +9,8 @@ export interface InvoiceReturnQuantityRow {
  * unlinked returns block the product until a human reconciles its provenance.
  */
 export function buildInvoiceReturnedQuantities(
-  type: 'sale' | 'purchase', rows: InvoiceReturnQuantityRow[],
+  type: 'sale' | 'purchase',
+  rows: InvoiceReturnQuantityRow[],
 ): { returnedQtyByLine: Record<string, number>; blockedProductIds: string[] } {
   const returnedQtyByLine: Record<string, number> = {};
   const blocked = new Set<string>();

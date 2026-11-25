@@ -5,9 +5,7 @@ import { Database } from '../../../../database/database.types';
 import type { SalesEditAndCancelDeps } from './sales-edit-and-cancel-types';
 
 export class PreparedWasteAndShiftRefreshService {
-  constructor(
-    private readonly cashDrawerService: SalesEditAndCancelDeps['cashDrawerService'],
-  ) {}
+  constructor(private readonly cashDrawerService: SalesEditAndCancelDeps['cashDrawerService']) {}
 
   /**
    * Shared prepared-waste detection for cancelSale and updateSale:
@@ -26,28 +24,35 @@ export class PreparedWasteAndShiftRefreshService {
     let isPreparedWaste = false;
     const saleId = Number(sale.id);
     if (['dine_in', 'takeaway', 'delivery'].includes(String(sale.order_type || ''))) {
-      const consumedIngredient = await trx.selectFrom('sale_line_stock_allocations as a')
-        .innerJoin('sale_items as i', (join) => join
-          .onRef('i.id', '=', 'a.sale_line_id')
-          .onRef('i.tenant_id', '=', 'a.tenant_id'))
+      const consumedIngredient = await trx
+        .selectFrom('sale_line_stock_allocations as a')
+        .innerJoin('sale_items as i', (join) =>
+          join.onRef('i.id', '=', 'a.sale_line_id').onRef('i.tenant_id', '=', 'a.tenant_id'),
+        )
         .select('a.id')
         .where('a.tenant_id', '=', tenantId)
         .where('i.sale_id', '=', saleId)
         .whereRef('a.product_id', '!=', 'i.product_id')
-        .limit(1).executeTakeFirst();
-      const recipeMeal = await trx.selectFrom('sale_items as i')
-        .innerJoin('manufacturing_boms as b', (join) => join
-          .onRef('b.product_id', '=', 'i.product_id')
-          .onRef('b.tenant_id', '=', 'i.tenant_id'))
+        .limit(1)
+        .executeTakeFirst();
+      const recipeMeal = await trx
+        .selectFrom('sale_items as i')
+        .innerJoin('manufacturing_boms as b', (join) =>
+          join.onRef('b.product_id', '=', 'i.product_id').onRef('b.tenant_id', '=', 'i.tenant_id'),
+        )
         .select('i.id')
         .where('i.tenant_id', '=', tenantId)
         .where('i.sale_id', '=', saleId)
         .where('b.is_active', '=', true)
-        .limit(1).executeTakeFirst();
+        .limit(1)
+        .executeTakeFirst();
       if (consumedIngredient || recipeMeal) {
-        const kitchenRecord = await trx.selectFrom('settings').select('value')
+        const kitchenRecord = await trx
+          .selectFrom('settings')
+          .select('value')
           .where('tenant_id', '=', tenantId)
-          .where('key', '=', 'kds_tickets_runtime_state').executeTakeFirst();
+          .where('key', '=', 'kds_tickets_runtime_state')
+          .executeTakeFirst();
         let stage: string | undefined;
         try {
           const parsed = kitchenRecord?.value ? JSON.parse(String(kitchenRecord.value)) : null;
@@ -56,9 +61,12 @@ export class PreparedWasteAndShiftRefreshService {
           stage = 'pending';
         }
         const createdMs = sale.created_at ? new Date(sale.created_at).getTime() : NaN;
-        if (stage === 'cooking' || stage === 'ready' || stage === 'served' ||
-            (stage !== 'pending' && (!Number.isFinite(createdMs) ||
-              Date.now() - createdMs > 14 * 60 * 60 * 1000))) {
+        if (
+          stage === 'cooking' ||
+          stage === 'ready' ||
+          stage === 'served' ||
+          (stage !== 'pending' && (!Number.isFinite(createdMs) || Date.now() - createdMs > 14 * 60 * 60 * 1000))
+        ) {
           isPreparedWaste = true;
         }
       }
@@ -94,7 +102,11 @@ export class PreparedWasteAndShiftRefreshService {
     tenantId: string,
   ): Promise<void> {
     if (!this.cashDrawerService) {
-      throw new AppError('تعذر تحديث أرقام الوردية المغلقة: خدمة الورديات غير موصولة.', 'SHIFT_REFRESH_UNAVAILABLE', 500);
+      throw new AppError(
+        'تعذر تحديث أرقام الوردية المغلقة: خدمة الورديات غير موصولة.',
+        'SHIFT_REFRESH_UNAVAILABLE',
+        500,
+      );
     }
     // A null sale branch/location matches any shift scope (the
     // same null-means-any rule as the attribution predicate); a
@@ -105,20 +117,24 @@ export class PreparedWasteAndShiftRefreshService {
       .where('tenant_id', '=', tenantId)
       .where('status', 'in', ['closed', 'pending_review'])
       .where('created_at', '<=', offlineCreatedAt)
-      .where((eb) => eb.or([
-        eb('closed_at', '>=', offlineCreatedAt),
-        eb('closed_at', 'is', null),
-      ]));
+      .where((eb) => eb.or([eb('closed_at', '>=', offlineCreatedAt), eb('closed_at', 'is', null)]));
     if (branchId != null) {
       shiftsQuery = shiftsQuery.where((eb) => eb.or([eb('branch_id', 'is', null), eb('branch_id', '=', branchId)]));
     }
     if (locationId != null) {
-      shiftsQuery = shiftsQuery.where((eb) => eb.or([eb('location_id', 'is', null), eb('location_id', '=', locationId)]));
+      shiftsQuery = shiftsQuery.where((eb) =>
+        eb.or([eb('location_id', 'is', null), eb('location_id', '=', locationId)]),
+      );
     }
     const shifts = await shiftsQuery.execute();
     for (const shift of shifts) {
       await this.refreshClosedShiftForPostCloseChange(
-        trx, Number(shift.id), saleId, 'offline_sync', 'مزامنة فاتورة أوفلاين بتاريخها الأصلي', auth,
+        trx,
+        Number(shift.id),
+        saleId,
+        'offline_sync',
+        'مزامنة فاتورة أوفلاين بتاريخها الأصلي',
+        auth,
       );
     }
   }
@@ -132,7 +148,11 @@ export class PreparedWasteAndShiftRefreshService {
     auth: AuthContext,
   ): Promise<void> {
     if (!this.cashDrawerService) {
-      throw new AppError('تعذر تحديث أرقام الوردية المغلقة: خدمة الورديات غير موصولة.', 'SHIFT_REFRESH_UNAVAILABLE', 500);
+      throw new AppError(
+        'تعذر تحديث أرقام الوردية المغلقة: خدمة الورديات غير موصولة.',
+        'SHIFT_REFRESH_UNAVAILABLE',
+        500,
+      );
     }
     await this.cashDrawerService.refreshClosedShiftSummary(trx as Kysely<Database>, shiftId, {
       saleId,

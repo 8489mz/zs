@@ -1,4 +1,14 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, IsIn, IsDateString, Min, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  IsIn,
+  IsDateString,
+  Min,
+  MaxLength,
+} from 'class-validator';
 
 export class ArCollectionsQueryDto {
   @IsOptional()

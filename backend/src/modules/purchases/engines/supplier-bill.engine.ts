@@ -46,22 +46,31 @@ export function buildBillTotal(lines: SupplierBillLineInput[], digits: MoneyDigi
  * point of the document: the amount is consumed or owned, never stocked
  * and never a settlement of itself. */
 const BLOCKED_BILL_ACCOUNT_CODES = new Set([
-  '1110', '1120', // cash, bank
+  '1110',
+  '1120', // cash, bank
   '1130', // customers receivable
   '1140', // inventory
   '2110', // suppliers payable (the credit side of this very bill)
-  '1185', '1160', '1165', // supplier / employee / subcontractor advances
-  '1150', '2120', '2126', '2150', // tax receivable / payable / advances
+  '1185',
+  '1160',
+  '1165', // supplier / employee / subcontractor advances
+  '1150',
+  '2120',
+  '2126',
+  '2150', // tax receivable / payable / advances
 ]);
 
-export type BillLineAccountRow = {
-  id: number;
-  code: string;
-  account_type: string;
-  normal_balance?: string | null;
-  is_active?: boolean | null;
-  is_control_account?: boolean | null;
-} | null | undefined;
+export type BillLineAccountRow =
+  | {
+      id: number;
+      code: string;
+      account_type: string;
+      normal_balance?: string | null;
+      is_active?: boolean | null;
+      is_control_account?: boolean | null;
+    }
+  | null
+  | undefined;
 
 export function validateBillLineAccount(account: BillLineAccountRow, description: string): void {
   const label = description ? ` for line "${description}"` : '';
@@ -69,7 +78,11 @@ export function validateBillLineAccount(account: BillLineAccountRow, description
     throw new AppError(`Supplier bill line account not found${label}`, 'SUPPLIER_BILL_INVALID_ACCOUNT', 400);
   }
   if (account.is_active === false) {
-    throw new AppError(`Supplier bill line account ${account.code} is inactive${label}`, 'SUPPLIER_BILL_INVALID_ACCOUNT', 400);
+    throw new AppError(
+      `Supplier bill line account ${account.code} is inactive${label}`,
+      'SUPPLIER_BILL_INVALID_ACCOUNT',
+      400,
+    );
   }
   if (account.account_type !== 'expense' && account.account_type !== 'asset') {
     throw new AppError(

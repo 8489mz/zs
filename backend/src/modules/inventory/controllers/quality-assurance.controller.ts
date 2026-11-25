@@ -20,10 +20,7 @@ export class QualityAssuranceController {
   }
 
   @Get('points')
-  getQCPoints(
-    @Query() query: { triggerStage?: string; productId?: number },
-    @Req() req: RequestWithAuth,
-  ) {
+  getQCPoints(@Query() query: { triggerStage?: string; productId?: number }, @Req() req: RequestWithAuth) {
     return this.qualityService.getQCPoints(req.authContext!, query);
   }
 
@@ -33,10 +30,7 @@ export class QualityAssuranceController {
   }
 
   @Get('inspections')
-  getInspections(
-    @Query() query: { status?: string; docType?: string },
-    @Req() req: RequestWithAuth,
-  ) {
+  getInspections(@Query() query: { status?: string; docType?: string }, @Req() req: RequestWithAuth) {
     return this.qualityService.getInspections(req.authContext!, query);
   }
 
@@ -46,10 +40,7 @@ export class QualityAssuranceController {
   }
 
   @Get('ncrs')
-  getNCRs(
-    @Query() query: { status?: string; severity?: string },
-    @Req() req: RequestWithAuth,
-  ) {
+  getNCRs(@Query() query: { status?: string; severity?: string }, @Req() req: RequestWithAuth) {
     return this.qualityService.getNCRs(req.authContext!, query);
   }
 
@@ -59,11 +50,7 @@ export class QualityAssuranceController {
   }
 
   @Patch('ncrs/:id/status')
-  updateNCRStatus(
-    @Param('id') id: string,
-    @Body() dto: UpdateNCRStatusDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  updateNCRStatus(@Param('id') id: string, @Body() dto: UpdateNCRStatusDto, @Req() req: RequestWithAuth) {
     return this.qualityService.updateNCRStatus(req.authContext!, id, dto);
   }
 }

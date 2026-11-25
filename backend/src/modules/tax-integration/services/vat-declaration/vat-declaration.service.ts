@@ -8,7 +8,11 @@ import { KYSELY_DB } from '../../../../database/database.constants';
 import { Database } from '../../../../database/database.types';
 import { selectConfiguredTaxRow } from '../../engines/configured-tax-id.engine';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
+import {
+  currencyMoneyDigits,
+  roundMoney,
+  type MoneyDigits,
+} from '../../../accounting/engines/money-minor-units.engine';
 
 export interface VatDeclarationQueryDto {
   from?: string;
@@ -30,18 +34,26 @@ export function deriveDeclarationCountry(
   countrySetting: string | null | undefined,
   currencySetting: string | null | undefined,
 ): 'EG' | 'SA' {
-  const country = String(countrySetting || '').trim().toUpperCase();
+  const country = String(countrySetting || '')
+    .trim()
+    .toUpperCase();
   if (country === 'EG' || country === 'SA') return country;
   if (country === 'KW' || country === 'QA' || country === 'OM') {
     throw new AppError('لا يوجد نموذج إقرار ضريبي مدعوم لهذه الدولة', 'VAT_DECLARATION_COUNTRY_UNSUPPORTED', 409);
   }
-  const currency = String(currencySetting || '').trim().toUpperCase();
+  const currency = String(currencySetting || '')
+    .trim()
+    .toUpperCase();
   if (currency === 'EGP') return 'EG';
   if (currency === 'SAR') return 'SA';
   if (currency === 'KWD' || currency === 'QAR' || currency === 'OMR') {
     throw new AppError('لا يوجد نموذج إقرار ضريبي مدعوم لهذه الدولة', 'VAT_DECLARATION_COUNTRY_UNSUPPORTED', 409);
   }
-  throw new AppError('لم يتم تحديد بلد المنشأة أو عملتها، لا يمكن إصدار الإقرار', 'VAT_DECLARATION_COUNTRY_UNRESOLVED', 409);
+  throw new AppError(
+    'لم يتم تحديد بلد المنشأة أو عملتها، لا يمكن إصدار الإقرار',
+    'VAT_DECLARATION_COUNTRY_UNRESOLVED',
+    409,
+  );
 }
 
 const DECLARATION_TAX_PROVIDER: Record<'EG' | 'SA', string> = {
@@ -82,7 +94,8 @@ export class VatDeclarationService {
       ) i on true
       where d.tenant_id = ${tenantId} and d.return_type = ${type} and d.created_at >= ${from} and d.created_at < ${to}
     `.execute(this.db);
-    if (Number(result.rows[0]?.missing || 0)) throw new BadRequestException('توجد مرتجعات قديمة بدون ضريبة سطر مثبتة؛ يلزم مطابقتها قبل إصدار الإقرار.');
+    if (Number(result.rows[0]?.missing || 0))
+      throw new BadRequestException('توجد مرتجعات قديمة بدون ضريبة سطر مثبتة؛ يلزم مطابقتها قبل إصدار الإقرار.');
     return result.rows[0] || { total: 0, tax: 0, missing: 0 };
   }
 
@@ -93,7 +106,8 @@ export class VatDeclarationService {
 
     const fromDate = query.from ? new Date(query.from) : defaultFrom;
     const toDate = query.to ? nextAccountingDay(query.to) : defaultTo;
-    if (!Number.isFinite(fromDate.getTime()) || toDate <= fromDate) throw new BadRequestException('فترة الإقرار غير صالحة.');
+    if (!Number.isFinite(fromDate.getTime()) || toDate <= fromDate)
+      throw new BadRequestException('فترة الإقرار غير صالحة.');
     // The caller's country is deliberately ignored: the declaration
     // follows the tenant's configured jurisdiction (see
     // deriveDeclarationCountry). A request for another country's form
@@ -126,7 +140,9 @@ export class VatDeclarationService {
           END
         ), 0)`.as('standard_rated_base'),
         sql<number>`COALESCE(SUM(CASE WHEN tax_rate > 0 THEN tax_amount ELSE 0 END), 0)`.as('standard_rated_tax'),
-        sql<number>`COALESCE(SUM(CASE WHEN tax_rate = 0 THEN (subtotal - discount + coalesce(service_charge, 0)) ELSE 0 END), 0)`.as('zero_rated_base'),
+        sql<number>`COALESCE(SUM(CASE WHEN tax_rate = 0 THEN (subtotal - discount + coalesce(service_charge, 0)) ELSE 0 END), 0)`.as(
+          'zero_rated_base',
+        ),
       ])
       .where(this.tenantPredicate(auth))
       .where('created_at', '>=', fromDate)
@@ -152,7 +168,9 @@ export class VatDeclarationService {
           END
         ), 0)`.as('standard_rated_base'),
         sql<number>`COALESCE(SUM(CASE WHEN tax_rate > 0 THEN tax_amount ELSE 0 END), 0)`.as('standard_rated_tax'),
-        sql<number>`COALESCE(SUM(CASE WHEN tax_rate = 0 THEN (subtotal - discount) ELSE 0 END), 0)`.as('zero_rated_base'),
+        sql<number>`COALESCE(SUM(CASE WHEN tax_rate = 0 THEN (subtotal - discount) ELSE 0 END), 0)`.as(
+          'zero_rated_base',
+        ),
       ])
       .where(this.tenantPredicate(auth))
       .where('created_at', '>=', fromDate)
@@ -205,7 +223,11 @@ export class VatDeclarationService {
     });
     const taxId = selected?.taxId ?? '';
     if (!taxId) {
-      throw new AppError('لم يتم تسجيل رقم ضريبي لهذه المنشأة، لا يمكن إصدار الإقرار', 'VAT_DECLARATION_TAX_ID_MISSING', 409);
+      throw new AppError(
+        'لم يتم تسجيل رقم ضريبي لهذه المنشأة، لا يمكن إصدار الإقرار',
+        'VAT_DECLARATION_TAX_ID_MISSING',
+        409,
+      );
     }
 
     return {
@@ -239,7 +261,10 @@ export class VatDeclarationService {
         returns_base: purchaseReturnsBase,
         returns_tax: purchaseReturnsTax,
         bills_count: Number(purchaseStats?.bills_count || 0),
-        total_purchases_base: this.roundCurrency(purchasesStandardBase + purchasesZeroBase - purchaseReturnsBase, bookDigits),
+        total_purchases_base: this.roundCurrency(
+          purchasesStandardBase + purchasesZeroBase - purchaseReturnsBase,
+          bookDigits,
+        ),
         total_input_vat: Math.max(0, totalInputVat),
       },
       summary: {

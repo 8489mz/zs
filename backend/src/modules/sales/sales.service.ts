@@ -22,7 +22,12 @@ export class SalesService {
     return this.query.getSaleById(id, auth);
   }
 
-  async createSale(payload: UpsertSaleDto, auth: AuthContext, approvedTerms?: SystemApprovedSaleTerms, conversionRelease?: SalesOrderConversionRelease): Promise<Record<string, unknown>> {
+  async createSale(
+    payload: UpsertSaleDto,
+    auth: AuthContext,
+    approvedTerms?: SystemApprovedSaleTerms,
+    conversionRelease?: SalesOrderConversionRelease,
+  ): Promise<Record<string, unknown>> {
     return this.write.createSale(payload, auth, approvedTerms, conversionRelease);
   }
 
@@ -30,7 +35,12 @@ export class SalesService {
     return this.write.authorizeDiscountOverride(secret, auth);
   }
 
-  async cancelSale(saleId: number, reason: string, managerPin: string, auth: AuthContext): Promise<Record<string, unknown>> {
+  async cancelSale(
+    saleId: number,
+    reason: string,
+    managerPin: string,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.write.cancelSale(saleId, reason, managerPin, auth);
   }
 
@@ -38,7 +48,11 @@ export class SalesService {
     return this.write.updateSale(saleId, payload, auth);
   }
 
-  async adjustSalePayments(saleId: number, payload: AdjustSalePaymentsDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async adjustSalePayments(
+    saleId: number,
+    payload: AdjustSalePaymentsDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.write.adjustSalePayments(saleId, payload, auth);
   }
 

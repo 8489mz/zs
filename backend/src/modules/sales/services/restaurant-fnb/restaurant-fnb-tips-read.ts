@@ -10,10 +10,7 @@ export class RestaurantFnbTipsReadSlice {
   // ==========================================
 
   async getTipPools(scope: TenantScope, shiftDate?: string) {
-    let query = this.db
-      .selectFrom('restaurant_tip_pools')
-      .selectAll()
-      .where('tenant_id', '=', scope.tenantId);
+    let query = this.db.selectFrom('restaurant_tip_pools').selectAll().where('tenant_id', '=', scope.tenantId);
 
     if (shiftDate) {
       query = query.where('shift_date', '=', shiftDate);
@@ -68,8 +65,7 @@ export class RestaurantFnbTipsReadSlice {
       id: String(row.id),
       displayName: String(row.display_name || ''),
       branchId: row.branch_id != null ? String(row.branch_id) : null,
-      expectedDailyHours:
-        row.expected_daily_hours != null ? Number(row.expected_daily_hours) : null,
+      expectedDailyHours: row.expected_daily_hours != null ? Number(row.expected_daily_hours) : null,
       status: 'active' as const,
     }));
   }

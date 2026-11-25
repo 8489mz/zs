@@ -7,10 +7,16 @@ import { PosTerminalTerminals } from './pos-terminal/pos-terminal-terminals';
 import { PosTerminalPayments } from './pos-terminal/pos-terminal-payments';
 import { PosTerminalCharges } from './pos-terminal/pos-terminal-charges';
 import { PosTerminalConnection } from './pos-terminal/pos-terminal-connection';
-import type { BridgeJob, BridgePoller, PosTerminalInfo, TerminalPaymentRequest, TerminalPaymentSession, TerminalConnectionTestResult } from './pos-terminal/pos-terminal-shared';
+import type {
+  BridgeJob,
+  BridgePoller,
+  PosTerminalInfo,
+  TerminalPaymentRequest,
+  TerminalPaymentSession,
+  TerminalConnectionTestResult,
+} from './pos-terminal/pos-terminal-shared';
 export { derivePosBridgeKey } from './pos-terminal/pos-terminal-shared';
 export type { TerminalPaymentRequest } from './pos-terminal/pos-terminal-shared';
-
 
 @Injectable()
 export class PosTerminalService {
@@ -29,7 +35,15 @@ export class PosTerminalService {
   private _s5?: PosTerminalConnection;
 
   private get s1(): PosTerminalBridge {
-    return (this._s1 ??= new PosTerminalBridge(this.logger, this.activeSessions, this.sessionTtlMs, this.bridgePollers, this.pendingBridgeJobs, this.bridgeLastSeen, this.db));
+    return (this._s1 ??= new PosTerminalBridge(
+      this.logger,
+      this.activeSessions,
+      this.sessionTtlMs,
+      this.bridgePollers,
+      this.pendingBridgeJobs,
+      this.bridgeLastSeen,
+      this.db,
+    ));
   }
 
   private get s2(): PosTerminalTerminals {
@@ -42,8 +56,10 @@ export class PosTerminalService {
       pruneExpiredSessions: () => this.s1.pruneExpiredSessions(),
       getTenantBaseCurrency: (tenantId) => this.s2.getTenantBaseCurrency(tenantId),
       dispatchToBridgeRelay: (tenantId, job) => this.s1.dispatchToBridgeRelay(tenantId, job),
-      executeTerminalCharge: (session, ip, port, provider, terminal, request) => this.s4.executeTerminalCharge(session, ip, port, provider, terminal, request),
-      dispatchTerminalCancel: (ip, port, provider, transactionId) => this.s4.dispatchTerminalCancel(ip, port, provider, transactionId),
+      executeTerminalCharge: (session, ip, port, provider, terminal, request) =>
+        this.s4.executeTerminalCharge(session, ip, port, provider, terminal, request),
+      dispatchTerminalCancel: (ip, port, provider, transactionId) =>
+        this.s4.dispatchTerminalCancel(ip, port, provider, transactionId),
     }));
   }
 
@@ -65,15 +81,18 @@ export class PosTerminalService {
     return this.s1.pollBridge(tenantId);
   }
 
-  async handleBridgeCallback(tenantId: string, payload: {
-    jobId: string;
-    status: string;
-    authCode?: string;
-    rrn?: string;
-    cardScheme?: string;
-    cardLastFour?: string;
-    message?: string;
-  }): Promise<boolean> {
+  async handleBridgeCallback(
+    tenantId: string,
+    payload: {
+      jobId: string;
+      status: string;
+      authCode?: string;
+      rrn?: string;
+      cardScheme?: string;
+      cardLastFour?: string;
+      message?: string;
+    },
+  ): Promise<boolean> {
     return this.s1.handleBridgeCallback(tenantId, payload);
   }
   async getTerminals(tenantId: string): Promise<PosTerminalInfo[]> {
@@ -93,7 +112,7 @@ export class PosTerminalService {
 
   async testConnection(
     tenantId: string,
-    payload: { ip?: string; port?: number; provider?: string }
+    payload: { ip?: string; port?: number; provider?: string },
   ): Promise<TerminalConnectionTestResult> {
     return this.s5.testConnection(tenantId, payload);
   }

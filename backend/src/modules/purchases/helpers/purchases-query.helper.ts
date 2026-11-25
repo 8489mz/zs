@@ -33,7 +33,7 @@ export function mapPurchaseRows(
       fileName: att.file_name,
       fileUrl: `/api/purchases/${att.purchase_id}/attachments/${att.id}/download`,
       fileSize: att.file_size,
-      fileType: att.file_type
+      fileType: att.file_type,
     });
   }
 
@@ -74,15 +74,21 @@ export function mapPurchaseRows(
 }
 
 export function filterPurchases(rows: PurchaseRow[], query: Record<string, unknown>): PurchaseRow[] {
-  const q = String(query.search || query.q || '').trim().toLowerCase();
+  const q = String(query.search || query.q || '')
+    .trim()
+    .toLowerCase();
   const filter = String(query.filter || query.view || 'all').trim();
   return rows.filter((row) => {
     if (filter === 'cash' && row.paymentType !== 'cash') return false;
     if (filter === 'credit' && row.paymentType !== 'credit') return false;
     if (filter === 'cancelled' && row.status !== 'cancelled') return false;
     if (!q) return true;
-    return [row.docNo, row.supplierName, row.status, row.paymentType, row.branchName, row.locationName, row.note]
-      .some((value) => String(value || '').toLowerCase().includes(q));
+    return [row.docNo, row.supplierName, row.status, row.paymentType, row.branchName, row.locationName, row.note].some(
+      (value) =>
+        String(value || '')
+          .toLowerCase()
+          .includes(q),
+    );
   });
 }
 
@@ -111,8 +117,14 @@ export function summarizePurchases(rows: PurchaseRow[], digits: MoneyDigits = 2)
 
   return {
     totalItems: rows.length,
-    totalAmount: roundMoney(rows.reduce((sum, row) => sum + Number(row.total || 0), 0), digits),
-    creditTotal: roundMoney(rows.filter((row) => row.paymentType === 'credit').reduce((sum, row) => sum + Number(row.total || 0), 0), digits),
+    totalAmount: roundMoney(
+      rows.reduce((sum, row) => sum + Number(row.total || 0), 0),
+      digits,
+    ),
+    creditTotal: roundMoney(
+      rows.filter((row) => row.paymentType === 'credit').reduce((sum, row) => sum + Number(row.total || 0), 0),
+      digits,
+    ),
     cancelledCount: rows.filter((row) => row.status === 'cancelled').length,
     posted: rows.filter((row) => row.status === 'posted').length,
     draft: rows.filter((row) => row.status !== 'posted').length,

@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
@@ -16,10 +10,7 @@ import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
-import {
-  CreateCommercialSubscriptionDto,
-  UpdateSubscriptionStatusDto,
-} from '../dto/commercial-subscription.dto';
+import { CreateCommercialSubscriptionDto, UpdateSubscriptionStatusDto } from '../dto/commercial-subscription.dto';
 import {
   calculateNextBillingDate,
   calculateSubscriptionTotals,
@@ -73,10 +64,7 @@ export class CommercialSubscriptionService {
   /**
    * Creates a new B2B commercial subscription contract
    */
-  async createSubscription(
-    auth: AuthContext,
-    dto: CreateCommercialSubscriptionDto,
-  ): Promise<any> {
+  async createSubscription(auth: AuthContext, dto: CreateCommercialSubscriptionDto): Promise<any> {
     this.assertAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
@@ -172,10 +160,7 @@ export class CommercialSubscriptionService {
   /**
    * Retrieves subscriptions list with customer info
    */
-  async getSubscriptions(
-    auth: AuthContext,
-    params?: { status?: string; search?: string },
-  ): Promise<any[]> {
+  async getSubscriptions(auth: AuthContext, params?: { status?: string; search?: string }): Promise<any[]> {
     this.assertAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
@@ -210,11 +195,7 @@ export class CommercialSubscriptionService {
     if (params?.search && params.search.trim()) {
       const term = `%${params.search.trim()}%`;
       query = query.where((eb: any) =>
-        eb.or([
-          eb('s.contract_number', 'ilike', term),
-          eb('c.name', 'ilike', term),
-          eb('c.phone', 'ilike', term),
-        ]),
+        eb.or([eb('s.contract_number', 'ilike', term), eb('c.name', 'ilike', term), eb('c.phone', 'ilike', term)]),
       );
     }
 
@@ -284,11 +265,7 @@ export class CommercialSubscriptionService {
   /**
    * Updates subscription contract status
    */
-  async updateStatus(
-    auth: AuthContext,
-    id: string,
-    dto: UpdateSubscriptionStatusDto,
-  ): Promise<{ success: boolean }> {
+  async updateStatus(auth: AuthContext, id: string, dto: UpdateSubscriptionStatusDto): Promise<{ success: boolean }> {
     this.assertAccess(auth);
     const scope = requireTenantScope(auth);
 
@@ -377,7 +354,13 @@ export class CommercialSubscriptionService {
       );
 
       // Create Sale Record
-      const invNumber = formatDailyDocumentNumber('SUB-INV', (sub.invoices_count || 0) + 1, new Date(), 4, await getTenantTimezone(this.db, tenantId));
+      const invNumber = formatDailyDocumentNumber(
+        'SUB-INV',
+        (sub.invoices_count || 0) + 1,
+        new Date(),
+        4,
+        await getTenantTimezone(this.db, tenantId),
+      );
 
       await (this.db as any).transaction().execute(async (trx: any) => {
         const saleInsert = await trx

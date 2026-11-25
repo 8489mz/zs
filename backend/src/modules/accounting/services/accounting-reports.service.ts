@@ -74,8 +74,12 @@ export class AccountingReportsService {
 
     let query = this.db
       .selectFrom('journal_entry_lines as l')
-      .innerJoin('journal_entries as je', (join: any) => join.onRef('je.id', '=', 'l.journal_entry_id').onRef('je.tenant_id', '=', 'l.tenant_id'))
-      .innerJoin('accounting_accounts as a', (join: any) => join.onRef('a.id', '=', 'l.account_id').onRef('a.tenant_id', '=', 'l.tenant_id'))
+      .innerJoin('journal_entries as je', (join: any) =>
+        join.onRef('je.id', '=', 'l.journal_entry_id').onRef('je.tenant_id', '=', 'l.tenant_id'),
+      )
+      .innerJoin('accounting_accounts as a', (join: any) =>
+        join.onRef('a.id', '=', 'l.account_id').onRef('a.tenant_id', '=', 'l.tenant_id'),
+      )
       .select([
         'a.code as account_code',
         'a.name_ar as account_name_ar',
@@ -161,9 +165,10 @@ export class AccountingReportsService {
         cogs = this.toMoney(cogs + expenseMovement, digits);
       }
 
-      const isOperatingExpense = (accountType === 'expense' || accountType === 'contra_expense' || accountGroup === 'operating_expenses')
-        && !this.inCodes(code, COGS_CODES)
-        && accountGroup !== 'cogs';
+      const isOperatingExpense =
+        (accountType === 'expense' || accountType === 'contra_expense' || accountGroup === 'operating_expenses') &&
+        !this.inCodes(code, COGS_CODES) &&
+        accountGroup !== 'cogs';
       if (isOperatingExpense) {
         operatingExpenses = this.toMoney(operatingExpenses + expenseMovement, digits);
         const current = expenseBreakdown.get(code) || { accountCode: code, accountNameAr, amount: 0 };
@@ -182,7 +187,10 @@ export class AccountingReportsService {
         if (sourceType === 'customer_payment' && debit > 0) {
           customerCollections = this.toMoney(customerCollections + debit, digits);
         }
-        if ((sourceType === 'supplier_payment' || sourceType === 'supplier_payment_schedule_settlement') && credit > 0) {
+        if (
+          (sourceType === 'supplier_payment' || sourceType === 'supplier_payment_schedule_settlement') &&
+          credit > 0
+        ) {
           supplierPayments = this.toMoney(supplierPayments + credit, digits);
         }
         if ((sourceType === 'expense' || sourceType === 'treasury_expense') && credit > 0) {
@@ -224,13 +232,19 @@ export class AccountingReportsService {
     };
   }
 
-  async getReceivablesPayables(filters: ReceivablesPayablesQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async getReceivablesPayables(
+    filters: ReceivablesPayablesQueryDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     this.assertAccountingAccess(auth);
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, String(auth.tenantId || '')));
     const dateTo = filters.date_to ? new Date(filters.date_to) : null;
     const branchId = Number(filters.branch_id || 0) > 0 ? Number(filters.branch_id) : null;
     const locationId = Number(filters.location_id || 0) > 0 ? Number(filters.location_id) : null;
-    const showZero = String(filters.show_zero || '').trim().toLowerCase() === 'true';
+    const showZero =
+      String(filters.show_zero || '')
+        .trim()
+        .toLowerCase() === 'true';
 
     if (!dateTo && !branchId && !locationId) {
       const [customers, suppliers, customerLastRows, supplierLastRows] = await Promise.all([
@@ -262,8 +276,18 @@ export class AccountingReportsService {
           .execute(),
       ]);
 
-      const customerLastMap = new Map(customerLastRows.map((row) => [String(row.customer_id || ''), row.last_movement_at ? String(row.last_movement_at) : '']));
-      const supplierLastMap = new Map(supplierLastRows.map((row) => [String(row.supplier_id || ''), row.last_movement_at ? String(row.last_movement_at) : '']));
+      const customerLastMap = new Map(
+        customerLastRows.map((row) => [
+          String(row.customer_id || ''),
+          row.last_movement_at ? String(row.last_movement_at) : '',
+        ]),
+      );
+      const supplierLastMap = new Map(
+        supplierLastRows.map((row) => [
+          String(row.supplier_id || ''),
+          row.last_movement_at ? String(row.last_movement_at) : '',
+        ]),
+      );
 
       const customerRows = customers
         .map((row) => ({
@@ -285,8 +309,14 @@ export class AccountingReportsService {
         }))
         .filter((row) => showZero || Math.abs(row.balance) > 0.0001);
 
-      const customerReceivables = this.toMoney(customerRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0), digits);
-      const supplierPayables = this.toMoney(supplierRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0), digits);
+      const customerReceivables = this.toMoney(
+        customerRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0),
+        digits,
+      );
+      const supplierPayables = this.toMoney(
+        supplierRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0),
+        digits,
+      );
 
       return {
         totals: {
@@ -333,8 +363,18 @@ export class AccountingReportsService {
     const [customerLedgers, supplierLedgers, customers, suppliers] = await Promise.all([
       customerLedgerQuery.groupBy('customer_id').execute(),
       supplierLedgerQuery.groupBy('supplier_id').execute(),
-      this.db.selectFrom('customers').select(['id', 'name', 'phone']).where('is_active', '=', true).where(this.tenantPredicate(auth)).execute(),
-      this.db.selectFrom('suppliers').select(['id', 'name', 'phone']).where('is_active', '=', true).where(this.tenantPredicate(auth)).execute(),
+      this.db
+        .selectFrom('customers')
+        .select(['id', 'name', 'phone'])
+        .where('is_active', '=', true)
+        .where(this.tenantPredicate(auth))
+        .execute(),
+      this.db
+        .selectFrom('suppliers')
+        .select(['id', 'name', 'phone'])
+        .where('is_active', '=', true)
+        .where(this.tenantPredicate(auth))
+        .execute(),
     ]);
 
     const customerInfo = new Map(customers.map((row) => [String(row.id), row]));
@@ -370,8 +410,14 @@ export class AccountingReportsService {
       .filter((row) => showZero || Math.abs(row.balance) > 0.0001)
       .sort((a, b) => b.balance - a.balance);
 
-    const customerReceivables = this.toMoney(customerRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0), digits);
-    const supplierPayables = this.toMoney(supplierRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0), digits);
+    const customerReceivables = this.toMoney(
+      customerRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0),
+      digits,
+    );
+    const supplierPayables = this.toMoney(
+      supplierRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0),
+      digits,
+    );
 
     return {
       totals: {
@@ -394,8 +440,12 @@ export class AccountingReportsService {
 
     let query = this.db
       .selectFrom('journal_entry_lines as l')
-      .innerJoin('journal_entries as je', (join: any) => join.onRef('je.id', '=', 'l.journal_entry_id').onRef('je.tenant_id', '=', 'l.tenant_id'))
-      .innerJoin('accounting_accounts as a', (join: any) => join.onRef('a.id', '=', 'l.account_id').onRef('a.tenant_id', '=', 'l.tenant_id'))
+      .innerJoin('journal_entries as je', (join: any) =>
+        join.onRef('je.id', '=', 'l.journal_entry_id').onRef('je.tenant_id', '=', 'l.tenant_id'),
+      )
+      .innerJoin('accounting_accounts as a', (join: any) =>
+        join.onRef('a.id', '=', 'l.account_id').onRef('a.tenant_id', '=', 'l.tenant_id'),
+      )
       .select([
         'a.code as account_code',
         'a.name_ar as account_name_ar',
@@ -413,13 +463,14 @@ export class AccountingReportsService {
     if (branchId) query = query.where('je.branch_id', '=', branchId);
     if (locationId) query = query.where('je.location_id', '=', locationId);
 
-    const rows = await query
-      .groupBy(['a.code', 'a.name_ar', 'je.source_type'])
-      .execute();
+    const rows = await query.groupBy(['a.code', 'a.name_ar', 'je.source_type']).execute();
 
     let totalDebit = 0;
     let totalCredit = 0;
-    const byAccount = new Map<string, { accountCode: string; accountNameAr: string; debit: number; credit: number; net: number }>();
+    const byAccount = new Map<
+      string,
+      { accountCode: string; accountNameAr: string; debit: number; credit: number; net: number }
+    >();
     const bySource = new Map<string, { sourceType: string; debit: number; credit: number; net: number }>();
 
     for (const row of rows) {
@@ -464,14 +515,22 @@ export class AccountingReportsService {
     const categoryId = Number(filters.category_id || 0) > 0 ? Number(filters.category_id) : null;
     const supplierId = Number(filters.supplier_id || 0) > 0 ? Number(filters.supplier_id) : null;
     const search = String(filters.search || '').trim();
-    const lowStockOnly = String(filters.low_stock_only || '').trim().toLowerCase() === 'true';
-    const zeroStockOnly = String(filters.zero_stock_only || '').trim().toLowerCase() === 'true';
+    const lowStockOnly =
+      String(filters.low_stock_only || '')
+        .trim()
+        .toLowerCase() === 'true';
+    const zeroStockOnly =
+      String(filters.zero_stock_only || '')
+        .trim()
+        .toLowerCase() === 'true';
     const locationId = Number(filters.location_id || 0) > 0 ? Number(filters.location_id) : null;
     const stockQty = locationId ? sql<number>`COALESCE(pls.qty, 0)` : sql<number>`p.stock_qty`;
 
     let query = this.db
       .selectFrom('products as p')
-      .leftJoin('product_categories as c', (j) => j.onRef('c.id', '=', 'p.category_id').onRef('c.tenant_id', '=', 'p.tenant_id'))
+      .leftJoin('product_categories as c', (j) =>
+        j.onRef('c.id', '=', 'p.category_id').onRef('c.tenant_id', '=', 'p.tenant_id'),
+      )
       .leftJoin('suppliers as s', (j) => j.onRef('s.id', '=', 'p.supplier_id').onRef('s.tenant_id', '=', 'p.tenant_id'))
       .leftJoin('product_location_stock as pls', (join) => {
         const j = join.onRef('pls.product_id', '=', 'p.id').onRef('pls.tenant_id', '=', 'p.tenant_id');
@@ -501,64 +560,75 @@ export class AccountingReportsService {
     }
     if (search) {
       query = query.where((eb) =>
-        eb.or([
-          eb('p.name', 'ilike', `%${search}%`),
-          eb('p.barcode', 'ilike', `%${search}%`),
-        ]),
+        eb.or([eb('p.name', 'ilike', `%${search}%`), eb('p.barcode', 'ilike', `%${search}%`)]),
       );
     }
 
     if (zeroStockOnly) query = query.where(sql<boolean>`ROUND(${stockQty}, 2) = 0`);
-    if (lowStockOnly) query = query.where(sql<boolean>`ROUND(${stockQty}, 2) > 0 AND ROUND(${stockQty}, 2) <= ROUND(p.min_stock_qty, 2)`);
+    if (lowStockOnly)
+      query = query.where(
+        sql<boolean>`ROUND(${stockQty}, 2) > 0 AND ROUND(${stockQty}, 2) <= ROUND(p.min_stock_qty, 2)`,
+      );
 
-    const totalsRow = await query.clearSelect().select([
-      sql<number>`COALESCE(SUM(ROUND(${stockQty} * COALESCE(p.cost_price, 0), ${digits})), 0)`.as('total_inventory_value'),
-      sql<number>`COALESCE(SUM(ROUND(ROUND(${stockQty}, 2) * ROUND(COALESCE(p.retail_price, 0), ${digits}), ${digits})), 0)`.as('total_retail_value'),
-      sql<number>`COUNT(*)::int`.as('item_count'),
-      sql<number>`COUNT(*) FILTER (WHERE ROUND(${stockQty}, 2) > 0 AND ROUND(${stockQty}, 2) <= ROUND(p.min_stock_qty, 2))::int`.as('low_stock_count'),
-      sql<number>`COUNT(*) FILTER (WHERE ROUND(${stockQty}, 2) = 0)::int`.as('zero_stock_count'),
-      sql<number>`COUNT(*) FILTER (WHERE ROUND(${stockQty}, 2) < 0)::int`.as('negative_stock_count'),
-    ]).executeTakeFirst();
+    const totalsRow = await query
+      .clearSelect()
+      .select([
+        sql<number>`COALESCE(SUM(ROUND(${stockQty} * COALESCE(p.cost_price, 0), ${digits})), 0)`.as(
+          'total_inventory_value',
+        ),
+        sql<number>`COALESCE(SUM(ROUND(ROUND(${stockQty}, 2) * ROUND(COALESCE(p.retail_price, 0), ${digits}), ${digits})), 0)`.as(
+          'total_retail_value',
+        ),
+        sql<number>`COUNT(*)::int`.as('item_count'),
+        sql<number>`COUNT(*) FILTER (WHERE ROUND(${stockQty}, 2) > 0 AND ROUND(${stockQty}, 2) <= ROUND(p.min_stock_qty, 2))::int`.as(
+          'low_stock_count',
+        ),
+        sql<number>`COUNT(*) FILTER (WHERE ROUND(${stockQty}, 2) = 0)::int`.as('zero_stock_count'),
+        sql<number>`COUNT(*) FILTER (WHERE ROUND(${stockQty}, 2) < 0)::int`.as('negative_stock_count'),
+      ])
+      .executeTakeFirst();
 
     const rows = await query.orderBy('p.name', 'asc').execute();
-    const items = rows
-      .map((row) => {
-        const quantityOnHand = Number(row.stock_qty);
-        const minStockQty = this.toMoney(row.min_stock_qty, digits);
-        const unitCost = Number(row.cost_price);
-        const unitRetailPrice = this.toMoney(row.retail_price, digits);
-        const inventoryValue = this.toMoney(quantityOnHand * unitCost, digits);
-        const retailPotentialValue = this.toMoney(quantityOnHand * unitRetailPrice, digits);
-        const potentialGrossMargin = this.toMoney(retailPotentialValue - inventoryValue, digits);
+    const items = rows.map((row) => {
+      const quantityOnHand = Number(row.stock_qty);
+      const minStockQty = this.toMoney(row.min_stock_qty, digits);
+      const unitCost = Number(row.cost_price);
+      const unitRetailPrice = this.toMoney(row.retail_price, digits);
+      const inventoryValue = this.toMoney(quantityOnHand * unitCost, digits);
+      const retailPotentialValue = this.toMoney(quantityOnHand * unitRetailPrice, digits);
+      const potentialGrossMargin = this.toMoney(retailPotentialValue - inventoryValue, digits);
 
-        let status: 'available' | 'low_stock' | 'out_of_stock' | 'negative_stock' = 'available';
-        if (quantityOnHand < 0) status = 'negative_stock';
-        else if (quantityOnHand === 0) status = 'out_of_stock';
-        else if (quantityOnHand <= minStockQty) status = 'low_stock';
+      let status: 'available' | 'low_stock' | 'out_of_stock' | 'negative_stock' = 'available';
+      if (quantityOnHand < 0) status = 'negative_stock';
+      else if (quantityOnHand === 0) status = 'out_of_stock';
+      else if (quantityOnHand <= minStockQty) status = 'low_stock';
 
-        return {
-          productId: String(row.id),
-          productName: String(row.name || ''),
-          barcode: String(row.barcode || ''),
-          categoryId: row.category_id ? String(row.category_id) : '',
-          categoryName: String(row.category_name || ''),
-          supplierId: row.supplier_id ? String(row.supplier_id) : '',
-          supplierName: String(row.supplier_name || ''),
-          quantityOnHand,
-          minStockQty,
-          unitCost,
-          unitRetailPrice,
-          inventoryValue,
-          retailPotentialValue,
-          potentialGrossMargin,
-          status,
-        };
-      });
+      return {
+        productId: String(row.id),
+        productName: String(row.name || ''),
+        barcode: String(row.barcode || ''),
+        categoryId: row.category_id ? String(row.category_id) : '',
+        categoryName: String(row.category_name || ''),
+        supplierId: row.supplier_id ? String(row.supplier_id) : '',
+        supplierName: String(row.supplier_name || ''),
+        quantityOnHand,
+        minStockQty,
+        unitCost,
+        unitRetailPrice,
+        inventoryValue,
+        retailPotentialValue,
+        potentialGrossMargin,
+        status,
+      };
+    });
 
     const totals = {
       totalInventoryValue: this.toMoney(totalsRow?.total_inventory_value, digits),
       totalRetailPotentialValue: this.toMoney(totalsRow?.total_retail_value, digits),
-      totalPotentialGrossMargin: this.toMoney(Number(totalsRow?.total_retail_value || 0) - Number(totalsRow?.total_inventory_value || 0), digits),
+      totalPotentialGrossMargin: this.toMoney(
+        Number(totalsRow?.total_retail_value || 0) - Number(totalsRow?.total_inventory_value || 0),
+        digits,
+      ),
       itemCount: Number(totalsRow?.item_count || 0),
       lowStockCount: Number(totalsRow?.low_stock_count || 0),
       zeroStockCount: Number(totalsRow?.zero_stock_count || 0),
@@ -568,11 +638,7 @@ export class AccountingReportsService {
     return { totals, items };
   }
 
-  async getCostCenterReport(
-    costCenterId: number,
-    auth: AuthContext,
-    filters?: { fromDate?: string; toDate?: string },
-  ) {
+  async getCostCenterReport(costCenterId: number, auth: AuthContext, filters?: { fromDate?: string; toDate?: string }) {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
 
@@ -589,8 +655,12 @@ export class AccountingReportsService {
 
     let query = (this.db as any)
       .selectFrom('journal_entry_lines as l')
-      .innerJoin('journal_entries as e', (join: any) => join.onRef('l.journal_entry_id', '=', 'e.id').onRef('l.tenant_id', '=', 'e.tenant_id'))
-      .innerJoin('accounting_accounts as a', (join: any) => join.onRef('l.account_id', '=', 'a.id').onRef('l.tenant_id', '=', 'a.tenant_id'))
+      .innerJoin('journal_entries as e', (join: any) =>
+        join.onRef('l.journal_entry_id', '=', 'e.id').onRef('l.tenant_id', '=', 'e.tenant_id'),
+      )
+      .innerJoin('accounting_accounts as a', (join: any) =>
+        join.onRef('l.account_id', '=', 'a.id').onRef('l.tenant_id', '=', 'a.tenant_id'),
+      )
       .select([
         'l.id as lineId',
         'e.id as entryId',
@@ -630,14 +700,14 @@ export class AccountingReportsService {
       totalDebit += debit;
       totalCredit += credit;
       if (line.accountType === 'expense' || line.accountType === 'contra_expense') {
-        totalExpenses += (debit - credit);
+        totalExpenses += debit - credit;
       } else if (line.accountType === 'revenue' || line.accountType === 'contra_revenue') {
-        totalRevenues += (credit - debit);
+        totalRevenues += credit - debit;
       }
     }
 
     const budgetAmount = Number((costCenter as any).budget_amount || 0);
-    const variance = budgetAmount > 0 ? (budgetAmount - totalExpenses) : 0;
+    const variance = budgetAmount > 0 ? budgetAmount - totalExpenses : 0;
     const utilizationRate = budgetAmount > 0 ? Math.round((totalExpenses / budgetAmount) * 100) : 0;
 
     return {

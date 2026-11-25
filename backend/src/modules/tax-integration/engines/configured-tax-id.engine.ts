@@ -34,8 +34,7 @@ export function selectConfiguredTaxRow(
   options: { provider: string; allowFallback: boolean },
 ): { taxId: string; isActive: boolean } | null {
   const list = Array.isArray(rows) ? rows : [];
-  const trimmed = (row: ConfiguredTaxRow): string =>
-    typeof row.tax_id === 'string' ? row.tax_id.trim() : '';
+  const trimmed = (row: ConfiguredTaxRow): string => (typeof row.tax_id === 'string' ? row.tax_id.trim() : '');
   const picked = (row: ConfiguredTaxRow): { taxId: string; isActive: boolean } => ({
     taxId: trimmed(row),
     isActive: row.is_active !== false,

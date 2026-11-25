@@ -5,15 +5,26 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { AccountingPostingService } from '../accounting-posting.service';
-import type { PdcChequeRecord, PdcChequesFilter, PdcChequesStats, CreatePdcChequeDto, UpdateChequeStatusDto } from './pdc-cheques/pdc-cheques.types';
-export type { PdcChequeRecord, PdcChequesFilter, PdcChequesStats, CreatePdcChequeDto, UpdateChequeStatusDto } from './pdc-cheques/pdc-cheques.types';
+import type {
+  PdcChequeRecord,
+  PdcChequesFilter,
+  PdcChequesStats,
+  CreatePdcChequeDto,
+  UpdateChequeStatusDto,
+} from './pdc-cheques/pdc-cheques.types';
+export type {
+  PdcChequeRecord,
+  PdcChequesFilter,
+  PdcChequesStats,
+  CreatePdcChequeDto,
+  UpdateChequeStatusDto,
+} from './pdc-cheques/pdc-cheques.types';
 import { ListChequesSlice } from './pdc-cheques/list-cheques.slice';
 import { ChequesStatsSlice } from './pdc-cheques/cheques-stats.slice';
 import { CreateChequeSlice } from './pdc-cheques/create-cheque.slice';
 import { UpdateChequeStatusSlice } from './pdc-cheques/update-cheque-status.slice';
 import { SyncSubLedgersSlice } from './pdc-cheques/sync-sub-ledgers.slice';
 import { DeleteChequeSlice } from './pdc-cheques/delete-cheque.slice';
-
 
 @Injectable()
 export class PdcChequesService {
@@ -36,46 +47,30 @@ export class PdcChequesService {
 
   private listChequesSliceInstance?: ListChequesSlice;
   private get listChequesSlice(): ListChequesSlice {
-    return (this.listChequesSliceInstance ??= new ListChequesSlice(
-      this.db,
-      {
-        toMoney: (value, digits) =>
-          this.toMoney(value, digits),
-        formatDate: (date) =>
-          this.formatDate(date),
-      },
-    ));
+    return (this.listChequesSliceInstance ??= new ListChequesSlice(this.db, {
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      formatDate: (date) => this.formatDate(date),
+    }));
   }
 
   private chequesStatsSliceInstance?: ChequesStatsSlice;
   private get chequesStatsSlice(): ChequesStatsSlice {
-    return (this.chequesStatsSliceInstance ??= new ChequesStatsSlice(
-      this.db,
-      {
-        toMoney: (value, digits) =>
-          this.toMoney(value, digits),
-        formatDate: (date) =>
-          this.formatDate(date),
-      },
-    ));
+    return (this.chequesStatsSliceInstance ??= new ChequesStatsSlice(this.db, {
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      formatDate: (date) => this.formatDate(date),
+    }));
   }
 
   private createChequeSliceInstance?: CreateChequeSlice;
   private get createChequeSlice(): CreateChequeSlice {
-    return (this.createChequeSliceInstance ??= new CreateChequeSlice(
-      this.db,
-      this.accountingPostingService,
-      {
-        toMoney: (value, digits) =>
-          this.toMoney(value, digits),
-        formatDate: (date) =>
-          this.formatDate(date),
-        syncCustomerSubLedger: (trx, auth, customerId, amount, entryType, note, chequeId) =>
-          this.syncCustomerSubLedger(trx, auth, customerId, amount, entryType, note, chequeId),
-        syncSupplierSubLedger: (trx, auth, supplierId, amount, entryType, note, chequeId) =>
-          this.syncSupplierSubLedger(trx, auth, supplierId, amount, entryType, note, chequeId),
-      },
-    ));
+    return (this.createChequeSliceInstance ??= new CreateChequeSlice(this.db, this.accountingPostingService, {
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      formatDate: (date) => this.formatDate(date),
+      syncCustomerSubLedger: (trx, auth, customerId, amount, entryType, note, chequeId) =>
+        this.syncCustomerSubLedger(trx, auth, customerId, amount, entryType, note, chequeId),
+      syncSupplierSubLedger: (trx, auth, supplierId, amount, entryType, note, chequeId) =>
+        this.syncSupplierSubLedger(trx, auth, supplierId, amount, entryType, note, chequeId),
+    }));
   }
 
   private updateChequeStatusSliceInstance?: UpdateChequeStatusSlice;
@@ -84,10 +79,8 @@ export class PdcChequesService {
       this.db,
       this.accountingPostingService,
       {
-        toMoney: (value, digits) =>
-          this.toMoney(value, digits),
-        formatDate: (date) =>
-          this.formatDate(date),
+        toMoney: (value, digits) => this.toMoney(value, digits),
+        formatDate: (date) => this.formatDate(date),
         syncCustomerSubLedger: (trx, auth, customerId, amount, entryType, note, chequeId) =>
           this.syncCustomerSubLedger(trx, auth, customerId, amount, entryType, note, chequeId),
         syncSupplierSubLedger: (trx, auth, supplierId, amount, entryType, note, chequeId) =>
@@ -103,17 +96,20 @@ export class PdcChequesService {
 
   private deleteChequeSliceInstance?: DeleteChequeSlice;
   private get deleteChequeSlice(): DeleteChequeSlice {
-    return (this.deleteChequeSliceInstance ??= new DeleteChequeSlice(
-      this.db,
-    ));
+    return (this.deleteChequeSliceInstance ??= new DeleteChequeSlice(this.db));
   }
-
-
 
   async listCheques(
     authContext: AuthContext,
     filters: PdcChequesFilter = {},
-  ): Promise<{ data: PdcChequeRecord[]; total: number; page: number; limit: number; serverTime: string; serverTimezone: string }> {
+  ): Promise<{
+    data: PdcChequeRecord[];
+    total: number;
+    page: number;
+    limit: number;
+    serverTime: string;
+    serverTimezone: string;
+  }> {
     return this.listChequesSlice.listCheques(authContext, filters);
   }
 
@@ -160,4 +156,3 @@ export class PdcChequesService {
     return this.deleteChequeSlice.deleteCheque(authContext, id);
   }
 }
-

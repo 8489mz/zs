@@ -23,7 +23,7 @@ export class TaxSettingsController {
     const settings = await this.taxSettingsService.getPublicSettings(tenantId);
     return {
       status: 'success',
-      settings
+      settings,
     };
   }
 
@@ -37,7 +37,7 @@ export class TaxSettingsController {
     const settings = await this.taxSettingsService.upsertSettings(tenantId, accountId, payload);
     return {
       status: 'success',
-      settings: this.taxSettingsService.toPublicSettings(settings)
+      settings: this.taxSettingsService.toPublicSettings(settings),
     };
   }
 }

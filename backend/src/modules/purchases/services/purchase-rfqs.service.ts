@@ -124,16 +124,19 @@ export class PurchaseRfqsService {
       .execute();
 
     // Group bids by supplier to build the Comparison Matrix
-    const supplierBidsMap = new Map<number, {
-      supplier_id: number;
-      supplier_name: string;
-      supplier_phone: string | null;
-      delivery_lead_days: number;
-      payment_terms: string | null;
-      is_winner: boolean;
-      total_quote: number;
-      item_quotes: Record<number, { quoted_unit_cost: number; tax_rate: number }>;
-    }>();
+    const supplierBidsMap = new Map<
+      number,
+      {
+        supplier_id: number;
+        supplier_name: string;
+        supplier_phone: string | null;
+        delivery_lead_days: number;
+        payment_terms: string | null;
+        is_winner: boolean;
+        total_quote: number;
+        item_quotes: Record<number, { quoted_unit_cost: number; tax_rate: number }>;
+      }
+    >();
 
     for (const bid of bids) {
       const sId = Number(bid.supplier_id);
@@ -471,17 +474,9 @@ export class PurchaseRfqsService {
         .where('rfq_id', '=', id)
         .execute();
 
-      await trx
-        .deleteFrom('purchase_rfq_items')
-        .where('tenant_id', '=', tenantId)
-        .where('rfq_id', '=', id)
-        .execute();
+      await trx.deleteFrom('purchase_rfq_items').where('tenant_id', '=', tenantId).where('rfq_id', '=', id).execute();
 
-      await trx
-        .deleteFrom('purchase_rfqs')
-        .where('tenant_id', '=', tenantId)
-        .where('id', '=', id)
-        .execute();
+      await trx.deleteFrom('purchase_rfqs').where('tenant_id', '=', tenantId).where('id', '=', id).execute();
 
       return { success: true };
     });

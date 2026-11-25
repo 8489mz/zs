@@ -102,11 +102,7 @@ export async function advancePurchaseOrderReceipt(
   const currentStatus = String(order.status);
   const unapprovedReceipt = currentStatus === 'draft' && options?.allowUnapproved === true;
   if (!unapprovedReceipt && !RECEIVABLE_PO_STATUSES.includes(currentStatus)) {
-    throw new AppError(
-      'لا يجوز الاستلام على أمر شراء في حالته الحالية',
-      'PO_RECEIPT_NOT_ALLOWED',
-      409,
-    );
+    throw new AppError('لا يجوز الاستلام على أمر شراء في حالته الحالية', 'PO_RECEIPT_NOT_ALLOWED', 409);
   }
 
   const items = await trx
@@ -125,11 +121,7 @@ export async function advancePurchaseOrderReceipt(
   }
   for (const poItemId of aggregated.keys()) {
     if (!byId.has(poItemId)) {
-      throw new AppError(
-        'بند أمر الشراء المرتبط بالاستلام لا يتبع أمر الشراء المحدد',
-        'PO_RECEIPT_ITEM_MISMATCH',
-        409,
-      );
+      throw new AppError('بند أمر الشراء المرتبط بالاستلام لا يتبع أمر الشراء المحدد', 'PO_RECEIPT_ITEM_MISMATCH', 409);
     }
   }
 

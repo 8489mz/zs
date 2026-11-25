@@ -60,8 +60,11 @@ export class CashFlowService {
     const parseReportBoundary = (input?: string, isEnd = false): { date: Date; dateStr: string } => {
       const dateStr = input ? input.slice(0, 10) : isEnd ? today : `${today.slice(0, 4)}-01-01`;
       let end: Date;
-      try { end = nextAccountingDay(dateStr); }
-      catch { throw new BadRequestException('تاريخ التقرير غير صالح.'); }
+      try {
+        end = nextAccountingDay(dateStr);
+      } catch {
+        throw new BadRequestException('تاريخ التقرير غير صالح.');
+      }
       return { date: isEnd ? end : new Date(`${dateStr}T00:00:00.000Z`), dateStr };
     };
 
@@ -132,7 +135,14 @@ export class CashFlowService {
     const endRow = await endQuery.executeTakeFirst();
     const endingCash = this.toMoney(Number(endRow?.debit_sum || 0) - Number(endRow?.credit_sum || 0), digits);
 
-    const flows = await sql<{ id: number; explicit_category: 'operating' | 'investing' | 'financing' | null; cash: number; operating: number; investing: number; financing: number }>`
+    const flows = await sql<{
+      id: number;
+      explicit_category: 'operating' | 'investing' | 'financing' | null;
+      cash: number;
+      operating: number;
+      investing: number;
+      financing: number;
+    }>`
       with legs as (
         select j.id, j.cash_flow_category as explicit_category, l.debit, l.credit,
           case when a.id = any(${cashAccountIds}::bigint[]) then 'cash'
@@ -155,22 +165,41 @@ export class CashFlowService {
     const totals = { operating: 0, investing: 0, financing: 0, unclassified: 0 };
     let unclassifiedCount = 0;
     for (const row of flows.rows) {
-      const amounts = classifyCashFlow(Number(row.cash), Number(row.operating), Number(row.investing), Number(row.financing), row.explicit_category);
+      const amounts = classifyCashFlow(
+        Number(row.cash),
+        Number(row.operating),
+        Number(row.investing),
+        Number(row.financing),
+        row.explicit_category,
+      );
       for (const key of Object.keys(totals) as Array<keyof typeof totals>) totals[key] += amounts[key];
       if (amounts.unclassified !== 0) unclassifiedCount++;
     }
-    const section = (titleAr: string, titleEn: string, amount: number): CashFlowSection => ({ titleAr, titleEn, total: this.toMoney(amount, digits),
+    const section = (titleAr: string, titleEn: string, amount: number): CashFlowSection => ({
+      titleAr,
+      titleEn,
+      total: this.toMoney(amount, digits),
       lines: [{ labelAr: titleAr, labelEn: titleEn, amount: this.toMoney(amount, digits) }],
     });
-    const netCashFlow = this.toMoney(totals.operating + totals.investing + totals.financing + totals.unclassified, digits);
+    const netCashFlow = this.toMoney(
+      totals.operating + totals.investing + totals.financing + totals.unclassified,
+      digits,
+    );
     return {
-      dateFrom: fromDateStr, dateTo: toDateStr,
+      dateFrom: fromDateStr,
+      dateTo: toDateStr,
       operatingActivities: section('صافي التدفقات التشغيلية', 'Net Operating Cash Flows', totals.operating),
       investingActivities: section('صافي التدفقات الاستثمارية', 'Net Investing Cash Flows', totals.investing),
       financingActivities: section('صافي التدفقات التمويلية', 'Net Financing Cash Flows', totals.financing),
-      unclassifiedActivities: section('تدفقات مختلطة تتطلب تصنيفاً محاسبياً', 'Mixed Cash Flows Requiring Attribution', totals.unclassified),
+      unclassifiedActivities: section(
+        'تدفقات مختلطة تتطلب تصنيفاً محاسبياً',
+        'Mixed Cash Flows Requiring Attribution',
+        totals.unclassified,
+      ),
       isClassified: unclassifiedCount === 0,
-      netCashFlow, beginningCash, endingCash,
+      netCashFlow,
+      beginningCash,
+      endingCash,
       reconciledCashActual: this.toMoney(endingCash - beginningCash, digits),
       // Tolerance stays 0.01: the section classifier
       // (cash-flow-classification.engine.ts) still rounds to cents, so

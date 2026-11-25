@@ -16,13 +16,14 @@ import {
 import { SalesFinanceService } from './sales-finance.service';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, toMinorUnits, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
-import { splitInstallmentSchedule } from '../../accounting/engines/installment-interest.engine';
 import {
-  CreateInstallmentPlanDto,
-  PayInstallmentDto,
-  ListInstallmentsQueryDto,
-} from '../dto/customer-installment.dto';
+  currencyMoneyDigits,
+  roundMoney,
+  toMinorUnits,
+  type MoneyDigits,
+} from '../../accounting/engines/money-minor-units.engine';
+import { splitInstallmentSchedule } from '../../accounting/engines/installment-interest.engine';
+import { CreateInstallmentPlanDto, PayInstallmentDto, ListInstallmentsQueryDto } from '../dto/customer-installment.dto';
 
 /*
  * INV-INSTALLMENT-PAYMENT-CHANNEL: the channel a customer_payments
@@ -52,10 +53,7 @@ const INSTALLMENT_PAYMENT_CHANNELS: Record<string, 'cash' | 'bank' | 'card' | 'i
  * than silently truncated. A free-text note alone is NOT a
  * reference — the gate below reads only this field.
  */
-function normalizeInstallmentTransferReference(
-  paymentChannel: string,
-  rawReference: unknown,
-): string | null {
+function normalizeInstallmentTransferReference(paymentChannel: string, rawReference: unknown): string | null {
   if (!paymentChannel || paymentChannel === 'cash') return null;
   const reference = String(rawReference || '').trim();
   if (!reference) return null;
@@ -74,10 +72,7 @@ function normalizeInstallmentTransferReference(
  * any future caller reaching the posting without evidence is
  * refused before any Dr 1120 is posted.
  */
-function assertInstallmentTransferReference(
-  paymentChannel: string,
-  reference: unknown,
-): void {
+function assertInstallmentTransferReference(paymentChannel: string, reference: unknown): void {
   if (!paymentChannel || paymentChannel === 'cash') return;
   const trimmed = String(reference || '').trim();
   if (trimmed.length < 3) {
@@ -148,7 +143,11 @@ export class CustomerInstallmentsService {
       maxDayOffset: 0,
     });
     if (!startDay.ok) {
-      throw new AppError('Installment start date is outside the allowed window', 'INSTALLMENT_START_DATE_OUT_OF_RANGE', 400);
+      throw new AppError(
+        'Installment start date is outside the allowed window',
+        'INSTALLMENT_START_DATE_OUT_OF_RANGE',
+        400,
+      );
     }
 
     // INV-INSTALLMENT-FIRST-DUE-DATE: the create form labels this
@@ -167,7 +166,11 @@ export class CustomerInstallmentsService {
         maxDayOffset: CLIENT_INSTALLMENT_SCHEDULE_YEARS * 365,
       });
       if (!firstDueDay.ok) {
-        throw new AppError('First due date is outside the installment schedule', 'INSTALLMENT_FIRST_DUE_DATE_OUT_OF_RANGE', 400);
+        throw new AppError(
+          'First due date is outside the installment schedule',
+          'INSTALLMENT_FIRST_DUE_DATE_OUT_OF_RANGE',
+          400,
+        );
       }
     }
 
@@ -189,14 +192,23 @@ export class CustomerInstallmentsService {
       }
 
       const interestRatePercent = Number(dto.interestRatePercent || 0);
-      if (!Number.isFinite(interestRatePercent) || interestRatePercent < 0) throw new AppError('Invalid interest rate', 'INVALID_INTEREST_RATE', 400);
+      if (!Number.isFinite(interestRatePercent) || interestRatePercent < 0)
+        throw new AppError('Invalid interest rate', 'INVALID_INTEREST_RATE', 400);
       const interestAmount = this.roundBook((financedAmount * interestRatePercent) / 100, bookDigits);
       const totalWithInterest = this.roundBook(financedAmount + interestAmount, bookDigits);
       const installmentCount = Number(dto.installmentCount);
       const totalMinor = toMinorUnits(totalWithInterest, bookDigits);
-      if (!Number.isSafeInteger(installmentCount) || installmentCount < 1 || installmentCount > 600
-        || installmentCount > totalMinor) {
-        throw new AppError('Installment count must be a positive integer with at least one minor unit per installment', 'INVALID_INSTALLMENT_COUNT', 400);
+      if (
+        !Number.isSafeInteger(installmentCount) ||
+        installmentCount < 1 ||
+        installmentCount > 600 ||
+        installmentCount > totalMinor
+      ) {
+        throw new AppError(
+          'Installment count must be a positive integer with at least one minor unit per installment',
+          'INVALID_INSTALLMENT_COUNT',
+          400,
+        );
       }
       const scheduleAmounts = splitInstallmentSchedule(totalWithInterest, installmentCount, bookDigits);
       const monthlyAmount = scheduleAmounts[0];
@@ -228,7 +240,13 @@ export class CustomerInstallmentsService {
         .executeTakeFirstOrThrow();
 
       const planId = Number(inserted.id);
-      const planNumber = formatDailyDocumentNumber('INST', planId, startDate, 4, await getTenantTimezone(trx, scope.tenantId));
+      const planNumber = formatDailyDocumentNumber(
+        'INST',
+        planId,
+        startDate,
+        4,
+        await getTenantTimezone(trx, scope.tenantId),
+      );
 
       // Update plan with authoritative daily document number
       const plan = await trx
@@ -355,7 +373,6 @@ export class CustomerInstallmentsService {
     });
   }
 
-
   async listPlans(query: { customerId?: number; status?: string; search?: string }, auth: AuthContext) {
     const bookDigits = await this.bookDigits(this.db, auth);
     let q = this.db
@@ -435,9 +452,8 @@ export class CustomerInstallmentsService {
       const prog = progressMap.get(Number(p.id)) || { paid_amount: 0, paid_count: 0 };
       const totalWithInterest = Number(p.total_with_interest || 0);
       const remainingAmount = Math.max(0, this.roundBook(totalWithInterest - prog.paid_amount, bookDigits));
-      const progressPercent = totalWithInterest > 0
-        ? Math.min(100, Math.round((prog.paid_amount / totalWithInterest) * 100))
-        : 0;
+      const progressPercent =
+        totalWithInterest > 0 ? Math.min(100, Math.round((prog.paid_amount / totalWithInterest) * 100)) : 0;
 
       return {
         ...p,
@@ -522,9 +538,7 @@ export class CustomerInstallmentsService {
         ...plan,
         paid_amount: this.roundBook(totalPaid, bookDigits),
         remaining_amount: Math.max(0, this.roundBook(totalWithInterest - totalPaid, bookDigits)),
-        progress_percent: totalWithInterest > 0
-          ? Math.min(100, Math.round((totalPaid / totalWithInterest) * 100))
-          : 0,
+        progress_percent: totalWithInterest > 0 ? Math.min(100, Math.round((totalPaid / totalWithInterest) * 100)) : 0,
       },
       installments: installmentsWithStatus,
     };
@@ -598,7 +612,10 @@ export class CustomerInstallmentsService {
       q = q.where('i.status', '=', query.status);
     }
 
-    const rows = await q.orderBy('i.due_date', 'asc').limit(Number(query.pageSize) || 100).execute();
+    const rows = await q
+      .orderBy('i.due_date', 'asc')
+      .limit(Number(query.pageSize) || 100)
+      .execute();
 
     const installments = rows.map((r) => {
       const dueDateStr = formatLocalCalendarDay(new Date(r.due_date));
@@ -682,8 +699,7 @@ export class CustomerInstallmentsService {
         .where(this.tenantPredicate(auth))
         .forUpdate()
         .executeTakeFirst();
-      if (!plan || Number(plan.customer_id) !== Number(installment.customer_id)
-        || plan.status !== 'active') {
+      if (!plan || Number(plan.customer_id) !== Number(installment.customer_id) || plan.status !== 'active') {
         throw new AppError('Installment plan is not active', 'INSTALLMENT_PLAN_NOT_ACTIVE', 400);
       }
 
@@ -724,7 +740,13 @@ export class CustomerInstallmentsService {
 
       const paymentId = Number(insertedPayment.id);
       // External references must never replace the unique identity-based system receipt number.
-      const receiptNo = formatDailyDocumentNumber('REC', paymentId, new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
+      const receiptNo = formatDailyDocumentNumber(
+        'REC',
+        paymentId,
+        new Date(),
+        4,
+        await getTenantTimezone(trx, scope.tenantId),
+      );
       const branchId = plan?.branch_id ? Number(plan.branch_id) : null;
       const fullDesc = `سداد قسط رقم ${installment.installment_number} (إيصال #${receiptNo})`;
 
@@ -821,7 +843,6 @@ export class CustomerInstallmentsService {
     });
   }
 
-
   async getSummaryMetrics(auth: AuthContext) {
     const bookDigits = await this.bookDigits(this.db, auth);
     // Overdue means due before the tenant's business day; the filter
@@ -836,7 +857,9 @@ export class CustomerInstallmentsService {
         .select([
           sql<number>`COALESCE(COUNT(*), 0)`.as('total_plans'),
           sql<number>`COALESCE(COUNT(CASE WHEN status = 'active' THEN 1 END), 0)`.as('active_plans'),
-          sql<number>`COALESCE(SUM(CASE WHEN status = 'active' THEN total_with_interest ELSE 0 END), 0)`.as('active_total_amount'),
+          sql<number>`COALESCE(SUM(CASE WHEN status = 'active' THEN total_with_interest ELSE 0 END), 0)`.as(
+            'active_total_amount',
+          ),
         ])
         .where(this.tenantPredicate(auth))
         .executeTakeFirst(),
@@ -846,7 +869,9 @@ export class CustomerInstallmentsService {
         .select([
           sql<number>`COALESCE(SUM(paid_amount), 0)`.as('total_collected'),
           sql<number>`COALESCE(COUNT(CASE WHEN status != 'paid' THEN 1 END), 0)`.as('unpaid_installments_count'),
-          sql<number>`COALESCE(SUM(CASE WHEN status != 'paid' THEN (amount - paid_amount) ELSE 0 END), 0)`.as('unpaid_installments_amount'),
+          sql<number>`COALESCE(SUM(CASE WHEN status != 'paid' THEN (amount - paid_amount) ELSE 0 END), 0)`.as(
+            'unpaid_installments_amount',
+          ),
         ])
         .where(this.tenantPredicate(auth))
         .executeTakeFirst(),

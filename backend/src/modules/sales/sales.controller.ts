@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { RequirePermissions } from '../../core/auth/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
@@ -36,7 +49,10 @@ export class SalesController {
 
   @Post('sales/discount-authorization')
   @RequirePermissions('sales')
-  authorizeDiscountOverride(@Body() body: { secret?: string }, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  authorizeDiscountOverride(
+    @Body() body: { secret?: string },
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.salesService.authorizeDiscountOverride(String(body?.secret || ''), req.authContext!);
   }
 
@@ -54,7 +70,12 @@ export class SalesController {
     @Body() body: { reason?: string; managerPin?: string },
     @Req() req: RequestWithAuth,
   ) {
-    return this.salesService.cancelSale(id, String(body?.reason || ''), String(body?.managerPin || ''), req.authContext!);
+    return this.salesService.cancelSale(
+      id,
+      String(body?.reason || ''),
+      String(body?.managerPin || ''),
+      req.authContext!,
+    );
   }
 
   @Put('sales/:id')

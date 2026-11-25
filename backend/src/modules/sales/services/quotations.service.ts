@@ -10,7 +10,12 @@ import { SalesWriteService } from './sales-write.service';
 import { UpsertSaleDto } from '../dto/upsert-sale.dto';
 import { idempotencyStorage } from '../../../core/idempotency/idempotency.context';
 import { IdempotencyService, IDEMPOTENCY_STUCK_PROCESSING_MS } from '../../../core/idempotency/idempotency.service';
-import { conversionRecoverySaleId, decideConversionRecovery, resolveConversionDiscounts, resolveConversionPaymentTerms } from '../helpers/sales-write.helper';
+import {
+  conversionRecoverySaleId,
+  decideConversionRecovery,
+  resolveConversionDiscounts,
+  resolveConversionPaymentTerms,
+} from '../helpers/sales-write.helper';
 import { recomputeSalesOrderMoney, assertQuotationMoney } from '../helpers/sales-order-money.helper';
 
 @Injectable()
@@ -37,7 +42,11 @@ export class QuotationsService {
     };
   }
 
-  private async markQuotationConverted(id: number, scope: { tenantId: string; accountId: string }, saleId: number): Promise<void> {
+  private async markQuotationConverted(
+    id: number,
+    scope: { tenantId: string; accountId: string },
+    saleId: number,
+  ): Promise<void> {
     await this.db
       .updateTable('quotations')
       .set({
@@ -50,7 +59,10 @@ export class QuotationsService {
       .execute();
   }
 
-  async listQuotations(auth: AuthContext, query?: { status?: string; search?: string }): Promise<Record<string, unknown>> {
+  async listQuotations(
+    auth: AuthContext,
+    query?: { status?: string; search?: string },
+  ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     let qb = this.db
       .selectFrom('quotations')
@@ -197,7 +209,8 @@ export class QuotationsService {
           customer_id: dto.customerId !== undefined ? dto.customerId : existing.customer_id,
           customer_name: dto.customerName !== undefined ? dto.customerName.trim() : existing.customer_name,
           customer_phone: dto.customerPhone !== undefined ? dto.customerPhone?.trim() || null : existing.customer_phone,
-          customer_address: dto.customerAddress !== undefined ? dto.customerAddress?.trim() || null : existing.customer_address,
+          customer_address:
+            dto.customerAddress !== undefined ? dto.customerAddress?.trim() || null : existing.customer_address,
           branch_id: dto.branchId !== undefined ? dto.branchId : existing.branch_id,
           subtotal: dto.subtotal !== undefined ? dto.subtotal : existing.subtotal,
           discount_amount: dto.discountAmount !== undefined ? dto.discountAmount : existing.discount_amount,
@@ -206,7 +219,8 @@ export class QuotationsService {
           valid_until: dto.validUntil ? new Date(dto.validUntil) : existing.valid_until,
           status: (dto.status as any) || existing.status,
           notes: dto.notes !== undefined ? dto.notes?.trim() || null : existing.notes,
-          terms_conditions: dto.termsConditions !== undefined ? dto.termsConditions?.trim() || null : existing.terms_conditions,
+          terms_conditions:
+            dto.termsConditions !== undefined ? dto.termsConditions?.trim() || null : existing.terms_conditions,
           updated_at: now,
         })
         .where('id', '=', id)
@@ -267,11 +281,7 @@ export class QuotationsService {
         .where('tenant_id', '=', scope.tenantId)
         .execute();
 
-      await trx
-        .deleteFrom('quotations')
-        .where('id', '=', id)
-        .where('tenant_id', '=', scope.tenantId)
-        .execute();
+      await trx.deleteFrom('quotations').where('id', '=', id).where('tenant_id', '=', scope.tenantId).execute();
     });
 
     return { ok: true, message: 'تم حذف عرض السعر بنجاح' };
@@ -313,8 +323,7 @@ export class QuotationsService {
     const idemKey = `quote_convert_${scope.tenantId}_${id}`;
     const idemHash = this.idempotency.generateRequestHash({ conversion: 'quotation', id });
     const idemParams = this.conversionOperationParams(scope, idemKey);
-    const claimFilter = (eb: any) =>
-      eb.and([eb('status', '!=', 'converted'), eb('status', '!=', 'converting')]);
+    const claimFilter = (eb: any) => eb.and([eb('status', '!=', 'converted'), eb('status', '!=', 'converting')]);
 
     const claimed = await this.db
       .updateTable('quotations')
@@ -523,14 +532,15 @@ export class QuotationsService {
         paymentType: paymentTerms,
         paymentChannel: paymentTerms,
         source: 'dashboard',
-        payments: paymentTerms === 'credit'
-          ? []
-          : [
-              {
-                paymentChannel: 'cash',
-                amount: totalAmount,
-              },
-            ],
+        payments:
+          paymentTerms === 'credit'
+            ? []
+            : [
+                {
+                  paymentChannel: 'cash',
+                  amount: totalAmount,
+                },
+              ],
       };
 
       saleAttempted = true;

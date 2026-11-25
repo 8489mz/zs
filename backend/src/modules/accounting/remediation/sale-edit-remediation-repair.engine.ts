@@ -124,12 +124,7 @@ export interface SaleEditRepairOptions {
   limit?: number;
 }
 
-export type SaleEditRepairItemStatus =
-  | 'would_reverse'
-  | 'reversed'
-  | 'already_repaired'
-  | 'skipped_manual'
-  | 'failed';
+export type SaleEditRepairItemStatus = 'would_reverse' | 'reversed' | 'already_repaired' | 'skipped_manual' | 'failed';
 
 export interface SaleEditRepairItem {
   saleId: number;
@@ -162,11 +157,7 @@ function toNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
-function isWithinOneMinorUnit(
-  actual: number,
-  expected: number,
-  bookDigits: MoneyDigits,
-): boolean {
+function isWithinOneMinorUnit(actual: number, expected: number, bookDigits: MoneyDigits): boolean {
   if (!Number.isFinite(actual) || !Number.isFinite(expected)) return false;
   const factor = 10 ** bookDigits;
   return Math.abs(Math.round(actual * factor) - Math.round(expected * factor)) <= 1;
@@ -178,10 +169,7 @@ function errorMessage(error: unknown): string {
 
 function isAlreadyReversedError(error: unknown): boolean {
   const message = errorMessage(error);
-  return (
-    message.includes('JOURNAL_REVERSAL_INVALID') ||
-    message.includes('already reversed')
-  );
+  return message.includes('JOURNAL_REVERSAL_INVALID') || message.includes('already reversed');
 }
 
 function buildReport(
@@ -191,8 +179,7 @@ function buildReport(
   candidatesConsidered: number,
   items: SaleEditRepairItem[],
 ): SaleEditRepairReport {
-  const count = (status: SaleEditRepairItemStatus): number =>
-    items.filter((item) => item.status === status).length;
+  const count = (status: SaleEditRepairItemStatus): number => items.filter((item) => item.status === status).length;
   return {
     tenantId,
     runId,
@@ -227,9 +214,7 @@ function validateOptions(
     );
   }
   if (options.bookDigits !== 2 && options.bookDigits !== 3) {
-    throw new Error(
-      `repairSaleEditCandidates: bookDigits must be 2 or 3, got ${String(options.bookDigits)}`,
-    );
+    throw new Error(`repairSaleEditCandidates: bookDigits must be 2 or 3, got ${String(options.bookDigits)}`);
   }
   const mode: SaleEditRepairMode = options.mode ?? 'dry_run';
   if (mode !== 'dry_run' && mode !== 'apply') {
@@ -251,10 +236,7 @@ function selectBatch(
     options.saleIds && options.saleIds.length > 0
       ? sorted.filter((candidate) => options.saleIds!.includes(candidate.saleId))
       : sorted;
-  const batch =
-    options.limit != null && options.limit >= 0
-      ? considered.slice(0, options.limit)
-      : considered;
+  const batch = options.limit != null && options.limit >= 0 ? considered.slice(0, options.limit) : considered;
   return { considered, batch };
 }
 
@@ -310,15 +292,7 @@ async function revalidateInTransaction(
 ): Promise<{ alreadyRepaired: boolean; reversalJournalId: number | null }> {
   const saleRow = await trx
     .selectFrom('sales')
-    .select([
-      'subtotal',
-      'discount',
-      'tax_amount',
-      'total',
-      'store_credit_used',
-      'status',
-      'exchange_return_id',
-    ])
+    .select(['subtotal', 'discount', 'tax_amount', 'total', 'store_credit_used', 'status', 'exchange_return_id'])
     .where('id', '=', candidate.saleId)
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .executeTakeFirst();
@@ -330,7 +304,9 @@ async function revalidateInTransaction(
       `sale ${candidate.saleId}: exchange_return_id appeared since classification (now ${saleRow.exchange_return_id}); re-classify before repairing`,
     );
   }
-  const status = String(saleRow.status ?? '').trim().toLowerCase();
+  const status = String(saleRow.status ?? '')
+    .trim()
+    .toLowerCase();
   if (['cancelled', 'canceled', 'void', 'voided'].includes(status)) {
     throw new Error(
       `sale ${candidate.saleId}: sale status changed to '${saleRow.status}' since classification; re-classify before repairing`,
@@ -341,11 +317,7 @@ async function revalidateInTransaction(
     ['discount', toNumber(saleRow.discount), candidate.sale.discount],
     ['tax_amount', toNumber(saleRow.tax_amount), candidate.sale.taxAmount],
     ['total', toNumber(saleRow.total), candidate.sale.total],
-    [
-      'store_credit_used',
-      toNumber(saleRow.store_credit_used),
-      candidate.sale.storeCreditUsed ?? 0,
-    ],
+    ['store_credit_used', toNumber(saleRow.store_credit_used), candidate.sale.storeCreditUsed ?? 0],
   ];
   for (const [field, fresh, classified] of headerChecks) {
     if (!isWithinOneMinorUnit(fresh, classified, bookDigits)) {
@@ -360,10 +332,7 @@ async function revalidateInTransaction(
     .where('sale_id', '=', candidate.saleId)
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute();
-  const freshCogs = itemRows.reduce(
-    (sum, item) => sum + toNumber(item.qty) * toNumber(item.cost_price),
-    0,
-  );
+  const freshCogs = itemRows.reduce((sum, item) => sum + toNumber(item.qty) * toNumber(item.cost_price), 0);
   if (!isWithinOneMinorUnit(freshCogs, candidate.sale.cogs, bookDigits)) {
     throw new Error(
       `sale ${candidate.saleId}: COGS changed since classification (${freshCogs} vs ${candidate.sale.cogs}); re-classify before repairing`,
@@ -383,9 +352,7 @@ async function revalidateInTransaction(
     .orderBy('id', 'asc')
     .forUpdate()
     .execute();
-  const activeIds = journalRows
-    .filter((row) => row.reversed_by_entry_id == null)
-    .map((row) => Number(row.id));
+  const activeIds = journalRows.filter((row) => row.reversed_by_entry_id == null).map((row) => Number(row.id));
   const staleRow = journalRows.find((row) => Number(row.id) === staleJournalId);
   const keepRow = journalRows.find((row) => Number(row.id) === keepJournalId);
   if (
@@ -401,11 +368,7 @@ async function revalidateInTransaction(
       reversalJournalId: Number(staleRow.reversed_by_entry_id),
     };
   }
-  if (
-    activeIds.length !== 2 ||
-    !activeIds.includes(keepJournalId) ||
-    !activeIds.includes(staleJournalId)
-  ) {
+  if (activeIds.length !== 2 || !activeIds.includes(keepJournalId) || !activeIds.includes(staleJournalId)) {
     throw new Error(
       `sale ${candidate.saleId}: active journal set changed since classification (expected [${keepJournalId}, ${staleJournalId}], found [${activeIds.join(', ')}]); re-classify before repairing`,
     );
@@ -501,7 +464,11 @@ export async function repairSaleEditCandidates(
   // day. The lookup runs before validation only because validation owns the
   // tenantId check; a missing/invalid tenant resolves to the gateway fallback
   // here and validation still throws right after, with no side effect.
-  const todayKey = await resolveBusinessDateKey(db, typeof options.tenantId === 'string' ? options.tenantId : '', new Date());
+  const todayKey = await resolveBusinessDateKey(
+    db,
+    typeof options.tenantId === 'string' ? options.tenantId : '',
+    new Date(),
+  );
   const { tenantId, bookDigits, mode, runId } = validateOptions(options, auth, todayKey);
 
   const dbAny = db as unknown as {
@@ -531,17 +498,10 @@ export async function repairSaleEditCandidates(
       continue;
     }
     const { keepJournalId, staleJournalId } = classification;
-    const reason =
-      `P2 sale-edit remediation (run ${runId}): reverse duplicate journal ${staleJournalId}, keep ${keepJournalId}`;
+    const reason = `P2 sale-edit remediation (run ${runId}): reverse duplicate journal ${staleJournalId}, keep ${keepJournalId}`;
 
     if (mode === 'dry_run') {
-      const existing = await findExistingReversal(
-        db,
-        tenantId,
-        candidate.saleId,
-        keepJournalId,
-        staleJournalId,
-      );
+      const existing = await findExistingReversal(db, tenantId, candidate.saleId, keepJournalId, staleJournalId);
       if (existing != null) {
         items.push({
           saleId: candidate.saleId,
@@ -579,13 +539,7 @@ export async function repairSaleEditCandidates(
             reversalJournalId: revalidated.reversalJournalId,
           };
         }
-        const result = await gateway.reverseSaleJournalById(
-          trx,
-          candidate.saleId,
-          staleJournalId,
-          reason,
-          auth,
-        );
+        const result = await gateway.reverseSaleJournalById(trx, candidate.saleId, staleJournalId, reason, auth);
         if (!result.reversed) {
           if (result.journalEntryId != null) {
             // Gateway found the stale journal already reversed (race
@@ -597,10 +551,7 @@ export async function repairSaleEditCandidates(
               .where('id', '=', Number(result.journalEntryId))
               .where('tenant_id', '=', tenantId)
               .executeTakeFirst();
-            if (
-              reversalRow &&
-              Number(reversalRow.reversal_of_entry_id) === staleJournalId
-            ) {
+            if (reversalRow && Number(reversalRow.reversal_of_entry_id) === staleJournalId) {
               return {
                 status: 'already_repaired' as const,
                 reversalJournalId: Number(result.journalEntryId),
@@ -644,13 +595,7 @@ export async function repairSaleEditCandidates(
       // back transaction; if the sale is now repaired, report that
       // instead of a failure.
       if (isAlreadyReversedError(error)) {
-        const existing = await findExistingReversal(
-          db,
-          tenantId,
-          candidate.saleId,
-          keepJournalId,
-          staleJournalId,
-        );
+        const existing = await findExistingReversal(db, tenantId, candidate.saleId, keepJournalId, staleJournalId);
         if (existing != null) {
           items.push({
             saleId: candidate.saleId,

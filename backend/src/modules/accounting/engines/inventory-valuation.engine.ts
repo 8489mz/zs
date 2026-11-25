@@ -77,8 +77,18 @@ export function revalueStockPool(beforeQty: number, beforeCost: number, addition
   return result;
 }
 
-export function weightedReceiptCost(beforeQty: number, beforeCost: number, receivedQty: number, receivedValue: number): number {
-  if (![beforeQty, beforeCost, receivedQty, receivedValue].every(Number.isFinite) || beforeCost < 0 || receivedQty <= 0 || receivedValue < 0) {
+export function weightedReceiptCost(
+  beforeQty: number,
+  beforeCost: number,
+  receivedQty: number,
+  receivedValue: number,
+): number {
+  if (
+    ![beforeQty, beforeCost, receivedQty, receivedValue].every(Number.isFinite) ||
+    beforeCost < 0 ||
+    receivedQty <= 0 ||
+    receivedValue < 0
+  ) {
     throw new Error('Invalid inventory valuation inputs');
   }
   const afterQty = beforeQty + receivedQty;
@@ -116,8 +126,18 @@ export function weightedReceiptCost(beforeQty: number, beforeCost: number, recei
  *   reprice the remaining pool UP to the returned cost: the return
  *   must not mint unit cost the pool never held.
  */
-export function weightedReturnCost(beforeQty: number, beforeCost: number, returnedQty: number, returnedValue: number): number {
-  if (![beforeQty, beforeCost, returnedQty, returnedValue].every(Number.isFinite) || beforeCost < 0 || returnedQty <= 0 || returnedValue < 0) {
+export function weightedReturnCost(
+  beforeQty: number,
+  beforeCost: number,
+  returnedQty: number,
+  returnedValue: number,
+): number {
+  if (
+    ![beforeQty, beforeCost, returnedQty, returnedValue].every(Number.isFinite) ||
+    beforeCost < 0 ||
+    returnedQty <= 0 ||
+    returnedValue < 0
+  ) {
     throw new Error('Invalid inventory return valuation inputs');
   }
   const afterQty = beforeQty - returnedQty;

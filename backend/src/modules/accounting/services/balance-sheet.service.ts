@@ -234,23 +234,55 @@ export class BalanceSheetService {
     compareCurrentPeriodNetProfit = this.toMoney(compareCurrentPeriodNetProfit, digits);
 
     // Build sections with totals
-    const currentAssetsSec = this.createSection('الأصول المتداولة', 'Current Assets', currentAssetsRows, hasCompare, digits);
-    const nonCurrentAssetsSec = this.createSection('الأصول غير المتداولة', 'Non-Current Assets', nonCurrentAssetsRows, hasCompare, digits);
+    const currentAssetsSec = this.createSection(
+      'الأصول المتداولة',
+      'Current Assets',
+      currentAssetsRows,
+      hasCompare,
+      digits,
+    );
+    const nonCurrentAssetsSec = this.createSection(
+      'الأصول غير المتداولة',
+      'Non-Current Assets',
+      nonCurrentAssetsRows,
+      hasCompare,
+      digits,
+    );
     const totalAssets = this.toMoney(currentAssetsSec.total + nonCurrentAssetsSec.total, digits);
-    const compareTotalAssets = hasCompare ? this.toMoney((currentAssetsSec.compareTotal || 0) + (nonCurrentAssetsSec.compareTotal || 0), digits) : undefined;
+    const compareTotalAssets = hasCompare
+      ? this.toMoney((currentAssetsSec.compareTotal || 0) + (nonCurrentAssetsSec.compareTotal || 0), digits)
+      : undefined;
 
-    const currentLiabilitiesSec = this.createSection('الالتزامات المتداولة', 'Current Liabilities', currentLiabilitiesRows, hasCompare, digits);
-    const nonCurrentLiabilitiesSec = this.createSection('الالتزامات غير المتداولة', 'Non-Current Liabilities', nonCurrentLiabilitiesRows, hasCompare, digits);
+    const currentLiabilitiesSec = this.createSection(
+      'الالتزامات المتداولة',
+      'Current Liabilities',
+      currentLiabilitiesRows,
+      hasCompare,
+      digits,
+    );
+    const nonCurrentLiabilitiesSec = this.createSection(
+      'الالتزامات غير المتداولة',
+      'Non-Current Liabilities',
+      nonCurrentLiabilitiesRows,
+      hasCompare,
+      digits,
+    );
     const totalLiabilities = this.toMoney(currentLiabilitiesSec.total + nonCurrentLiabilitiesSec.total, digits);
-    const compareTotalLiabilities = hasCompare ? this.toMoney((currentLiabilitiesSec.compareTotal || 0) + (nonCurrentLiabilitiesSec.compareTotal || 0), digits) : undefined;
+    const compareTotalLiabilities = hasCompare
+      ? this.toMoney((currentLiabilitiesSec.compareTotal || 0) + (nonCurrentLiabilitiesSec.compareTotal || 0), digits)
+      : undefined;
 
     const equitySec = this.createSection('حقوق الملكية', 'Equity', equityRows, hasCompare, digits);
     // Add current period profit to equity
     const totalEquity = this.toMoney(equitySec.total + currentPeriodNetProfit, digits);
-    const compareTotalEquity = hasCompare ? this.toMoney((equitySec.compareTotal || 0) + compareCurrentPeriodNetProfit, digits) : undefined;
+    const compareTotalEquity = hasCompare
+      ? this.toMoney((equitySec.compareTotal || 0) + compareCurrentPeriodNetProfit, digits)
+      : undefined;
 
     const totalLiabilitiesAndEquity = this.toMoney(totalLiabilities + totalEquity, digits);
-    const compareTotalLiabilitiesAndEquity = hasCompare ? this.toMoney((compareTotalLiabilities || 0) + (compareTotalEquity || 0), digits) : undefined;
+    const compareTotalLiabilitiesAndEquity = hasCompare
+      ? this.toMoney((compareTotalLiabilities || 0) + (compareTotalEquity || 0), digits)
+      : undefined;
 
     const difference = this.toMoney(totalAssets - totalLiabilitiesAndEquity, digits);
     const isBalanced = Math.abs(difference) <= 5 * unit;
@@ -284,7 +316,12 @@ export class BalanceSheetService {
     };
   }
 
-  private createAccountRow(acc: any, amount: number, compareAmount: number | undefined, digits: MoneyDigits): BalanceSheetAccountRow {
+  private createAccountRow(
+    acc: any,
+    amount: number,
+    compareAmount: number | undefined,
+    digits: MoneyDigits,
+  ): BalanceSheetAccountRow {
     let varianceAmount: number | undefined;
     let variancePercent: number | undefined;
 
@@ -311,14 +348,26 @@ export class BalanceSheetService {
     };
   }
 
-  private createSection(titleAr: string, titleEn: string, rows: BalanceSheetAccountRow[], hasCompare: boolean, digits: MoneyDigits): BalanceSheetSection {
-    const total = this.toMoney(rows.reduce((sum, r) => sum + r.amount, 0), digits);
+  private createSection(
+    titleAr: string,
+    titleEn: string,
+    rows: BalanceSheetAccountRow[],
+    hasCompare: boolean,
+    digits: MoneyDigits,
+  ): BalanceSheetSection {
+    const total = this.toMoney(
+      rows.reduce((sum, r) => sum + r.amount, 0),
+      digits,
+    );
     let compareTotal: number | undefined;
     let varianceAmount: number | undefined;
     let variancePercent: number | undefined;
 
     if (hasCompare) {
-      compareTotal = this.toMoney(rows.reduce((sum, r) => sum + (r.compareAmount || 0), 0), digits);
+      compareTotal = this.toMoney(
+        rows.reduce((sum, r) => sum + (r.compareAmount || 0), 0),
+        digits,
+      );
       varianceAmount = this.toMoney(total - compareTotal, digits);
       if (compareTotal !== 0) {
         variancePercent = this.toMoney((varianceAmount / Math.abs(compareTotal)) * 100, digits);

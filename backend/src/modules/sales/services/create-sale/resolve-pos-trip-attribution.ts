@@ -44,24 +44,27 @@ export async function resolvePosTripAttribution(
     repId = explicitRepId;
   } else {
     const linkValues = [String(auth.username || '').trim()].filter((value) => value.length > 0);
-    const actingUser = await dbConn.selectFrom('users').selectAll()
-      .where('id', '=', Number(auth.userId)).executeTakeFirst();
+    const actingUser = await dbConn
+      .selectFrom('users')
+      .selectAll()
+      .where('id', '=', Number(auth.userId))
+      .executeTakeFirst();
     for (const value of [actingUser?.phone, actingUser?.username]) {
       const trimmed = String(value || '').trim();
       if (trimmed.length > 0 && !linkValues.includes(trimmed)) linkValues.push(trimmed);
     }
-    const repRows = await dbConn.selectFrom('delivery_representatives').selectAll()
-      .where('tenant_id', '=', tenantId).execute();
+    const repRows = await dbConn
+      .selectFrom('delivery_representatives')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .execute();
     const repLink = repRows.find((row) => linkValues.includes(String(row.phone || '').trim()));
     if (!repLink) return null;
     repId = Number(repLink.id);
   }
   if (!repId || repId <= 0) return null;
-  const tripRows = await dbConn.selectFrom('van_sales_trips').selectAll()
-    .where('tenant_id', '=', tenantId).execute();
-  const openTrips = tripRows.filter(
-    (row) => Number(row.rep_id) === repId && String(row.status || '') === 'open',
-  );
+  const tripRows = await dbConn.selectFrom('van_sales_trips').selectAll().where('tenant_id', '=', tenantId).execute();
+  const openTrips = tripRows.filter((row) => Number(row.rep_id) === repId && String(row.status || '') === 'open');
   if (openTrips.length === 0) return null;
   const latest = openTrips.reduce((best, row) => (Number(row.id) > Number(best.id) ? row : best));
   return { repId, tripId: Number(latest.id) };

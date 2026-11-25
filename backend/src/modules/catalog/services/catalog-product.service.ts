@@ -46,11 +46,14 @@ export class CatalogProductService {
   private readonly writeService: CatalogProductWriteService;
   private readonly fashionService: CatalogProductFashionService;
 
-  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>, private readonly audit: AuditService,
+  constructor(
+    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
+    private readonly audit: AuditService,
     private readonly inventoryScope: InventoryScopeService,
     @Optional() private readonly accountingPosting?: AccountingPostingService,
     @Optional() private readonly accountingFoundation?: AccountingTenantFoundationService,
-    @Optional() private readonly mediaService?: StorefrontMediaService) {
+    @Optional() private readonly mediaService?: StorefrontMediaService,
+  ) {
     this.postingService = new CatalogProductPostingService({
       db: this.db,
       accountingPosting: this.accountingPosting,
@@ -156,8 +159,14 @@ export class CatalogProductService {
     return this.postingService.bookDigits(executor, actor);
   }
 
-  private async postOpeningStock(trx: ProductWriteExecutor, productId: number, qty: number, unitCost: number,
-    locationId: number | null, actor: AuthContext): Promise<void> {
+  private async postOpeningStock(
+    trx: ProductWriteExecutor,
+    productId: number,
+    qty: number,
+    unitCost: number,
+    locationId: number | null,
+    actor: AuthContext,
+  ): Promise<void> {
     return this.postingService.postOpeningStock(trx, productId, qty, unitCost, locationId, actor);
   }
 
@@ -168,7 +177,12 @@ export class CatalogProductService {
   private canViewCostPrice(actor: AuthContext): boolean {
     if (actor.role === 'super_admin' || actor.role === 'admin') return true;
     const perms = actor.permissions || [];
-    return perms.includes('canViewProfit') || perms.includes('purchases') || perms.includes('inventory') || perms.includes('canViewCost');
+    return (
+      perms.includes('canViewProfit') ||
+      perms.includes('purchases') ||
+      perms.includes('inventory') ||
+      perms.includes('canViewCost')
+    );
   }
 
   private hasPermission(actor: AuthContext, permission: string): boolean {
@@ -209,7 +223,10 @@ export class CatalogProductService {
     return this.offersService.getProductOfferColumnCapabilities();
   }
 
-  private ensureAdvancedOffersSupported(payload: NormalizedUpsertProduct, capabilities: ProductOfferColumnCapabilities): void {
+  private ensureAdvancedOffersSupported(
+    payload: NormalizedUpsertProduct,
+    capabilities: ProductOfferColumnCapabilities,
+  ): void {
     this.offersService.ensureAdvancedOffersSupported(payload, capabilities);
   }
 
@@ -239,10 +256,11 @@ export class CatalogProductService {
     return this.listService.listProducts(query, actor);
   }
 
-  async getPosCatalogVersion(actor: AuthContext): Promise<{ version: string; totalCount: number; lastUpdatedAt: string }> {
+  async getPosCatalogVersion(
+    actor: AuthContext,
+  ): Promise<{ version: string; totalCount: number; lastUpdatedAt: string }> {
     return this.posService.getPosCatalogVersion(actor);
   }
-
 
   async listPosProducts(query: Record<string, unknown>, actor: AuthContext): Promise<Record<string, unknown>> {
     return this.posService.listPosProducts(query, actor);
@@ -252,7 +270,8 @@ export class CatalogProductService {
     const text = String(name || '').trim();
     if (!text) return 'قطعة';
     const lower = text.toLowerCase();
-    if (['piece', 'pieces', 'pcs', 'pc', 'item', 'items', 'unit', 'units', 'قطعه', 'حبة', 'حبه'].includes(lower)) return 'قطعة';
+    if (['piece', 'pieces', 'pcs', 'pc', 'item', 'items', 'unit', 'units', 'قطعه', 'حبة', 'حبه'].includes(lower))
+      return 'قطعة';
     if (lower === 'kg' || lower === 'كجم' || lower === 'كيلو' || lower === 'كيلوجرام') return 'kg';
     if (lower === 'g' || lower === 'gm' || lower === 'gram' || lower === 'جرام') return 'g';
     if (['box', 'boxes', 'carton', 'cartons', 'كرتونه'].includes(lower)) return 'كرتونة';
@@ -269,7 +288,13 @@ export class CatalogProductService {
     return this.posService.mapOffersByProduct(offers);
   }
 
-  private async resolveScopedStockByProduct(productIds: number[], eligibleLocationIds: number[], products: Array<Pick<ProductRow, 'id' | 'stock_qty'>>, actor: AuthContext, isFullCatalog = false): Promise<{ stock: Map<string, number>, locations: Map<string, number[]> }> {
+  private async resolveScopedStockByProduct(
+    productIds: number[],
+    eligibleLocationIds: number[],
+    products: Array<Pick<ProductRow, 'id' | 'stock_qty'>>,
+    actor: AuthContext,
+    isFullCatalog = false,
+  ): Promise<{ stock: Map<string, number>; locations: Map<string, number[]> }> {
     return this.posService.resolveScopedStockByProduct(productIds, eligibleLocationIds, products, actor, isFullCatalog);
   }
 
@@ -296,15 +321,17 @@ export class CatalogProductService {
     return this.listService.mapListProducts(pagedBaseRows, context);
   }
 
-  private getListProductStock(product: Pick<ProductRow, 'id' | 'stock_qty'>, scopedLocationId: number | null, scopedStockByProduct: Map<string, number>) {
+  private getListProductStock(
+    product: Pick<ProductRow, 'id' | 'stock_qty'>,
+    scopedLocationId: number | null,
+    scopedStockByProduct: Map<string, number>,
+  ) {
     if (!scopedLocationId) return Number(product.stock_qty || 0);
     return Number(scopedStockByProduct.get(String(product.id)) || 0);
   }
   private normalizeProductPayload(payload: UpsertProductDto): NormalizedUpsertProduct {
     return this.writeService.normalizeProductPayload(payload);
   }
-
-
 
   private async ensureCategoryAndSupplierInTenant(payload: NormalizedUpsertProduct, actor: AuthContext): Promise<void> {
     return this.writeService.ensureCategoryAndSupplierInTenant(payload, actor);
@@ -314,12 +341,20 @@ export class CatalogProductService {
     return this.writeService.ensureCustomerPricesInTenant(payload, actor);
   }
 
-  private async replaceProductRelations(db: ProductWriteExecutor, productId: number, payload: NormalizedUpsertProduct, actor: AuthContext): Promise<void> {
+  private async replaceProductRelations(
+    db: ProductWriteExecutor,
+    productId: number,
+    payload: NormalizedUpsertProduct,
+    actor: AuthContext,
+  ): Promise<void> {
     return this.writeService.replaceProductRelations(db, productId, payload, actor);
   }
 
-
-  async saveFashionGroup(oldStyleCode: string, payload: SaveFashionGroupDto, actor: AuthContext): Promise<{ ok: boolean; updated: number; created: number; archived: number }> {
+  async saveFashionGroup(
+    oldStyleCode: string,
+    payload: SaveFashionGroupDto,
+    actor: AuthContext,
+  ): Promise<{ ok: boolean; updated: number; created: number; archived: number }> {
     return this.fashionService.saveFashionGroup(oldStyleCode, payload, actor);
   }
 
@@ -347,7 +382,10 @@ export class CatalogProductService {
     return this.archiveService.getProduct(id, actor);
   }
 
-  async bulkUpdateIcons(updates: Array<{ id: number; icon: string }>, actor: AuthContext): Promise<{ ok: boolean; updated: number }> {
+  async bulkUpdateIcons(
+    updates: Array<{ id: number; icon: string }>,
+    actor: AuthContext,
+  ): Promise<{ ok: boolean; updated: number }> {
     return this.archiveService.bulkUpdateIcons(updates, actor);
   }
 }

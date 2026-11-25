@@ -77,7 +77,9 @@ export class ZatcaPhase2Service {
    * Synchronous ZATCA package builder from pre-assembled ZatcaInvoiceData
    * Used by tests and direct invoice processing without DB round-trip
    */
-  generateZatcaPackage(data: ZatcaInvoiceData): Omit<ZatcaPhase2Result, 'icv' | 'previousHash'> & { icv: number; previousHash: string } {
+  generateZatcaPackage(
+    data: ZatcaInvoiceData,
+  ): Omit<ZatcaPhase2Result, 'icv' | 'previousHash'> & { icv: number; previousHash: string } {
     const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', {
       namedCurve: 'prime256v1',
       publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -117,7 +119,7 @@ export class ZatcaPhase2Service {
    */
   async buildZatcaInvoice(tenantId: string, saleId: number, egsId?: string | number): Promise<ZatcaPhase2Result> {
     const settings = await this.taxSettings.getSettings(tenantId, 'ZATCA_SAUDI');
-    
+
     return await this.db.transaction().execute(async (trx) => {
       const sale = await trx
         .selectFrom('sales')
@@ -155,20 +157,29 @@ export class ZatcaPhase2Service {
             .selectAll()
             .where('id', '=', String(selectedEgsId))
             .where('tenant_id', '=', tenantId)
-            .where((eb) => sale.branch_id == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', Number(sale.branch_id)))
+            .where((eb) =>
+              sale.branch_id == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', Number(sale.branch_id)),
+            )
             .forUpdate()
             .executeTakeFirst()
         : await trx
             .selectFrom('zatca_egs_units')
             .selectAll()
             .where('tenant_id', '=', tenantId)
-            .where((eb) => sale.branch_id == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', Number(sale.branch_id)))
-            .where((eb) => eb.or([
-              eb('status', '=', 'production_active'),
-              eb('status', '=', 'compliance_passed'),
-              eb('status', '=', 'unregistered'),
-            ]))
-            .orderBy(sql<number>`CASE status WHEN 'production_active' THEN 0 WHEN 'compliance_passed' THEN 1 ELSE 2 END`, 'asc')
+            .where((eb) =>
+              sale.branch_id == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', Number(sale.branch_id)),
+            )
+            .where((eb) =>
+              eb.or([
+                eb('status', '=', 'production_active'),
+                eb('status', '=', 'compliance_passed'),
+                eb('status', '=', 'unregistered'),
+              ]),
+            )
+            .orderBy(
+              sql<number>`CASE status WHEN 'production_active' THEN 0 WHEN 'compliance_passed' THEN 1 ELSE 2 END`,
+              'asc',
+            )
             .orderBy('id', 'asc')
             .forUpdate()
             .executeTakeFirst();
@@ -187,12 +198,21 @@ export class ZatcaPhase2Service {
         // A missing row cannot be FOR UPDATE locked. Serialize bootstrap on the
         // tenant row, then recheck the device before creating the first unit.
         await trx.selectFrom('tenants').select('id').where('id', '=', tenantId).forUpdate().executeTakeFirstOrThrow();
-        egs = await trx.selectFrom('zatca_egs_units').selectAll()
+        egs = await trx
+          .selectFrom('zatca_egs_units')
+          .selectAll()
           .where('tenant_id', '=', tenantId)
-          .where((eb) => sale.branch_id == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', Number(sale.branch_id)))
+          .where((eb) =>
+            sale.branch_id == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', Number(sale.branch_id)),
+          )
           .where('status', 'in', ['production_active', 'compliance_passed', 'unregistered'])
-          .orderBy(sql<number>`CASE status WHEN 'production_active' THEN 0 WHEN 'compliance_passed' THEN 1 ELSE 2 END`, 'asc')
-          .orderBy('id', 'asc').forUpdate().executeTakeFirst();
+          .orderBy(
+            sql<number>`CASE status WHEN 'production_active' THEN 0 WHEN 'compliance_passed' THEN 1 ELSE 2 END`,
+            'asc',
+          )
+          .orderBy('id', 'asc')
+          .forUpdate()
+          .executeTakeFirst();
       }
       if (!egs) {
         const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', {
@@ -225,7 +245,8 @@ export class ZatcaPhase2Service {
             status: 'unregistered',
             environment: settings?.environment === 'production' ? 'production' : 'sandbox',
             last_icv: 0,
-            last_invoice_hash: 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMjRiMWUxMDhkNDQ3ZjhlNzY1ZmVhNGU3NDkyNDQ1NQ==',
+            last_invoice_hash:
+              'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMjRiMWUxMDhkNDQ3ZjhlNzY1ZmVhNGU3NDkyNDQ1NQ==',
           })
           .returningAll()
           .executeTakeFirstOrThrow();
@@ -238,7 +259,9 @@ export class ZatcaPhase2Service {
 
       if (sale.zatca_icv != null || sale.zatca_hash || sale.zatca_uuid) {
         if (!sale.zatca_icv || !sale.zatca_hash || !sale.zatca_uuid || !sale.zatca_ubl_xml || !sale.zatca_qr) {
-          throw new BadRequestException('بيانات الفاتورة الإلكترونية السابقة غير مكتملة؛ يجب تسويتها قبل إعادة الإرسال');
+          throw new BadRequestException(
+            'بيانات الفاتورة الإلكترونية السابقة غير مكتملة؛ يجب تسويتها قبل إعادة الإرسال',
+          );
         }
         if (sale.zatca_egs_id && Number(sale.zatca_egs_id) !== Number(egs.id)) {
           throw new BadRequestException('الفاتورة موقعة بوحدة EGS مختلفة؛ أعد الإرسال بنفس الوحدة');
@@ -247,16 +270,22 @@ export class ZatcaPhase2Service {
           throw new BadRequestException('الفاتورة مرتبطة بوحدة EGS مختلفة');
         }
         const savedQrFields = this.readTlvQr(sale.zatca_qr);
-        if (savedQrFields.get(6) !== sale.zatca_hash || savedQrFields.get(8) !== egs.public_key_pem
-          || !savedQrFields.get(7)) {
+        if (
+          savedQrFields.get(6) !== sale.zatca_hash ||
+          savedQrFields.get(8) !== egs.public_key_pem ||
+          !savedQrFields.get(7)
+        ) {
           throw new BadRequestException('توقيع الفاتورة الإلكترونية المحفوظ لا يطابق وحدة EGS أو الهاش');
         }
         return {
-          ublXml: sale.zatca_ubl_xml, invoiceHash: sale.zatca_hash,
+          ublXml: sale.zatca_ubl_xml,
+          invoiceHash: sale.zatca_hash,
           qrCodeBase64: sale.zatca_qr,
           digitalSignature: savedQrFields.get(7)!,
-          publicKey: egs.public_key_pem, uuid: sale.zatca_uuid,
-          icv: Number(sale.zatca_icv), previousHash: sale.zatca_prev_hash || '',
+          publicKey: egs.public_key_pem,
+          uuid: sale.zatca_uuid,
+          icv: Number(sale.zatca_icv),
+          previousHash: sale.zatca_prev_hash || '',
         };
       }
 
@@ -265,7 +294,9 @@ export class ZatcaPhase2Service {
         throw new BadRequestException('عداد فواتير وحدة EGS غير صالح');
       }
       const nextIcv = lastIcv + 1;
-      const previousInvoiceHash = egs.last_invoice_hash || 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMjRiMWUxMDhkNDQ3ZjhlNzY1ZmVhNGU3NDkyNDQ1NQ==';
+      const previousInvoiceHash =
+        egs.last_invoice_hash ||
+        'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMjRiMWUxMDhkNDQ3ZjhlNzY1ZmVhNGU3NDkyNDQ1NQ==';
       const invoiceUuid = crypto.randomUUID();
 
       const saleDate = new Date(sale.created_at || Date.now());
@@ -470,7 +501,9 @@ export class ZatcaPhase2Service {
     // the stated attested rate, never re-derived from the first line.
     const documentVatRate = data.documentVatRate;
 
-    const linesXml = data.lineItems.map(item => `
+    const linesXml = data.lineItems
+      .map(
+        (item) => `
     <cac:InvoiceLine>
         <cbc:ID>${item.id}</cbc:ID>
         <cbc:InvoicedQuantity unitCode="PCE">${item.quantity}</cbc:InvoicedQuantity>
@@ -503,7 +536,9 @@ export class ZatcaPhase2Service {
         <cac:Price>
             <cbc:PriceAmount currencyID="SAR">${item.unitPrice.toFixed(2)}</cbc:PriceAmount>
         </cac:Price>
-    </cac:InvoiceLine>`).join('\n');
+    </cac:InvoiceLine>`,
+      )
+      .join('\n');
 
     return `<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"

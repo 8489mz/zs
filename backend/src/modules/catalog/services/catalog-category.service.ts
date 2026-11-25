@@ -10,7 +10,10 @@ import { UpsertCategoryDto } from '../dto/upsert-category.dto';
 
 @Injectable()
 export class CatalogCategoryService {
-  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>, private readonly audit: AuditService) {}
+  constructor(
+    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
+    private readonly audit: AuditService,
+  ) {}
 
   private tenantId(actor: AuthContext): string {
     return requireTenantScope(actor).tenantId;
@@ -27,26 +30,25 @@ export class CatalogCategoryService {
   async listCategories(actor: AuthContext): Promise<Record<string, unknown>> {
     const categories = await this.db
       .selectFrom('product_categories')
-      .leftJoin('products', (join) => 
-        join.onRef('products.category_id', '=', 'product_categories.id')
-            .on('products.is_active', '=', true)
+      .leftJoin('products', (join) =>
+        join.onRef('products.category_id', '=', 'product_categories.id').on('products.is_active', '=', true),
       )
       .select([
-        'product_categories.id', 
+        'product_categories.id',
         'product_categories.name',
-        (eb) => eb.fn.count<number>('products.id').as('productCount')
+        (eb) => eb.fn.count<number>('products.id').as('productCount'),
       ])
       .where('product_categories.is_active', '=', true)
       .where(sql<boolean>`product_categories.tenant_id = ${this.tenantId(actor)}`)
       .groupBy(['product_categories.id', 'product_categories.name'])
       .orderBy('product_categories.id', 'asc')
       .execute();
-    return { 
-      categories: categories.map((entry) => ({ 
-        id: String(entry.id), 
+    return {
+      categories: categories.map((entry) => ({
+        id: String(entry.id),
         name: entry.name,
-        productCount: Number(entry.productCount || 0)
-      })) 
+        productCount: Number(entry.productCount || 0),
+      })),
     };
   }
 
@@ -120,7 +122,7 @@ export class CatalogCategoryService {
 
   async transferProducts(id: number, toCategoryId: number, actor: AuthContext): Promise<Record<string, unknown>> {
     if (id === toCategoryId) throw new AppError('Cannot transfer to the same category', 'INVALID_TARGET_CATEGORY', 400);
-    
+
     const targetCategory = await this.db
       .selectFrom('product_categories')
       .select('id')
@@ -128,7 +130,7 @@ export class CatalogCategoryService {
       .where('is_active', '=', true)
       .where(this.tenantPredicate(actor))
       .executeTakeFirst();
-      
+
     if (!targetCategory) throw new AppError('Target category not found', 'TARGET_CATEGORY_NOT_FOUND', 404);
 
     await this.db
@@ -137,8 +139,12 @@ export class CatalogCategoryService {
       .where('category_id', '=', id)
       .where(sql<boolean>`tenant_id = ${this.tenantId(actor)}`)
       .execute();
-      
-    await this.audit.log('نقل أصناف', `تم نقل الأصناف من تصنيف #${id} إلى تصنيف #${toCategoryId} بواسطة ${actor.username}`, actor);
+
+    await this.audit.log(
+      'نقل أصناف',
+      `تم نقل الأصناف من تصنيف #${id} إلى تصنيف #${toCategoryId} بواسطة ${actor.username}`,
+      actor,
+    );
     return { ok: true, ...(await this.listCategories(actor)) };
   }
 }

@@ -1,5 +1,19 @@
 import { Transform, Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min, Validate, ValidateNested, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+  Validate,
+  ValidateNested,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+} from 'class-validator';
 
 export class SalePaymentDto {
   @IsIn(['cash', 'card', 'wallet', 'instapay'])
@@ -423,7 +437,21 @@ export type NormalizedSalePayload = {
   branchId: number | null;
   locationId: number | null;
   source: 'pos' | 'dashboard';
-  items: Array<{ productId: number; qty: number; price: number; originalPrice?: number; offerDiscount?: number; lineDiscount?: number; offerName?: string; unitName: string; unitMultiplier: number; priceType: 'retail' | 'wholesale' | 'half_wholesale' | 'credit'; notes: string; modifiers: any; serials?: string[] }>;
+  items: Array<{
+    productId: number;
+    qty: number;
+    price: number;
+    originalPrice?: number;
+    offerDiscount?: number;
+    lineDiscount?: number;
+    offerName?: string;
+    unitName: string;
+    unitMultiplier: number;
+    priceType: 'retail' | 'wholesale' | 'half_wholesale' | 'credit';
+    notes: string;
+    modifiers: any;
+    serials?: string[];
+  }>;
   payments: Array<{ paymentChannel: 'cash' | 'card' | 'wallet' | 'instapay'; amount: number }>;
   tenderedAmount: number;
   tableNumber: string | null;

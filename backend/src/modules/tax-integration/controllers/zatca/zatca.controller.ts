@@ -5,7 +5,11 @@ import { PermissionsGuard } from '../../../../core/auth/guards/permissions.guard
 import { RequirePermissions } from '../../../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../../../core/auth/interfaces/request-with-auth.interface';
 import { ZatcaPhase2Service } from '../../services/zatca/zatca-phase2.service';
-import { ZatcaOnboardingService, CreateEgsUnitDto, RequestComplianceDto } from '../../services/zatca/zatca-onboarding.service';
+import {
+  ZatcaOnboardingService,
+  CreateEgsUnitDto,
+  RequestComplianceDto,
+} from '../../services/zatca/zatca-onboarding.service';
 import { ZatcaSubmissionService } from '../../services/zatca/zatca-submission.service';
 
 @Controller('api/tax-integration/zatca')
@@ -125,4 +129,3 @@ export class ZatcaController {
     return this.zatcaOnboarding.requestProductionCsid(tenantId, id);
   }
 }
-

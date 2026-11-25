@@ -6,15 +6,26 @@ import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary'
 import { getLocationAvailability } from '../../../../common/utils/location-stock-ledger';
 
 export class SalesOrdersReads {
-  constructor(private readonly db: Kysely<Database>, private readonly bound: { resolveStoredOrderLocation: (order: { warehouse_location_id?: number | null; branch_id?: number | null }, scope: { tenantId: string; accountId: string }) => Promise<number | null> }) {}
+  constructor(
+    private readonly db: Kysely<Database>,
+    private readonly bound: {
+      resolveStoredOrderLocation: (
+        order: { warehouse_location_id?: number | null; branch_id?: number | null },
+        scope: { tenantId: string; accountId: string },
+      ) => Promise<number | null>;
+    },
+  ) {}
 
-  private resolveStoredOrderLocation(order: { warehouse_location_id?: number | null; branch_id?: number | null }, scope: { tenantId: string; accountId: string }): Promise<number | null> {
+  private resolveStoredOrderLocation(
+    order: { warehouse_location_id?: number | null; branch_id?: number | null },
+    scope: { tenantId: string; accountId: string },
+  ): Promise<number | null> {
     return this.bound.resolveStoredOrderLocation(order, scope);
   }
 
   async listOrders(
     auth: AuthContext,
-    query?: { status?: string; search?: string; limit?: number; offset?: number }
+    query?: { status?: string; search?: string; limit?: number; offset?: number },
   ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     let qb = this.db

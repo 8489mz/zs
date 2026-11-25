@@ -61,7 +61,9 @@ export class CatalogProductOffersService {
   }
 
   ensureAdvancedOffersSupported(payload: NormalizedUpsertProduct, capabilities: ProductOfferColumnCapabilities): void {
-    const requiresAdvancedOfferSchema = payload.offers.some((offer) => offer.type === 'price' || Number(offer.minQty || 1) > 1);
+    const requiresAdvancedOfferSchema = payload.offers.some(
+      (offer) => offer.type === 'price' || Number(offer.minQty || 1) > 1,
+    );
     if (requiresAdvancedOfferSchema && !capabilities.hasMinQty) {
       throw new AppError(
         'Advanced product offers require the latest database migration. Run backend migrations first, then retry saving offers.',

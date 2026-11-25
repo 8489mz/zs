@@ -53,11 +53,7 @@ function resolvePercent(value: unknown): number {
   }
   const rate = Number(value);
   if (!Number.isFinite(rate) || rate < 0 || rate > MAX_RATE_PERCENT) {
-    throw new AppError(
-      'نسبة رسم الخدمة غير صالحة: يجب أن تكون رقماً بين 0 و100',
-      'TABLE_BILL_RATE_INVALID',
-      400,
-    );
+    throw new AppError('نسبة رسم الخدمة غير صالحة: يجب أن تكون رقماً بين 0 و100', 'TABLE_BILL_RATE_INVALID', 400);
   }
   return rate;
 }

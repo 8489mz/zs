@@ -9,8 +9,11 @@ export function assertGrnRequestedLocationScope(
   requestedLocationId: number,
   resolved: { id: number } | null | undefined,
 ): void {
-  if (requestedLocationId > 0 &&
-    (!resolved || Number(resolved.id) !== requestedLocationId)) {
-    throw new AppError('مخزن الاستلام المحدد غير موجود أو لا يتبع المنشأة؛ راجع اختيار المخزن', 'GRN_LOCATION_NOT_FOUND', 404);
+  if (requestedLocationId > 0 && (!resolved || Number(resolved.id) !== requestedLocationId)) {
+    throw new AppError(
+      'مخزن الاستلام المحدد غير موجود أو لا يتبع المنشأة؛ راجع اختيار المخزن',
+      'GRN_LOCATION_NOT_FOUND',
+      404,
+    );
   }
 }

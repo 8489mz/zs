@@ -5,10 +5,19 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
-import { filterPurchases, mapPurchaseRows, paginatePurchases, summarizePurchases } from '../helpers/purchases-query.helper';
+import {
+  filterPurchases,
+  mapPurchaseRows,
+  paginatePurchases,
+  summarizePurchases,
+} from '../helpers/purchases-query.helper';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
-import { detectDuplicateBills, type DuplicateBillCheckResult, type HistoricalPurchaseRecord } from '../engines/duplicate-bill-detector.engine';
+import {
+  detectDuplicateBills,
+  type DuplicateBillCheckResult,
+  type HistoricalPurchaseRecord,
+} from '../engines/duplicate-bill-detector.engine';
 
 @Injectable()
 export class PurchasesQueryService {
@@ -25,12 +34,41 @@ export class PurchasesQueryService {
       .selectFrom('purchases as p')
       .leftJoin('suppliers as s', (j) => j.onRef('s.id', '=', 'p.supplier_id').onRef('s.tenant_id', '=', 'p.tenant_id'))
       .leftJoin('branches as b', (j) => j.onRef('b.id', '=', 'p.branch_id').onRef('b.tenant_id', '=', 'p.tenant_id'))
-      .leftJoin('stock_locations as l', (j) => j.onRef('l.id', '=', 'p.location_id').onRef('l.tenant_id', '=', 'p.tenant_id'))
+      .leftJoin('stock_locations as l', (j) =>
+        j.onRef('l.id', '=', 'p.location_id').onRef('l.tenant_id', '=', 'p.tenant_id'),
+      )
       .leftJoin('users as u', (j) => j.onRef('u.id', '=', 'p.created_by').onRef('u.tenant_id', '=', 'p.tenant_id'))
       .select([
-        'p.id', 'p.doc_no', 'p.supplier_id', 's.name as supplier_name', 'p.payment_type', 'p.subtotal', 'p.discount', 'p.tax_rate', 'p.tax_amount',
-        'p.prices_include_tax', 'p.total', 'p.note', 'p.status', 'p.lifecycle_status', 'p.matched_status', 'p.branch_id', 'p.location_id', 'p.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name',
-        'p.required_date', 'p.currency', 'p.company_name', 'p.contact_id', 'p.shipping_address_id', 'p.cost_center_id', 'p.project_id', 'p.import_project_id', 'p.terms_template'
+        'p.id',
+        'p.doc_no',
+        'p.supplier_id',
+        's.name as supplier_name',
+        'p.payment_type',
+        'p.subtotal',
+        'p.discount',
+        'p.tax_rate',
+        'p.tax_amount',
+        'p.prices_include_tax',
+        'p.total',
+        'p.note',
+        'p.status',
+        'p.lifecycle_status',
+        'p.matched_status',
+        'p.branch_id',
+        'p.location_id',
+        'p.created_at',
+        'b.name as branch_name',
+        'l.name as location_name',
+        'u.username as created_by_name',
+        'p.required_date',
+        'p.currency',
+        'p.company_name',
+        'p.contact_id',
+        'p.shipping_address_id',
+        'p.cost_center_id',
+        'p.project_id',
+        'p.import_project_id',
+        'p.terms_template',
       ])
       .where(this.tenantPredicate(auth, 'p'))
       .orderBy('p.id', 'desc')
@@ -38,25 +76,44 @@ export class PurchasesQueryService {
       .execute();
 
     const purchaseIds = purchases.map((row) => Number(row.id || 0)).filter((id) => id > 0);
-    const items = purchaseIds.length ? await this.db
-      .selectFrom('purchase_items')
-      .select(['id', 'purchase_id', 'product_id', 'product_name', 'qty', 'received_qty', 'unit_cost', 'line_total', 'unit_name', 'unit_multiplier'])
-      .where('purchase_id', 'in', purchaseIds)
-      .where(this.tenantPredicate(auth))
-      .orderBy('purchase_id', 'asc')
-      .orderBy('id', 'asc')
-      .execute() : [];
+    const items = purchaseIds.length
+      ? await this.db
+          .selectFrom('purchase_items')
+          .select([
+            'id',
+            'purchase_id',
+            'product_id',
+            'product_name',
+            'qty',
+            'received_qty',
+            'unit_cost',
+            'line_total',
+            'unit_name',
+            'unit_multiplier',
+          ])
+          .where('purchase_id', 'in', purchaseIds)
+          .where(this.tenantPredicate(auth))
+          .orderBy('purchase_id', 'asc')
+          .orderBy('id', 'asc')
+          .execute()
+      : [];
 
-    const attachments = purchaseIds.length ? await this.db
-      .selectFrom('purchase_attachments')
-      .select(['id', 'purchase_id', 'file_name', 'file_url', 'file_type', 'file_size'])
-      .where('purchase_id', 'in', purchaseIds)
-      .where(this.tenantPredicate(auth))
-      .orderBy('purchase_id', 'asc')
-      .orderBy('id', 'asc')
-      .execute() : [];
+    const attachments = purchaseIds.length
+      ? await this.db
+          .selectFrom('purchase_attachments')
+          .select(['id', 'purchase_id', 'file_name', 'file_url', 'file_type', 'file_size'])
+          .where('purchase_id', 'in', purchaseIds)
+          .where(this.tenantPredicate(auth))
+          .orderBy('purchase_id', 'asc')
+          .orderBy('id', 'asc')
+          .execute()
+      : [];
 
-    return mapPurchaseRows(purchases as unknown as Array<Record<string, unknown>>, items as unknown as Array<Record<string, unknown>>, attachments as unknown as Array<Record<string, unknown>>);
+    return mapPurchaseRows(
+      purchases as unknown as Array<Record<string, unknown>>,
+      items as unknown as Array<Record<string, unknown>>,
+      attachments as unknown as Array<Record<string, unknown>>,
+    );
   }
 
   async listPurchases(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
@@ -65,23 +122,60 @@ export class PurchasesQueryService {
     const pageSize = Math.min(100, Math.max(1, Number(query.pageSize || query.limit || 25)));
     const offset = (page - 1) * pageSize;
     const search = String(query.search || query.q || '').trim();
-    const filter = String(query.filter || query.view || 'all').trim().toLowerCase();
+    const filter = String(query.filter || query.view || 'all')
+      .trim()
+      .toLowerCase();
 
     let qb = this.db
       .selectFrom('purchases as p')
       .leftJoin('suppliers as s', (j) => j.onRef('s.id', '=', 'p.supplier_id').onRef('s.tenant_id', '=', 'p.tenant_id'))
       .leftJoin('branches as b', (j) => j.onRef('b.id', '=', 'p.branch_id').onRef('b.tenant_id', '=', 'p.tenant_id'))
-      .leftJoin('stock_locations as l', (j) => j.onRef('l.id', '=', 'p.location_id').onRef('l.tenant_id', '=', 'p.tenant_id'))
+      .leftJoin('stock_locations as l', (j) =>
+        j.onRef('l.id', '=', 'p.location_id').onRef('l.tenant_id', '=', 'p.tenant_id'),
+      )
       .leftJoin('users as u', (j) => j.onRef('u.id', '=', 'p.created_by').onRef('u.tenant_id', '=', 'p.tenant_id'))
       .select([
-        'p.id', 'p.doc_no', 'p.supplier_id', 's.name as supplier_name', 'p.payment_type', 'p.subtotal', 'p.discount', 'p.tax_rate', 'p.tax_amount',
-        'p.prices_include_tax', 'p.total', 'p.note', 'p.status', 'p.lifecycle_status', 'p.matched_status', 'p.branch_id', 'p.location_id', 'p.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name',
-        'p.required_date', 'p.currency', 'p.company_name', 'p.contact_id', 'p.shipping_address_id', 'p.cost_center_id', 'p.project_id', 'p.import_project_id', 'p.terms_template',
+        'p.id',
+        'p.doc_no',
+        'p.supplier_id',
+        's.name as supplier_name',
+        'p.payment_type',
+        'p.subtotal',
+        'p.discount',
+        'p.tax_rate',
+        'p.tax_amount',
+        'p.prices_include_tax',
+        'p.total',
+        'p.note',
+        'p.status',
+        'p.lifecycle_status',
+        'p.matched_status',
+        'p.branch_id',
+        'p.location_id',
+        'p.created_at',
+        'b.name as branch_name',
+        'l.name as location_name',
+        'u.username as created_by_name',
+        'p.required_date',
+        'p.currency',
+        'p.company_name',
+        'p.contact_id',
+        'p.shipping_address_id',
+        'p.cost_center_id',
+        'p.project_id',
+        'p.import_project_id',
+        'p.terms_template',
         sql<number>`COUNT(*) OVER()`.as('total_count'),
         sql<number>`COALESCE(SUM(p.total) OVER(), 0)`.as('agg_total_amount'),
-        sql<number>`COALESCE(SUM(CASE WHEN p.payment_type = 'cash' THEN p.total ELSE 0 END) OVER(), 0)`.as('agg_cash_total'),
-        sql<number>`COALESCE(SUM(CASE WHEN p.payment_type = 'credit' THEN p.total ELSE 0 END) OVER(), 0)`.as('agg_credit_total'),
-        sql<number>`COALESCE(SUM(CASE WHEN p.status = 'cancelled' THEN 1 ELSE 0 END) OVER(), 0)`.as('agg_cancelled_count')
+        sql<number>`COALESCE(SUM(CASE WHEN p.payment_type = 'cash' THEN p.total ELSE 0 END) OVER(), 0)`.as(
+          'agg_cash_total',
+        ),
+        sql<number>`COALESCE(SUM(CASE WHEN p.payment_type = 'credit' THEN p.total ELSE 0 END) OVER(), 0)`.as(
+          'agg_credit_total',
+        ),
+        sql<number>`COALESCE(SUM(CASE WHEN p.status = 'cancelled' THEN 1 ELSE 0 END) OVER(), 0)`.as(
+          'agg_cancelled_count',
+        ),
       ])
       .where(this.tenantPredicate(auth, 'p'));
 
@@ -93,7 +187,7 @@ export class PurchasesQueryService {
           eb('p.note', 'ilike', `%${search}%`),
           eb('b.name', 'ilike', `%${search}%`),
           eb('l.name', 'ilike', `%${search}%`),
-        ])
+        ]),
       );
     }
 
@@ -129,7 +223,18 @@ export class PurchasesQueryService {
       ? await Promise.all([
           this.db
             .selectFrom('purchase_items')
-            .select(['id', 'purchase_id', 'product_id', 'product_name', 'qty', 'received_qty', 'unit_cost', 'line_total', 'unit_name', 'unit_multiplier'])
+            .select([
+              'id',
+              'purchase_id',
+              'product_id',
+              'product_name',
+              'qty',
+              'received_qty',
+              'unit_cost',
+              'line_total',
+              'unit_name',
+              'unit_multiplier',
+            ])
             .where('purchase_id', 'in', pagedIds)
             .where(this.tenantPredicate(auth))
             .orderBy('purchase_id', 'asc')
@@ -149,7 +254,7 @@ export class PurchasesQueryService {
     const hydratedRows = mapPurchaseRows(
       purchases as unknown as Array<Record<string, unknown>>,
       items as unknown as Array<Record<string, unknown>>,
-      attachments as unknown as Array<Record<string, unknown>>
+      attachments as unknown as Array<Record<string, unknown>>,
     );
 
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
@@ -167,7 +272,7 @@ export class PurchasesQueryService {
       purchases: hydratedRows,
       pagination: { page, pageSize, totalItems, totalPages, rangeStart, rangeEnd, nextCursor },
       summary,
-      scope
+      scope,
     };
   }
 
@@ -177,12 +282,41 @@ export class PurchasesQueryService {
       .selectFrom('purchases as p')
       .leftJoin('suppliers as s', (j) => j.onRef('s.id', '=', 'p.supplier_id').onRef('s.tenant_id', '=', 'p.tenant_id'))
       .leftJoin('branches as b', (j) => j.onRef('b.id', '=', 'p.branch_id').onRef('b.tenant_id', '=', 'p.tenant_id'))
-      .leftJoin('stock_locations as l', (j) => j.onRef('l.id', '=', 'p.location_id').onRef('l.tenant_id', '=', 'p.tenant_id'))
+      .leftJoin('stock_locations as l', (j) =>
+        j.onRef('l.id', '=', 'p.location_id').onRef('l.tenant_id', '=', 'p.tenant_id'),
+      )
       .leftJoin('users as u', (j) => j.onRef('u.id', '=', 'p.created_by').onRef('u.tenant_id', '=', 'p.tenant_id'))
       .select([
-        'p.id', 'p.doc_no', 'p.supplier_id', 's.name as supplier_name', 'p.payment_type', 'p.subtotal', 'p.discount', 'p.tax_rate', 'p.tax_amount',
-        'p.prices_include_tax', 'p.total', 'p.note', 'p.status', 'p.lifecycle_status', 'p.matched_status', 'p.branch_id', 'p.location_id', 'p.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name',
-        'p.required_date', 'p.currency', 'p.company_name', 'p.contact_id', 'p.shipping_address_id', 'p.cost_center_id', 'p.project_id', 'p.import_project_id', 'p.terms_template'
+        'p.id',
+        'p.doc_no',
+        'p.supplier_id',
+        's.name as supplier_name',
+        'p.payment_type',
+        'p.subtotal',
+        'p.discount',
+        'p.tax_rate',
+        'p.tax_amount',
+        'p.prices_include_tax',
+        'p.total',
+        'p.note',
+        'p.status',
+        'p.lifecycle_status',
+        'p.matched_status',
+        'p.branch_id',
+        'p.location_id',
+        'p.created_at',
+        'b.name as branch_name',
+        'l.name as location_name',
+        'u.username as created_by_name',
+        'p.required_date',
+        'p.currency',
+        'p.company_name',
+        'p.contact_id',
+        'p.shipping_address_id',
+        'p.cost_center_id',
+        'p.project_id',
+        'p.import_project_id',
+        'p.terms_template',
       ])
       .where('p.id', '=', id)
       .where(this.tenantPredicate(auth, 'p'))
@@ -193,7 +327,18 @@ export class PurchasesQueryService {
     const [items, attachments] = await Promise.all([
       this.db
         .selectFrom('purchase_items')
-        .select(['id', 'purchase_id', 'product_id', 'product_name', 'qty', 'received_qty', 'unit_cost', 'line_total', 'unit_name', 'unit_multiplier'])
+        .select([
+          'id',
+          'purchase_id',
+          'product_id',
+          'product_name',
+          'qty',
+          'received_qty',
+          'unit_cost',
+          'line_total',
+          'unit_name',
+          'unit_multiplier',
+        ])
         .where('purchase_id', '=', id)
         .where(this.tenantPredicate(auth))
         .orderBy('id', 'asc')
@@ -210,24 +355,39 @@ export class PurchasesQueryService {
     const mapped = mapPurchaseRows(
       [purchaseRow as unknown as Record<string, unknown>],
       items as unknown as Array<Record<string, unknown>>,
-      attachments as unknown as Array<Record<string, unknown>>
+      attachments as unknown as Array<Record<string, unknown>>,
     );
 
     return { purchase: mapped[0], scope };
   }
 
-  async getPurchaseAttachment(purchaseId: number, attachmentId: number, auth: AuthContext): Promise<Record<string, unknown>> {
+  async getPurchaseAttachment(
+    purchaseId: number,
+    attachmentId: number,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const row = await this.db
       .selectFrom('purchase_attachments as pa')
-      .innerJoin('purchases as p', (j) => j.onRef('p.id', '=', 'pa.purchase_id').onRef('p.tenant_id', '=', 'pa.tenant_id'))
-      .select(['pa.id', 'pa.purchase_id', 'pa.file_name', 'pa.file_url', 'pa.file_type', 'pa.file_size', 'pa.created_at', 'pa.updated_at'])
+      .innerJoin('purchases as p', (j) =>
+        j.onRef('p.id', '=', 'pa.purchase_id').onRef('p.tenant_id', '=', 'pa.tenant_id'),
+      )
+      .select([
+        'pa.id',
+        'pa.purchase_id',
+        'pa.file_name',
+        'pa.file_url',
+        'pa.file_type',
+        'pa.file_size',
+        'pa.created_at',
+        'pa.updated_at',
+      ])
       .where('pa.id', '=', attachmentId)
       .where('pa.purchase_id', '=', purchaseId)
       .where('pa.tenant_id', '=', scope.tenantId)
       .where(sql<boolean>`p.tenant_id = ${scope.tenantId}`)
       .executeTakeFirst();
-      
+
     if (!row) throw new AppError('Attachment not found', 'ATTACHMENT_NOT_FOUND', 404);
     return { attachment: row };
   }
@@ -268,11 +428,7 @@ export class PurchasesQueryService {
     if (supplierFilter > 0) {
       listQuery = listQuery.where('sp.supplier_id', '=', supplierFilter);
     }
-    const rows = await listQuery
-      .orderBy('sp.id', 'desc')
-      .limit(pageSize)
-      .offset(offset)
-      .execute();
+    const rows = await listQuery.orderBy('sp.id', 'desc').limit(pageSize).offset(offset).execute();
     const total = rows.length > 0 ? Number(rows[0].total_count || 0) : 0;
     return {
       supplierPayments: rows.map((row) => ({
@@ -318,9 +474,13 @@ export class PurchasesQueryService {
     const scope = requireTenantScope(auth);
     const row = await this.db
       .selectFrom('supplier_payments as sp')
-      .leftJoin('suppliers as s', (j) => j.onRef('s.id', '=', 'sp.supplier_id').onRef('s.tenant_id', '=', 'sp.tenant_id'))
+      .leftJoin('suppliers as s', (j) =>
+        j.onRef('s.id', '=', 'sp.supplier_id').onRef('s.tenant_id', '=', 'sp.tenant_id'),
+      )
       .leftJoin('branches as b', (j) => j.onRef('b.id', '=', 'sp.branch_id').onRef('b.tenant_id', '=', 'sp.tenant_id'))
-      .leftJoin('stock_locations as l', (j) => j.onRef('l.id', '=', 'sp.location_id').onRef('l.tenant_id', '=', 'sp.tenant_id'))
+      .leftJoin('stock_locations as l', (j) =>
+        j.onRef('l.id', '=', 'sp.location_id').onRef('l.tenant_id', '=', 'sp.tenant_id'),
+      )
       .leftJoin('users as u', (j) => j.onRef('u.id', '=', 'sp.created_by').onRef('u.tenant_id', '=', 'sp.tenant_id'))
       .select([
         'sp.id',
@@ -414,12 +574,7 @@ export class PurchasesQueryService {
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .where('supplier_id', '=', candidateSupplierId)
       .where('status', '!=', 'cancelled')
-      .where((eb) =>
-        eb.or([
-          eb('created_at', '>=', ninetyDaysAgo),
-          eb('supplier_invoice_no', 'is not', null),
-        ]),
-      )
+      .where((eb) => eb.or([eb('created_at', '>=', ninetyDaysAgo), eb('supplier_invoice_no', 'is not', null)]))
       .execute();
 
     const historical: HistoricalPurchaseRecord[] = rows.map((r) => ({

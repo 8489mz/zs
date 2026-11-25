@@ -4,7 +4,10 @@ import { AppError } from '../../../../common/errors/app-error';
 import { TenantScope } from './restaurant-fnb-types';
 
 export class RestaurantFnbUpsellLayoutsSlice {
-  constructor(private readonly db: Kysely<Database>, private readonly assertManagerCaller: (scope: TenantScope) => void) {}
+  constructor(
+    private readonly db: Kysely<Database>,
+    private readonly assertManagerCaller: (scope: TenantScope) => void,
+  ) {}
 
   // ==========================================
   // 11. SMART UPSELLING & CROSS-SELLING ENGINE
@@ -27,14 +30,17 @@ export class RestaurantFnbUpsellLayoutsSlice {
     return rules;
   }
 
-  async createUpsellRule(scope: TenantScope, dto: {
-    triggerProductId?: number;
-    triggerCategoryName?: string;
-    suggestedProductId: number;
-    suggestedProductName: string;
-    title: string;
-    discountAmount?: number;
-  }) {
+  async createUpsellRule(
+    scope: TenantScope,
+    dto: {
+      triggerProductId?: number;
+      triggerCategoryName?: string;
+      suggestedProductId: number;
+      suggestedProductName: string;
+      title: string;
+      discountAmount?: number;
+    },
+  ) {
     const [rule] = await this.db
       .insertInto('restaurant_upsell_rules')
       .values({
@@ -66,12 +72,7 @@ export class RestaurantFnbUpsellLayoutsSlice {
       .where('is_active', '=', true);
 
     if (branchId) {
-      query = query.where((eb) =>
-        eb.or([
-          eb('branch_id', '=', branchId),
-          eb('branch_id', 'is', null),
-        ])
-      );
+      query = query.where((eb) => eb.or([eb('branch_id', '=', branchId), eb('branch_id', 'is', null)]));
     }
 
     const layouts = await query.orderBy('id', 'asc').execute();

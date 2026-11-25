@@ -138,19 +138,25 @@ export class KitchenPrintersService {
       .orderBy('id', 'asc')
       .execute();
 
-    const ticketStations = stations.length > 0
-      ? stations
-      : [...new Set(ticket.items.map((item) =>
-          item.station && item.station !== 'all' && item.station !== 'expo'
-            ? item.station
-            : resolveItemStation({ productName: item.name }),
-        ))];
+    const ticketStations =
+      stations.length > 0
+        ? stations
+        : [
+            ...new Set(
+              ticket.items.map((item) =>
+                item.station && item.station !== 'all' && item.station !== 'expo'
+                  ? item.station
+                  : resolveItemStation({ productName: item.name }),
+              ),
+            ),
+          ];
 
     const matched = rows.filter((row) => {
       if (!row.ip_address) return false;
       const categoryIds = parsePrinterCategoryIds(row.category_ids);
-      const byCategory = categoryIds.length > 0
-        && ticket.items.some((item) => item.categoryId != null && categoryIds.includes(Number(item.categoryId)));
+      const byCategory =
+        categoryIds.length > 0 &&
+        ticket.items.some((item) => item.categoryId != null && categoryIds.includes(Number(item.categoryId)));
       const mapped = mapPrinterStationToKdsStation(row.station_code);
       const byStation = mapped !== null && ticketStations.includes(mapped);
       return byCategory || byStation;
@@ -159,22 +165,24 @@ export class KitchenPrintersService {
     if (matched.length === 0) return [];
 
     const text = formatKitchenTicketText(ticket);
-    return Promise.all(matched.map(async (row) => {
-      const port = Number(row.port) || 9100;
-      const base = {
-        printerId: Number(row.id),
-        printerName: String(row.name),
-        station: String(row.station_code),
-      };
-      try {
-        await sendRawToPrinter(String(row.ip_address), port, text);
-        return { ...base, ok: true };
-      } catch (e: any) {
-        const error = e?.message || String(e);
-        this.logger.warn(`Kitchen printer ${row.name} (${row.ip_address}:${port}) failed: ${error}`);
-        return { ...base, ok: false, error };
-      }
-    }));
+    return Promise.all(
+      matched.map(async (row) => {
+        const port = Number(row.port) || 9100;
+        const base = {
+          printerId: Number(row.id),
+          printerName: String(row.name),
+          station: String(row.station_code),
+        };
+        try {
+          await sendRawToPrinter(String(row.ip_address), port, text);
+          return { ...base, ok: true };
+        } catch (e: any) {
+          const error = e?.message || String(e);
+          this.logger.warn(`Kitchen printer ${row.name} (${row.ip_address}:${port}) failed: ${error}`);
+          return { ...base, ok: false, error };
+        }
+      }),
+    );
   }
 
   /**
@@ -196,14 +204,17 @@ export class KitchenPrintersService {
 
     const itemRows = await this.db
       .selectFrom('sale_items as si')
-      .leftJoin('products as p', (join) => join
-        .onRef('p.id', '=', 'si.product_id')
-        .onRef('p.tenant_id', '=', 'si.tenant_id'))
-      .leftJoin('product_categories as pc', (join) => join
-        .onRef('pc.id', '=', 'p.category_id')
-        .onRef('pc.tenant_id', '=', 'si.tenant_id'))
+      .leftJoin('products as p', (join) =>
+        join.onRef('p.id', '=', 'si.product_id').onRef('p.tenant_id', '=', 'si.tenant_id'),
+      )
+      .leftJoin('product_categories as pc', (join) =>
+        join.onRef('pc.id', '=', 'p.category_id').onRef('pc.tenant_id', '=', 'si.tenant_id'),
+      )
       .select([
-        'si.product_name', 'si.qty', 'si.notes', 'si.modifiers',
+        'si.product_name',
+        'si.qty',
+        'si.notes',
+        'si.modifiers',
         'p.kitchen_station as configured_station',
         'p.category_id as category_id',
         'pc.kitchen_station as category_station',
@@ -217,7 +228,11 @@ export class KitchenPrintersService {
     const ticketItems: KitchenPrintTicketItem[] = itemRows.map((row: any) => {
       let modifiers: Array<{ name: string; qty?: number }> = [];
       if (typeof row.modifiers === 'string') {
-        try { modifiers = JSON.parse(row.modifiers); } catch { modifiers = []; }
+        try {
+          modifiers = JSON.parse(row.modifiers);
+        } catch {
+          modifiers = [];
+        }
       } else if (Array.isArray(row.modifiers)) {
         modifiers = row.modifiers;
       }
@@ -252,18 +267,10 @@ export class KitchenPrintersService {
   }
 
   async listPrinters(tenantId: string, branchId?: number) {
-    let query = this.db
-      .selectFrom('pos_kitchen_printers')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('pos_kitchen_printers').selectAll().where('tenant_id', '=', tenantId);
 
     if (branchId) {
-      query = query.where((eb) =>
-        eb.or([
-          eb('branch_id', '=', branchId),
-          eb('branch_id', 'is', null),
-        ]),
-      );
+      query = query.where((eb) => eb.or([eb('branch_id', '=', branchId), eb('branch_id', 'is', null)]));
     }
 
     const rows = await query.orderBy('id', 'asc').execute();

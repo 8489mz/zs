@@ -7,10 +7,7 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits } from '../engines/money-minor-units.engine';
 import { AccountingPostingService } from '../accounting-posting.service';
-import {
-  runSaleEditRemediation,
-  type SaleEditRepairReport,
-} from '../remediation/sale-edit-remediation-repair.engine';
+import { runSaleEditRemediation, type SaleEditRepairReport } from '../remediation/sale-edit-remediation-repair.engine';
 
 /**
  * Rank 7, sub-package 7d: the only wiring over the sale-edit

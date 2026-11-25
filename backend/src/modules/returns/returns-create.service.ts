@@ -26,11 +26,38 @@ export interface ReturnsCreateDeps {
   whatsappService?: WhatsAppGatewayService;
   scope: (auth: AuthContext) => TenantScope;
   verifyManagerAuthorization: (trx: Kysely<Database>, secret: string, auth: AuthContext) => Promise<string>;
-  getLargeCashRefundThreshold: (auth: AuthContext, executor?: Kysely<Database> | Transaction<Database>) => Promise<number>;
-  addTreasuryTransaction: (trx: Kysely<Database>, txnType: string, amount: number, note: string, returnDocumentId: number, auth: AuthContext, branchId: number | null, locationId: number | null, cashRefund?: boolean) => Promise<void>;
+  getLargeCashRefundThreshold: (
+    auth: AuthContext,
+    executor?: Kysely<Database> | Transaction<Database>,
+  ) => Promise<number>;
+  addTreasuryTransaction: (
+    trx: Kysely<Database>,
+    txnType: string,
+    amount: number,
+    note: string,
+    returnDocumentId: number,
+    auth: AuthContext,
+    branchId: number | null,
+    locationId: number | null,
+    cashRefund?: boolean,
+  ) => Promise<void>;
   addStoreCredit: (trx: Kysely<Database>, customerId: number, amount: number, auth: AuthContext) => Promise<void>;
-  createSaleReturn: (trx: Transaction<Database>, payload: CreateReturnDto, items: ReturnInputItem[], auth: AuthContext, approvedByName?: string, exchangePrepared?: (context: ExchangeReturnContext) => void, approvalRequest?: { secret: string; threshold: number }) => Promise<number[]>;
-  createPurchaseReturn: (trx: Transaction<Database>, payload: CreateReturnDto, items: ReturnInputItem[], auth: AuthContext, approvalRequest?: { secret: string; threshold: number }) => Promise<number[]>;
+  createSaleReturn: (
+    trx: Transaction<Database>,
+    payload: CreateReturnDto,
+    items: ReturnInputItem[],
+    auth: AuthContext,
+    approvedByName?: string,
+    exchangePrepared?: (context: ExchangeReturnContext) => void,
+    approvalRequest?: { secret: string; threshold: number },
+  ) => Promise<number[]>;
+  createPurchaseReturn: (
+    trx: Transaction<Database>,
+    payload: CreateReturnDto,
+    items: ReturnInputItem[],
+    auth: AuthContext,
+    approvalRequest?: { secret: string; threshold: number },
+  ) => Promise<number[]>;
 }
 
 @Injectable()
@@ -41,12 +68,48 @@ export class ReturnsCreateService {
   private readonly idempotency: IdempotencyService;
   private readonly whatsappService?: WhatsAppGatewayService;
   private readonly scope: (auth: AuthContext) => TenantScope;
-  private readonly verifyManagerAuthorization: (trx: Kysely<Database>, secret: string, auth: AuthContext) => Promise<string>;
-  private readonly getLargeCashRefundThreshold: (auth: AuthContext, executor?: Kysely<Database> | Transaction<Database>) => Promise<number>;
-  private readonly addTreasuryTransaction: (trx: Kysely<Database>, txnType: string, amount: number, note: string, returnDocumentId: number, auth: AuthContext, branchId: number | null, locationId: number | null, cashRefund?: boolean) => Promise<void>;
-  private readonly addStoreCredit: (trx: Kysely<Database>, customerId: number, amount: number, auth: AuthContext) => Promise<void>;
-  private readonly createSaleReturn: (trx: Transaction<Database>, payload: CreateReturnDto, items: ReturnInputItem[], auth: AuthContext, approvedByName?: string, exchangePrepared?: (context: ExchangeReturnContext) => void, approvalRequest?: { secret: string; threshold: number }) => Promise<number[]>;
-  private readonly createPurchaseReturn: (trx: Transaction<Database>, payload: CreateReturnDto, items: ReturnInputItem[], auth: AuthContext, approvalRequest?: { secret: string; threshold: number }) => Promise<number[]>;
+  private readonly verifyManagerAuthorization: (
+    trx: Kysely<Database>,
+    secret: string,
+    auth: AuthContext,
+  ) => Promise<string>;
+  private readonly getLargeCashRefundThreshold: (
+    auth: AuthContext,
+    executor?: Kysely<Database> | Transaction<Database>,
+  ) => Promise<number>;
+  private readonly addTreasuryTransaction: (
+    trx: Kysely<Database>,
+    txnType: string,
+    amount: number,
+    note: string,
+    returnDocumentId: number,
+    auth: AuthContext,
+    branchId: number | null,
+    locationId: number | null,
+    cashRefund?: boolean,
+  ) => Promise<void>;
+  private readonly addStoreCredit: (
+    trx: Kysely<Database>,
+    customerId: number,
+    amount: number,
+    auth: AuthContext,
+  ) => Promise<void>;
+  private readonly createSaleReturn: (
+    trx: Transaction<Database>,
+    payload: CreateReturnDto,
+    items: ReturnInputItem[],
+    auth: AuthContext,
+    approvedByName?: string,
+    exchangePrepared?: (context: ExchangeReturnContext) => void,
+    approvalRequest?: { secret: string; threshold: number },
+  ) => Promise<number[]>;
+  private readonly createPurchaseReturn: (
+    trx: Transaction<Database>,
+    payload: CreateReturnDto,
+    items: ReturnInputItem[],
+    auth: AuthContext,
+    approvalRequest?: { secret: string; threshold: number },
+  ) => Promise<number[]>;
 
   constructor(deps: ReturnsCreateDeps) {
     this.db = deps.db;
@@ -87,15 +150,17 @@ export class ReturnsCreateService {
     if (overrideRequested && !['admin', 'super_admin'].includes(auth.role)) {
       approvedByName = await this.verifyManagerAuthorization(this.db, payload.managerPin || '', auth);
     }
-    const approvalRequest = !isAdminRole && approvedByName === undefined
-      ? { secret: payload.managerPin || '', threshold: await this.getLargeCashRefundThreshold(auth) }
-      : undefined;
+    const approvalRequest =
+      !isAdminRole && approvedByName === undefined
+        ? { secret: payload.managerPin || '', threshold: await this.getLargeCashRefundThreshold(auth) }
+        : undefined;
 
     const result = await this.tx.runInTransaction(this.db, async (trx) => {
       const normalizedItems = normalizeReturnItems(payload);
-      const returnIds = payload.type === 'sale'
-        ? await this.createSaleReturn(trx, payload, normalizedItems, auth, approvedByName, undefined, approvalRequest)
-        : await this.createPurchaseReturn(trx, payload, normalizedItems, auth, approvalRequest);
+      const returnIds =
+        payload.type === 'sale'
+          ? await this.createSaleReturn(trx, payload, normalizedItems, auth, approvedByName, undefined, approvalRequest)
+          : await this.createPurchaseReturn(trx, payload, normalizedItems, auth, approvalRequest);
 
       // T10-D: the create response carries the refund the backend
       // actually pays (goods + relief, as stored on the document),
@@ -109,7 +174,8 @@ export class ReturnsCreateService {
       // hands over from the drawer (live trial: 35 cash + 35 card
       // returned as "70.00 cash" was RIGHT; the books posting only
       // 35 cash out were wrong, drawer 35 short).
-      const createdDoc = await trx.selectFrom('return_documents')
+      const createdDoc = await trx
+        .selectFrom('return_documents')
         .select(['total', 'tip_relief', 'courier_relief', 'refund_method', 'refund_allocations'])
         .where('id', '=', returnIds[0])
         .where('tenant_id', '=', scope.tenantId)
@@ -128,8 +194,13 @@ export class ReturnsCreateService {
         }
       })();
       const res = {
-        ok: true, createdIds: returnIds, id: returnIds[0], returnDocumentId: returnIds[0],
-        goodsTotal, tipRelief, courierRelief,
+        ok: true,
+        createdIds: returnIds,
+        id: returnIds[0],
+        returnDocumentId: returnIds[0],
+        goodsTotal,
+        tipRelief,
+        courierRelief,
         totalRelief: roundBookMoney(tipRelief + courierRelief, moneyDigits),
         refundTotal: roundBookMoney(goodsTotal + tipRelief + courierRelief, moneyDigits),
         refundMethod: String(createdDoc?.refund_method || ''),
@@ -140,9 +211,14 @@ export class ReturnsCreateService {
       if (idemCtx && idemCtx.idempotencyKey && idemCtx.operationType) {
         await this.idempotency.commitOperation(
           trx,
-          { tenantId: scope.tenantId, accountId: idemCtx.accountId || scope.accountId, idempotencyKey: idemCtx.idempotencyKey, operationType: idemCtx.operationType },
+          {
+            tenantId: scope.tenantId,
+            accountId: idemCtx.accountId || scope.accountId,
+            idempotencyKey: idemCtx.idempotencyKey,
+            operationType: idemCtx.operationType,
+          },
           res,
-          String(returnIds[0])
+          String(returnIds[0]),
         );
       }
 
@@ -174,13 +250,15 @@ export class ReturnsCreateService {
       void (async () => {
         try {
           if (doc) {
-            void this.whatsappService?.sendRefundNotification(
-              doc.doc_no || String(returnIds[0]),
-              Number(doc.total || 0),
-              payload.note || '',
-              scope.tenantId,
-              auth.username
-            ).catch(() => undefined);
+            void this.whatsappService
+              ?.sendRefundNotification(
+                doc.doc_no || String(returnIds[0]),
+                Number(doc.total || 0),
+                payload.note || '',
+                scope.tenantId,
+                auth.username,
+              )
+              .catch(() => undefined);
           }
         } catch {}
       })();
@@ -189,21 +267,41 @@ export class ReturnsCreateService {
     return result;
   }
 
-  async prepareExchangeReturn(trx: Transaction<Database>, payload: CreateReturnDto, auth: AuthContext): Promise<ExchangeReturnContext> {
+  async prepareExchangeReturn(
+    trx: Transaction<Database>,
+    payload: CreateReturnDto,
+    auth: AuthContext,
+  ): Promise<ExchangeReturnContext> {
     const cleanPin = String(payload.managerPin || '').trim();
     const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin';
     const approved = cleanPin
       ? await this.verifyManagerAuthorization(trx, cleanPin, auth)
-      : (isAdminRole ? (auth.username || 'المدير') : undefined);
+      : isAdminRole
+        ? auth.username || 'المدير'
+        : undefined;
     let context: ExchangeReturnContext | undefined;
-    await this.createSaleReturn(trx, { ...payload, settlementMode: 'store_credit' }, normalizeReturnItems(payload), auth, approved,
-      (result) => { context = result; });
+    await this.createSaleReturn(
+      trx,
+      { ...payload, settlementMode: 'store_credit' },
+      normalizeReturnItems(payload),
+      auth,
+      approved,
+      (result) => {
+        context = result;
+      },
+    );
     if (!context) throw new AppError('تعذر تجهيز المرتجع الذري', 'EXCHANGE_RETURN_MISSING', 500);
     return context;
   }
 
-  async settleExchangeReturn(trx: Transaction<Database>, context: ExchangeReturnContext, saleTotal: number,
-    requested: 'cash' | 'card' | 'store_credit', auth: AuthContext, managerPin?: string): Promise<ReturnType<typeof settlePosExchange>> {
+  async settleExchangeReturn(
+    trx: Transaction<Database>,
+    context: ExchangeReturnContext,
+    saleTotal: number,
+    requested: 'cash' | 'card' | 'store_credit',
+    auth: AuthContext,
+    managerPin?: string,
+  ): Promise<ReturnType<typeof settlePosExchange>> {
     const exchangeDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, this.scope(auth).tenantId));
     const settlement = settlePosExchange(context.total, saleTotal, exchangeDigits);
     // INV-SALE-RETURN-CASH-ONLY: an exchange remainder refunds in
@@ -211,35 +309,59 @@ export class ReturnsCreateService {
     // in createSaleReturn below. Only store_credit (the settlement
     // mode) passes through; there is no card-reversal path.
     const cashOnlyRequested = requested === 'store_credit' ? 'store_credit' : 'cash';
-    const remainder = settlement.refundAmount > 0
-      ? allocateRefundTenders({ ...context.refundBase, amount: settlement.refundAmount, requested: cashOnlyRequested, digits: exchangeDigits }) : [];
+    const remainder =
+      settlement.refundAmount > 0
+        ? allocateRefundTenders({
+            ...context.refundBase,
+            amount: settlement.refundAmount,
+            requested: cashOnlyRequested,
+            digits: exchangeDigits,
+          })
+        : [];
     const cashRefundOut = remainder
       .filter((line) => line.tender === 'cash')
       .reduce((sum, line) => sum + Number(line.amount || 0), 0);
     const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin';
     const cleanPin = String(managerPin || '').trim();
-    if (!isAdminRole && cashRefundOut > 0 && cashRefundOut >= await this.getLargeCashRefundThreshold(auth, trx)) {
+    if (!isAdminRole && cashRefundOut > 0 && cashRefundOut >= (await this.getLargeCashRefundThreshold(auth, trx))) {
       await this.verifyManagerAuthorization(trx, cleanPin, auth);
     }
     const allocations: Array<{ tender: RefundTender; amount: number }> = [];
-    const retainedCredit = settlement.appliedCredit + remainder.filter((line) => line.tender === 'store_credit')
-      .reduce((sum, line) => sum + line.amount, 0);
-    if (retainedCredit > 0) allocations.push({ tender: 'store_credit', amount: exchangeStoreCreditAmount(retainedCredit, exchangeDigits) });
+    const retainedCredit =
+      settlement.appliedCredit +
+      remainder.filter((line) => line.tender === 'store_credit').reduce((sum, line) => sum + line.amount, 0);
+    if (retainedCredit > 0)
+      allocations.push({ tender: 'store_credit', amount: exchangeStoreCreditAmount(retainedCredit, exchangeDigits) });
     for (const line of remainder) {
       if (line.tender === 'store_credit') continue;
-      if (line.tender === 'receivable') throw new AppError('يجب تسوية مديونية الفاتورة قبل الاستبدال', 'EXCHANGE_UNPAID_SOURCE', 422);
+      if (line.tender === 'receivable')
+        throw new AppError('يجب تسوية مديونية الفاتورة قبل الاستبدال', 'EXCHANGE_UNPAID_SOURCE', 422);
       allocations.push(line);
       await this.addStoreCredit(trx, context.customerId, -line.amount, auth);
       if (line.tender === 'cash') {
-        await this.addTreasuryTransaction(trx, 'sale_return_refund', -line.amount,
-          `صافي استرداد استبدال ${context.returnId}`, context.returnId, auth, context.branchId, context.locationId, true);
+        await this.addTreasuryTransaction(
+          trx,
+          'sale_return_refund',
+          -line.amount,
+          `صافي استرداد استبدال ${context.returnId}`,
+          context.returnId,
+          auth,
+          context.branchId,
+          context.locationId,
+          true,
+        );
       }
     }
-    await trx.updateTable('return_documents').set({
-      settlement_mode: requested === 'store_credit' ? 'store_credit' : 'refund',
-      refund_method: allocations.length === 1 ? allocations[0].tender : 'mixed',
-      refund_allocations: JSON.stringify(allocations),
-    }).where('tenant_id', '=', this.scope(auth).tenantId).where('id', '=', context.returnId).execute();
+    await trx
+      .updateTable('return_documents')
+      .set({
+        settlement_mode: requested === 'store_credit' ? 'store_credit' : 'refund',
+        refund_method: allocations.length === 1 ? allocations[0].tender : 'mixed',
+        refund_allocations: JSON.stringify(allocations),
+      })
+      .where('tenant_id', '=', this.scope(auth).tenantId)
+      .where('id', '=', context.returnId)
+      .execute();
     return settlement;
   }
 }

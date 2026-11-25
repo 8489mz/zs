@@ -20,20 +20,14 @@ export class RestaurantAdvancedFnbController {
 
   // 1. Fast 86 Engine
   @Get('86-items')
-  async get86Items(
-    @Req() req: RequestWithAuth,
-    @Query('branchId') branchId?: string,
-  ) {
+  async get86Items(@Req() req: RequestWithAuth, @Query('branchId') branchId?: string) {
     const scope = requireTenantScope(req.authContext!);
     const branch = branchId ? parseInt(branchId, 10) : undefined;
     return this.service.get86Items(scope, branch);
   }
 
   @Post('86-items/toggle')
-  async toggle86Item(
-    @Req() req: RequestWithAuth,
-    @Body() dto: Toggle86ItemDto,
-  ) {
+  async toggle86Item(@Req() req: RequestWithAuth, @Body() dto: Toggle86ItemDto) {
     const scope = requireTenantScope(req.authContext!);
     const userId = Number(req.authContext?.userId || 0);
     return this.service.toggle86Item({ ...scope, userId }, dto);
@@ -48,10 +42,7 @@ export class RestaurantAdvancedFnbController {
   // only, so a decorator could not express the role half and would lock
   // out tenant admins.
   @Get('tip-pools')
-  async getTipPools(
-    @Req() req: RequestWithAuth,
-    @Query('shiftDate') shiftDate?: string,
-  ) {
+  async getTipPools(@Req() req: RequestWithAuth, @Query('shiftDate') shiftDate?: string) {
     const scope = requireTenantScope(req.authContext!);
     return this.service.getTipPools(scope, shiftDate);
   }
@@ -69,10 +60,7 @@ export class RestaurantAdvancedFnbController {
   }
 
   @Post('tip-pools/calculate')
-  async calculateAndSaveTipPool(
-    @Req() req: RequestWithAuth,
-    @Body() dto: CalculateTipPoolDto,
-  ) {
+  async calculateAndSaveTipPool(@Req() req: RequestWithAuth, @Body() dto: CalculateTipPoolDto) {
     const scope = requireTenantScope(req.authContext!);
     return this.service.calculateAndSaveTipPool(
       { ...scope, role: req.authContext?.role, permissions: req.authContext?.permissions ?? [] },
@@ -81,10 +69,7 @@ export class RestaurantAdvancedFnbController {
   }
 
   @Post('tip-pools/:id/distribute')
-  async confirmTipDistribution(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async confirmTipDistribution(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     const scope = requireTenantScope(req.authContext!);
     const userId = Number(req.authContext?.userId || 0);
     return this.service.confirmTipDistribution(
@@ -95,20 +80,14 @@ export class RestaurantAdvancedFnbController {
 
   // 3. Multi-Zone Floor Plan
   @Get('zones')
-  async getZones(
-    @Req() req: RequestWithAuth,
-    @Query('branchId') branchId?: string,
-  ) {
+  async getZones(@Req() req: RequestWithAuth, @Query('branchId') branchId?: string) {
     const scope = requireTenantScope(req.authContext!);
     const branch = branchId ? parseInt(branchId, 10) : undefined;
     return this.service.getZones(scope, branch);
   }
 
   @Post('zones')
-  async saveZone(
-    @Req() req: RequestWithAuth,
-    @Body() dto: SaveTableZoneDto,
-  ) {
+  async saveZone(@Req() req: RequestWithAuth, @Body() dto: SaveTableZoneDto) {
     const scope = requireTenantScope(req.authContext!);
     // INV-REST-FLOOR-DESIGN-GATES (B2): the zone gate lives in the
     // service (assertManagerCaller) and reads scope.role /
@@ -124,19 +103,13 @@ export class RestaurantAdvancedFnbController {
 
   // 4. Central Prep Kitchen & Daily Prep Sheets
   @Get('prep-sheets')
-  async getPrepSheets(
-    @Req() req: RequestWithAuth,
-    @Query('prepDate') prepDate?: string,
-  ) {
+  async getPrepSheets(@Req() req: RequestWithAuth, @Query('prepDate') prepDate?: string) {
     const scope = requireTenantScope(req.authContext!);
     return this.service.getPrepSheets(scope, prepDate);
   }
 
   @Post('prep-sheets/generate')
-  async generateDailyPrepSheet(
-    @Req() req: RequestWithAuth,
-    @Body() dto: GeneratePrepSheetDto,
-  ) {
+  async generateDailyPrepSheet(@Req() req: RequestWithAuth, @Body() dto: GeneratePrepSheetDto) {
     const scope = requireTenantScope(req.authContext!);
     const userId = Number(req.authContext?.userId || 0);
     return this.service.generateDailyPrepSheet({ ...scope, userId }, dto);
@@ -155,10 +128,7 @@ export class RestaurantAdvancedFnbController {
 
   // 5. Digital Stamp Card Loyalty
   @Get('stamp-cards/:customerId')
-  async getCustomerStampCard(
-    @Req() req: RequestWithAuth,
-    @Param('customerId', ParseIntPipe) customerId: number,
-  ) {
+  async getCustomerStampCard(@Req() req: RequestWithAuth, @Param('customerId', ParseIntPipe) customerId: number) {
     const scope = requireTenantScope(req.authContext!);
     return this.service.getCustomerStampCard(scope, customerId);
   }
@@ -190,7 +160,8 @@ export class RestaurantAdvancedFnbController {
   @Post('manager-comps')
   async recordManagerComp(
     @Req() req: RequestWithAuth,
-    @Body() dto: {
+    @Body()
+    dto: {
       saleId?: number;
       tableNumber?: string;
       compType: 'vip_guest' | 'customer_complaint' | 'staff_meal' | 'promotional_tasting';
@@ -204,7 +175,13 @@ export class RestaurantAdvancedFnbController {
     const scope = requireTenantScope(req.authContext!);
     const userId = Number(req.authContext?.userId || 0);
     return this.service.recordManagerComp(
-      { ...scope, userId, username: req.authContext?.username, role: req.authContext?.role, permissions: req.authContext?.permissions ?? [] },
+      {
+        ...scope,
+        userId,
+        username: req.authContext?.username,
+        role: req.authContext?.role,
+        permissions: req.authContext?.permissions ?? [],
+      },
       dto,
     );
   }
@@ -213,7 +190,8 @@ export class RestaurantAdvancedFnbController {
   @Post('table-ratings')
   async recordTableRating(
     @Req() req: RequestWithAuth,
-    @Body() dto: {
+    @Body()
+    dto: {
       tableNumber: string;
       saleId?: number;
       rating: number;
@@ -237,10 +215,7 @@ export class RestaurantAdvancedFnbController {
 
   // 9. Table Minimum Spend Calculator
   @Post('minimum-spend/calculate')
-  async calculateMinimumSpend(
-    @Body('currentTotal') currentTotal: number,
-    @Body('minimumSpend') minimumSpend: number,
-  ) {
+  async calculateMinimumSpend(@Body('currentTotal') currentTotal: number, @Body('minimumSpend') minimumSpend: number) {
     return this.service.calculateMinimumSpend(Number(currentTotal || 0), Number(minimumSpend || 0));
   }
 
@@ -254,7 +229,8 @@ export class RestaurantAdvancedFnbController {
   @Post('drive-thru')
   async createDriveThruOrder(
     @Req() req: RequestWithAuth,
-    @Body() dto: {
+    @Body()
+    dto: {
       vehiclePlate: string;
       vehicleDesc?: string;
       totalAmount?: number;
@@ -293,7 +269,8 @@ export class RestaurantAdvancedFnbController {
   @Post('upsell')
   async createUpsellRule(
     @Req() req: RequestWithAuth,
-    @Body() dto: {
+    @Body()
+    dto: {
       triggerProductId?: number;
       triggerCategoryName?: string;
       suggestedProductId: number;
@@ -308,10 +285,7 @@ export class RestaurantAdvancedFnbController {
 
   // 12. Visual Floor Plan Canvas Layouts
   @Get('table-layouts')
-  async getTableLayouts(
-    @Req() req: RequestWithAuth,
-    @Query('branchId') branchId?: string,
-  ) {
+  async getTableLayouts(@Req() req: RequestWithAuth, @Query('branchId') branchId?: string) {
     const scope = requireTenantScope(req.authContext!);
     const branch = branchId ? parseInt(branchId, 10) : undefined;
     return this.service.getTableLayouts(scope, branch);
@@ -320,7 +294,8 @@ export class RestaurantAdvancedFnbController {
   @Post('table-layouts')
   async saveTableLayouts(
     @Req() req: RequestWithAuth,
-    @Body() dto: {
+    @Body()
+    dto: {
       layouts: Array<{
         id?: number;
         table_number: string;
@@ -350,10 +325,7 @@ export class RestaurantAdvancedFnbController {
   }
 
   @Post('table-layouts/:id/delete')
-  async deleteTableLayout(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async deleteTableLayout(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     const scope = requireTenantScope(req.authContext!);
     // INV-REST-FLOOR-DESIGN-GATES (B2): same forwarding as saveZone
     // above — the delete gate reads scope.role / scope.permissions, so

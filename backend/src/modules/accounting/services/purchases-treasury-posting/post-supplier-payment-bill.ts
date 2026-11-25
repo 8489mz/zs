@@ -23,7 +23,11 @@ export class PostSupplierPaymentBillService {
     private readonly ensureTenantFoundation: (queryable: DbOrTx, auth: AuthContext) => Promise<void>,
   ) {}
 
-  async postSupplierPayment(queryable: DbOrTx, paymentId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postSupplierPayment(
+    queryable: DbOrTx,
+    paymentId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
@@ -71,10 +75,22 @@ export class PostSupplierPaymentBillService {
     const supplierName = String(payment.supplier_name || '').trim();
     const docNo = String(payment.doc_no || `ZPV-${paymentId}`).trim();
 
-    const supplierPayableAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.supplier_payable_account_id, '2110');
-    const cashAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.cash_account_id, '1110');
-    const paymentAccountId = (payment.payment_channel || 'cash') === 'cash' ? cashAccountId :
-      await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.bank_account_id, '1120');
+    const supplierPayableAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.supplier_payable_account_id,
+      '2110',
+    );
+    const cashAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.cash_account_id,
+      '1110',
+    );
+    const paymentAccountId =
+      (payment.payment_channel || 'cash') === 'cash'
+        ? cashAccountId
+        : await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.bank_account_id, '1120');
     /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT (trial D08): an advance is
      * NOT a settlement — it debits the dedicated advance asset 1185
      * and never touches the 2110 payable. resolveSystemAccountByCode
@@ -99,9 +115,14 @@ export class PostSupplierPaymentBillService {
     });
     addBookLine({
       accountId: paymentAccountId,
-      description: (payment.payment_channel || 'cash') === 'cash'
-        ? (isAdvance ? 'خروج نقدية كدفعة مقدمة لمورد' : 'خروج نقدية لسداد مورد')
-        : (isAdvance ? 'دفعة مقدمة لمورد عبر البنك أو المدفوعات الإلكترونية' : 'سداد مورد عبر البنك أو المدفوعات الإلكترونية'),
+      description:
+        (payment.payment_channel || 'cash') === 'cash'
+          ? isAdvance
+            ? 'خروج نقدية كدفعة مقدمة لمورد'
+            : 'خروج نقدية لسداد مورد'
+          : isAdvance
+            ? 'دفعة مقدمة لمورد عبر البنك أو المدفوعات الإلكترونية'
+            : 'سداد مورد عبر البنك أو المدفوعات الإلكترونية',
       debit: 0,
       credit: amount,
       partnerType: 'none',
@@ -110,18 +131,31 @@ export class PostSupplierPaymentBillService {
       locationId,
     });
 
-    const accountMap = await this.getActiveAccountMap(queryable, scope.tenantId, lines.map((line) => line.accountId));
+    const accountMap = await this.getActiveAccountMap(
+      queryable,
+      scope.tenantId,
+      lines.map((line) => line.accountId),
+    );
     for (const line of lines) {
-      if (!(line.accountId > 0)) throw new Error(`Invalid accounting setting account id while posting supplier payment ${paymentId}`);
-      if (!accountMap.has(line.accountId)) throw new Error(`Configured account ${line.accountId} was not found while posting supplier payment ${paymentId}`);
-      if (!accountMap.get(line.accountId)) throw new Error(`Configured account ${line.accountId} is inactive while posting supplier payment ${paymentId}`);
+      if (!(line.accountId > 0))
+        throw new Error(`Invalid accounting setting account id while posting supplier payment ${paymentId}`);
+      if (!accountMap.has(line.accountId))
+        throw new Error(
+          `Configured account ${line.accountId} was not found while posting supplier payment ${paymentId}`,
+        );
+      if (!accountMap.get(line.accountId))
+        throw new Error(`Configured account ${line.accountId} is inactive while posting supplier payment ${paymentId}`);
     }
 
-    const normalizedLines = lines.map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) })).filter((line) => line.debit > 0 || line.credit > 0);
+    const normalizedLines = lines
+      .map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) }))
+      .filter((line) => line.debit > 0 || line.credit > 0);
     const totalDebit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > this.maxAllowedDifference(bookDigits)) {
-      throw new Error(`Unbalanced supplier payment journal for payment ${paymentId}: debit=${totalDebit} credit=${totalCredit}`);
+      throw new Error(
+        `Unbalanced supplier payment journal for payment ${paymentId}: debit=${totalDebit} credit=${totalCredit}`,
+      );
     }
 
     const entryId = await this.insertPostedJournal(queryable, {
@@ -129,7 +163,11 @@ export class PostSupplierPaymentBillService {
       sourceId: paymentId,
       tenantId: scope.tenantId,
       accountId: scope.accountId,
-      entryDate: payment.payment_date ? new Date(payment.payment_date) : (payment.created_at ? new Date(payment.created_at) : new Date()),
+      entryDate: payment.payment_date
+        ? new Date(payment.payment_date)
+        : payment.created_at
+          ? new Date(payment.created_at)
+          : new Date(),
       description: isAdvance
         ? `قيد دفعة مقدمة لمورد رقم ${docNo}${supplierName ? ` - ${supplierName}` : ''}`
         : `قيد سداد مورد رقم ${docNo}${supplierName ? ` - ${supplierName}` : ''}`,
@@ -152,7 +190,11 @@ export class PostSupplierPaymentBillService {
    * stock, no cash, no GRN: the payable balance itself moves in the
    * caller (SupplierBillsService, via a supplier-ledger entry), so the
    * statement shows the debt; this method owns the journal only. */
-  async postSupplierBill(queryable: DbOrTx, billId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postSupplierBill(
+    queryable: DbOrTx,
+    billId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
@@ -164,8 +206,14 @@ export class PostSupplierPaymentBillService {
       .selectFrom('supplier_bills as sb')
       .leftJoin('suppliers as s', 's.id', 'sb.supplier_id')
       .select([
-        'sb.id', 'sb.doc_no', 'sb.supplier_id', 'sb.bill_date', 'sb.total', 'sb.note',
-        'sb.created_by', 'sb.created_at',
+        'sb.id',
+        'sb.doc_no',
+        'sb.supplier_id',
+        'sb.bill_date',
+        'sb.total',
+        'sb.note',
+        'sb.created_by',
+        'sb.created_at',
         's.name as supplier_name',
       ])
       .where('sb.id', '=', billId)
@@ -200,13 +248,24 @@ export class PostSupplierPaymentBillService {
     const supplierName = String((bill as any).supplier_name || '').trim();
     const docNo = String((bill as any).doc_no || `SPB-${billId}`).trim();
 
-    const supplierPayableAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.supplier_payable_account_id, '2110');
+    const supplierPayableAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.supplier_payable_account_id,
+      '2110',
+    );
     const lineAccountIds = billLines.map((row: any) => Number(row.chart_account_id));
-    const accountMap = await this.getActiveAccountMap(queryable, scope.tenantId, [...lineAccountIds, supplierPayableAccountId]);
+    const accountMap = await this.getActiveAccountMap(queryable, scope.tenantId, [
+      ...lineAccountIds,
+      supplierPayableAccountId,
+    ]);
     for (const accountId of [...lineAccountIds, supplierPayableAccountId]) {
-      if (!(accountId > 0)) throw new Error(`Invalid accounting setting account id while posting supplier bill ${billId}`);
-      if (!accountMap.has(accountId)) throw new Error(`Configured account ${accountId} was not found while posting supplier bill ${billId}`);
-      if (!accountMap.get(accountId)) throw new Error(`Configured account ${accountId} is inactive while posting supplier bill ${billId}`);
+      if (!(accountId > 0))
+        throw new Error(`Invalid accounting setting account id while posting supplier bill ${billId}`);
+      if (!accountMap.has(accountId))
+        throw new Error(`Configured account ${accountId} was not found while posting supplier bill ${billId}`);
+      if (!accountMap.get(accountId))
+        throw new Error(`Configured account ${accountId} is inactive while posting supplier bill ${billId}`);
     }
 
     const lines: JournalLineDraft[] = [];
@@ -236,7 +295,9 @@ export class PostSupplierPaymentBillService {
       locationId,
     });
 
-    const normalizedLines = lines.map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) })).filter((line) => line.debit > 0 || line.credit > 0);
+    const normalizedLines = lines
+      .map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) }))
+      .filter((line) => line.debit > 0 || line.credit > 0);
     const totalDebit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > this.maxAllowedDifference(bookDigits)) {
@@ -254,10 +315,12 @@ export class PostSupplierPaymentBillService {
       // zone — one day early whenever the tenant zone is west of the
       // host zone. The day string passes through untouched.
       entryDate: (bill as any).bill_date
-        ? ((bill as any).bill_date instanceof Date
+        ? (bill as any).bill_date instanceof Date
           ? formatLocalCalendarDay((bill as any).bill_date)
-          : String((bill as any).bill_date).slice(0, 10))
-        : ((bill as any).created_at ? new Date((bill as any).created_at) : new Date()),
+          : String((bill as any).bill_date).slice(0, 10)
+        : (bill as any).created_at
+          ? new Date((bill as any).created_at)
+          : new Date(),
       description: `قيد فاتورة مورد بدون مخزون رقم ${docNo}${supplierName ? ` - ${supplierName}` : ''}`,
       branchId,
       locationId,

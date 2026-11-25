@@ -64,14 +64,14 @@ export class PostVanTripSettlementSlice {
   }
 
   /**
-     * A van/field sale posts (via postSale) as a receivable rather than straight to cash — the money,
-     * if any was collected, is physically in the rep's pocket, not the till. This is the same "collect
-     * now, settle later" shape as postDeliveryRepSettlement, generalized to a whole trip: it reduces
-     * that pooled receivable by the amount the rep actually hands over, and reconciles the difference
-     * against a shortage/overage account (mirroring the cashier-shift variance treatment) rather than
-     * silently adjusting cash by whatever was collected.
-     */
-async postVanTripSettlement(
+   * A van/field sale posts (via postSale) as a receivable rather than straight to cash — the money,
+   * if any was collected, is physically in the rep's pocket, not the till. This is the same "collect
+   * now, settle later" shape as postDeliveryRepSettlement, generalized to a whole trip: it reduces
+   * that pooled receivable by the amount the rep actually hands over, and reconciles the difference
+   * against a shortage/overage account (mirroring the cashier-shift variance treatment) rather than
+   * silently adjusting cash by whatever was collected.
+   */
+  async postVanTripSettlement(
     queryable: DbOrTx,
     tripId: number,
     params: {
@@ -96,8 +96,8 @@ async postVanTripSettlement(
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
 
-
-    const existing = await queryable.selectFrom('journal_entries')
+    const existing = await queryable
+      .selectFrom('journal_entries')
       .select('id')
       .where('source_type', '=', 'van_trip_settlement')
       .where('source_id', '=', tripId)
@@ -111,7 +111,8 @@ async postVanTripSettlement(
     const stockShortage = params.stockShortageAmount ? toBookMoney(params.stockShortageAmount) : 0;
     const stockOverage = params.stockOverageAmount ? toBookMoney(params.stockOverageAmount) : 0;
 
-    if (expected <= 0 && counted <= 0 && tripExpenses <= 0 && stockShortage <= 0 && stockOverage <= 0) return { posted: false, journalEntryId: null };
+    if (expected <= 0 && counted <= 0 && tripExpenses <= 0 && stockShortage <= 0 && stockOverage <= 0)
+      return { posted: false, journalEntryId: null };
     const variance = toBookMoney(counted - expected);
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
@@ -120,7 +121,8 @@ async postVanTripSettlement(
     let cashAccountId = Number(settings.cash_account_id || 0);
     if (!(cashAccountId > 0)) cashAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1110');
     let receivableAccountId = Number(settings.customer_receivable_account_id || 0);
-    if (!(receivableAccountId > 0)) receivableAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1130');
+    if (!(receivableAccountId > 0))
+      receivableAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1130');
 
     const lines: JournalLineDraft[] = [];
     const branchId = params.branchId;
@@ -128,29 +130,75 @@ async postVanTripSettlement(
 
     const grossReceivableToClear = toBookMoney(expected + tripExpenses);
     if (grossReceivableToClear > 0) {
-      addBookLine({ accountId: receivableAccountId, description: `تصفية عهدة نقدية مندوب - رحلة #${tripId}`, debit: 0, credit: grossReceivableToClear, partnerType: 'none', partnerId: null, branchId, locationId });
+      addBookLine({
+        accountId: receivableAccountId,
+        description: `تصفية عهدة نقدية مندوب - رحلة #${tripId}`,
+        debit: 0,
+        credit: grossReceivableToClear,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     }
 
     if (tripExpenses > 0) {
       const expenseAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '6400');
-      addBookLine({ accountId: expenseAccountId, description: `مصروفات تشغيلية ووقود رحلة توزيع #${tripId}`, debit: tripExpenses, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
+      addBookLine({
+        accountId: expenseAccountId,
+        description: `مصروفات تشغيلية ووقود رحلة توزيع #${tripId}`,
+        debit: tripExpenses,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     }
 
     if (variance < -this.maxAllowedDifference(bookDigits)) {
       const shortageAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7200');
-      addBookLine({ accountId: shortageAccountId, description: `عجز تصفية رحلة توزيع #${tripId}`, debit: Math.abs(variance), credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
+      addBookLine({
+        accountId: shortageAccountId,
+        description: `عجز تصفية رحلة توزيع #${tripId}`,
+        debit: Math.abs(variance),
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     } else if (variance > this.maxAllowedDifference(bookDigits)) {
       const overageAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7100');
-      addBookLine({ accountId: overageAccountId, description: `زيادة تصفية رحلة توزيع #${tripId}`, debit: 0, credit: variance, partnerType: 'none', partnerId: null, branchId, locationId });
+      addBookLine({
+        accountId: overageAccountId,
+        description: `زيادة تصفية رحلة توزيع #${tripId}`,
+        debit: 0,
+        credit: variance,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     }
 
     if (counted > 0) {
-      addBookLine({ accountId: cashAccountId, description: `نقدية مسلَّمة من مندوب - رحلة #${tripId}`, debit: counted, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
+      addBookLine({
+        accountId: cashAccountId,
+        description: `نقدية مسلَّمة من مندوب - رحلة #${tripId}`,
+        debit: counted,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     }
 
     if (stockShortage > 0) {
       let inventoryAccountId = Number(settings.inventory_account_id || 0);
-      if (!(inventoryAccountId > 0)) inventoryAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1140');
+      if (!(inventoryAccountId > 0))
+        inventoryAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1140');
 
       let debitAccountId: number;
       let debitDesc: string;
@@ -162,8 +210,26 @@ async postVanTripSettlement(
         debitDesc = `خسائر عجز مخزني سيارة التوزيع - رحلة #${tripId}`;
       }
 
-      addBookLine({ accountId: debitAccountId, description: debitDesc, debit: stockShortage, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
-      addBookLine({ accountId: inventoryAccountId, description: `تسوية عجز مخزني سيارة التوزيع - رحلة #${tripId}`, debit: 0, credit: stockShortage, partnerType: 'none', partnerId: null, branchId, locationId });
+      addBookLine({
+        accountId: debitAccountId,
+        description: debitDesc,
+        debit: stockShortage,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
+      addBookLine({
+        accountId: inventoryAccountId,
+        description: `تسوية عجز مخزني سيارة التوزيع - رحلة #${tripId}`,
+        debit: 0,
+        credit: stockShortage,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     }
 
     // INV-VAN-SETTLE-COUNT-OVERAGE-VISIBLE: overage mirror of the
@@ -173,10 +239,29 @@ async postVanTripSettlement(
     // above are byte-identical; this block only adds legs.
     if (stockOverage > 0) {
       let inventoryAccountId = Number(settings.inventory_account_id || 0);
-      if (!(inventoryAccountId > 0)) inventoryAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1140');
+      if (!(inventoryAccountId > 0))
+        inventoryAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1140');
       const overageAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7100');
-      addBookLine({ accountId: inventoryAccountId, description: `تسوية زيادة مخزنية سيارة التوزيع - رحلة #${tripId}`, debit: stockOverage, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
-      addBookLine({ accountId: overageAccountId, description: `إيراد زيادة جرد بضاعة سيارة التوزيع - رحلة #${tripId}`, debit: 0, credit: stockOverage, partnerType: 'none', partnerId: null, branchId, locationId });
+      addBookLine({
+        accountId: inventoryAccountId,
+        description: `تسوية زيادة مخزنية سيارة التوزيع - رحلة #${tripId}`,
+        debit: stockOverage,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
+      addBookLine({
+        accountId: overageAccountId,
+        description: `إيراد زيادة جرد بضاعة سيارة التوزيع - رحلة #${tripId}`,
+        debit: 0,
+        credit: stockOverage,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     }
 
     if (lines.length === 0) return { posted: false, journalEntryId: null };
@@ -198,7 +283,13 @@ async postVanTripSettlement(
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_van_sales_uniq')) {
-        const existing2 = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'van_trip_settlement').where('source_id', '=', tripId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+        const existing2 = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'van_trip_settlement')
+          .where('source_id', '=', tripId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
         return { posted: false, journalEntryId: Number(existing2?.id || 0) };
       }
       throw e;

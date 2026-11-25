@@ -18,17 +18,13 @@ export class WarehouseBinsController {
 
   @Get()
   @AllowAuthenticated()
-  listBins(
-    @Query('locationId') locationId: string,
-    @Query('search') search: string,
-    @Req() req: RequestWithAuth
-  ) {
+  listBins(@Query('locationId') locationId: string, @Query('search') search: string, @Req() req: RequestWithAuth) {
     return this.binsService.listBins(
       {
         locationId: locationId ? Number(locationId) : undefined,
         search,
       },
-      req.authContext!
+      req.authContext!,
     );
   }
 
@@ -58,11 +54,7 @@ export class WarehouseBinsController {
 
   @Patch(':id')
   @RequirePermissions('inventory')
-  updateBin(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateBinDto,
-    @Req() req: RequestWithAuth
-  ) {
+  updateBin(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateBinDto, @Req() req: RequestWithAuth) {
     return this.binsService.updateBin(id, dto, req.authContext!);
   }
 

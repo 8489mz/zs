@@ -62,7 +62,11 @@ export class DamagedStockFoodWasteSlice {
     return this.bound.insertPostedJournal(queryable, params);
   }
 
-  async postDamagedStock(queryable: DbOrTx, damageRecordId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null; hasFinancialImpact?: boolean }> {
+  async postDamagedStock(
+    queryable: DbOrTx,
+    damageRecordId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null; hasFinancialImpact?: boolean }> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
 
@@ -85,8 +89,7 @@ export class DamagedStockFoodWasteSlice {
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const storedTotal = record.total_cost == null ? null : Number(record.total_cost);
     const amount = this.toMoney(
-      storedTotal != null && Number.isFinite(storedTotal) && storedTotal >= 0
-        ? storedTotal : qty * unitCost,
+      storedTotal != null && Number.isFinite(storedTotal) && storedTotal >= 0 ? storedTotal : qty * unitCost,
       moneyDigits,
     );
 
@@ -105,8 +108,34 @@ export class DamagedStockFoodWasteSlice {
     const locationId = record.location_id ? Number(record.location_id) : null;
 
     const lines: JournalLineDraft[] = [];
-    this.addLine(lines, { accountId: damagedExpenseAccountId, description: 'مصروف مخزون تالف', debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId }, moneyDigits);
-    this.addLine(lines, { accountId: inventoryAccountId, description: 'نقص مخزون بسبب التلف', debit: 0, credit: amount, partnerType: 'none', partnerId: null, branchId, locationId }, moneyDigits);
+    this.addLine(
+      lines,
+      {
+        accountId: damagedExpenseAccountId,
+        description: 'مصروف مخزون تالف',
+        debit: amount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      },
+      moneyDigits,
+    );
+    this.addLine(
+      lines,
+      {
+        accountId: inventoryAccountId,
+        description: 'نقص مخزون بسبب التلف',
+        debit: 0,
+        credit: amount,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      },
+      moneyDigits,
+    );
 
     try {
       const entryId = await this.insertPostedJournal(queryable, {
@@ -125,14 +154,24 @@ export class DamagedStockFoodWasteSlice {
       return { posted: true, journalEntryId: entryId, hasFinancialImpact: true };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_round1_uniq')) {
-         const existing = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'damaged_stock').where('source_id', '=', damageRecordId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
-         return { posted: false, journalEntryId: Number(existing?.id || 0), hasFinancialImpact: true };
+        const existing = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'damaged_stock')
+          .where('source_id', '=', damageRecordId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
+        return { posted: false, journalEntryId: Number(existing?.id || 0), hasFinancialImpact: true };
       }
       throw e;
     }
   }
 
-  async postFoodWaste(queryable: DbOrTx, wasteLogId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postFoodWaste(
+    queryable: DbOrTx,
+    wasteLogId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
 
@@ -163,26 +202,34 @@ export class DamagedStockFoodWasteSlice {
     const locationId: number | null = null;
 
     const lines: JournalLineDraft[] = [];
-    this.addLine(lines, {
-      accountId: wasteExpenseAccountId,
-      description: `مصروف هدر وتالف مطبخ - ${log.reason}`,
-      debit: amount,
-      credit: 0,
-      partnerType: 'none',
-      partnerId: null,
-      branchId,
-      locationId,
-    }, moneyDigits);
-    this.addLine(lines, {
-      accountId: inventoryAccountId,
-      description: 'نقص مخزون بسبب هدر المطبخ',
-      debit: 0,
-      credit: amount,
-      partnerType: 'none',
-      partnerId: null,
-      branchId,
-      locationId,
-    }, moneyDigits);
+    this.addLine(
+      lines,
+      {
+        accountId: wasteExpenseAccountId,
+        description: `مصروف هدر وتالف مطبخ - ${log.reason}`,
+        debit: amount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      },
+      moneyDigits,
+    );
+    this.addLine(
+      lines,
+      {
+        accountId: inventoryAccountId,
+        description: 'نقص مخزون بسبب هدر المطبخ',
+        debit: 0,
+        credit: amount,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      },
+      moneyDigits,
+    );
 
     try {
       const entryId = await this.insertPostedJournal(queryable, {

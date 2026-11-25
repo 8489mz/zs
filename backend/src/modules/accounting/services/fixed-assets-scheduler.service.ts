@@ -27,11 +27,14 @@ export class FixedAssetsSchedulerService implements OnApplicationBootstrap, OnMo
     }, 30000);
 
     // Run every 12 hours
-    this.timer = setInterval(() => {
-      this.checkAndRunAutoDepreciation().catch((err) => {
-        this.logger.warn(`Periodic auto depreciation check error: ${err?.message}`);
-      });
-    }, 12 * 60 * 60 * 1000);
+    this.timer = setInterval(
+      () => {
+        this.checkAndRunAutoDepreciation().catch((err) => {
+          this.logger.warn(`Periodic auto depreciation check error: ${err?.message}`);
+        });
+      },
+      12 * 60 * 60 * 1000,
+    );
   }
 
   onModuleDestroy() {
@@ -101,7 +104,7 @@ export class FixedAssetsSchedulerService implements OnApplicationBootstrap, OnMo
     try {
       const res = await this.accountingService.depreciateAllFixedAssets(
         { months: 1, note: `إهلاك شهري آلي مجدول لشهر ${yearMonth}` },
-        mockActor
+        mockActor,
       );
 
       const hasFailures = Array.isArray((res as any)?.results) && (res as any).results.some((r: any) => r.error);
@@ -118,11 +121,13 @@ export class FixedAssetsSchedulerService implements OnApplicationBootstrap, OnMo
           .onConflict((oc) =>
             oc.columns(['tenant_id', 'key'] as never).doUpdateSet({
               value: yearMonth,
-            } as any)
+            } as any),
           )
           .execute();
       } else {
-        this.logger.warn(`Fixed assets auto-depreciation for tenant ${tenantId} had partial failures, not marking month ${yearMonth} as complete`);
+        this.logger.warn(
+          `Fixed assets auto-depreciation for tenant ${tenantId} had partial failures, not marking month ${yearMonth} as complete`,
+        );
       }
 
       return res;
@@ -177,7 +182,7 @@ export class FixedAssetsSchedulerService implements OnApplicationBootstrap, OnMo
       .onConflict((oc) =>
         oc.columns(['tenant_id', 'key'] as never).doUpdateSet({
           value: enabled ? 'true' : 'false',
-        } as any)
+        } as any),
       )
       .execute();
 

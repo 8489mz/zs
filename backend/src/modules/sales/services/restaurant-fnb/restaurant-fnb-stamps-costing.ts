@@ -117,13 +117,11 @@ export class RestaurantFnbStampsCostingSlice {
       const sellingPrice = Number(r.selling_price || 0);
       const standardCost = Number(r.standard_cost || 0);
       const liveCost = Number(r.live_recipe_cost || standardCost);
-      const costInflationPct = standardCost > 0
-        ? Number((((liveCost - standardCost) / standardCost) * 100).toFixed(1))
-        : 0;
+      const costInflationPct =
+        standardCost > 0 ? Number((((liveCost - standardCost) / standardCost) * 100).toFixed(1)) : 0;
 
-      const currentMarginPct = sellingPrice > 0
-        ? Number((((sellingPrice - liveCost) / sellingPrice) * 100).toFixed(1))
-        : 0;
+      const currentMarginPct =
+        sellingPrice > 0 ? Number((((sellingPrice - liveCost) / sellingPrice) * 100).toFixed(1)) : 0;
 
       // Desired standard margin is 65% for restaurants
       const targetMargin = 0.65;

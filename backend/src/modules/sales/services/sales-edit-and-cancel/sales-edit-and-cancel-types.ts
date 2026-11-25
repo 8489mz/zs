@@ -42,11 +42,7 @@ import { CashDrawerService } from '../../../cash-drawer/cash-drawer.service';
  * is applied once the replacement rows exist. A settled trip's
  * counters are history: they are never moved, in either method.
  */
-export async function lockOpenTripRow(
-  trx: any,
-  tenantId: string,
-  tripId: number,
-): Promise<boolean> {
+export async function lockOpenTripRow(trx: any, tenantId: string, tripId: number): Promise<boolean> {
   const trip = await trx
     .selectFrom('van_sales_trips')
     .select(['id', 'status'])
@@ -105,10 +101,7 @@ export type SalesEditAndCancelDeps = {
     managerPin?: string,
     saleId?: number,
   ) => Promise<void>;
-  getTenantSettingsMap: (
-    trx: Kysely<Database> | Transaction<Database>,
-    tenantId: string,
-  ) => Promise<Map<string, any>>;
+  getTenantSettingsMap: (trx: Kysely<Database> | Transaction<Database>, tenantId: string) => Promise<Map<string, any>>;
   claimSaleSerials: (
     trx: Kysely<Database>,
     item: { productId: number; requiredQty: number; serials?: unknown },
@@ -116,11 +109,7 @@ export type SalesEditAndCancelDeps = {
     saleItemId: number,
     tenantId: string,
   ) => Promise<string[]>;
-  releaseSaleSerials: (
-    trx: Kysely<Database>,
-    saleId: number,
-    tenantId: string,
-  ) => Promise<void>;
+  releaseSaleSerials: (trx: Kysely<Database>, saleId: number, tenantId: string) => Promise<void>;
   resolveSaleModifierCosts: (
     trx: Kysely<Database> | Transaction<Database>,
     items: any[],
@@ -142,7 +131,14 @@ export type SalesEditAndCancelDeps = {
   ) => Promise<void>;
   autoProduceShortfall: (
     trx: Kysely<Database> | Transaction<Database>,
-    items: { productId: number; requiredQty: number; availableQty: number; hasBOM?: boolean; bomId?: number; unitMultiplier?: number }[],
+    items: {
+      productId: number;
+      requiredQty: number;
+      availableQty: number;
+      hasBOM?: boolean;
+      bomId?: number;
+      unitMultiplier?: number;
+    }[],
     saleId: number,
     branchId: number | null,
     locationId: number | null,
@@ -186,13 +182,19 @@ export type SalesEditAndCancelDeps = {
     scope: { tenantId: string; accountId: string },
     saleId: number,
     saleLineId: number,
-    allocation: { items: Array<{ productId: number; requestedQty: number; allocatedQty: number; shortfallQty: number; fullyCovered: boolean; reason: string }> },
+    allocation: {
+      items: Array<{
+        productId: number;
+        requestedQty: number;
+        allocatedQty: number;
+        shortfallQty: number;
+        fullyCovered: boolean;
+        reason: string;
+      }>;
+    },
     auth: AuthContext,
   ) => Promise<void>;
-  getAllowNegativeStockSales: (
-    trx: Kysely<Database> | Transaction<Database>,
-    tenantId: string,
-  ) => Promise<boolean>;
+  getAllowNegativeStockSales: (trx: Kysely<Database> | Transaction<Database>, tenantId: string) => Promise<boolean>;
   buildInsufficientStockError: (
     trx: Kysely<Database> | Transaction<Database>,
     params: {

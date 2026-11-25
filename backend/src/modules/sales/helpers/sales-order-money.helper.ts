@@ -39,27 +39,15 @@ export type SalesOrderMoney = {
 };
 
 function failLine(): never {
-  throw new AppError(
-    'إجمالي بند أمر البيع لا يطابق الكمية × السعر − الخصم',
-    'SALES_ORDER_LINE_MISMATCH',
-    400,
-  );
+  throw new AppError('إجمالي بند أمر البيع لا يطابق الكمية × السعر − الخصم', 'SALES_ORDER_LINE_MISMATCH', 400);
 }
 
 function failTotal(): never {
-  throw new AppError(
-    'إجمالي أمر البيع لا يطابق البنود والخصم والضريبة',
-    'SALES_ORDER_TOTAL_MISMATCH',
-    400,
-  );
+  throw new AppError('إجمالي أمر البيع لا يطابق البنود والخصم والضريبة', 'SALES_ORDER_TOTAL_MISMATCH', 400);
 }
 
 function failQuotationTotal(): never {
-  throw new AppError(
-    'إجمالي عرض السعر لا يطابق البنود والخصم والضريبة',
-    'QUOTATION_TOTAL_MISMATCH',
-    400,
-  );
+  throw new AppError('إجمالي عرض السعر لا يطابق البنود والخصم والضريبة', 'QUOTATION_TOTAL_MISMATCH', 400);
 }
 
 /**

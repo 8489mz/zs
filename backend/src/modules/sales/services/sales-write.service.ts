@@ -4,7 +4,11 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Kysely, sql, type Transaction } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
 // previewConsumableStockQty is kept in this import: check-architecture-guardrails.cjs requires the token in sales-write.service.ts, although no method left in this file calls it.
-import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
+import {
+  applyStockDelta,
+  lockStockProducts,
+  previewConsumableStockQty,
+} from '../../../common/utils/location-stock-ledger';
 import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -220,7 +224,6 @@ export class SalesWriteService {
     return this.heldSales;
   }
 
-
   /**
    * The create-sale sub-service, built eagerly by the constructor. Specs
    * that Object.create the facade and set fields by hand never run the
@@ -279,7 +282,6 @@ export class SalesWriteService {
     return this.getRestaurantSerials().transferKdsTicketStateInTrx(trx, tenantId, draftSaleId, postedSaleId);
   }
 
-
   private async loadFlatAddonCosts(
     trx: Kysely<Database> | Transaction<Database>,
     tenantId: string,
@@ -289,24 +291,43 @@ export class SalesWriteService {
   }
 
   private async resolveSaleModifierCosts(
-    trx: Kysely<Database> | Transaction<Database>, items: any[],
-    tenantId: string, restaurantEnabled: boolean,
+    trx: Kysely<Database> | Transaction<Database>,
+    items: any[],
+    tenantId: string,
+    restaurantEnabled: boolean,
     approvedModifierPrices?: Record<string, number>,
   ): Promise<void> {
-    return this.getRestaurantSerials().resolveSaleModifierCosts(trx, items, tenantId, restaurantEnabled, approvedModifierPrices);
+    return this.getRestaurantSerials().resolveSaleModifierCosts(
+      trx,
+      items,
+      tenantId,
+      restaurantEnabled,
+      approvedModifierPrices,
+    );
   }
 
   private async enforceRestaurantModifierContract(
-    trx: Kysely<Database> | Transaction<Database>, items: any[],
-    tenantId: string, restaurantEnabled: boolean,
+    trx: Kysely<Database> | Transaction<Database>,
+    items: any[],
+    tenantId: string,
+    restaurantEnabled: boolean,
     approvedModifierPrices?: Record<string, number>,
   ): Promise<void> {
-    return this.getRestaurantSerials().enforceRestaurantModifierContract(trx, items, tenantId, restaurantEnabled, approvedModifierPrices);
+    return this.getRestaurantSerials().enforceRestaurantModifierContract(
+      trx,
+      items,
+      tenantId,
+      restaurantEnabled,
+      approvedModifierPrices,
+    );
   }
 
   private async claimSaleSerials(
-    trx: Kysely<Database>, item: { productId: number; requiredQty: number; serials?: unknown },
-    saleId: number, saleItemId: number, tenantId: string,
+    trx: Kysely<Database>,
+    item: { productId: number; requiredQty: number; serials?: unknown },
+    saleId: number,
+    saleItemId: number,
+    tenantId: string,
   ): Promise<string[]> {
     return this.getRestaurantSerials().claimSaleSerials(trx, item, saleId, saleItemId, tenantId);
   }
@@ -319,17 +340,29 @@ export class SalesWriteService {
   // On a cache miss the caller's transaction connection must be reused: opening a second
   // pool connection while every cashier holds a transaction can exhaust the whole pool.
   private static readonly SALE_SETTING_KEYS = [
-    'posMaxDiscountThresholdEnabled', 'posMaxDiscountThresholdType', 'posMaxDiscountThresholdValue',
+    'posMaxDiscountThresholdEnabled',
+    'posMaxDiscountThresholdType',
+    'posMaxDiscountThresholdValue',
     'posSmallDiscountFlatAllowance',
-    'taxRate', 'tax_rate', 'allowNegativeStockSales', 'allowSellingBelowStock', 'loyaltyEnabled',
-    'loyaltyPointsPer100Egp', 'loyaltyPointRedeemValue', 'loyaltyMinRedeemPoints',
-    'loyaltyMaxDiscountPercentage', 'requireCashierShiftForSales', 'deliveryFeeMode',
+    'taxRate',
+    'tax_rate',
+    'allowNegativeStockSales',
+    'allowSellingBelowStock',
+    'loyaltyEnabled',
+    'loyaltyPointsPer100Egp',
+    'loyaltyPointRedeemValue',
+    'loyaltyMinRedeemPoints',
+    'loyaltyMaxDiscountPercentage',
+    'requireCashierShiftForSales',
+    'deliveryFeeMode',
     // R4-A (INV-REST-SALE-MONEY-TRUTH): the dine-in service charge is
     // recomputed server-side, so its tenant settings must be fetched
     // here too (camelCase is the live key; the snake spellings are a
     // fallback only — they have no writer).
-    'restaurantServiceChargeEnabled', 'restaurantServiceChargePercent',
-    'restaurant_service_charge_enabled', 'restaurant_service_charge_rate',
+    'restaurantServiceChargeEnabled',
+    'restaurantServiceChargePercent',
+    'restaurant_service_charge_enabled',
+    'restaurant_service_charge_rate',
     'invoiceNumberingScheme',
   ];
   private static readonly tenantSettingsMapCache = new Map<string, { map: Map<string, any>; expiresAt: number }>();
@@ -343,7 +376,10 @@ export class SalesWriteService {
     }
   }
 
-  private async getTenantSettingsMap(trx: Kysely<Database> | Transaction<Database>, tenantId: string): Promise<Map<string, any>> {
+  private async getTenantSettingsMap(
+    trx: Kysely<Database> | Transaction<Database>,
+    tenantId: string,
+  ): Promise<Map<string, any>> {
     const now = Date.now();
     const cached = SalesWriteService.tenantSettingsMapCache.get(tenantId);
     if (cached && cached.expiresAt > now) {
@@ -388,11 +424,31 @@ export class SalesWriteService {
     return this.getStockPricing().assertDiscountChangeAllowed(trx, auth, discount, managerPin, subtotal);
   }
 
-  private async assertUnitPriceChangeAllowed(trx: Kysely<Database> | Transaction<Database>, auth: AuthContext, providedPrice: number, allowedPrice: number, productId: number, managerPin?: string, saleId?: number): Promise<void> {
-    return this.getStockPricing().assertUnitPriceChangeAllowed(trx, auth, providedPrice, allowedPrice, productId, managerPin, saleId);
+  private async assertUnitPriceChangeAllowed(
+    trx: Kysely<Database> | Transaction<Database>,
+    auth: AuthContext,
+    providedPrice: number,
+    allowedPrice: number,
+    productId: number,
+    managerPin?: string,
+    saleId?: number,
+  ): Promise<void> {
+    return this.getStockPricing().assertUnitPriceChangeAllowed(
+      trx,
+      auth,
+      providedPrice,
+      allowedPrice,
+      productId,
+      managerPin,
+      saleId,
+    );
   }
 
-  private async getCurrentProductOffers(trx: Kysely<Database> | Transaction<Database>, productId: number, tenantId: string) {
+  private async getCurrentProductOffers(
+    trx: Kysely<Database> | Transaction<Database>,
+    productId: number,
+    tenantId: string,
+  ) {
     return this.getStockPricing().getCurrentProductOffers(trx, productId, tenantId);
   }
 
@@ -417,7 +473,10 @@ export class SalesWriteService {
     return this.getStockPricing().lockSaleStockRows(trx, scope, items);
   }
 
-  private async getAllowNegativeStockSales(trx: Kysely<Database> | Transaction<Database>, tenantId: string): Promise<boolean> {
+  private async getAllowNegativeStockSales(
+    trx: Kysely<Database> | Transaction<Database>,
+    tenantId: string,
+  ): Promise<boolean> {
     return this.getStockPricing().getAllowNegativeStockSales(trx, tenantId);
   }
 
@@ -439,7 +498,14 @@ export class SalesWriteService {
 
   private async autoProduceShortfall(
     trx: Kysely<Database> | Transaction<Database>,
-    items: { productId: number; requiredQty: number; availableQty: number; hasBOM?: boolean; bomId?: number; unitMultiplier?: number }[],
+    items: {
+      productId: number;
+      requiredQty: number;
+      availableQty: number;
+      hasBOM?: boolean;
+      bomId?: number;
+      unitMultiplier?: number;
+    }[],
     saleId: number,
     branchId: number | null,
     locationId: number | null,
@@ -448,7 +514,17 @@ export class SalesWriteService {
     visitedProductIds: Set<number> = new Set(),
     depth = 0,
   ) {
-    return this.getRestaurantSerials().autoProduceShortfall(trx, items, saleId, branchId, locationId, scope, auth, visitedProductIds, depth);
+    return this.getRestaurantSerials().autoProduceShortfall(
+      trx,
+      items,
+      saleId,
+      branchId,
+      locationId,
+      scope,
+      auth,
+      visitedProductIds,
+      depth,
+    );
   }
 
   private async recordImportLotShortfalls(
@@ -456,7 +532,16 @@ export class SalesWriteService {
     scope: { tenantId: string; accountId: string },
     saleId: number,
     saleLineId: number,
-    allocation: { items: Array<{ productId: number; requestedQty: number; allocatedQty: number; shortfallQty: number; fullyCovered: boolean; reason: string }> },
+    allocation: {
+      items: Array<{
+        productId: number;
+        requestedQty: number;
+        allocatedQty: number;
+        shortfallQty: number;
+        fullyCovered: boolean;
+        reason: string;
+      }>;
+    },
     auth: AuthContext,
   ): Promise<void> {
     return this.getRestaurantSerials().recordImportLotShortfalls(trx, scope, saleId, saleLineId, allocation, auth);
@@ -470,13 +555,22 @@ export class SalesWriteService {
     saleId: number,
     saleItemId: number,
   ): Promise<void> {
-    return this.getRestaurantSerials().deductPharmacyBatchesFefo(trx, productId, allocations, scope, saleId, saleItemId);
+    return this.getRestaurantSerials().deductPharmacyBatchesFefo(
+      trx,
+      productId,
+      allocations,
+      scope,
+      saleId,
+      saleItemId,
+    );
   }
 
   private async restoreSalePharmacyBatches(
-    trx: Kysely<Database> | Transaction<Database>, saleId: number,
+    trx: Kysely<Database> | Transaction<Database>,
+    saleId: number,
     items: Array<{ id: number; product_id: number | null }>,
-    scope: { tenantId: string; accountId: string }, removeAllocations: boolean,
+    scope: { tenantId: string; accountId: string },
+    removeAllocations: boolean,
   ): Promise<void> {
     return this.getRestaurantSerials().restoreSalePharmacyBatches(trx, saleId, items, scope, removeAllocations);
   }
@@ -491,13 +585,22 @@ export class SalesWriteService {
     saleId: number,
     saleItemId: number,
   ): Promise<void> {
-    return this.getRestaurantSerials().deductInventoryBatchesFefo(trx, productId, allocations, scope, saleId, saleItemId);
+    return this.getRestaurantSerials().deductInventoryBatchesFefo(
+      trx,
+      productId,
+      allocations,
+      scope,
+      saleId,
+      saleItemId,
+    );
   }
 
   private async restoreSaleInventoryBatches(
-    trx: Kysely<Database> | Transaction<Database>, saleId: number,
+    trx: Kysely<Database> | Transaction<Database>,
+    saleId: number,
     items: Array<{ id: number; product_id: number | null }>,
-    scope: { tenantId: string; accountId: string }, removeAllocations: boolean,
+    scope: { tenantId: string; accountId: string },
+    removeAllocations: boolean,
   ): Promise<void> {
     return this.getRestaurantSerials().restoreSaleInventoryBatches(trx, saleId, items, scope, removeAllocations);
   }
@@ -519,7 +622,12 @@ export class SalesWriteService {
       product_id: payload.productId || null,
       amount: Number(payload.total || 0),
       reason,
-      metadata: { branchId: payload.branchId, productName: payload.productName, qty: payload.qty, cartItemsCount: payload.cartItemsCount },
+      metadata: {
+        branchId: payload.branchId,
+        productName: payload.productName,
+        qty: payload.qty,
+        cartItemsCount: payload.cartItemsCount,
+      },
     };
     if (payload.eventType === 'no_sale') {
       const branchId = Number(payload.branchId);
@@ -529,16 +637,26 @@ export class SalesWriteService {
       // event with shiftId + username, and the audit log entry).
       if (!branchId || !reason) throw new AppError('حدد الفرع وسبب فتح الدرج', 'NO_SALE_REASON_REQUIRED', 400);
       await this.tx.runInTransaction(this.db, async (trx) => {
-        if (!await this.authz.hasOpenCashierShift(trx, auth, branchId)) {
+        if (!(await this.authz.hasOpenCashierShift(trx, auth, branchId))) {
           throw new AppError('وردية كاشير مفتوحة مطلوبة لفتح الدرج', 'OPEN_SHIFT_REQUIRED', 400);
         }
-        const shift = await trx.selectFrom('cashier_shifts').select('id')
-          .where('tenant_id', '=', scope.tenantId).where('opened_by', '=', auth.userId)
-          .where('branch_id', '=', branchId).where('status', '=', 'open')
-          .orderBy('id', 'desc').forUpdate().executeTakeFirstOrThrow();
-        await trx.insertInto('pos_audit_events').values({
-          ...event, metadata: { ...event.metadata, shiftId: Number(shift.id), username: auth.username },
-        }).execute();
+        const shift = await trx
+          .selectFrom('cashier_shifts')
+          .select('id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('opened_by', '=', auth.userId)
+          .where('branch_id', '=', branchId)
+          .where('status', '=', 'open')
+          .orderBy('id', 'desc')
+          .forUpdate()
+          .executeTakeFirstOrThrow();
+        await trx
+          .insertInto('pos_audit_events')
+          .values({
+            ...event,
+            metadata: { ...event.metadata, shiftId: Number(shift.id), username: auth.username },
+          })
+          .execute();
       });
     } else {
       await this.db.insertInto('pos_audit_events').values(event).execute();
@@ -555,11 +673,17 @@ export class SalesWriteService {
         typeof payload.cartItemsCount === 'number' ? `عدد العناصر: ${payload.cartItemsCount}` : '',
         payload.note ? `ملاحظة: ${payload.note}` : '',
       ].filter(Boolean);
-      await this.audit.log('حدث أمني - حذف عنصر من السلة', detailsParts.join(' | '), auth, { eventCode: AUDIT_EVENT_CODES.POS_CART_ITEM_REMOVED });
-      detailInfo = payload.productName ? `${payload.productName} (كمية: ${payload.qty || 1})` : (payload.note || 'حذف صنف من السلة');
+      await this.audit.log('حدث أمني - حذف عنصر من السلة', detailsParts.join(' | '), auth, {
+        eventCode: AUDIT_EVENT_CODES.POS_CART_ITEM_REMOVED,
+      });
+      detailInfo = payload.productName
+        ? `${payload.productName} (كمية: ${payload.qty || 1})`
+        : payload.note || 'حذف صنف من السلة';
     } else if (payload.eventType === 'no_sale') {
       detailInfo = reason || 'فتح درج بدون بيع';
-      await this.audit.log('حدث أمني - فتح درج بدون بيع', detailInfo, auth, { eventCode: AUDIT_EVENT_CODES.POS_DRAFT_SALE_CANCELLED });
+      await this.audit.log('حدث أمني - فتح درج بدون بيع', detailInfo, auth, {
+        eventCode: AUDIT_EVENT_CODES.POS_DRAFT_SALE_CANCELLED,
+      });
     } else {
       const cancelDetailsParts = [
         `تم إلغاء/حذف فاتورة قبل الإرسال بواسطة ${auth.username}`,
@@ -567,19 +691,17 @@ export class SalesWriteService {
         typeof payload.cartItemsCount === 'number' ? `عدد العناصر: ${payload.cartItemsCount}` : '',
         payload.note ? `ملاحظة: ${payload.note}` : '',
       ].filter(Boolean);
-      await this.audit.log('حدث أمني - إلغاء/حذف فاتورة', cancelDetailsParts.join(' | '), auth, { eventCode: AUDIT_EVENT_CODES.POS_DRAFT_SALE_CANCELLED });
+      await this.audit.log('حدث أمني - إلغاء/حذف فاتورة', cancelDetailsParts.join(' | '), auth, {
+        eventCode: AUDIT_EVENT_CODES.POS_DRAFT_SALE_CANCELLED,
+      });
       detailInfo = `إلغاء فاتورة بقيمة ${payload.total || 0} ج.م`;
     }
 
     // Trigger proactive fraud radar anomaly check in the background
     if (this.fraudRadarService) {
-      this.fraudRadarService.checkAndAlertAnomaly(
-        scope.tenantId,
-        auth.userId,
-        auth.username,
-        payload.eventType,
-        detailInfo,
-      ).catch((err) => this.logger.warn(`Fraud radar anomaly check error: ${err?.message}`));
+      this.fraudRadarService
+        .checkAndAlertAnomaly(scope.tenantId, auth.userId, auth.username, payload.eventType, detailInfo)
+        .catch((err) => this.logger.warn(`Fraud radar anomaly check error: ${err?.message}`));
     }
 
     return { ok: true };
@@ -603,7 +725,8 @@ export class SalesWriteService {
       .executeTakeFirst()
       .catch(() => undefined);
 
-    if (!order || ['cancelled', 'payment_failed', 'review_required'].includes(order.status) || order.sale_id) return existing;
+    if (!order || ['cancelled', 'payment_failed', 'review_required'].includes(order.status) || order.sale_id)
+      return existing;
 
     let items: Array<Record<string, unknown>> = [];
     try {
@@ -638,7 +761,10 @@ export class SalesWriteService {
     }
 
     return {
-      approvedDiscount: Math.max(Number(existing?.approvedDiscount || 0), Math.max(0, Number(order.discount_amount || 0))),
+      approvedDiscount: Math.max(
+        Number(existing?.approvedDiscount || 0),
+        Math.max(0, Number(order.discount_amount || 0)),
+      ),
       approvedUnitPrices,
       approvedModifierPrices,
       // SF-2 D-SF-11: the caller-computed terms are rebuilt here, so the
@@ -651,7 +777,12 @@ export class SalesWriteService {
    * Create a sale. Thin delegate — the implementation lives in
    * CreateSaleService (split 5); see that file for the phase breakdown.
    */
-  async createSale(payload: UpsertSaleDto, auth: AuthContext, approvedTerms?: SystemApprovedSaleTerms, conversionRelease?: SalesOrderConversionRelease): Promise<Record<string, unknown>> {
+  async createSale(
+    payload: UpsertSaleDto,
+    auth: AuthContext,
+    approvedTerms?: SystemApprovedSaleTerms,
+    conversionRelease?: SalesOrderConversionRelease,
+  ): Promise<Record<string, unknown>> {
     return this.getCreateSale().createSale(payload, auth, approvedTerms, conversionRelease);
   }
 
@@ -659,7 +790,11 @@ export class SalesWriteService {
     return this.editAndCancel().updateSale(saleId, payload, auth);
   }
 
-  async adjustSalePayments(saleId: number, payload: AdjustSalePaymentsDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async adjustSalePayments(
+    saleId: number,
+    payload: AdjustSalePaymentsDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.editAndCancel().adjustSalePayments(saleId, payload, auth);
   }
 
@@ -672,26 +807,44 @@ export class SalesWriteService {
     auth: AuthContext,
     tenantId: string,
   ): Promise<void> {
-    return this.editAndCancel().refreshClosedShiftsForBackdatedOfflineSale(trx, offlineCreatedAt, saleId, branchId, locationId, auth, tenantId);
+    return this.editAndCancel().refreshClosedShiftsForBackdatedOfflineSale(
+      trx,
+      offlineCreatedAt,
+      saleId,
+      branchId,
+      locationId,
+      auth,
+      tenantId,
+    );
   }
 
-  async cancelSale(saleId: number, reason: string, managerPin: string, auth: AuthContext): Promise<Record<string, unknown>> {
+  async cancelSale(
+    saleId: number,
+    reason: string,
+    managerPin: string,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.editAndCancel().cancelSale(saleId, reason, managerPin, auth);
   }
 
-    async saveHeldSale(payload: HeldSaleDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async saveHeldSale(payload: HeldSaleDto, auth: AuthContext): Promise<Record<string, unknown>> {
     return this.getHeldSales().saveHeldSale(payload, auth);
   }
 
-    async deleteHeldSale(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
+  async deleteHeldSale(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
     return this.getHeldSales().deleteHeldSale(id, auth);
   }
 
-    async clearHeldSales(auth: AuthContext): Promise<Record<string, unknown>> {
+  async clearHeldSales(auth: AuthContext): Promise<Record<string, unknown>> {
     return this.getHeldSales().clearHeldSales(auth);
   }
 
-  private async generateSaleDocNo(trx: Kysely<Database>, saleId: number, tenantId: string, businessDate?: Date | null): Promise<string> {
+  private async generateSaleDocNo(
+    trx: Kysely<Database>,
+    saleId: number,
+    tenantId: string,
+    businessDate?: Date | null,
+  ): Promise<string> {
     const settingsMap = await this.getTenantSettingsMap(trx, tenantId);
     let scheme = settingsMap.get('invoiceNumberingScheme') || 'daily';
     if (typeof scheme !== 'string') {

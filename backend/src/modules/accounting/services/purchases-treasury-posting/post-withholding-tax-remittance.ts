@@ -15,7 +15,12 @@ export class PostWithholdingTaxRemittanceService {
     private readonly ensureTenantFoundation: (queryable: DbOrTx, auth: AuthContext) => Promise<void>,
   ) {}
 
-  async postWithholdingTaxRemittance(queryable: DbOrTx, transactionId: number, paymentMethod: 'bank' | 'cash', auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postWithholdingTaxRemittance(
+    queryable: DbOrTx,
+    transactionId: number,
+    paymentMethod: 'bank' | 'cash',
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
@@ -41,50 +46,101 @@ export class PostWithholdingTaxRemittanceService {
       let supplierApId = Number(settings?.supplier_payable_account_id || 0);
       if (!(supplierApId > 0)) supplierApId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '2110');
       const whtPayableId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '2126');
-      const paymentAccountId = paymentMethod === 'cash'
-        ? await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1110')
-        : await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1120');
+      const paymentAccountId =
+        paymentMethod === 'cash'
+          ? await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1110')
+          : await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1120');
 
-      this.addLine(lines, {
-        accountId: supplierApId,
-        description: `استقطاع ضريبة خصم وإضافة من مستحقات المورد ${tx.partner_name} - فاتورة #${tx.invoice_number}`,
-        debit: taxAmount, credit: 0,
-        partnerType: partnerId ? 'supplier' : 'none', partnerId,
-        branchId: null, locationId: null,
-      }, bookDigits);
-      this.addLine(lines, {
-        accountId: whtPayableId,
-        description: `أمانات ضريبة خصم وإضافة نموذج 41 - فاتورة #${tx.invoice_number}`,
-        debit: 0, credit: taxAmount, partnerType: 'none', partnerId: null, branchId: null, locationId: null,
-      }, bookDigits);
-      this.addLine(lines, {
-        accountId: whtPayableId,
-        description: `سداد ضريبة خصم وإضافة نموذج 41 - فاتورة #${tx.invoice_number}`,
-        debit: taxAmount, credit: 0, partnerType: 'none', partnerId: null, branchId: null, locationId: null,
-      }, bookDigits);
-      this.addLine(lines, {
-        accountId: paymentAccountId,
-        description: `سداد وتوريد ضريبة الخصم والإضافة لمصلحة الضرائب (${paymentMethod === 'cash' ? 'نقداً' : 'بنكياً'})`,
-        debit: 0, credit: taxAmount, partnerType: 'none', partnerId: null, branchId: null, locationId: null,
-      }, bookDigits);
+      this.addLine(
+        lines,
+        {
+          accountId: supplierApId,
+          description: `استقطاع ضريبة خصم وإضافة من مستحقات المورد ${tx.partner_name} - فاتورة #${tx.invoice_number}`,
+          debit: taxAmount,
+          credit: 0,
+          partnerType: partnerId ? 'supplier' : 'none',
+          partnerId,
+          branchId: null,
+          locationId: null,
+        },
+        bookDigits,
+      );
+      this.addLine(
+        lines,
+        {
+          accountId: whtPayableId,
+          description: `أمانات ضريبة خصم وإضافة نموذج 41 - فاتورة #${tx.invoice_number}`,
+          debit: 0,
+          credit: taxAmount,
+          partnerType: 'none',
+          partnerId: null,
+          branchId: null,
+          locationId: null,
+        },
+        bookDigits,
+      );
+      this.addLine(
+        lines,
+        {
+          accountId: whtPayableId,
+          description: `سداد ضريبة خصم وإضافة نموذج 41 - فاتورة #${tx.invoice_number}`,
+          debit: taxAmount,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+          branchId: null,
+          locationId: null,
+        },
+        bookDigits,
+      );
+      this.addLine(
+        lines,
+        {
+          accountId: paymentAccountId,
+          description: `سداد وتوريد ضريبة الخصم والإضافة لمصلحة الضرائب (${paymentMethod === 'cash' ? 'نقداً' : 'بنكياً'})`,
+          debit: 0,
+          credit: taxAmount,
+          partnerType: 'none',
+          partnerId: null,
+          branchId: null,
+          locationId: null,
+        },
+        bookDigits,
+      );
     } else {
       // Tax withheld by the customer is a credit against our income tax; it settles part of the customer's debt.
       let customerArId = Number(settings?.customer_receivable_account_id || 0);
       if (!(customerArId > 0)) customerArId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1130');
       const whtReceivableId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1155');
 
-      this.addLine(lines, {
-        accountId: whtReceivableId,
-        description: `ضريبة خصم وإضافة مخصومة لدى العميل - فاتورة #${tx.invoice_number}`,
-        debit: taxAmount, credit: 0, partnerType: 'none', partnerId: null, branchId: null, locationId: null,
-      }, bookDigits);
-      this.addLine(lines, {
-        accountId: customerArId,
-        description: `تسوية مديونية العميل ${tx.partner_name} بقيمة الضريبة المخصومة - فاتورة #${tx.invoice_number}`,
-        debit: 0, credit: taxAmount,
-        partnerType: partnerId ? 'customer' : 'none', partnerId,
-        branchId: null, locationId: null,
-      }, bookDigits);
+      this.addLine(
+        lines,
+        {
+          accountId: whtReceivableId,
+          description: `ضريبة خصم وإضافة مخصومة لدى العميل - فاتورة #${tx.invoice_number}`,
+          debit: taxAmount,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+          branchId: null,
+          locationId: null,
+        },
+        bookDigits,
+      );
+      this.addLine(
+        lines,
+        {
+          accountId: customerArId,
+          description: `تسوية مديونية العميل ${tx.partner_name} بقيمة الضريبة المخصومة - فاتورة #${tx.invoice_number}`,
+          debit: 0,
+          credit: taxAmount,
+          partnerType: partnerId ? 'customer' : 'none',
+          partnerId,
+          branchId: null,
+          locationId: null,
+        },
+        bookDigits,
+      );
     }
 
     try {
@@ -103,7 +159,11 @@ export class PostWithholdingTaxRemittanceService {
       });
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
-      if (e.code === '23505' && (e.constraint?.includes('idx_journal_entries_pdc_and_wht_uniq') || e.constraint?.includes('idx_journal_entries_round1_uniq'))) {
+      if (
+        e.code === '23505' &&
+        (e.constraint?.includes('idx_journal_entries_pdc_and_wht_uniq') ||
+          e.constraint?.includes('idx_journal_entries_round1_uniq'))
+      ) {
         const existing = await queryable
           .selectFrom('journal_entries')
           .select('id')

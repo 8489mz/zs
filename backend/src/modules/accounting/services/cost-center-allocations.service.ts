@@ -22,7 +22,9 @@ export interface CreateCostCenterAllocationDto {
 export class CostCenterAllocationsService {
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
-  private normalizeSplits(splits: CostCenterSplitInput[] | undefined): Array<{ costCenterId: number; percentage: number; notes: string | null }> {
+  private normalizeSplits(
+    splits: CostCenterSplitInput[] | undefined,
+  ): Array<{ costCenterId: number; percentage: number; notes: string | null }> {
     if (!Array.isArray(splits) || splits.length < 2) {
       throw new BadRequestException('يجب إضافة مركزين تكلفة على الأقل في مصفوفة التوزيع.');
     }
@@ -47,8 +49,12 @@ export class CostCenterAllocationsService {
   }
 
   private async assertOwnedCenters(db: Kysely<Database>, tenantId: string, centers: number[]): Promise<void> {
-    const rows = await db.selectFrom('cost_centers').select('id')
-      .where('tenant_id', '=', tenantId).where('id', 'in', centers).execute();
+    const rows = await db
+      .selectFrom('cost_centers')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('id', 'in', centers)
+      .execute();
     if (rows.length !== centers.length) {
       throw new BadRequestException('أحد مراكز التكلفة غير موجود أو لا يتبع المنشأة.');
     }
@@ -68,7 +74,9 @@ export class CostCenterAllocationsService {
     const allocationIds = allocations.map((a) => String(a.id));
     const splits = await this.db
       .selectFrom('cost_center_allocation_splits as ccas')
-      .leftJoin('cost_centers as cc', (join) => join.onRef('cc.id', '=', 'ccas.cost_center_id').on('cc.tenant_id', '=', tenantId))
+      .leftJoin('cost_centers as cc', (join) =>
+        join.onRef('cc.id', '=', 'ccas.cost_center_id').on('cc.tenant_id', '=', tenantId),
+      )
       .select([
         'ccas.id',
         'ccas.allocation_id',
@@ -109,24 +117,35 @@ export class CostCenterAllocationsService {
 
   async createAllocation(dto: CreateCostCenterAllocationDto, auth: AuthContext) {
     const { tenantId } = requireTenantScope(auth);
-    const code = String(dto.code || '').trim().toUpperCase();
+    const code = String(dto.code || '')
+      .trim()
+      .toUpperCase();
     const name = String(dto.name || '').trim();
     if (!code || !name) throw new BadRequestException('كود واسم مصفوفة التوزيع مطلوبان.');
     const splits = this.normalizeSplits(dto.splits);
 
     return this.db.transaction().execute(async (trx) => {
-      await this.assertOwnedCenters(trx, tenantId, splits.map(s => s.costCenterId));
-      const created = await trx.insertInto('cost_center_allocations')
+      await this.assertOwnedCenters(
+        trx,
+        tenantId,
+        splits.map((s) => s.costCenterId),
+      );
+      const created = await trx
+        .insertInto('cost_center_allocations')
         .values({ tenant_id: tenantId, code, name, description: dto.description || null, is_active: true } as any)
-        .returningAll().executeTakeFirstOrThrow();
-      await trx.insertInto('cost_center_allocation_splits')
-        .values(splits.map(split => ({
-          tenant_id: tenantId,
-          allocation_id: String(created.id),
-          cost_center_id: String(split.costCenterId),
-          percentage: split.percentage,
-          notes: split.notes,
-        })) as any)
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      await trx
+        .insertInto('cost_center_allocation_splits')
+        .values(
+          splits.map((split) => ({
+            tenant_id: tenantId,
+            allocation_id: String(created.id),
+            cost_center_id: String(split.costCenterId),
+            percentage: split.percentage,
+            notes: split.notes,
+          })) as any,
+        )
         .execute();
       return { ok: true, allocationId: created.id };
     });
@@ -134,27 +153,50 @@ export class CostCenterAllocationsService {
 
   async updateAllocation(id: string, dto: CreateCostCenterAllocationDto, auth: AuthContext) {
     const { tenantId } = requireTenantScope(auth);
-    const code = String(dto.code || '').trim().toUpperCase();
+    const code = String(dto.code || '')
+      .trim()
+      .toUpperCase();
     const name = String(dto.name || '').trim();
     if (!code || !name) throw new BadRequestException('كود واسم مصفوفة التوزيع مطلوبان.');
     const splits = this.normalizeSplits(dto.splits);
 
     return this.db.transaction().execute(async (trx) => {
-      const existing = await trx.selectFrom('cost_center_allocations').select('id')
-        .where('tenant_id', '=', tenantId).where('id', '=', id as any)
-        .forUpdate().executeTakeFirst();
+      const existing = await trx
+        .selectFrom('cost_center_allocations')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id as any)
+        .forUpdate()
+        .executeTakeFirst();
       if (!existing) throw new NotFoundException('مصفوفة التوزيع غير موجودة.');
-      await this.assertOwnedCenters(trx, tenantId, splits.map(s => s.costCenterId));
-      await trx.updateTable('cost_center_allocations')
+      await this.assertOwnedCenters(
+        trx,
+        tenantId,
+        splits.map((s) => s.costCenterId),
+      );
+      await trx
+        .updateTable('cost_center_allocations')
         .set({ code, name, description: dto.description || null, updated_at: sql`NOW()` } as any)
-        .where('tenant_id', '=', tenantId).where('id', '=', id as any).execute();
-      await trx.deleteFrom('cost_center_allocation_splits')
-        .where('tenant_id', '=', tenantId).where('allocation_id', '=', id).execute();
-      await trx.insertInto('cost_center_allocation_splits')
-        .values(splits.map(split => ({
-          tenant_id: tenantId, allocation_id: id,
-          cost_center_id: String(split.costCenterId), percentage: split.percentage, notes: split.notes,
-        })) as any).execute();
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id as any)
+        .execute();
+      await trx
+        .deleteFrom('cost_center_allocation_splits')
+        .where('tenant_id', '=', tenantId)
+        .where('allocation_id', '=', id)
+        .execute();
+      await trx
+        .insertInto('cost_center_allocation_splits')
+        .values(
+          splits.map((split) => ({
+            tenant_id: tenantId,
+            allocation_id: id,
+            cost_center_id: String(split.costCenterId),
+            percentage: split.percentage,
+            notes: split.notes,
+          })) as any,
+        )
+        .execute();
       return { ok: true };
     });
   }
@@ -185,13 +227,10 @@ export class CostCenterAllocationsService {
 
     const splits = await this.db
       .selectFrom('cost_center_allocation_splits as ccas')
-      .leftJoin('cost_centers as cc', (join) => join.onRef('cc.id', '=', 'ccas.cost_center_id').on('cc.tenant_id', '=', tenantId))
-      .select([
-        'ccas.cost_center_id',
-        'ccas.percentage',
-        'cc.name as cost_center_name',
-        'cc.code as cost_center_code',
-      ])
+      .leftJoin('cost_centers as cc', (join) =>
+        join.onRef('cc.id', '=', 'ccas.cost_center_id').on('cc.tenant_id', '=', tenantId),
+      )
+      .select(['ccas.cost_center_id', 'ccas.percentage', 'cc.name as cost_center_name', 'cc.code as cost_center_code'])
       .where('ccas.tenant_id', '=', tenantId)
       .where('ccas.allocation_id', '=', allocationId as any)
       .execute();
@@ -203,19 +242,18 @@ export class CostCenterAllocationsService {
     const cents = Math.round(Math.abs(totalAmount) * 100);
     const parts = splits.map((split: any, index: number) => {
       const percentage = Number(split.percentage);
-      const exactCents = cents * percentage / 100;
+      const exactCents = (cents * percentage) / 100;
       const wholeCents = Math.floor(exactCents);
       return { split, index, percentage, wholeCents, remainder: exactCents - wholeCents };
     });
     if (!parts.length) throw new BadRequestException('مصفوفة التوزيع لا تحتوي على مراكز تكلفة.');
     const pctTotal = parts.reduce((sum, part) => sum + part.percentage, 0);
-    if (!parts.every(p => Number.isFinite(p.percentage) && p.percentage > 0) || Math.abs(pctTotal - 100) > 0.000001) {
+    if (!parts.every((p) => Number.isFinite(p.percentage) && p.percentage > 0) || Math.abs(pctTotal - 100) > 0.000001) {
       throw new BadRequestException('نسب توزيع مراكز التكلفة غير صالحة.');
     }
     const residual = cents - parts.reduce((sum, part) => sum + part.wholeCents, 0);
-    const ranked = [...parts].sort((a, b) =>
-      b.remainder - a.remainder ||
-      Number(a.split.cost_center_id) - Number(b.split.cost_center_id)
+    const ranked = [...parts].sort(
+      (a, b) => b.remainder - a.remainder || Number(a.split.cost_center_id) - Number(b.split.cost_center_id),
     );
     for (let i = 0; i < residual; i++) ranked[i % ranked.length].wholeCents += 1;
     const splitResults = parts.map(({ split, percentage, wholeCents }) => ({
@@ -223,7 +261,7 @@ export class CostCenterAllocationsService {
       costCenterName: split.cost_center_name,
       costCenterCode: split.cost_center_code,
       percentage,
-      allocatedAmount: sign * wholeCents / 100,
+      allocatedAmount: (sign * wholeCents) / 100,
     }));
 
     return {

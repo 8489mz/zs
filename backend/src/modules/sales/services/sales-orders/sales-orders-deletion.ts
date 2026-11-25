@@ -8,9 +8,22 @@ import { decideConversionRecovery } from '../../helpers/sales-write.helper';
 import { releaseLocationStock } from '../../../../common/utils/location-stock-ledger';
 
 export class SalesOrdersDeletion {
-  constructor(private readonly db: Kysely<Database>, private readonly idempotency: IdempotencyService, private readonly bound: { conversionOperationParams: (scope: { tenantId: string; accountId: string }, idemKey: string) => { tenantId: string; accountId: string; idempotencyKey: string; operationType: string }; cancelOrder: (id: number, auth: AuthContext) => Promise<Record<string, unknown>> }) {}
+  constructor(
+    private readonly db: Kysely<Database>,
+    private readonly idempotency: IdempotencyService,
+    private readonly bound: {
+      conversionOperationParams: (
+        scope: { tenantId: string; accountId: string },
+        idemKey: string,
+      ) => { tenantId: string; accountId: string; idempotencyKey: string; operationType: string };
+      cancelOrder: (id: number, auth: AuthContext) => Promise<Record<string, unknown>>;
+    },
+  ) {}
 
-  private conversionOperationParams(scope: { tenantId: string; accountId: string }, idemKey: string): { tenantId: string; accountId: string; idempotencyKey: string; operationType: string } {
+  private conversionOperationParams(
+    scope: { tenantId: string; accountId: string },
+    idemKey: string,
+  ): { tenantId: string; accountId: string; idempotencyKey: string; operationType: string } {
     return this.bound.conversionOperationParams(scope, idemKey);
   }
   private async cancelOrder(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
@@ -133,11 +146,7 @@ export class SalesOrdersDeletion {
           .where('sales_order_id', '=', id)
           .where('tenant_id', '=', scope.tenantId)
           .execute();
-        await trx
-          .deleteFrom('sales_orders')
-          .where('id', '=', id)
-          .where('tenant_id', '=', scope.tenantId)
-          .execute();
+        await trx.deleteFrom('sales_orders').where('id', '=', id).where('tenant_id', '=', scope.tenantId).execute();
       });
 
       return { ok: true, message: 'تم حذف أمر البيع بنجاح' };
@@ -155,11 +164,7 @@ export class SalesOrdersDeletion {
         .where('tenant_id', '=', scope.tenantId)
         .execute();
 
-      await trx
-        .deleteFrom('sales_orders')
-        .where('id', '=', id)
-        .where('tenant_id', '=', scope.tenantId)
-        .execute();
+      await trx.deleteFrom('sales_orders').where('id', '=', id).where('tenant_id', '=', scope.tenantId).execute();
     });
 
     return { ok: true, message: 'تم حذف أمر البيع بنجاح' };

@@ -14,7 +14,12 @@ import { AccountingPostingService } from '../../../accounting/accounting-posting
 import { SalesAuthorizationService } from '../sales-authorization.service';
 import { SalesFinanceService } from '../sales-finance.service';
 import { SalesQueryService } from '../sales-query.service';
-import { calculateCollectibleTotal, calculateRemainingDebt, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel } from '../../helpers/sales-write.helper';
+import {
+  calculateCollectibleTotal,
+  calculateRemainingDebt,
+  paidAmountExceedsRecordedPayments,
+  resolvePostedSalePaymentChannel,
+} from '../../helpers/sales-write.helper';
 import { formatCreditLimitExceededMessage } from '../credit-limit-message';
 import { lockOpenTripRow, applyTripCounterDelta } from './sales-edit-and-cancel-types';
 import type { PreparedWasteAndShiftRefreshService } from './prepared-waste-and-shift-refresh.service';
@@ -56,13 +61,18 @@ export class AdjustSalePaymentsService {
    * re-created. Multiple adjustments in a row work (each reverses the
    * latest active journal).
    */
-  async adjustSalePayments(saleId: number, payload: AdjustSalePaymentsDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async adjustSalePayments(
+    saleId: number,
+    payload: AdjustSalePaymentsDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const reason = String((payload as any)?.reason || '').trim();
     const managerPin = String((payload as any)?.managerPin || '').trim();
     if (!reason) throw new AppError('سبب تعديل الدفعات مطلوب.', 'PAYMENT_ADJUSTMENT_REASON_REQUIRED', 400);
     const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
-    if (!isAdmin && !managerPin) throw new AppError('رمز اعتماد المدير مطلوب قبل تعديل دفعات الفاتورة.', 'MANAGER_AUTH_REQUIRED', 400);
+    if (!isAdmin && !managerPin)
+      throw new AppError('رمز اعتماد المدير مطلوب قبل تعديل دفعات الفاتورة.', 'MANAGER_AUTH_REQUIRED', 400);
     if (!isAdmin || managerPin) await this.authz.authorizeDiscountOverride(managerPin, auth, this.db);
 
     const validChannels = ['cash', 'card', 'wallet', 'instapay'] as const;
@@ -78,7 +88,10 @@ export class AdjustSalePaymentsService {
       }
       mergedLegs.set(channel, (mergedLegs.get(channel) || 0) + amount);
     }
-    const newLegs = [...mergedLegs.entries()].map(([paymentChannel, amount]) => ({ paymentChannel: paymentChannel as 'cash' | 'card' | 'wallet' | 'instapay', amount }));
+    const newLegs = [...mergedLegs.entries()].map(([paymentChannel, amount]) => ({
+      paymentChannel: paymentChannel as 'cash' | 'card' | 'wallet' | 'instapay',
+      amount,
+    }));
 
     let postCloseEdit = false;
     let postCloseShiftId: number | null = null;
@@ -93,8 +106,10 @@ export class AdjustSalePaymentsService {
         .forUpdate()
         .executeTakeFirst();
       if (!sale) throw new AppError('الفاتورة غير موجودة.', 'SALE_NOT_FOUND', 404);
-      if (sale.exchange_return_id) throw new AppError('فاتورة استبدال مترابطة؛ استخدم مرتجعاً بدلاً من تعديلها', 'EXCHANGE_IMMUTABLE', 422);
-      if (sale.status !== 'posted') throw new AppError('لا يمكن تعديل دفعات فاتورة غير مرحّلة أو ملغاة.', 'SALE_EDIT_STATUS_FORBIDDEN', 400);
+      if (sale.exchange_return_id)
+        throw new AppError('فاتورة استبدال مترابطة؛ استخدم مرتجعاً بدلاً من تعديلها', 'EXCHANGE_IMMUTABLE', 422);
+      if (sale.status !== 'posted')
+        throw new AppError('لا يمكن تعديل دفعات فاتورة غير مرحّلة أو ملغاة.', 'SALE_EDIT_STATUS_FORBIDDEN', 400);
       assertSaleNotZatcaSigned((sale as any).zatca_status);
       // One-edit allowance: this posts a sale_edit journal, exactly
       // like updateSale — a second money edit of the same sale is
@@ -108,16 +123,28 @@ export class AdjustSalePaymentsService {
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .executeTakeFirst();
       if (existingEditedJournal) {
-        throw new AppError('تم تعديل هذه الفاتورة سابقًا. أنشئ فاتورة جديدة بدلًا من إعادة التعديل.', 'SALE_EDIT_ALREADY_APPLIED', 400);
+        throw new AppError(
+          'تم تعديل هذه الفاتورة سابقًا. أنشئ فاتورة جديدة بدلًا من إعادة التعديل.',
+          'SALE_EDIT_ALREADY_APPLIED',
+          400,
+        );
       }
       // A later receipt stays attached to the original debt (same guard
       // as updateSale): changing the legs under it would orphan it.
-      const laterAllocation = await trx.selectFrom('payment_allocations')
-        .select('id').where('tenant_id', '=', scope.tenantId)
-        .where('invoice_type', '=', 'sale').where('invoice_id', '=', saleId)
-        .limit(1).executeTakeFirst();
+      const laterAllocation = await trx
+        .selectFrom('payment_allocations')
+        .select('id')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('invoice_type', '=', 'sale')
+        .where('invoice_id', '=', saleId)
+        .limit(1)
+        .executeTakeFirst();
       if (laterAllocation) {
-        throw new AppError('الفاتورة عليها سند قبض مخصص؛ يلزم مستند تصحيح بدلاً من تعديلها', 'SALE_EDIT_HAS_LATER_PAYMENTS', 422);
+        throw new AppError(
+          'الفاتورة عليها سند قبض مخصص؛ يلزم مستند تصحيح بدلاً من تعديلها',
+          'SALE_EDIT_HAS_LATER_PAYMENTS',
+          422,
+        );
       }
       const currentPayments = await trx
         .selectFrom('sale_payments')
@@ -125,27 +152,42 @@ export class AdjustSalePaymentsService {
         .where('sale_id', '=', saleId)
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .execute();
-      if (currentPayments.length > 0 &&
-          paidAmountExceedsRecordedPayments(currentPayments, sale.paid_amount, moneyDigits)) {
-        throw new AppError('الفاتورة عليها تحصيلات إضافية لا يمكن عكسها بتعديل الدفعات', 'SALE_EDIT_PAYMENT_RECONCILIATION_REQUIRED', 409);
+      if (
+        currentPayments.length > 0 &&
+        paidAmountExceedsRecordedPayments(currentPayments, sale.paid_amount, moneyDigits)
+      ) {
+        throw new AppError(
+          'الفاتورة عليها تحصيلات إضافية لا يمكن عكسها بتعديل الدفعات',
+          'SALE_EDIT_PAYMENT_RECONCILIATION_REQUIRED',
+          409,
+        );
       }
       if (currentPayments.length === 0 && Number(sale.paid_amount || 0) > 0 && sale.payment_channel === 'mixed') {
-        throw new AppError('لا يمكن تعديل دفعات فاتورة قديمة ذات سداد مختلط دون تفاصيل وسائل الدفع', 'SALE_EDIT_PAYMENT_RECONCILIATION_REQUIRED', 409);
+        throw new AppError(
+          'لا يمكن تعديل دفعات فاتورة قديمة ذات سداد مختلط دون تفاصيل وسائل الدفع',
+          'SALE_EDIT_PAYMENT_RECONCILIATION_REQUIRED',
+          409,
+        );
       }
 
       // Post-close shift handling, same as updateSale: an OPEN shift
       // belonging to another cashier still blocks the change; a closed
       // original shift is refreshed below (never restated).
-      const shiftBase = trx.selectFrom('cashier_shifts')
+      const shiftBase = trx
+        .selectFrom('cashier_shifts')
         .select(['id', 'opened_by', 'status'])
         .where('tenant_id', '=', scope.tenantId)
         .where('opened_by', '=', Number(sale.created_by || 0))
         .where('created_at', '<=', sale.created_at)
         .where((eb) => eb.or([eb('closed_at', 'is', null), eb('closed_at', '>=', sale.created_at)]));
-      const originalShift = await (sale.branch_id == null
-        ? shiftBase.where('branch_id', 'is', null)
-        : shiftBase.where('branch_id', '=', sale.branch_id))
-        .orderBy('id', 'desc').forUpdate().executeTakeFirst();
+      const originalShift = await (
+        sale.branch_id == null
+          ? shiftBase.where('branch_id', 'is', null)
+          : shiftBase.where('branch_id', '=', sale.branch_id)
+      )
+        .orderBy('id', 'desc')
+        .forUpdate()
+        .executeTakeFirst();
       postCloseEdit = originalShift ? String(originalShift.status || '') !== 'open' : false;
       postCloseShiftId = postCloseEdit && originalShift ? Number(originalShift.id) : null;
       if (originalShift && !postCloseEdit && Number(originalShift.opened_by) !== auth.userId) {
@@ -159,8 +201,15 @@ export class AdjustSalePaymentsService {
       const tripId = Number((sale as any).van_trip_id || 0) || null;
       const tripOpen = tripId ? await lockOpenTripRow(trx, scope.tenantId, tripId) : false;
 
-      const collectibleTotal = calculateCollectibleTotal(Number(sale.total || 0), Number(sale.store_credit_used || 0), moneyDigits);
-      const newPaid = roundMoney(newLegs.reduce((sum, leg) => sum + leg.amount, 0), moneyDigits);
+      const collectibleTotal = calculateCollectibleTotal(
+        Number(sale.total || 0),
+        Number(sale.store_credit_used || 0),
+        moneyDigits,
+      );
+      const newPaid = roundMoney(
+        newLegs.reduce((sum, leg) => sum + leg.amount, 0),
+        moneyDigits,
+      );
       const paymentTolerance = 1 / 10 ** moneyDigits;
       if (newPaid > collectibleTotal + paymentTolerance) {
         throw new AppError(
@@ -172,11 +221,19 @@ export class AdjustSalePaymentsService {
       remainingReceivable = roundMoney(Math.max(0, collectibleTotal - newPaid), moneyDigits);
 
       const customer = (sale as any).customer_id
-        ? await trx.selectFrom('customers').select(['id', 'name', 'balance', 'credit_limit', 'is_credit_blocked']).where('id', '=', Number((sale as any).customer_id)).where(sql<boolean>`tenant_id = ${scope.tenantId}`).forUpdate().executeTakeFirst()
+        ? await trx
+            .selectFrom('customers')
+            .select(['id', 'name', 'balance', 'credit_limit', 'is_credit_blocked'])
+            .where('id', '=', Number((sale as any).customer_id))
+            .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+            .forUpdate()
+            .executeTakeFirst()
         : null;
       if (remainingReceivable > 0 && customer) {
-        if (Number(customer.balance || 0) + remainingReceivable > Number(customer.credit_limit || 0) + 0.001
-          && Number(customer.credit_limit || 0) > 0) {
+        if (
+          Number(customer.balance || 0) + remainingReceivable > Number(customer.credit_limit || 0) + 0.001 &&
+          Number(customer.credit_limit || 0) > 0
+        ) {
           throw new AppError(
             formatCreditLimitExceededMessage({
               creditLimit: Number(customer.credit_limit || 0),
@@ -188,7 +245,8 @@ export class AdjustSalePaymentsService {
             400,
           );
         }
-        if (customer.is_credit_blocked) throw new AppError('Customer credit is blocked', 'CUSTOMER_CREDIT_BLOCKED', 400);
+        if (customer.is_credit_blocked)
+          throw new AppError('Customer credit is blocked', 'CUSTOMER_CREDIT_BLOCKED', 400);
       }
 
       // Reverse the OLD money side, exactly like updateSale: the old
@@ -198,27 +256,49 @@ export class AdjustSalePaymentsService {
         : Number(sale.paid_amount || 0);
       const oldDebt = calculateRemainingDebt(collectibleTotal, oldPaid, moneyDigits);
       if (sale.customer_id && oldDebt > 0) {
-        await this.finance.createCustomerLedgerEntry(trx, sale.customer_id, -oldDebt, `عكس تعديل دفعات فاتورة بيع S-${saleId}`, saleId, auth);
+        await this.finance.createCustomerLedgerEntry(
+          trx,
+          sale.customer_id,
+          -oldDebt,
+          `عكس تعديل دفعات فاتورة بيع S-${saleId}`,
+          saleId,
+          auth,
+        );
       }
       for (const payment of currentPayments) {
         if (payment.payment_channel !== 'cash') continue;
-        await this.finance.addTreasuryTransaction(trx, -Number(payment.amount || 0), `عكس تعديل دفعات فاتورة بيع S-${saleId}`, saleId, auth, sale.branch_id, sale.location_id);
+        await this.finance.addTreasuryTransaction(
+          trx,
+          -Number(payment.amount || 0),
+          `عكس تعديل دفعات فاتورة بيع S-${saleId}`,
+          saleId,
+          auth,
+          sale.branch_id,
+          sale.location_id,
+        );
       }
 
       // Replace the legs: the only deleteFrom/insert of sale_payments
       // outside the original sale insert in the whole codebase.
-      await trx.deleteFrom('sale_payments').where('sale_id', '=', saleId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+      await trx
+        .deleteFrom('sale_payments')
+        .where('sale_id', '=', saleId)
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .execute();
       for (const leg of newLegs) {
-        await trx.insertInto('sale_payments').values({
-          sale_id: saleId,
-          payment_channel: leg.paymentChannel,
-          amount: roundMoney(leg.amount, moneyDigits),
-          applied_amount: roundMoney(leg.amount, moneyDigits),
-          tendered_amount: roundMoney(leg.amount, moneyDigits),
-          change_amount: 0,
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-        }).execute();
+        await trx
+          .insertInto('sale_payments')
+          .values({
+            sale_id: saleId,
+            payment_channel: leg.paymentChannel,
+            amount: roundMoney(leg.amount, moneyDigits),
+            applied_amount: roundMoney(leg.amount, moneyDigits),
+            tendered_amount: roundMoney(leg.amount, moneyDigits),
+            change_amount: 0,
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+          })
+          .execute();
       }
 
       // The sale row follows the new legs: the type flips to 'credit'
@@ -228,23 +308,33 @@ export class AdjustSalePaymentsService {
       // changed — otherwise the stored channel stays (a 'mixed' or
       // split-sale channel must not collapse to a single leg's channel
       // just because the amounts moved).
-      const newPaymentType = remainingReceivable > paymentTolerance ? 'credit' : String((sale as any).payment_type || 'cash');
+      const newPaymentType =
+        remainingReceivable > paymentTolerance ? 'credit' : String((sale as any).payment_type || 'cash');
       const oldChannels = new Set(currentPayments.map((p) => String(p.payment_channel || '')));
       const newChannels = new Set(newLegs.map((l) => l.paymentChannel));
-      const channelsChanged = oldChannels.size !== newChannels.size || [...newChannels].some((c) => !oldChannels.has(c));
-      const newPaymentChannel = remainingReceivable > paymentTolerance || channelsChanged
-        ? resolvePostedSalePaymentChannel(newPaymentType === 'credit' ? 'credit' : 'cash',
-            newLegs.map((leg) => ({ paymentChannel: leg.paymentChannel as 'cash' | 'card' | 'wallet' | 'instapay' })))
-        : String((sale as any).payment_channel || 'cash');
-      await trx.updateTable('sales').set({
-        payment_type: newPaymentType,
-        payment_channel: newPaymentChannel,
-        paid_amount: newPaid,
-        applied_amount: newPaid,
-        tendered_amount: newPaid,
-        change_amount: 0,
-        updated_at: sql`NOW()`,
-      } as any).where('id', '=', saleId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+      const channelsChanged =
+        oldChannels.size !== newChannels.size || [...newChannels].some((c) => !oldChannels.has(c));
+      const newPaymentChannel =
+        remainingReceivable > paymentTolerance || channelsChanged
+          ? resolvePostedSalePaymentChannel(
+              newPaymentType === 'credit' ? 'credit' : 'cash',
+              newLegs.map((leg) => ({ paymentChannel: leg.paymentChannel as 'cash' | 'card' | 'wallet' | 'instapay' })),
+            )
+          : String((sale as any).payment_channel || 'cash');
+      await trx
+        .updateTable('sales')
+        .set({
+          payment_type: newPaymentType,
+          payment_channel: newPaymentChannel,
+          paid_amount: newPaid,
+          applied_amount: newPaid,
+          tendered_amount: newPaid,
+          change_amount: 0,
+          updated_at: sql`NOW()`,
+        } as any)
+        .where('id', '=', saleId)
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .execute();
 
       // Post the NEW money side, mirroring updateSale.
       if (customer && remainingReceivable > 0) {
@@ -259,23 +349,55 @@ export class AdjustSalePaymentsService {
       } else if (customer && remainingReceivable === 0) {
         const settled = roundMoney(collectibleTotal - remainingReceivable, moneyDigits);
         if (settled > 0) {
-          await this.finance.addCustomerLedgerLeg(trx, customer.id, settled, 'sale_paid', `تعديل دفعات فاتورة بيع S-${saleId}`, 'sale', saleId, auth);
-          await this.finance.addCustomerPaymentLedgerEntry(trx, customer.id, -settled, `سداد تعديل دفعات فاتورة بيع S-${saleId}`, 'sale', saleId, auth, (sale as any).branch_id, (sale as any).location_id);
+          await this.finance.addCustomerLedgerLeg(
+            trx,
+            customer.id,
+            settled,
+            'sale_paid',
+            `تعديل دفعات فاتورة بيع S-${saleId}`,
+            'sale',
+            saleId,
+            auth,
+          );
+          await this.finance.addCustomerPaymentLedgerEntry(
+            trx,
+            customer.id,
+            -settled,
+            `سداد تعديل دفعات فاتورة بيع S-${saleId}`,
+            'sale',
+            saleId,
+            auth,
+            (sale as any).branch_id,
+            (sale as any).location_id,
+          );
         }
       }
       for (const leg of newLegs) {
         if (leg.paymentChannel !== 'cash') continue;
-        await this.finance.addTreasuryTransaction(trx, leg.amount, `تعديل دفعات فاتورة بيع S-${saleId}`, saleId, auth, sale.branch_id, sale.location_id);
+        await this.finance.addTreasuryTransaction(
+          trx,
+          leg.amount,
+          `تعديل دفعات فاتورة بيع S-${saleId}`,
+          saleId,
+          auth,
+          sale.branch_id,
+          sale.location_id,
+        );
       }
 
       // The trip counters move with the legs, same delta as updateSale.
       if (tripOpen && tripId) {
         let oldLedgerCredit: number | null = null;
         if (String((sale as any).payment_channel || '').toLowerCase() === 'mixed') {
-          const ledgerRow = await trx.selectFrom('customer_ledger').select('amount')
-            .where('reference_type', '=', 'sale').where('reference_id', '=', saleId)
-            .where('entry_type', '=', 'sale_credit').where('tenant_id', '=', scope.tenantId)
-            .orderBy('id', 'desc').executeTakeFirst();
+          const ledgerRow = await trx
+            .selectFrom('customer_ledger')
+            .select('amount')
+            .where('reference_type', '=', 'sale')
+            .where('reference_id', '=', saleId)
+            .where('entry_type', '=', 'sale_credit')
+            .where('tenant_id', '=', scope.tenantId)
+            .orderBy('id', 'desc')
+            .executeTakeFirst();
           oldLedgerCredit = ledgerRow ? Number((ledgerRow as any).amount || 0) : null;
         }
         const oldContribution = tripSaleContribution({
@@ -295,11 +417,20 @@ export class AdjustSalePaymentsService {
       }
 
       if (postCloseEdit) {
-        await trx.insertInto('pos_audit_events').values({
-          tenant_id: scope.tenantId, account_id: scope.accountId, event_type: 'sale_payment_adjustment_post_close',
-          user_id: auth.userId, sale_id: saleId, product_id: null, amount: Number(sale.total || 0),
-          reason, metadata: { postClose: true, originalShiftId: postCloseShiftId, managerApproved: true },
-        }).execute();
+        await trx
+          .insertInto('pos_audit_events')
+          .values({
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+            event_type: 'sale_payment_adjustment_post_close',
+            user_id: auth.userId,
+            sale_id: saleId,
+            product_id: null,
+            amount: Number(sale.total || 0),
+            reason,
+            metadata: { postClose: true, originalShiftId: postCloseShiftId, managerApproved: true },
+          })
+          .execute();
       }
 
       // Reuse the existing reversal helper — no second journal path.
@@ -310,7 +441,11 @@ export class AdjustSalePaymentsService {
       }
     });
 
-    await this.audit.log('تعديل دفعات فاتورة بيع', `تم تعديل دفعات الفاتورة S-${saleId} بواسطة ${auth.username} | السبب: ${reason}${postCloseEdit ? ` | تعديل بعد إغلاق الوردية الأصلية #${postCloseShiftId}` : ''}`, auth);
+    await this.audit.log(
+      'تعديل دفعات فاتورة بيع',
+      `تم تعديل دفعات الفاتورة S-${saleId} بواسطة ${auth.username} | السبب: ${reason}${postCloseEdit ? ` | تعديل بعد إغلاق الوردية الأصلية #${postCloseShiftId}` : ''}`,
+      auth,
+    );
     const sale = await this.query.getSaleById(saleId, auth);
     return { ok: true, sale: sale.sale, remainingReceivable };
   }

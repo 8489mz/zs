@@ -2,17 +2,46 @@ import { MoneyDigits, toMinorUnits, fromMinorUnits } from '../../accounting/engi
 
 /** Track the surviving share of a receipt in a pooled weighted-average stock balance. */
 const locationOnlyMovements = new Set([
-  'transfer_send', 'transfer_receive', 'transfer_transit_in', 'transfer_transit_out',
-  'transfer_transit_cancel', 'transfer_cancel', 'stock_assign',
+  'transfer_send',
+  'transfer_receive',
+  'transfer_transit_in',
+  'transfer_transit_out',
+  'transfer_transit_cancel',
+  'transfer_cancel',
+  'stock_assign',
 ]);
 const globalMovements = new Set([
-  'opening_balance', 'opening_stock', 'purchase', 'purchase_receipt', 'purchase_edit_restore',
-  'purchase_edit_apply', 'purchase_cancel', 'purchase_return', 'goods_receipt', 'import_receipt',
-  'sale', 'sale_edit', 'sale_edit_reversal', 'sale_cancel', 'sale_return',
-  'stock_count_gain', 'stock_count_loss', 'add', 'deduct', 'adjust', 'damaged',
-  'manufacturing_consumption', 'manufacturing_production', 'manufacturing_byproduct',
-  'manufacturing_unbuild', 'manufacturing_unbuild_recovery', 'maintenance_consumption',
-  'maintenance_return', 'tradein_in', 'transfer_final_issue', 'transfer_transit_loss',
+  'opening_balance',
+  'opening_stock',
+  'purchase',
+  'purchase_receipt',
+  'purchase_edit_restore',
+  'purchase_edit_apply',
+  'purchase_cancel',
+  'purchase_return',
+  'goods_receipt',
+  'import_receipt',
+  'sale',
+  'sale_edit',
+  'sale_edit_reversal',
+  'sale_cancel',
+  'sale_return',
+  'stock_count_gain',
+  'stock_count_loss',
+  'add',
+  'deduct',
+  'adjust',
+  'damaged',
+  'manufacturing_consumption',
+  'manufacturing_production',
+  'manufacturing_byproduct',
+  'manufacturing_unbuild',
+  'manufacturing_unbuild_recovery',
+  'maintenance_consumption',
+  'maintenance_return',
+  'tradein_in',
+  'transfer_final_issue',
+  'transfer_transit_loss',
 ]);
 
 export function stockMovementGlobalDelta(type: string, qty: number): number {
@@ -29,9 +58,17 @@ export function allocateReceiptCostByStockFlow(input: {
   receipts: Array<{ key: number; movementId: number; receivedQty: number; allocatedCost: number }>;
 }): Map<number, { inventory: number; cogs: number }> {
   const ordered = [...input.movements].sort((a, b) => a.id - b.id);
-  if (!Number.isFinite(input.currentStock) || input.currentStock < -0.0001 ||
-      input.receipts.some((r) => !Number.isFinite(r.receivedQty) || r.receivedQty <= 0 ||
-        !Number.isFinite(r.allocatedCost) || r.allocatedCost < 0)) {
+  if (
+    !Number.isFinite(input.currentStock) ||
+    input.currentStock < -0.0001 ||
+    input.receipts.some(
+      (r) =>
+        !Number.isFinite(r.receivedQty) ||
+        r.receivedQty <= 0 ||
+        !Number.isFinite(r.allocatedCost) ||
+        r.allocatedCost < 0,
+    )
+  ) {
     throw new Error('Invalid stock flow for landed cost');
   }
   const remaining = new Map(input.receipts.map((r) => [r.key, 0]));
@@ -68,8 +105,10 @@ export function allocateReceiptCostByStockFlow(input: {
   for (const receipt of input.receipts) {
     const digits = input.minorUnits ?? 2;
     const totalMinor = toMinorUnits(receipt.allocatedCost, digits);
-    const inventoryMinor = Math.min(totalMinor, Math.max(0,
-      Math.round(totalMinor * (remaining.get(receipt.key) || 0) / receipt.receivedQty)));
+    const inventoryMinor = Math.min(
+      totalMinor,
+      Math.max(0, Math.round((totalMinor * (remaining.get(receipt.key) || 0)) / receipt.receivedQty)),
+    );
     result.set(receipt.key, {
       inventory: fromMinorUnits(inventoryMinor, digits),
       cogs: fromMinorUnits(totalMinor - inventoryMinor, digits),

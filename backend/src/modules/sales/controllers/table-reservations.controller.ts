@@ -26,10 +26,7 @@ export class TableReservationsController {
   }
 
   @Post()
-  async createReservation(
-    @Req() req: RequestWithAuth,
-    @Body() dto: CreateTableReservationDto,
-  ) {
+  async createReservation(@Req() req: RequestWithAuth, @Body() dto: CreateTableReservationDto) {
     const scope = requireTenantScope(req.authContext!);
     const userId = Number(req.authContext?.userId || 0);
     return this.service.createReservation(scope.tenantId, userId, dto);
@@ -46,10 +43,7 @@ export class TableReservationsController {
   }
 
   @Delete(':id')
-  async deleteReservation(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async deleteReservation(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     const scope = requireTenantScope(req.authContext!);
     return this.service.deleteReservation(scope.tenantId, id);
   }

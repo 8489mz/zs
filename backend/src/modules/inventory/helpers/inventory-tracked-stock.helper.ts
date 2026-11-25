@@ -13,28 +13,41 @@ export async function assertUntrackedStockMutation(
   scope: { tenantId: string },
   productId: number,
 ): Promise<void> {
-  const product = await trx.selectFrom('products')
-    .select('track_serials').where('tenant_id', '=', scope.tenantId)
-    .where('id', '=', productId).executeTakeFirst();
+  const product = await trx
+    .selectFrom('products')
+    .select('track_serials')
+    .where('tenant_id', '=', scope.tenantId)
+    .where('id', '=', productId)
+    .executeTakeFirst();
   if (!product) throw new AppError('Product not found', 'PRODUCT_NOT_FOUND', 404);
 
-  const serial = await trx.selectFrom('product_serials')
-    .select('id').where('tenant_id', '=', scope.tenantId)
-    .where('product_id', '=', productId).limit(1).executeTakeFirst();
+  const serial = await trx
+    .selectFrom('product_serials')
+    .select('id')
+    .where('tenant_id', '=', scope.tenantId)
+    .where('product_id', '=', productId)
+    .limit(1)
+    .executeTakeFirst();
   if (product.track_serials || serial) {
     throw new AppError(
       'الصنف مرتبط بسيريالات؛ يجب تحديد الأرقام المنقولة أو المتلفة وتسويتها قبل تعديل رصيد المخزن',
-      'SERIAL_TRACKED_STOCK_REQUIRES_RECONCILIATION', 409,
+      'SERIAL_TRACKED_STOCK_REQUIRES_RECONCILIATION',
+      409,
     );
   }
 
-  const batch = await trx.selectFrom('pharmacy_batches')
-    .select('id').where('tenant_id', '=', scope.tenantId)
-    .where('product_id', '=', productId).limit(1).executeTakeFirst();
+  const batch = await trx
+    .selectFrom('pharmacy_batches')
+    .select('id')
+    .where('tenant_id', '=', scope.tenantId)
+    .where('product_id', '=', productId)
+    .limit(1)
+    .executeTakeFirst();
   if (batch) {
     throw new AppError(
       'الصنف مرتبط بتشغيلات وتواريخ صلاحية؛ استخدم تسوية التشغيلات قبل تعديل الكمية',
-      'BATCH_TRACKED_STOCK_REQUIRES_RECONCILIATION', 409,
+      'BATCH_TRACKED_STOCK_REQUIRES_RECONCILIATION',
+      409,
     );
   }
 }

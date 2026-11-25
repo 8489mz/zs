@@ -6,9 +6,22 @@ import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary'
 import { reserveLocationStock, releaseLocationStock } from '../../../../common/utils/location-stock-ledger';
 
 export class SalesOrdersConfirmation {
-  constructor(private readonly db: Kysely<Database>, private readonly bound: { loadServiceProductIds: (trx: Kysely<Database>, scope: { tenantId: string; accountId: string }, productIds: number[]) => Promise<Set<number>> }) {}
+  constructor(
+    private readonly db: Kysely<Database>,
+    private readonly bound: {
+      loadServiceProductIds: (
+        trx: Kysely<Database>,
+        scope: { tenantId: string; accountId: string },
+        productIds: number[],
+      ) => Promise<Set<number>>;
+    },
+  ) {}
 
-  private loadServiceProductIds(trx: Kysely<Database>, scope: { tenantId: string; accountId: string }, productIds: number[]): Promise<Set<number>> {
+  private loadServiceProductIds(
+    trx: Kysely<Database>,
+    scope: { tenantId: string; accountId: string },
+    productIds: number[],
+  ): Promise<Set<number>> {
     return this.bound.loadServiceProductIds(trx, scope, productIds);
   }
 
@@ -89,7 +102,11 @@ export class SalesOrdersConfirmation {
       // INV-SERVICE-STOCK-NO-STOCK-CHECK: service lines reserve nothing
       // (see createOrder) — skip both the ledger reservation and the
       // reserved_quantity stamp for them.
-      const serviceProductIds = await this.loadServiceProductIds(trx, scope, items.map((item) => Number(item.product_id)));
+      const serviceProductIds = await this.loadServiceProductIds(
+        trx,
+        scope,
+        items.map((item) => Number(item.product_id)),
+      );
       const reserveItems: Array<{ productId: number; qty: number }> = [];
       for (const item of items) {
         if (serviceProductIds.has(Number(item.product_id))) continue;
@@ -155,7 +172,9 @@ export class SalesOrdersConfirmation {
       }
 
       if (order.status === 'converted') {
-        throw new BadRequestException('لا يمكن إلغاء أمر بيع تم تحويله إلى فاتورة؛ يجب إلغاء الفاتورة من شاشة المبيعات أولاً');
+        throw new BadRequestException(
+          'لا يمكن إلغاء أمر بيع تم تحويله إلى فاتورة؛ يجب إلغاء الفاتورة من شاشة المبيعات أولاً',
+        );
       }
 
       const items = await trx

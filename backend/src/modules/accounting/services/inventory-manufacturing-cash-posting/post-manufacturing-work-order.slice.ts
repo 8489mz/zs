@@ -70,12 +70,17 @@ export class PostManufacturingWorkOrderSlice {
     return this.bound.insertPostedJournal(queryable, params);
   }
 
-  async postManufacturingWorkOrder(queryable: DbOrTx, workOrderId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postManufacturingWorkOrder(
+    queryable: DbOrTx,
+    workOrderId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
 
     // Idempotency check using 'manufacturing_work_order' source
-    const existing = await queryable.selectFrom('journal_entries')
+    const existing = await queryable
+      .selectFrom('journal_entries')
       .select('id')
       .where('source_type', '=', 'manufacturing_work_order')
       .where('source_id', '=', workOrderId)
@@ -83,7 +88,8 @@ export class PostManufacturingWorkOrderSlice {
       .executeTakeFirst();
     if (existing) return { posted: false, journalEntryId: existing.id };
 
-    const wo = await queryable.selectFrom('manufacturing_work_orders as wo')
+    const wo = await queryable
+      .selectFrom('manufacturing_work_orders as wo')
       .innerJoin('manufacturing_boms as bom', 'bom.id', 'wo.bom_id')
       .select([
         'wo.total_cost',
@@ -93,7 +99,7 @@ export class PostManufacturingWorkOrderSlice {
         'wo.created_at',
         'wo.completed_at',
         'wo.created_by',
-        'wo.destination_location_id'
+        'wo.destination_location_id',
       ])
       .where('wo.id', '=', workOrderId)
       .where('wo.tenant_id', '=', scope.tenantId)
@@ -104,10 +110,13 @@ export class PostManufacturingWorkOrderSlice {
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
     const fgCost = toBookMoney(Number(wo.total_cost || 0));
-    const consumed = await queryable.selectFrom('manufacturing_wo_consumptions as c')
+    const consumed = await queryable
+      .selectFrom('manufacturing_wo_consumptions as c')
       .innerJoin('manufacturing_work_orders as w', 'w.id', 'c.work_order_id')
       .select(sql<number>`coalesce(sum(c.line_total), 0)`.as('amount'))
-      .where('w.tenant_id', '=', scope.tenantId).where('w.id', '=', workOrderId).executeTakeFirst();
+      .where('w.tenant_id', '=', scope.tenantId)
+      .where('w.id', '=', workOrderId)
+      .executeTakeFirst();
     const rmCost = toBookMoney(consumed?.amount || 0);
 
     // INV-MANUFACTURING-COST-DERIVATION: overhead is NEVER a residual.
@@ -126,7 +135,8 @@ export class PostManufacturingWorkOrderSlice {
     // is only a cross-check: any difference beyond one minor unit
     // (the codebase's own maxAllowedDifference) is data drift and
     // fails closed instead of posting.
-    const operations = await queryable.selectFrom('manufacturing_wo_operations')
+    const operations = await queryable
+      .selectFrom('manufacturing_wo_operations')
       .select(sql<number>`coalesce(sum(total_cost), 0)`.as('amount'))
       .where('work_order_id', '=', workOrderId)
       .where('tenant_id', '=', scope.tenantId)
@@ -140,7 +150,8 @@ export class PostManufacturingWorkOrderSlice {
       bookDigits,
     );
     const overheadCost = toBookMoney(opsCost + scaledOverheadCost);
-    const fgMovement = await queryable.selectFrom('stock_movements')
+    const fgMovement = await queryable
+      .selectFrom('stock_movements')
       .select('total_cost')
       .where('reference_type', '=', 'manufacturing_work_order')
       .where('reference_id', '=', workOrderId)
@@ -148,7 +159,8 @@ export class PostManufacturingWorkOrderSlice {
       .where('tenant_id', '=', scope.tenantId)
       .executeTakeFirst();
     const finishedValue = toBookMoney(fgMovement?.total_cost || 0);
-    const byProducts = await queryable.selectFrom('stock_movements')
+    const byProducts = await queryable
+      .selectFrom('stock_movements')
       .select(sql<number>`coalesce(sum(total_cost), 0)`.as('amount'))
       .where('reference_type', '=', 'manufacturing_work_order')
       .where('reference_id', '=', workOrderId)
@@ -162,7 +174,11 @@ export class PostManufacturingWorkOrderSlice {
       throw new AppError('Manufacturing cost components are inconsistent', 'MANUFACTURING_COST_MISMATCH', 409);
     }
     if (Math.abs(difference) > this.maxAllowedDifference(bookDigits)) {
-      throw new AppError('Manufacturing stored total does not reconcile with its cost components', 'MANUFACTURING_COST_MISMATCH', 409);
+      throw new AppError(
+        'Manufacturing stored total does not reconcile with its cost components',
+        'MANUFACTURING_COST_MISMATCH',
+        409,
+      );
     }
 
     // INV-MANUFACTURING-ZERO-COST: a genuinely zero-cost work order posts
@@ -178,21 +194,22 @@ export class PostManufacturingWorkOrderSlice {
     let inventoryAccountId = Number(settings?.inventory_account_id || 0);
     if (!(inventoryAccountId > 0)) {
       inventoryAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1140');
-      if (!inventoryAccountId) throw new AppError('Inventory account not configured and fallback 1140 not found', 'ACCOUNT_NOT_FOUND', 400);
+      if (!inventoryAccountId)
+        throw new AppError('Inventory account not configured and fallback 1140 not found', 'ACCOUNT_NOT_FOUND', 400);
     }
 
     let overheadAccountId = Number(settings?.manufacturing_overhead_account_id || 0);
     if (!(overheadAccountId > 0)) {
       overheadAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '5400');
-      if (!overheadAccountId) throw new AppError('Manufacturing Overhead account 5400 not found', 'ACCOUNT_NOT_FOUND', 400);
+      if (!overheadAccountId)
+        throw new AppError('Manufacturing Overhead account 5400 not found', 'ACCOUNT_NOT_FOUND', 400);
     }
 
     // The variance account is resolved only when a rounding-scale
     // difference actually exists (the unbuild poster's convention);
     // it auto-creates as a known system account when absent.
-    const varianceAccountId = difference !== 0
-      ? await this.resolveSystemAccountByCode(queryable, scope.tenantId, '5190')
-      : 0;
+    const varianceAccountId =
+      difference !== 0 ? await this.resolveSystemAccountByCode(queryable, scope.tenantId, '5190') : 0;
 
     const lines: JournalLineDraft[] = [];
     const branchId = null;
@@ -200,7 +217,20 @@ export class PostManufacturingWorkOrderSlice {
 
     // 1. Debit FG (Inventory) at finishedValue -- exactly the value
     // stamped on the finished-goods stock movement.
-    this.addLine(lines, { accountId: inventoryAccountId, description: `منتج تام إضافي - أمر #${workOrderId}`, debit: finishedValue, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+    this.addLine(
+      lines,
+      {
+        accountId: inventoryAccountId,
+        description: `منتج تام إضافي - أمر #${workOrderId}`,
+        debit: finishedValue,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      },
+      bookDigits,
+    );
 
     // 2. Debit by-products (Inventory) as their OWN leg. Both legs
     // debit 1140 (both are inventory increases) but stay separate
@@ -208,18 +238,57 @@ export class PostManufacturingWorkOrderSlice {
     // residual, and the 5400 credit below is only operations +
     // scaled overhead.
     if (byProductValue > 0) {
-      this.addLine(lines, { accountId: inventoryAccountId, description: `منتج ثانوي ناتج عن التصنيع - أمر #${workOrderId}`, debit: byProductValue, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+      this.addLine(
+        lines,
+        {
+          accountId: inventoryAccountId,
+          description: `منتج ثانوي ناتج عن التصنيع - أمر #${workOrderId}`,
+          debit: byProductValue,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        bookDigits,
+      );
     }
 
     // 3. Credit RM (Inventory)
     if (rmCost > 0) {
-      this.addLine(lines, { accountId: inventoryAccountId, description: `خامات مستهلكة - أمر #${workOrderId}`, debit: 0, credit: rmCost, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+      this.addLine(
+        lines,
+        {
+          accountId: inventoryAccountId,
+          description: `خامات مستهلكة - أمر #${workOrderId}`,
+          debit: 0,
+          credit: rmCost,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        bookDigits,
+      );
     }
 
     // 4. Credit operations + scaled overhead (5400 only -- never the
     // by-product value, never a residual).
     if (overheadCost > 0) {
-      this.addLine(lines, { accountId: overheadAccountId, description: `مصاريف صناعية محملة - أمر #${workOrderId}`, debit: 0, credit: overheadCost, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+      this.addLine(
+        lines,
+        {
+          accountId: overheadAccountId,
+          description: `مصاريف صناعية محملة - أمر #${workOrderId}`,
+          debit: 0,
+          credit: overheadCost,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        bookDigits,
+      );
     }
 
     // 5. Rounding-scale variance to 5190 (unbuild convention: debit
@@ -227,9 +296,35 @@ export class PostManufacturingWorkOrderSlice {
     // the recorded output exceeds the components). Anything larger
     // already threw above.
     if (difference > 0) {
-      this.addLine(lines, { accountId: varianceAccountId, description: `فرق تصنيع - أمر #${workOrderId}`, debit: difference, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+      this.addLine(
+        lines,
+        {
+          accountId: varianceAccountId,
+          description: `فرق تصنيع - أمر #${workOrderId}`,
+          debit: difference,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        bookDigits,
+      );
     } else if (difference < 0) {
-      this.addLine(lines, { accountId: varianceAccountId, description: `فرق تصنيع - أمر #${workOrderId}`, debit: 0, credit: -difference, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+      this.addLine(
+        lines,
+        {
+          accountId: varianceAccountId,
+          description: `فرق تصنيع - أمر #${workOrderId}`,
+          debit: 0,
+          credit: -difference,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        bookDigits,
+      );
     }
 
     try {
@@ -238,7 +333,11 @@ export class PostManufacturingWorkOrderSlice {
         sourceId: workOrderId,
         tenantId: scope.tenantId,
         accountId: scope.accountId,
-        entryDate: wo.completed_at ? new Date(wo.completed_at) : (() => { throw new AppError('Manufacturing completion date missing', 'MANUFACTURING_DATE_MISSING', 409); })(),
+        entryDate: wo.completed_at
+          ? new Date(wo.completed_at)
+          : (() => {
+              throw new AppError('Manufacturing completion date missing', 'MANUFACTURING_DATE_MISSING', 409);
+            })(),
         description: `قيد أمر تصنيع #${workOrderId}`,
         branchId,
         locationId,
@@ -249,8 +348,14 @@ export class PostManufacturingWorkOrderSlice {
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_race_window_uniq')) {
-         const existing = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'manufacturing_work_order').where('source_id', '=', workOrderId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
-         return { posted: false, journalEntryId: existing ? existing.id : null };
+        const existing = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'manufacturing_work_order')
+          .where('source_id', '=', workOrderId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
+        return { posted: false, journalEntryId: existing ? existing.id : null };
       }
       throw e;
     }

@@ -87,15 +87,15 @@ export class AccountingRecoveryService implements OnApplicationBootstrap, OnModu
         if (after > before) {
           repaired += 1;
           this.logger.warn(
-            `Accounting foundation repaired for tenant "${tenant.slug || tenantId}": `
-            + `chart of accounts went from ${before} to ${after}. This tenant could not post a journal before now.`,
+            `Accounting foundation repaired for tenant "${tenant.slug || tenantId}": ` +
+              `chart of accounts went from ${before} to ${after}. This tenant could not post a journal before now.`,
           );
         }
       } catch (error) {
         failed += 1;
         this.logger.error(
-          `Accounting foundation could not be repaired for tenant "${tenant.slug || tenantId}": `
-          + (error instanceof Error ? error.message : String(error)),
+          `Accounting foundation could not be repaired for tenant "${tenant.slug || tenantId}": ` +
+            (error instanceof Error ? error.message : String(error)),
         );
       }
     }

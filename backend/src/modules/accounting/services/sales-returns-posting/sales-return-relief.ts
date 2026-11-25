@@ -7,9 +7,7 @@ import type { DbOrTx } from '../../accounting-posting.service';
 import type { SalesAndReturnsPostingDeps } from './sales-returns-posting-types';
 
 export class SalesReturnReliefService {
-  constructor(
-    private readonly toMoney: SalesAndReturnsPostingDeps['toMoney'],
-  ) {}
+  constructor(private readonly toMoney: SalesAndReturnsPostingDeps['toMoney']) {}
 
   /**
    * R6-E (INV-REST-SALE-MONEY-TRUTH-2) + R7-A F3: tip / courier-fee
@@ -49,7 +47,11 @@ export class SalesReturnReliefService {
       .selectFrom('journal_entries')
       .select(['id', 'source_id'])
       .where('source_type', 'in', ['sales_return', 'return'])
-      .where('source_id', 'in', priorReturns.map((row) => Number(row.id)))
+      .where(
+        'source_id',
+        'in',
+        priorReturns.map((row) => Number(row.id)),
+      )
       .where(sql<boolean>`tenant_id = ${tenantId}`)
       .where('status', 'in', ['draft', 'posted'])
       .execute();
@@ -64,11 +66,12 @@ export class SalesReturnReliefService {
       const accountIdByCode = new Map(reliefAccounts.map((row) => [String(row.code), Number(row.id)]));
       const sums = await queryable
         .selectFrom('journal_entry_lines')
-        .select([
-          'account_id',
-          sql<number>`coalesce(sum(debit), 0)`.as('relieved'),
-        ])
-        .where('journal_entry_id', 'in', priorJournals.map((row) => Number(row.id)))
+        .select(['account_id', sql<number>`coalesce(sum(debit), 0)`.as('relieved')])
+        .where(
+          'journal_entry_id',
+          'in',
+          priorJournals.map((row) => Number(row.id)),
+        )
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .groupBy('account_id')
         .execute();
@@ -104,11 +107,7 @@ export class SalesReturnReliefService {
    * sale's journal. If that gate ever changes, this must count
    * exchange-collected receivable legs too.
    */
-  async priorSalesReturnReceivableCredit(
-    queryable: DbOrTx,
-    tenantId: string,
-    saleId: number,
-  ): Promise<number> {
+  async priorSalesReturnReceivableCredit(queryable: DbOrTx, tenantId: string, saleId: number): Promise<number> {
     const priorReturns = await queryable
       .selectFrom('return_documents')
       .select('id')
@@ -121,7 +120,11 @@ export class SalesReturnReliefService {
       .selectFrom('journal_entries')
       .select('id')
       .where('source_type', 'in', ['sales_return', 'return'])
-      .where('source_id', 'in', priorReturns.map((row) => Number(row.id)))
+      .where(
+        'source_id',
+        'in',
+        priorReturns.map((row) => Number(row.id)),
+      )
       .where(sql<boolean>`tenant_id = ${tenantId}`)
       .where('status', 'in', ['draft', 'posted'])
       .execute();
@@ -136,7 +139,11 @@ export class SalesReturnReliefService {
     const credited = await queryable
       .selectFrom('journal_entry_lines')
       .select(sql<number>`coalesce(sum(credit), 0)`.as('credited'))
-      .where('journal_entry_id', 'in', priorJournals.map((row) => Number(row.id)))
+      .where(
+        'journal_entry_id',
+        'in',
+        priorJournals.map((row) => Number(row.id)),
+      )
       .where('account_id', '=', Number(receivableAccount.id))
       .where(sql<boolean>`tenant_id = ${tenantId}`)
       .executeTakeFirst();
@@ -186,11 +193,12 @@ export class SalesReturnReliefService {
     const priorRelief = await this.priorSalesReturnRelief(queryable, scope.tenantId, saleId, null);
     const priorReceivable = await this.priorSalesReturnReceivableCredit(queryable, scope.tenantId, saleId);
     const isStoreFleetDelivery = String((sale as any)?.delivery_fee_mode ?? '').trim() === 'store_fleet';
-    const remainingFee = toBookMoney(isStoreFleetDelivery
-      ? 0
-      : Math.max(0, Number(sale.delivery_fee || 0) - priorRelief.courier));
-    const remainingReceivable = toBookMoney(Math.max(0,
-      totalDebt - Number(sale.store_credit_used || 0) - Number(sale.paid_amount || 0) - priorReceivable));
+    const remainingFee = toBookMoney(
+      isStoreFleetDelivery ? 0 : Math.max(0, Number(sale.delivery_fee || 0) - priorRelief.courier),
+    );
+    const remainingReceivable = toBookMoney(
+      Math.max(0, totalDebt - Number(sale.store_credit_used || 0) - Number(sale.paid_amount || 0) - priorReceivable),
+    );
     return { totalDebt, remainingReceivable, remainingFee };
   }
 
@@ -231,7 +239,20 @@ export class SalesReturnReliefService {
   async computeSalesReturnRelief(
     queryable: DbOrTx,
     tenantId: string,
-    sale: { id: number; subtotal?: unknown; discount?: unknown; tip_amount?: unknown; delivery_fee?: unknown; delivery_fee_mode?: unknown; service_charge?: unknown; tax_amount?: unknown; prices_include_tax?: unknown } | null | undefined,
+    sale:
+      | {
+          id: number;
+          subtotal?: unknown;
+          discount?: unknown;
+          tip_amount?: unknown;
+          delivery_fee?: unknown;
+          delivery_fee_mode?: unknown;
+          service_charge?: unknown;
+          tax_amount?: unknown;
+          prices_include_tax?: unknown;
+        }
+      | null
+      | undefined,
     returnTotal: number,
     netReturnAmount: number,
     excludeReturnId: number | null,
@@ -253,19 +274,18 @@ export class SalesReturnReliefService {
         const strippedBase = toBookMoney(saleSubtotal + saleServiceCharge - saleTaxAmount);
         if (strippedBase >= 0) {
           const inclusiveDenom = saleSubtotal + saleServiceCharge;
-          const serviceLeg = inclusiveDenom > 0
-            ? toBookMoney((strippedBase * saleServiceCharge) / inclusiveDenom) : 0;
+          const serviceLeg = inclusiveDenom > 0 ? toBookMoney((strippedBase * saleServiceCharge) / inclusiveDenom) : 0;
           netGoodsBase = toBookMoney(Math.max(0, strippedBase - serviceLeg - saleDiscount));
         }
       } else {
         netGoodsBase = toBookMoney(Math.max(0, saleSubtotal - saleDiscount));
       }
     }
-    const reliefRatio = sale && returnTotal > 0 && netGoodsBase > 0
-      ? Math.min(1, Math.max(0, netReturnAmount / netGoodsBase)) : 0;
+    const reliefRatio =
+      sale && returnTotal > 0 && netGoodsBase > 0 ? Math.min(1, Math.max(0, netReturnAmount / netGoodsBase)) : 0;
     let tipRelief = saleTip > 0 && reliefRatio > 0 ? toBookMoney(saleTip * reliefRatio) : 0;
-    let courierRelief = saleDeliveryFee > 0 && !isStoreFleetDelivery && reliefRatio > 0
-      ? toBookMoney(saleDeliveryFee * reliefRatio) : 0;
+    let courierRelief =
+      saleDeliveryFee > 0 && !isStoreFleetDelivery && reliefRatio > 0 ? toBookMoney(saleDeliveryFee * reliefRatio) : 0;
     if (sale && (tipRelief > 0 || courierRelief > 0)) {
       const priorRelief = await this.priorSalesReturnRelief(queryable, tenantId, Number(sale.id), excludeReturnId);
       tipRelief = toBookMoney(Math.max(0, Math.min(tipRelief, saleTip - priorRelief.tip)));

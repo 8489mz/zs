@@ -23,7 +23,12 @@ export interface FiscalYearYearsDeps {
   formatDate: (date: any) => string;
   toMoney: (value: unknown, digits: MoneyDigits) => number;
   assertAdmin: (auth: AuthContext) => void;
-  ensurePeriodsForFiscalYear: (tenantId: string, fiscalYearId: number, startDateStr: string, endDateStr: string) => Promise<void>;
+  ensurePeriodsForFiscalYear: (
+    tenantId: string,
+    fiscalYearId: number,
+    startDateStr: string,
+    endDateStr: string,
+  ) => Promise<void>;
 }
 
 @Injectable()
@@ -32,7 +37,12 @@ export class FiscalYearYearsService {
   private readonly formatDate: (date: any) => string;
   private readonly toMoney: (value: unknown, digits: MoneyDigits) => number;
   private readonly assertAdmin: (auth: AuthContext) => void;
-  private readonly ensurePeriodsForFiscalYear: (tenantId: string, fiscalYearId: number, startDateStr: string, endDateStr: string) => Promise<void>;
+  private readonly ensurePeriodsForFiscalYear: (
+    tenantId: string,
+    fiscalYearId: number,
+    startDateStr: string,
+    endDateStr: string,
+  ) => Promise<void>;
 
   constructor(deps: FiscalYearYearsDeps) {
     this.db = deps.db;
@@ -206,12 +216,7 @@ export class FiscalYearYearsService {
     }
 
     // Auto-generate 12 monthly fiscal periods for this fiscal year (البند O6)
-    await this.ensurePeriodsForFiscalYear(
-      tenantId,
-      inserted.id,
-      startDate,
-      endDate,
-    );
+    await this.ensurePeriodsForFiscalYear(tenantId, inserted.id, startDate, endDate);
 
     return {
       ...inserted,

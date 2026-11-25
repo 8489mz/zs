@@ -1,6 +1,12 @@
 import { BadRequestException, type Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { parseTerminalHostAndPort, type TerminalPaymentRequest, type TerminalPaymentSession, type BridgeJob, type PosTerminalInfo } from './pos-terminal-shared';
+import {
+  parseTerminalHostAndPort,
+  type TerminalPaymentRequest,
+  type TerminalPaymentSession,
+  type BridgeJob,
+  type PosTerminalInfo,
+} from './pos-terminal-shared';
 
 export class PosTerminalPayments {
   constructor(
@@ -20,12 +26,7 @@ export class PosTerminalPayments {
         terminal: PosTerminalInfo,
         request: TerminalPaymentRequest,
       ) => Promise<void>;
-      dispatchTerminalCancel: (
-        ip: string,
-        port: number,
-        provider: string,
-        transactionId: string,
-      ) => Promise<void>;
+      dispatchTerminalCancel: (ip: string, port: number, provider: string, transactionId: string) => Promise<void>;
     },
   ) {}
 
@@ -42,15 +43,21 @@ export class PosTerminalPayments {
       throw new BadRequestException('خدمة ماكينات نقاط البيع (POS Terminal) غير مفعلة في إعدادات المنشأة');
     }
 
-    const selectedTerminal = terminals.find(t => t.id === request.terminalId) || terminals.find(t => t.isDefault) || terminals[0];
+    const selectedTerminal =
+      terminals.find((t) => t.id === request.terminalId) || terminals.find((t) => t.isDefault) || terminals[0];
     this.pruneExpiredSessions();
 
     // Prevent concurrent charges on the exact same terminal
     const isTerminalBusy = Array.from(this.activeSessions.values()).some(
-      s => s.tenantId === tenantId && s.terminalId === selectedTerminal.id && (s.status === 'processing' || s.status === 'pending')
+      (s) =>
+        s.tenantId === tenantId &&
+        s.terminalId === selectedTerminal.id &&
+        (s.status === 'processing' || s.status === 'pending'),
     );
     if (isTerminalBusy) {
-      throw new BadRequestException(`ماكينة الدفع (${selectedTerminal.name}) مشغولة حالياً بعملية دفع أخرى قيد التنفيذ؛ يرجى إنهاء المعاملة الجارية أو إلغاؤها أولاً.`);
+      throw new BadRequestException(
+        `ماكينة الدفع (${selectedTerminal.name}) مشغولة حالياً بعملية دفع أخرى قيد التنفيذ؛ يرجى إنهاء المعاملة الجارية أو إلغاؤها أولاً.`,
+      );
     }
 
     const transactionId = `EDC-${randomUUID()}`;
@@ -73,7 +80,12 @@ export class PosTerminalPayments {
       ? String(request.currency).trim().toUpperCase()
       : await this.getTenantBaseCurrency(tenantId);
 
-    const isLocalLan = cleanIp.startsWith('192.168.') || cleanIp.startsWith('10.') || cleanIp.startsWith('172.') || cleanIp === '127.0.0.1' || cleanIp === 'localhost';
+    const isLocalLan =
+      cleanIp.startsWith('192.168.') ||
+      cleanIp.startsWith('10.') ||
+      cleanIp.startsWith('172.') ||
+      cleanIp === '127.0.0.1' ||
+      cleanIp === 'localhost';
 
     const session: TerminalPaymentSession = {
       tenantId,
@@ -93,7 +105,9 @@ export class PosTerminalPayments {
     };
 
     this.activeSessions.set(transactionId, session);
-    this.logger.log(`Initiated terminal payment: ${transactionId} for amount: ${request.amount} on ${selectedTerminal.name} (Simulated: ${isMock}, LocalLan: ${isLocalLan})`);
+    this.logger.log(
+      `Initiated terminal payment: ${transactionId} for amount: ${request.amount} on ${selectedTerminal.name} (Simulated: ${isMock}, LocalLan: ${isLocalLan})`,
+    );
 
     // If real device, dispatch via Bridge Relay (for local LAN) or direct cloud call
     if (!isMock) {
@@ -120,13 +134,18 @@ export class PosTerminalPayments {
             const current = this.activeSessions.get(transactionId);
             if (current && current.status === 'processing' && !current.approvalCode) {
               const pending = this.pendingBridgeJobs.get(tenantId) || [];
-              const stillQueued = pending.some(j => j.jobId === transactionId);
+              const stillQueued = pending.some((j) => j.jobId === transactionId);
               if (stillQueued) {
-                this.pendingBridgeJobs.set(tenantId, pending.filter(j => j.jobId !== transactionId));
+                this.pendingBridgeJobs.set(
+                  tenantId,
+                  pending.filter((j) => j.jobId !== transactionId),
+                );
                 current.status = 'declined';
                 current.message = `ماكينة الدفع (${selectedTerminal.name} - ${cleanIp}) على شبكة محلية، ولم يتم اكتشاف اتصال مع جسر Z-Systems Bridge على جهاز الكاشير. يرجى تشغيل الجسر.`;
                 current.updatedAt = Date.now();
-                this.logger.warn(`Terminal session ${transactionId} declined: No active bridge poller for tenant ${tenantId}`);
+                this.logger.warn(
+                  `Terminal session ${transactionId} declined: No active bridge poller for tenant ${tenantId}`,
+                );
               }
             }
           }, 4500);
@@ -214,8 +233,11 @@ export class PosTerminalPayments {
       return session;
     }
     const pending = this.pendingBridgeJobs.get(tenantId) || [];
-    if (pending.some(job => job.jobId === transactionId)) {
-      this.pendingBridgeJobs.set(tenantId, pending.filter(job => job.jobId !== transactionId));
+    if (pending.some((job) => job.jobId === transactionId)) {
+      this.pendingBridgeJobs.set(
+        tenantId,
+        pending.filter((job) => job.jobId !== transactionId),
+      );
       session.status = 'cancelled';
       session.message = 'أُلغي الطلب قبل إرساله إلى ماكينة البنك';
       session.updatedAt = Date.now();
@@ -225,7 +247,7 @@ export class PosTerminalPayments {
     // The bank may already have debited the card. Never report "cancelled" based on
     // a best-effort network request; keep status unsettled until reliable confirmation.
     const terminals = await this.getTerminals(tenantId).catch(() => []);
-    const term = terminals.find(t => t.id === session.terminalId);
+    const term = terminals.find((t) => t.id === session.terminalId);
     if (term?.ipAddress) {
       const { host, port } = parseTerminalHostAndPort(term.ipAddress, 8080);
       if (host) {

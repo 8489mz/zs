@@ -62,13 +62,23 @@ export class ServicePostingSlice {
     return this.bound.insertPostedJournal(queryable, params);
   }
 
-  async postService(queryable: DbOrTx, serviceId: number, revision: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postService(
+    queryable: DbOrTx,
+    serviceId: number,
+    revision: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
     await this.ensureTenantFoundation(queryable, auth);
 
-    const service = await queryable.selectFrom('services').selectAll().where('id', '=', serviceId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+    const service = await queryable
+      .selectFrom('services')
+      .selectAll()
+      .where('id', '=', serviceId)
+      .where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
     if (!service) return { posted: false, journalEntryId: null };
 
     const amount = toBookMoney(service.amount);
@@ -89,11 +99,50 @@ export class ServicePostingSlice {
 
     const lines: JournalLineDraft[] = [];
     if (isCard) {
-      this.addLine(lines, { accountId: bankAccountId, description: `إيراد خدمة بنكي: ${service.name}`, debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+      this.addLine(
+        lines,
+        {
+          accountId: bankAccountId,
+          description: `إيراد خدمة بنكي: ${service.name}`,
+          debit: amount,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        bookDigits,
+      );
     } else {
-      this.addLine(lines, { accountId: cashAccountId, description: `إيراد خدمة نقدي: ${service.name}`, debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+      this.addLine(
+        lines,
+        {
+          accountId: cashAccountId,
+          description: `إيراد خدمة نقدي: ${service.name}`,
+          debit: amount,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        bookDigits,
+      );
     }
-    this.addLine(lines, { accountId: revenueAccountId, description: `إيراد خدمة: ${service.name}`, debit: 0, credit: amount, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+    this.addLine(
+      lines,
+      {
+        accountId: revenueAccountId,
+        description: `إيراد خدمة: ${service.name}`,
+        debit: 0,
+        credit: amount,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      },
+      bookDigits,
+    );
 
     // Use composite source_id for idempotency on revisions
     const sourceIdComposite = Number(`${serviceId}000${revision}`);
@@ -115,8 +164,14 @@ export class ServicePostingSlice {
       return { posted: true, journalEntryId: entryId };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_round1_uniq')) {
-         const existing = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'service').where('source_id', '=', sourceIdComposite).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
-         return { posted: false, journalEntryId: Number(existing?.id || 0) };
+        const existing = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'service')
+          .where('source_id', '=', sourceIdComposite)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
+        return { posted: false, journalEntryId: Number(existing?.id || 0) };
       }
       throw e;
     }
@@ -126,13 +181,24 @@ export class ServicePostingSlice {
     const scope = requireTenantScope(auth);
     // Find the original journal entry for this specific revision
     const sourceIdComposite = Number(`${serviceId}000${revision}`);
-    const original = await queryable.selectFrom('journal_entries').selectAll().where('source_type', '=', 'service').where('source_id', '=', sourceIdComposite).where('tenant_id', '=', scope.tenantId).where('status', '=', 'posted').executeTakeFirst();
+    const original = await queryable
+      .selectFrom('journal_entries')
+      .selectAll()
+      .where('source_type', '=', 'service')
+      .where('source_id', '=', sourceIdComposite)
+      .where('tenant_id', '=', scope.tenantId)
+      .where('status', '=', 'posted')
+      .executeTakeFirst();
     if (!original) return; // Nothing to reverse
 
-    const originalLines = await queryable.selectFrom('journal_entry_lines').selectAll()
-      .where('journal_entry_id', '=', original.id).where('tenant_id', '=', scope.tenantId).execute();
+    const originalLines = await queryable
+      .selectFrom('journal_entry_lines')
+      .selectAll()
+      .where('journal_entry_id', '=', original.id)
+      .where('tenant_id', '=', scope.tenantId)
+      .execute();
 
-    const lines: JournalLineDraft[] = originalLines.map(l => ({
+    const lines: JournalLineDraft[] = originalLines.map((l) => ({
       accountId: Number(l.account_id),
       description: `عكس ${l.description}`,
       debit: Number(l.credit), // Flip
@@ -158,11 +224,11 @@ export class ServicePostingSlice {
         lines,
       });
     } catch (e: any) {
-       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_round1_uniq')) {
-          // Already reversed
-          return;
-       }
-       throw e;
+      if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_round1_uniq')) {
+        // Already reversed
+        return;
+      }
+      throw e;
     }
   }
 }

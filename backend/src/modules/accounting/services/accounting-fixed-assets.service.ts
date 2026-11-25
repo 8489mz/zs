@@ -59,7 +59,11 @@ export class AccountingFixedAssetsService {
     return { ok: true, projects: records };
   }
 
-  private async ensureDepreciationAccounts(trx: any, tenantId: string, accountId: string): Promise<{ deprExpenseAccountId: number; accumDeprAccountId: number }> {
+  private async ensureDepreciationAccounts(
+    trx: any,
+    tenantId: string,
+    accountId: string,
+  ): Promise<{ deprExpenseAccountId: number; accumDeprAccountId: number }> {
     const accumRow = await trx
       .selectFrom('accounting_accounts')
       .select(['id', 'code'])
@@ -111,10 +115,9 @@ export class AccountingFixedAssetsService {
       .selectFrom('accounting_accounts')
       .select(['id', 'code'])
       .where('tenant_id', '=', tenantId)
-      .where((eb: any) => eb.or([
-        eb('code', '=', '6960'),
-        eb('name_ar', 'like', '%إهلاك%').and('account_type', '=', 'expense'),
-      ]))
+      .where((eb: any) =>
+        eb.or([eb('code', '=', '6960'), eb('name_ar', 'like', '%إهلاك%').and('account_type', '=', 'expense')]),
+      )
       .executeTakeFirst();
 
     let deprExpenseAccountId: number;
@@ -186,16 +189,19 @@ export class AccountingFixedAssetsService {
     return { ok: true, assets };
   }
 
-  async createFixedAsset(body: {
-    code: string;
-    name: string;
-    category?: string;
-    purchaseCost: number;
-    salvageValue?: number;
-    usefulLifeMonths?: number;
-    depreciationMethod?: 'straight_line' | 'declining_balance';
-    purchaseDate?: string;
-  }, actor: AuthContext): Promise<Record<string, unknown>> {
+  async createFixedAsset(
+    body: {
+      code: string;
+      name: string;
+      category?: string;
+      purchaseCost: number;
+      salvageValue?: number;
+      usefulLifeMonths?: number;
+      depreciationMethod?: 'straight_line' | 'declining_balance';
+      purchaseDate?: string;
+    },
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(actor);
     const code = String(body.code || '').trim();
     const name = String(body.name || '').trim();
@@ -208,8 +214,11 @@ export class AccountingFixedAssetsService {
     if (!code || !name || purchaseCost <= 0) {
       throw new BadRequestException('بيانات الأصل غير مكتملة (الكود، الاسم، وتكلفة الشراء مطلوبة).');
     }
-    try { validateFixedAssetTerms(purchaseCost, salvageValue, usefulLifeMonths); }
-    catch { throw new BadRequestException('تكلفة الأصل أو قيمة الخردة أو العمر الإنتاجي غير صالح.'); }
+    try {
+      validateFixedAssetTerms(purchaseCost, salvageValue, usefulLifeMonths);
+    } catch {
+      throw new BadRequestException('تكلفة الأصل أو قيمة الخردة أو العمر الإنتاجي غير صالح.');
+    }
     if (Number.isNaN(purchaseDate.getTime()) || purchaseDate > new Date()) {
       throw new BadRequestException('تاريخ شراء الأصل غير صالح أو يقع في المستقبل.');
     }
@@ -236,7 +245,11 @@ export class AccountingFixedAssetsService {
     return { ok: true, asset: inserted };
   }
 
-  async depreciateFixedAsset(id: number, body: { months?: number; note?: string }, actor: AuthContext): Promise<Record<string, unknown>> {
+  async depreciateFixedAsset(
+    id: number,
+    body: { months?: number; note?: string },
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(actor);
     const posting = this.accountingPosting;
     if (!posting) throw new Error('Accounting posting service is required for depreciation');
@@ -269,8 +282,14 @@ export class AccountingFixedAssetsService {
       let depreciationAmount: number;
       try {
         depreciationAmount = calculateAssetDepreciation({
-          cost, salvage, usefulLifeMonths: usefulLife, accumulated: currentAccumulated,
-          purchaseDate: new Date(asset.purchase_date), postingDate: entryDate, months, method,
+          cost,
+          salvage,
+          usefulLifeMonths: usefulLife,
+          accumulated: currentAccumulated,
+          purchaseDate: new Date(asset.purchase_date),
+          postingDate: entryDate,
+          months,
+          method,
         });
       } catch {
         throw new BadRequestException('بيانات الأصل أو عدد أشهر الإهلاك أو تاريخ الشراء غير صالح.');
@@ -300,7 +319,9 @@ export class AccountingFixedAssetsService {
         .executeTakeFirst();
 
       if (existingInMonth) {
-        throw new BadRequestException(`تم بالفعل إهلاك هذا الأصل خلال هذا الشهر (${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}).`);
+        throw new BadRequestException(
+          `تم بالفعل إهلاك هذا الأصل خلال هذا الشهر (${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}).`,
+        );
       }
 
       // 2. Insert Balanced Journal Entry (ZS-055)
@@ -371,7 +392,11 @@ export class AccountingFixedAssetsService {
           accumulated_amount: newAccumulated,
           book_value: newBookValue,
           journal_entry_id: journalEntryId,
-          note: body.note || (method === 'declining_balance' ? `إهلاك دوري لعدد ${months} شهر بطريقة القسط المتناقص` : `إهلاك دوري لعدد ${months} شهر بطريقة القسط الثابت`),
+          note:
+            body.note ||
+            (method === 'declining_balance'
+              ? `إهلاك دوري لعدد ${months} شهر بطريقة القسط المتناقص`
+              : `إهلاك دوري لعدد ${months} شهر بطريقة القسط الثابت`),
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -389,7 +414,10 @@ export class AccountingFixedAssetsService {
     });
   }
 
-  async depreciateAllFixedAssets(body: { months?: number; note?: string }, actor: AuthContext): Promise<Record<string, unknown>> {
+  async depreciateAllFixedAssets(
+    body: { months?: number; note?: string },
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(actor);
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const activeAssets = await this.db
@@ -407,14 +435,20 @@ export class AccountingFixedAssetsService {
       const cost = Number(asset.purchase_cost || 0);
       const salvage = Number(asset.salvage_value || 0);
       const currentAccum = Number(asset.accumulated_depreciation || 0);
-      if (currentAccum >= (cost - salvage)) {
+      if (currentAccum >= cost - salvage) {
         continue;
       }
       try {
         const res = await this.depreciateFixedAsset(Number(asset.id), body, actor);
         processedCount++;
         totalDepreciation = this.toMoney(totalDepreciation + Number(res.depreciationAmount || 0), digits);
-        results.push({ id: asset.id, name: asset.name, code: asset.code, amount: res.depreciationAmount, entryNo: res.entryNo });
+        results.push({
+          id: asset.id,
+          name: asset.name,
+          code: asset.code,
+          amount: res.depreciationAmount,
+          entryNo: res.entryNo,
+        });
       } catch (e: any) {
         results.push({ id: asset.id, name: asset.name, code: asset.code, error: e?.message || 'Failed' });
       }
@@ -432,8 +466,12 @@ export class AccountingFixedAssetsService {
     const scope = requireTenantScope(actor!);
     let query = this.db
       .selectFrom('asset_depreciation_logs as l')
-      .leftJoin('journal_entries as j', (join) => join.onRef('j.id', '=', 'l.journal_entry_id').onRef('j.tenant_id', '=', 'l.tenant_id'))
-      .leftJoin('fixed_assets as a', (join) => join.onRef('a.id', '=', 'l.asset_id').onRef('a.tenant_id', '=', 'l.tenant_id'))
+      .leftJoin('journal_entries as j', (join) =>
+        join.onRef('j.id', '=', 'l.journal_entry_id').onRef('j.tenant_id', '=', 'l.tenant_id'),
+      )
+      .leftJoin('fixed_assets as a', (join) =>
+        join.onRef('a.id', '=', 'l.asset_id').onRef('a.tenant_id', '=', 'l.tenant_id'),
+      )
       .select([
         'l.id',
         'l.asset_id',
@@ -476,16 +514,15 @@ export class AccountingFixedAssetsService {
         .where('id', '=', id)
         .where('tenant_id', '=', scope.tenantId)
         .execute();
-      return { ok: true, retired: true, message: 'تم إحالة الأصل إلى التقاعد (الاستبعاد) للاحتفاظ بسجل القيود التاريخية.' };
+      return {
+        ok: true,
+        retired: true,
+        message: 'تم إحالة الأصل إلى التقاعد (الاستبعاد) للاحتفاظ بسجل القيود التاريخية.',
+      };
     }
 
-    await this.db
-      .deleteFrom('fixed_assets')
-      .where('id', '=', id)
-      .where('tenant_id', '=', scope.tenantId)
-      .execute();
+    await this.db.deleteFrom('fixed_assets').where('id', '=', id).where('tenant_id', '=', scope.tenantId).execute();
 
     return { ok: true, deleted: true };
   }
-
 }

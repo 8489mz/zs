@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
@@ -14,7 +8,10 @@ import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
-import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_FUTURE_DAYS } from '../../../common/utils/client-date-bounds.util';
+import {
+  checkClientBusinessDay,
+  CLIENT_BUSINESS_DATE_FUTURE_DAYS,
+} from '../../../common/utils/client-date-bounds.util';
 import { boundedPage } from '../../../common/utils/bounded-page';
 import {
   ArCollectionsQueryDto,
@@ -80,20 +77,28 @@ export class ArCollectionsService {
     const casesStats = await (this.db as any)
       .selectFrom('ar_collection_cases')
       .select([
-        sql<number>`COALESCE(SUM(CASE WHEN status IN ('open', 'promised_to_pay', 'escalated') THEN total_overdue ELSE 0 END), 0)`.as('total_overdue'),
-        sql<number>`COUNT(CASE WHEN status IN ('open', 'promised_to_pay', 'escalated') THEN 1 END)`.as('open_cases_count'),
-        sql<number>`COUNT(CASE WHEN status = 'escalated' OR oldest_overdue_days >= 30 THEN 1 END)`.as('escalated_cases_count'),
-        sql<number>`COUNT(CASE WHEN status = 'promised_to_pay' AND promised_payment_date IS NOT NULL THEN 1 END)`.as('promised_count'),
-        sql<number>`COALESCE(SUM(CASE WHEN promised_payment_date = ${todayKey} THEN promised_amount ELSE 0 END), 0)`.as('promised_amount_today'),
+        sql<number>`COALESCE(SUM(CASE WHEN status IN ('open', 'promised_to_pay', 'escalated') THEN total_overdue ELSE 0 END), 0)`.as(
+          'total_overdue',
+        ),
+        sql<number>`COUNT(CASE WHEN status IN ('open', 'promised_to_pay', 'escalated') THEN 1 END)`.as(
+          'open_cases_count',
+        ),
+        sql<number>`COUNT(CASE WHEN status = 'escalated' OR oldest_overdue_days >= 30 THEN 1 END)`.as(
+          'escalated_cases_count',
+        ),
+        sql<number>`COUNT(CASE WHEN status = 'promised_to_pay' AND promised_payment_date IS NOT NULL THEN 1 END)`.as(
+          'promised_count',
+        ),
+        sql<number>`COALESCE(SUM(CASE WHEN promised_payment_date = ${todayKey} THEN promised_amount ELSE 0 END), 0)`.as(
+          'promised_amount_today',
+        ),
       ])
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();
 
     const blockedStats = await (this.db as any)
       .selectFrom('customers')
-      .select([
-        sql<number>`COUNT(*)`.as('blocked_count'),
-      ])
+      .select([sql<number>`COUNT(*)`.as('blocked_count')])
       .where('tenant_id', '=', tenantId)
       .where('is_credit_blocked', '=', true)
       .executeTakeFirst();
@@ -111,7 +116,10 @@ export class ArCollectionsService {
   /**
    * Lists collection cases with customer and level details
    */
-  async getCases(auth: AuthContext, query: ArCollectionsQueryDto): Promise<{
+  async getCases(
+    auth: AuthContext,
+    query: ArCollectionsQueryDto,
+  ): Promise<{
     cases: any[];
     totalCount: number;
   }> {
@@ -164,11 +172,7 @@ export class ArCollectionsService {
     if (query.search && query.search.trim()) {
       const term = `%${query.search.trim()}%`;
       baseQuery = baseQuery.where((eb: any) =>
-        eb.or([
-          eb('cust.name', 'ilike', term),
-          eb('cust.phone', 'ilike', term),
-          eb('c.notes', 'ilike', term),
-        ]),
+        eb.or([eb('cust.name', 'ilike', term), eb('cust.phone', 'ilike', term), eb('c.notes', 'ilike', term)]),
       );
     }
 
@@ -221,7 +225,11 @@ export class ArCollectionsService {
   /**
    * Retrieves single case details including unpaid invoices and full interaction history
    */
-  async getCaseDetails(auth: AuthContext, caseId: string, pagination?: { page?: number; pageSize?: number }): Promise<any> {
+  async getCaseDetails(
+    auth: AuthContext,
+    caseId: string,
+    pagination?: { page?: number; pageSize?: number },
+  ): Promise<any> {
     const { page, pageSize, offset } = boundedPage(pagination?.page, pagination?.pageSize);
     this.assertCollectionsAccess(auth);
     const scope = requireTenantScope(auth);
@@ -280,7 +288,8 @@ export class ArCollectionsService {
       .where('status', '!=', 'cancelled')
       .where(sql<boolean>`total > COALESCE(paid_amount, 0)`)
       .orderBy('created_at', 'asc')
-      .limit(pageSize + 1).offset(offset)
+      .limit(pageSize + 1)
+      .offset(offset)
       .execute();
 
     // Fetch interaction logs
@@ -300,7 +309,8 @@ export class ArCollectionsService {
       .where('l.case_id', '=', caseId)
       .where('l.tenant_id', '=', tenantId)
       .orderBy('l.created_at', 'desc')
-      .limit(pageSize + 1).offset(offset)
+      .limit(pageSize + 1)
+      .offset(offset)
       .execute();
 
     let reminderMessage: string | undefined;
@@ -377,7 +387,8 @@ export class ArCollectionsService {
           days_past_due: 7,
           auto_block_sales: false,
           action_type: 'whatsapp',
-          template_text: 'مرحباً {customer_name}، نود تذكيركم بلطف بوجود رصيد مستحق بقيمة {total_overdue} ج.م تجاوز موعد استحقاقه منذ {days_overdue} يوماً. شاكرين حسن تعاونكم.',
+          template_text:
+            'مرحباً {customer_name}، نود تذكيركم بلطف بوجود رصيد مستحق بقيمة {total_overdue} ج.م تجاوز موعد استحقاقه منذ {days_overdue} يوماً. شاكرين حسن تعاونكم.',
         },
         {
           id: `lvl_2_${tenantId}`,
@@ -387,7 +398,8 @@ export class ArCollectionsService {
           days_past_due: 15,
           auto_block_sales: false,
           action_type: 'whatsapp',
-          template_text: 'إشعار سداد رسمي: السيد {customer_name}، نرجو التكرم بسرعة سداد المديونية المتأخرة وقدرها {total_overdue} ج.م لتجنب تعليق التسهيلات الائتمانية.',
+          template_text:
+            'إشعار سداد رسمي: السيد {customer_name}، نرجو التكرم بسرعة سداد المديونية المتأخرة وقدرها {total_overdue} ج.م لتجنب تعليق التسهيلات الائتمانية.',
         },
         {
           id: `lvl_3_${tenantId}`,
@@ -397,7 +409,8 @@ export class ArCollectionsService {
           days_past_due: 30,
           auto_block_sales: true,
           action_type: 'manual_call',
-          template_text: 'إنذار إداري عاجل: تم إيقاف المبيعات الآجلة مؤقتاً لوجود متأخرات بقيمة {total_overdue} ج.م متأخرة منذ {days_overdue} يوماً. يرجى مراجعة إدارة التحصيل فوراً.',
+          template_text:
+            'إنذار إداري عاجل: تم إيقاف المبيعات الآجلة مؤقتاً لوجود متأخرات بقيمة {total_overdue} ج.م متأخرة منذ {days_overdue} يوماً. يرجى مراجعة إدارة التحصيل فوراً.',
         },
         {
           id: `lvl_4_${tenantId}`,
@@ -407,7 +420,8 @@ export class ArCollectionsService {
           days_past_due: 60,
           auto_block_sales: true,
           action_type: 'legal',
-          template_text: 'إشعار أخير قبل اتخاذ الإجراءات القانونية: السيد {customer_name}، نظراً لعدم الاستجابة للمطالبات السابقة بخصوص المبلغ المستحق {total_overdue} ج.م، سيتم تحويل الملف للشؤون القانونية خلال 48 ساعة.',
+          template_text:
+            'إشعار أخير قبل اتخاذ الإجراءات القانونية: السيد {customer_name}، نظراً لعدم الاستجابة للمطالبات السابقة بخصوص المبلغ المستحق {total_overdue} ج.م، سيتم تحويل الملف للشؤون القانونية خلال 48 ساعة.',
         },
       ];
 
@@ -428,7 +442,8 @@ export class ArCollectionsService {
     let settledCasesCount = 0;
     let afterId = 0;
     for (;;) {
-      const customers = await this.db.selectFrom('customers')
+      const customers = await this.db
+        .selectFrom('customers')
         .select(['id', 'name', 'phone', 'balance', 'credit_limit', 'is_credit_blocked'])
         .where('tenant_id', '=', tenantId)
         .where('is_active', '=', true)
@@ -440,7 +455,8 @@ export class ArCollectionsService {
       scannedCustomers += customers.length;
       afterId = Number(customers[customers.length - 1].id);
       const customerIds = customers.map((customer) => customer.id);
-      const existingCases = await this.db.selectFrom('ar_collection_cases')
+      const existingCases = await this.db
+        .selectFrom('ar_collection_cases')
         .select(['id', 'customer_id', 'status', 'promised_payment_date', 'promised_amount'])
         .where('tenant_id', '=', tenantId)
         .where('customer_id', 'in', customerIds)
@@ -448,7 +464,9 @@ export class ArCollectionsService {
       const caseByCustomer = new Map(existingCases.map((row) => [Number(row.customer_id), row]));
 
       const summaries = await sql<{
-        customer_id: number; total_overdue: number | string; oldest_overdue_days: number;
+        customer_id: number;
+        total_overdue: number | string;
+        oldest_overdue_days: number;
       }>`
         with invoices as (
           select s.customer_id, s.created_at,
@@ -474,10 +492,12 @@ export class ArCollectionsService {
         from allocated a join customers c on c.id = a.customer_id and c.tenant_id = ${tenantId}
         group by a.customer_id, c.balance
       `.execute(this.db);
-      const overdueByCustomer = new Map(summaries.rows.map((row) => [
-        Number(row.customer_id),
-        { totalOverdue: this.toMoney(row.total_overdue, digits), oldestOverdueDays: Number(row.oldest_overdue_days) },
-      ]));
+      const overdueByCustomer = new Map(
+        summaries.rows.map((row) => [
+          Number(row.customer_id),
+          { totalOverdue: this.toMoney(row.total_overdue, digits), oldestOverdueDays: Number(row.oldest_overdue_days) },
+        ]),
+      );
 
       const activeCases: Array<Record<string, unknown>> = [];
       const blockedCustomers: Array<{ id: number; reason: string | null }> = [];
@@ -502,27 +522,35 @@ export class ArCollectionsService {
           currentCase: currentCase
             ? {
                 status: currentCase.status,
-                promisedPaymentDate: currentCase.promised_payment_date ? new Date(currentCase.promised_payment_date).toISOString() : null,
+                promisedPaymentDate: currentCase.promised_payment_date
+                  ? new Date(currentCase.promised_payment_date).toISOString()
+                  : null,
                 promisedAmount: currentCase.promised_amount ? Number(currentCase.promised_amount) : null,
               }
             : null,
         };
 
-        const evalResult = evaluateCustomerDunning(evalInput, levels as DunningLevel[], undefined, digits, businessTimezone);
+        const evalResult = evaluateCustomerDunning(
+          evalInput,
+          levels as DunningLevel[],
+          undefined,
+          digits,
+          businessTimezone,
+        );
 
         if (evalResult.totalOverdue > 0) {
           activeCasesCount++;
           const caseId = currentCase?.id || `case_${randomUUID()}`;
 
           activeCases.push({
-              id: caseId,
-              tenant_id: tenantId,
-              customer_id: cId,
-              current_level_id: evalResult.activeDunningLevel?.id || null,
-              total_overdue: evalResult.totalOverdue,
-              oldest_overdue_days: evalResult.oldestOverdueDays,
-              status: evalResult.recommendedStatus,
-              updated_at: new Date(),
+            id: caseId,
+            tenant_id: tenantId,
+            customer_id: cId,
+            current_level_id: evalResult.activeDunningLevel?.id || null,
+            total_overdue: evalResult.totalOverdue,
+            oldest_overdue_days: evalResult.oldestOverdueDays,
+            status: evalResult.recommendedStatus,
+            updated_at: new Date(),
           });
 
           // Enforce automated credit block if qualified and not already blocked
@@ -531,14 +559,14 @@ export class ArCollectionsService {
             blockedCustomers.push({ id: cId, reason: evalResult.creditBlockReason });
 
             logs.push({
-                id: `log_${randomUUID()}`,
-                tenant_id: tenantId,
-                case_id: caseId,
-                interaction_type: 'level_escalation',
-                result_status: 'credit_blocked',
-                details: evalResult.creditBlockReason,
-                created_by: null,
-                created_at: new Date(),
+              id: `log_${randomUUID()}`,
+              tenant_id: tenantId,
+              case_id: caseId,
+              interaction_type: 'level_escalation',
+              result_status: 'credit_blocked',
+              details: evalResult.creditBlockReason,
+              created_by: null,
+              created_at: new Date(),
             });
           }
         } else if (currentCase && currentCase.status !== 'settled') {
@@ -551,14 +579,14 @@ export class ArCollectionsService {
             unblockedCustomerIds.push(cId);
 
             logs.push({
-                id: `log_${randomUUID()}`,
-                tenant_id: tenantId,
-                case_id: currentCase.id,
-                interaction_type: 'unblock_credit',
-                result_status: 'settled',
-                details: 'تم سداد كامل المديونية المتأخرة وإلغاء حظر البيع الآجل تلقائياً',
-                created_by: null,
-                created_at: new Date(),
+              id: `log_${randomUUID()}`,
+              tenant_id: tenantId,
+              case_id: currentCase.id,
+              interaction_type: 'unblock_credit',
+              result_status: 'settled',
+              details: 'تم سداد كامل المديونية المتأخرة وإلغاء حظر البيع الآجل تلقائياً',
+              created_by: null,
+              created_at: new Date(),
             });
           }
         }
@@ -582,9 +610,17 @@ export class ArCollectionsService {
           `.execute(trx);
         }
         if (settledCaseIds.length) {
-          await trx.updateTable('ar_collection_cases').set({
-            status: 'settled', total_overdue: 0, oldest_overdue_days: 0, updated_at: new Date(),
-          }).where('tenant_id', '=', tenantId).where('id', 'in', settledCaseIds).execute();
+          await trx
+            .updateTable('ar_collection_cases')
+            .set({
+              status: 'settled',
+              total_overdue: 0,
+              oldest_overdue_days: 0,
+              updated_at: new Date(),
+            })
+            .where('tenant_id', '=', tenantId)
+            .where('id', 'in', settledCaseIds)
+            .execute();
         }
         if (blockedCustomers.length) {
           await sql`
@@ -595,9 +631,16 @@ export class ArCollectionsService {
           `.execute(trx);
         }
         if (unblockedCustomerIds.length) {
-          await trx.updateTable('customers').set({
-            is_credit_blocked: false, credit_block_reason: null, credit_blocked_at: null,
-          }).where('tenant_id', '=', tenantId).where('id', 'in', unblockedCustomerIds).execute();
+          await trx
+            .updateTable('customers')
+            .set({
+              is_credit_blocked: false,
+              credit_block_reason: null,
+              credit_blocked_at: null,
+            })
+            .where('tenant_id', '=', tenantId)
+            .where('id', 'in', unblockedCustomerIds)
+            .execute();
         }
         if (logs.length) {
           await sql`
@@ -622,11 +665,7 @@ export class ArCollectionsService {
   /**
    * Logs a follow-up interaction (call, visit, whatsapp, note)
    */
-  async logInteraction(
-    auth: AuthContext,
-    caseId: string,
-    dto: CreateCollectionLogDto,
-  ): Promise<any> {
+  async logInteraction(auth: AuthContext, caseId: string, dto: CreateCollectionLogDto): Promise<any> {
     this.assertCollectionsAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
@@ -718,11 +757,7 @@ export class ArCollectionsService {
   /**
    * Records a concrete Promise to Pay from customer
    */
-  async recordPromiseToPay(
-    auth: AuthContext,
-    caseId: string,
-    dto: RecordPromiseToPayDto,
-  ): Promise<any> {
+  async recordPromiseToPay(auth: AuthContext, caseId: string, dto: RecordPromiseToPayDto): Promise<any> {
     this.assertCollectionsAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
@@ -787,11 +822,7 @@ export class ArCollectionsService {
   /**
    * Manually blocks or unblocks credit sales for a customer under collection
    */
-  async toggleCreditBlock(
-    auth: AuthContext,
-    caseId: string,
-    dto: ToggleCreditBlockDto,
-  ): Promise<any> {
+  async toggleCreditBlock(auth: AuthContext, caseId: string, dto: ToggleCreditBlockDto): Promise<any> {
     this.assertCollectionsAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
@@ -813,7 +844,7 @@ export class ArCollectionsService {
       .updateTable('customers')
       .set({
         is_credit_blocked: dto.block,
-        credit_block_reason: dto.block ? (dto.reason || 'إيقاف يدوي من مسؤول التحصيل') : null,
+        credit_block_reason: dto.block ? dto.reason || 'إيقاف يدوي من مسؤول التحصيل' : null,
         credit_blocked_at: dto.block ? new Date() : null,
         credit_blocked_by: dto.block ? auth.userId : null,
       })
@@ -859,11 +890,7 @@ export class ArCollectionsService {
   /**
    * Updates an individual dunning level configuration
    */
-  async updateDunningLevel(
-    auth: AuthContext,
-    levelId: string,
-    dto: UpdateDunningLevelDto,
-  ): Promise<any> {
+  async updateDunningLevel(auth: AuthContext, levelId: string, dto: UpdateDunningLevelDto): Promise<any> {
     this.assertCollectionsAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;

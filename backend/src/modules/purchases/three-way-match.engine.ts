@@ -2,7 +2,7 @@ import { roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-
 
 /**
  * Three-Way Match Engine (AIA / IFRS / ISO 9001 Procurement Integrity Standard)
- * 
+ *
  * Invariants Enforced:
  * MATCH-1: Cumulative Invoiced Qty <= Cumulative Accepted GRN Qty (No over-billing or double-billing).
  * MATCH-2: Unit Price Variance vs PO must not exceed contractual tolerance percentage.
@@ -181,7 +181,7 @@ export function computeThreeWayMatch(input: ThreeWayMatchInput): ThreeWayMatchRe
   // Deterministic fallback order when a PO repeats a product at different prices: cheapest first,
   // then by id. Picking [0] (insertion order) silently valued everything at an arbitrary line.
   for (const [, items] of poItemsByProduct) {
-    items.sort((a, b) => (Number(a.unitCost) - Number(b.unitCost)) || (Number(a.id) - Number(b.id)));
+    items.sort((a, b) => Number(a.unitCost) - Number(b.unitCost) || Number(a.id) - Number(b.id));
   }
 
   // Aggregate accepted GRN quantities by (poItemId / productId)
@@ -232,23 +232,39 @@ export function computeThreeWayMatch(input: ThreeWayMatchInput): ThreeWayMatchRe
     if (invItem.poItemId) {
       matchedPoItem = poItemById.get(invItem.poItemId);
       if (!matchedPoItem || matchedPoItem.productId !== invItem.productId) {
-        block('INVALID_PO_LINE', invItem.productId, `بند أمر الشراء ${invItem.poItemId} لا يطابق صنف الفاتورة ${invItem.productId}.`);
+        block(
+          'INVALID_PO_LINE',
+          invItem.productId,
+          `بند أمر الشراء ${invItem.poItemId} لا يطابق صنف الفاتورة ${invItem.productId}.`,
+        );
         matchedPoItem = undefined;
       }
     }
     if (!invItem.poItemId && poItemsByProduct.has(invItem.productId)) {
       const matching = poItemsByProduct.get(invItem.productId)!;
       if (matching.length === 1) matchedPoItem = matching[0];
-      else block('INVALID_PO_LINE', invItem.productId, `الصنف ${invItem.productId} مكرر في أمر الشراء؛ حدد بند الأمر في الفاتورة.`);
+      else
+        block(
+          'INVALID_PO_LINE',
+          invItem.productId,
+          `الصنف ${invItem.productId} مكرر في أمر الشراء؛ حدد بند الأمر في الفاتورة.`,
+        );
     }
     if (input.poItems.length && !matchedPoItem) {
       block('INVALID_PO_LINE', invItem.productId, `لا يوجد بند مطابق للصنف ${invItem.productId} في أمر الشراء.`);
     }
     if (invItem.grnLineId) {
       const referenced = grnLineById.get(invItem.grnLineId);
-      if (!referenced || referenced.productId !== invItem.productId ||
-          (matchedPoItem && referenced.poItemId !== matchedPoItem.id)) {
-        block('INVALID_GRN_LINE', invItem.productId, `بند الاستلام ${invItem.grnLineId} لا يطابق بند الفاتورة وأمر الشراء.`);
+      if (
+        !referenced ||
+        referenced.productId !== invItem.productId ||
+        (matchedPoItem && referenced.poItemId !== matchedPoItem.id)
+      ) {
+        block(
+          'INVALID_GRN_LINE',
+          invItem.productId,
+          `بند الاستلام ${invItem.grnLineId} لا يطابق بند الفاتورة وأمر الشراء.`,
+        );
       }
     }
 
@@ -258,10 +274,10 @@ export function computeThreeWayMatch(input: ThreeWayMatchInput): ThreeWayMatchRe
     // Prior invoiced (other invoices) + already consumed by earlier lines of THIS invoice.
     const priorFromHistory = matchedPoItem
       ? (priorInvoicedByPoItem.get(matchedPoItem.id) || 0) + (priorUnlinkedByProduct.get(invItem.productId) || 0)
-      : (priorInvoicedByProduct.get(invItem.productId) || 0);
+      : priorInvoicedByProduct.get(invItem.productId) || 0;
     const priorFromThisInvoice = matchedPoItem
-      ? (consumedByPoItem.get(matchedPoItem.id) || 0)
-      : (consumedByProduct.get(invItem.productId) || 0);
+      ? consumedByPoItem.get(matchedPoItem.id) || 0
+      : consumedByProduct.get(invItem.productId) || 0;
 
     const priorQty = Number((priorFromHistory + priorFromThisInvoice).toFixed(4));
     const cumulativeInvoicedQty = Number((priorQty + invQty).toFixed(4));
@@ -275,8 +291,8 @@ export function computeThreeWayMatch(input: ThreeWayMatchInput): ThreeWayMatchRe
     // Only count receipts that belong to the matched PO line. Falling back to product-wide receipts
     // let an invoice match against a DIFFERENT purchase order's delivery of the same product.
     const acceptedGrnQty = matchedPoItem
-      ? (grnAcceptedByPoItem.get(matchedPoItem.id) || 0)
-      : (grnAcceptedByProduct.get(invItem.productId) || 0);
+      ? grnAcceptedByPoItem.get(matchedPoItem.id) || 0
+      : grnAcceptedByProduct.get(invItem.productId) || 0;
 
     let lineStatus: MatchStatus = 'matched';
     let note = '';
@@ -285,7 +301,11 @@ export function computeThreeWayMatch(input: ThreeWayMatchInput): ThreeWayMatchRe
     if (itemIsService) {
       if (!serviceRef) {
         lineStatus = 'service_rejected';
-        block('SERVICE_CERT_MISSING', invItem.productId, `البند الخدمي (كود ${invItem.productId}) يفتقر لشهادة إنجاز خدمة معتمدة.`);
+        block(
+          'SERVICE_CERT_MISSING',
+          invItem.productId,
+          `البند الخدمي (كود ${invItem.productId}) يفتقر لشهادة إنجاز خدمة معتمدة.`,
+        );
       } else {
         lineStatus = 'service_approved';
         note = `تم الاعتماد كبند خدمي بموجب شهادة إنجاز: ${serviceRef}`;
@@ -294,7 +314,11 @@ export function computeThreeWayMatch(input: ThreeWayMatchInput): ThreeWayMatchRe
       // MATCH-1: Cumulative Received vs Invoiced
       if (acceptedGrnQty === 0 && invQty > 0) {
         lineStatus = 'unmatched_grn';
-        block('NO_GRN', invItem.productId, `البند (كود ${invItem.productId}) لا يوجد له أي محضر استلام مخزني (GRN) معتمد.`);
+        block(
+          'NO_GRN',
+          invItem.productId,
+          `البند (كود ${invItem.productId}) لا يوجد له أي محضر استلام مخزني (GRN) معتمد.`,
+        );
       } else if (cumulativeInvoicedQty > acceptedGrnQty + 0.0001) {
         lineStatus = 'quantity_mismatch';
         const excess = Number((cumulativeInvoicedQty - acceptedGrnQty).toFixed(4));
@@ -310,7 +334,7 @@ export function computeThreeWayMatch(input: ThreeWayMatchInput): ThreeWayMatchRe
     // Only OVERCHARGING is blocked. A supplier invoicing below the agreed price is a favourable
     // variance in the buyer's favour; blocking it (as Math.abs did) just stalls valid payments.
     const priceDelta = Number((invCost - poUnitCost).toFixed(4));
-    const priceDeltaPct = poUnitCost > 0 ? Number((priceDelta / poUnitCost * 100).toFixed(2)) : 0;
+    const priceDeltaPct = poUnitCost > 0 ? Number(((priceDelta / poUnitCost) * 100).toFixed(2)) : 0;
 
     if (lineStatus === 'matched' || lineStatus === 'service_approved') {
       if (priceDeltaPct > tolerance) {
@@ -335,9 +359,7 @@ export function computeThreeWayMatch(input: ThreeWayMatchInput): ThreeWayMatchRe
     const lineVatRate = Number(input.vatRateByProduct?.[invItem.productId] ?? vatRate);
     // Tax-inclusive lines already carry the VAT inside lineTotal: extract
     // it instead of adding a second VAT on top of the tax.
-    totalVat += input.pricesIncludeTax
-      ? lineTotal - lineTotal / (1 + lineVatRate)
-      : lineTotal * lineVatRate;
+    totalVat += input.pricesIncludeTax ? lineTotal - lineTotal / (1 + lineVatRate) : lineTotal * lineVatRate;
 
     totalGrniClearing += lineGrni;
     totalPpv += linePpv;
@@ -394,7 +416,12 @@ export function computeThreeWayMatch(input: ThreeWayMatchInput): ThreeWayMatchRe
   const hasCode = (c: BlockingCode) => codes.includes(c);
 
   let overallStatus: MatchStatus = 'matched';
-  if (hasCode('INVALID_PO_LINE') || hasCode('INVALID_GRN_LINE') || hasCode('QTY_EXCEEDS_RECEIPT') || hasCode('NO_GRN')) {
+  if (
+    hasCode('INVALID_PO_LINE') ||
+    hasCode('INVALID_GRN_LINE') ||
+    hasCode('QTY_EXCEEDS_RECEIPT') ||
+    hasCode('NO_GRN')
+  ) {
     overallStatus = 'quantity_mismatch';
   } else if (hasCode('PRICE_TOLERANCE_EXCEEDED')) {
     overallStatus = 'tolerance_exceeded';
@@ -415,7 +442,10 @@ export function computeThreeWayMatch(input: ThreeWayMatchInput): ThreeWayMatchRe
     const scope: OverrideScope = input.overrideScope === 'full' ? 'full' : 'price_only';
     const overridable = codes.every((c) =>
       c === 'RECONCILIATION_DISCREPANCY' || c === 'INVALID_PO_LINE' || c === 'INVALID_GRN_LINE'
-        ? false : scope === 'full' ? true : PRICE_ONLY_CODES.has(c),
+        ? false
+        : scope === 'full'
+          ? true
+          : PRICE_ONLY_CODES.has(c),
     );
     if (overridable) {
       overallStatus = 'override_approved';

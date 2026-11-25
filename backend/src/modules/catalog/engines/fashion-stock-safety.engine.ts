@@ -27,29 +27,49 @@ export function assertFashionRemovedStockSafe(
   const stock = Number(product.stock_qty || 0);
   const located = locationBalances.reduce((sum, balance) => sum + Number(balance.qty || 0), 0);
   if (!options?.allowMismatchForZeroing) {
-    if (!Number.isFinite(stock) || !Number.isFinite(located) || stock < -0.0001 ||
-        Math.abs(Number((stock - located).toFixed(3))) > 0.001) {
-      throw new AppError('مخزون المقاس لا يتطابق مع أرصدة المواقع؛ يلزم جرد وتسوية أولاً', 'FASHION_STOCK_RECONCILIATION_REQUIRED', 409);
+    if (
+      !Number.isFinite(stock) ||
+      !Number.isFinite(located) ||
+      stock < -0.0001 ||
+      Math.abs(Number((stock - located).toFixed(3))) > 0.001
+    ) {
+      throw new AppError(
+        'مخزون المقاس لا يتطابق مع أرصدة المواقع؛ يلزم جرد وتسوية أولاً',
+        'FASHION_STOCK_RECONCILIATION_REQUIRED',
+        409,
+      );
     }
   }
-  if (targetUnitCost !== undefined &&
-      (!Number.isFinite(targetUnitCost) ||
-       (stock > 0.0001 && Math.abs(Number(product.cost_price || 0) - targetUnitCost) > 0.0001))) {
-    throw new AppError('لا يمكن دمج مقاسين بتكلفتين مختلفتين دون تسوية تقييم مخزون', 'FASHION_VALUATION_ADJUSTMENT_REQUIRED', 409);
+  if (
+    targetUnitCost !== undefined &&
+    (!Number.isFinite(targetUnitCost) ||
+      (stock > 0.0001 && Math.abs(Number(product.cost_price || 0) - targetUnitCost) > 0.0001))
+  ) {
+    throw new AppError(
+      'لا يمكن دمج مقاسين بتكلفتين مختلفتين دون تسوية تقييم مخزون',
+      'FASHION_VALUATION_ADJUSTMENT_REQUIRED',
+      409,
+    );
   }
 }
 
 /** Reject an obsolete stock snapshot for explicit fashion adjustments. */
 export function assertFashionExpectedStock(expected: number | undefined, current: number): void {
-  if (expected === undefined || !Number.isFinite(expected) || !Number.isFinite(current) ||
-      Math.abs(expected - current) > 0.0001) {
+  if (
+    expected === undefined ||
+    !Number.isFinite(expected) ||
+    !Number.isFinite(current) ||
+    Math.abs(expected - current) > 0.0001
+  ) {
     throw new AppError('الرصيد تغير منذ فتح الموديل؛ حدّث المقاسات قبل تسوية المخزون', 'FASHION_STOCK_STALE', 409);
   }
 }
 
 /** Editing descriptions only needs read access; stock-affecting saves need branch write scope. */
 export function fashionLocationAccessMode(
-  isNewVariant: boolean, hasStockUpdate: boolean, requestedConsolidation: boolean,
+  isNewVariant: boolean,
+  hasStockUpdate: boolean,
+  requestedConsolidation: boolean,
 ): 'read' | 'write' {
   return isNewVariant || hasStockUpdate || requestedConsolidation ? 'write' : 'read';
 }

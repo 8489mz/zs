@@ -13,10 +13,7 @@ export class GoodsReceiptController {
   constructor(private readonly goodsReceiptService: GoodsReceiptService) {}
 
   @Get()
-  listReceipts(
-    @Query() query: { supplierId?: string; status?: string; search?: string },
-    @Req() req: RequestWithAuth,
-  ) {
+  listReceipts(@Query() query: { supplierId?: string; status?: string; search?: string }, @Req() req: RequestWithAuth) {
     return this.goodsReceiptService.listGoodsReceipts(
       {
         supplierId: query.supplierId ? parseInt(query.supplierId, 10) : undefined,

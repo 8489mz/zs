@@ -71,7 +71,14 @@ export function buildNormalizedPurchaseItem(
   const qty = Number(item.qty || 0);
   const cost = Number(item.cost || 0);
   const unitMultiplier = item.unitMultiplier == null ? 1 : Number(item.unitMultiplier);
-  if (!Number.isFinite(unitMultiplier) || unitMultiplier <= 0 || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(cost) || cost < 0) {
+  if (
+    !Number.isFinite(unitMultiplier) ||
+    unitMultiplier <= 0 ||
+    !Number.isFinite(qty) ||
+    qty <= 0 ||
+    !Number.isFinite(cost) ||
+    cost < 0
+  ) {
     throw new AppError('Invalid purchase quantity, multiplier or cost', 'INVALID_PURCHASE_ITEM', 400);
   }
 
@@ -94,10 +101,17 @@ export function buildNormalizedPurchaseItem(
 }
 
 export function calculatePurchaseSubtotal(items: Array<{ total: number }>, digits: MoneyDigits = 2): number {
-  return roundCurrency(items.reduce((sum, item) => sum + Number(item.total || 0), 0), digits);
+  return roundCurrency(
+    items.reduce((sum, item) => sum + Number(item.total || 0), 0),
+    digits,
+  );
 }
 
-export function allocatePurchaseInvoiceDiscount(items: NormalizedPurchaseItem[], invoiceDiscount: number, digits: MoneyDigits = 2): DiscountAllocatedPurchaseItem[] {
+export function allocatePurchaseInvoiceDiscount(
+  items: NormalizedPurchaseItem[],
+  invoiceDiscount: number,
+  digits: MoneyDigits = 2,
+): DiscountAllocatedPurchaseItem[] {
   const safeDiscount = roundCurrency(Number(invoiceDiscount || 0), digits);
   if (!items.length || safeDiscount === 0) {
     return items.map((item) => ({
@@ -159,7 +173,7 @@ export function allocatePurchaseInvoiceDiscount(items: NormalizedPurchaseItem[],
     const allocated = roundCurrency(safeDiscount - allocatedSoFar, digits);
     const adjustedAllocated = safeDiscount > 0 ? Math.min(allocated, gross) : allocated;
     const net = roundCurrency(gross - adjustedAllocated, digits);
-    
+
     allocatedByIndex.set(index, adjustedAllocated);
     effectiveByIndex.set(index, net);
     allocatedSoFar = roundCurrency(allocatedSoFar + adjustedAllocated, digits);
@@ -169,9 +183,7 @@ export function allocatePurchaseInvoiceDiscount(items: NormalizedPurchaseItem[],
     const gross = roundCurrency(item.total, digits);
     const allocatedDiscount = roundCurrency(allocatedByIndex.get(index) || 0, digits);
     const effectiveLineTotal = roundCurrency(
-      effectiveByIndex.has(index)
-        ? Number(effectiveByIndex.get(index) || 0)
-        : gross,
+      effectiveByIndex.has(index) ? Number(effectiveByIndex.get(index) || 0) : gross,
       digits,
     );
     return {
@@ -215,29 +227,47 @@ export function partitionPurchaseLineTotals(
   return { serviceNet, stockedNet };
 }
 
-export function calculatePurchaseStockIncrease(itemQty: number | string | null | undefined, unitMultiplier: number | string | null | undefined, currentStockQty: number | string | null | undefined) {
+export function calculatePurchaseStockIncrease(
+  itemQty: number | string | null | undefined,
+  unitMultiplier: number | string | null | undefined,
+  currentStockQty: number | string | null | undefined,
+) {
   const exactQty = Number(itemQty || 0) * Number(unitMultiplier ?? 1);
   const increasedQty = Number(exactQty.toFixed(3));
   if (!Number.isFinite(exactQty) || exactQty <= 0 || Math.abs(exactQty - increasedQty) > 0.00000001) {
-    throw new AppError('Purchase stock quantity must have at most three decimal places', 'PURCHASE_QUANTITY_PRECISION_INVALID', 400);
+    throw new AppError(
+      'Purchase stock quantity must have at most three decimal places',
+      'PURCHASE_QUANTITY_PRECISION_INVALID',
+      400,
+    );
   }
   const beforeQty = Number(currentStockQty || 0);
   const afterQty = Number((beforeQty + increasedQty).toFixed(3));
   return { increasedQty, beforeQty, afterQty };
 }
 
-export function calculatePurchaseStockDecrease(itemQty: number | string | null | undefined, unitMultiplier: number | string | null | undefined, currentStockQty: number | string | null | undefined) {
+export function calculatePurchaseStockDecrease(
+  itemQty: number | string | null | undefined,
+  unitMultiplier: number | string | null | undefined,
+  currentStockQty: number | string | null | undefined,
+) {
   const exactQty = Number(itemQty || 0) * Number(unitMultiplier ?? 1);
   const removedQty = Number(exactQty.toFixed(3));
   if (!Number.isFinite(exactQty) || exactQty <= 0 || Math.abs(exactQty - removedQty) > 0.00000001) {
-    throw new AppError('Purchase stock quantity must have at most three decimal places', 'PURCHASE_QUANTITY_PRECISION_INVALID', 400);
+    throw new AppError(
+      'Purchase stock quantity must have at most three decimal places',
+      'PURCHASE_QUANTITY_PRECISION_INVALID',
+      400,
+    );
   }
   const beforeQty = Number(currentStockQty || 0);
   const afterQty = Number((beforeQty - removedQty).toFixed(3));
   return { removedQty, beforeQty, afterQty };
 }
 
-export function buildHistoricCostMap(oldItems: Array<{ product_id?: number | string | null; unit_cost?: number | string | null }>) {
+export function buildHistoricCostMap(
+  oldItems: Array<{ product_id?: number | string | null; unit_cost?: number | string | null }>,
+) {
   const oldByProduct = new Map<number, number>();
   for (const item of oldItems) {
     if (!item.product_id) continue;
@@ -246,7 +276,10 @@ export function buildHistoricCostMap(oldItems: Array<{ product_id?: number | str
   return oldByProduct;
 }
 
-export function normalizePurchaseScope(payload: { branchId?: number | string | null; locationId?: number | string | null }): PurchaseScope {
+export function normalizePurchaseScope(payload: {
+  branchId?: number | string | null;
+  locationId?: number | string | null;
+}): PurchaseScope {
   return {
     branchId: payload.branchId ? Number(payload.branchId) : null,
     locationId: payload.locationId ? Number(payload.locationId) : null,
@@ -266,10 +299,7 @@ export function normalizeOptionalNote(note: unknown): string {
  * payment. Blank input is NULL, never an empty string; over-long input
  * is rejected with the named error rather than silently truncated.
  */
-export function normalizeInstapayAddress(
-  paymentChannel: unknown,
-  rawAddress: unknown,
-): string | null {
+export function normalizeInstapayAddress(paymentChannel: unknown, rawAddress: unknown): string | null {
   if (paymentChannel !== 'instapay') return null;
   const address = String(rawAddress || '').trim();
   if (!address) return null;
@@ -290,10 +320,7 @@ export function normalizeInstapayAddress(
  * A free-text note alone is NOT a reference — the gate below reads
  * only this field.
  */
-export function normalizeTransferReference(
-  paymentChannel: unknown,
-  rawReference: unknown,
-): string | null {
+export function normalizeTransferReference(paymentChannel: unknown, rawReference: unknown): string | null {
   if (!paymentChannel || paymentChannel === 'cash') return null;
   const reference = String(rawReference || '').trim();
   if (!reference) return null;
@@ -311,10 +338,7 @@ export function normalizeTransferReference(
  * are untouched. The note is deliberately NOT consulted: a free-text
  * note alone is not evidence.
  */
-export function assertNonCashTransferReference(
-  paymentChannel: unknown,
-  reference: unknown,
-): void {
+export function assertNonCashTransferReference(paymentChannel: unknown, reference: unknown): void {
   if (!paymentChannel || paymentChannel === 'cash') return;
   const trimmed = String(reference || '').trim();
   if (trimmed.length < 3) {
@@ -326,7 +350,11 @@ export function assertNonCashTransferReference(
   }
 }
 
-export function normalizePositiveAmount(amount: unknown, errorCode = 'INVALID_AMOUNT', message = 'Amount must be greater than zero'): number {
+export function normalizePositiveAmount(
+  amount: unknown,
+  errorCode = 'INVALID_AMOUNT',
+  message = 'Amount must be greater than zero',
+): number {
   const normalized = roundCurrency(Number(amount || 0));
   if (!(normalized > 0)) {
     throw new AppError(message, errorCode, 400);
@@ -334,7 +362,12 @@ export function normalizePositiveAmount(amount: unknown, errorCode = 'INVALID_AM
   return normalized;
 }
 
-export function ensureAmountWithinOutstanding(amount: number, outstanding: number, errorCode: string, message: string): void {
+export function ensureAmountWithinOutstanding(
+  amount: number,
+  outstanding: number,
+  errorCode: string,
+  message: string,
+): void {
   if (!(outstanding > 0)) {
     throw new AppError(message, errorCode, 400);
   }

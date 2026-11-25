@@ -1,6 +1,12 @@
 import * as net from 'node:net';
 import type { Logger } from '@nestjs/common';
-import { translateBankResponseCode, isPrivateSubnetIp, type TerminalPaymentSession, type PosTerminalInfo, type TerminalPaymentRequest } from './pos-terminal-shared';
+import {
+  translateBankResponseCode,
+  isPrivateSubnetIp,
+  type TerminalPaymentSession,
+  type PosTerminalInfo,
+  type TerminalPaymentRequest,
+} from './pos-terminal-shared';
 
 export class PosTerminalCharges {
   constructor(private readonly logger: Logger) {}
@@ -14,7 +20,7 @@ export class PosTerminalCharges {
     port: number,
     provider: string,
     terminal: PosTerminalInfo,
-    request: TerminalPaymentRequest
+    request: TerminalPaymentRequest,
   ): Promise<void> {
     if (provider.includes('geidea')) {
       await this.executeGeideaCharge(session, ip, port, terminal, request);
@@ -36,7 +42,7 @@ export class PosTerminalCharges {
     ip: string,
     port: number,
     terminal: PosTerminalInfo,
-    request: TerminalPaymentRequest
+    request: TerminalPaymentRequest,
   ): Promise<void> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 95000);
@@ -116,7 +122,12 @@ export class PosTerminalCharges {
 
       if (isApproved) {
         session.status = 'approved';
-        session.approvalCode = String(data.authCode || data.approvalCode || data.authorizationCode || `AUTH-${Math.floor(100000 + Math.random() * 900000)}`);
+        session.approvalCode = String(
+          data.authCode ||
+            data.approvalCode ||
+            data.authorizationCode ||
+            `AUTH-${Math.floor(100000 + Math.random() * 900000)}`,
+        );
         session.rrn = String(data.rrn || data.retrievalReferenceNumber || data.referenceNo || session.transactionId);
 
         const rawScheme = String(data.cardScheme || data.scheme || data.cardType || 'mada').toLowerCase();
@@ -129,7 +140,9 @@ export class PosTerminalCharges {
         else mappedScheme = rawScheme;
         session.cardScheme = mappedScheme;
 
-        session.cardLastFour = String(data.cardLastFour || data.last4 || (data.maskedPan ? data.maskedPan.slice(-4) : ''));
+        session.cardLastFour = String(
+          data.cardLastFour || data.last4 || (data.maskedPan ? data.maskedPan.slice(-4) : ''),
+        );
         session.message = 'تمت الموافقة من بنك التاجر بنجاح!';
         session.updatedAt = Date.now();
         this.logger.log(`Geidea ECR approved: Auth=${session.approvalCode}, RRN=${session.rrn}`);
@@ -137,7 +150,10 @@ export class PosTerminalCharges {
         const isUserCancel = statusRaw === 'CANCELLED' || statusRaw === 'CANCELED' || data.responseCode === '99';
         session.status = isUserCancel ? 'cancelled' : 'declined';
         const rawCode = String(data.responseCode || data.resultCode || statusRaw || '');
-        session.message = translateBankResponseCode(rawCode, data.message || data.responseMessage || data.responseDescription);
+        session.message = translateBankResponseCode(
+          rawCode,
+          data.message || data.responseMessage || data.responseDescription,
+        );
         session.updatedAt = Date.now();
       }
     } catch (err: any) {
@@ -151,7 +167,8 @@ export class PosTerminalCharges {
         : `تعذر الاتصال بماكينة جيديا على ${ip}:${port} (${err.code || err.message}).`;
 
       if (isCloudEnv && isPrivateSub && !isAbort) {
-        errMsg += ' (ملاحظة السحابة: السيرفر السحابي لا يستطيع الدخول لشبكة الراوتر المحلي؛ استخدم تطبيق ديسكتوب Z-Systems أو فعّل Geidea Cloud ECR).';
+        errMsg +=
+          ' (ملاحظة السحابة: السيرفر السحابي لا يستطيع الدخول لشبكة الراوتر المحلي؛ استخدم تطبيق ديسكتوب Z-Systems أو فعّل Geidea Cloud ECR).';
       } else if (!isAbort) {
         errMsg += ' تأكد من تشغيل الماكينة وتفعيل خدمة ECR.';
       }
@@ -167,12 +184,7 @@ export class PosTerminalCharges {
    * Standard framing for PAX A920 / A960 / S900 / D210 on ports 10009 / 20008:
    * [STX (0x02)] + [Data] + [ETX (0x03)] + [LRC (XOR Checksum)]
    */
-  private checkOrSendPaxRawTcpSocket(
-    ip: string,
-    port: number,
-    payloadObj: any,
-    timeoutMs = 60000
-  ): Promise<any> {
+  private checkOrSendPaxRawTcpSocket(ip: string, port: number, payloadObj: any, timeoutMs = 60000): Promise<any> {
     return new Promise((resolve, reject) => {
       const client = new net.Socket();
       let buffer = Buffer.alloc(0);
@@ -262,7 +274,7 @@ export class PosTerminalCharges {
     ip: string,
     port: number,
     terminal: PosTerminalInfo,
-    request: TerminalPaymentRequest
+    request: TerminalPaymentRequest,
   ): Promise<void> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 95000);
@@ -359,7 +371,13 @@ export class PosTerminalCharges {
 
       if (isApproved) {
         session.status = 'approved';
-        session.approvalCode = String(data.authCode || data.approvalCode || data.authNum || data.extData?.AuthCode || `AUTH-${Math.floor(100000 + Math.random() * 900000)}`);
+        session.approvalCode = String(
+          data.authCode ||
+            data.approvalCode ||
+            data.authNum ||
+            data.extData?.AuthCode ||
+            `AUTH-${Math.floor(100000 + Math.random() * 900000)}`,
+        );
         session.rrn = String(data.refNum || data.rrn || data.extData?.RRN || session.transactionId);
 
         const rawScheme = String(data.cardType || data.cardScheme || data.extData?.CardType || 'Visa').toLowerCase();
@@ -372,7 +390,11 @@ export class PosTerminalCharges {
         else mappedScheme = rawScheme;
         session.cardScheme = mappedScheme;
 
-        session.cardLastFour = String(data.cardLastFour || data.last4 || (data.bogusPan ? data.bogusPan.slice(-4) : (data.extData?.Pan ? data.extData.Pan.slice(-4) : '')));
+        session.cardLastFour = String(
+          data.cardLastFour ||
+            data.last4 ||
+            (data.bogusPan ? data.bogusPan.slice(-4) : data.extData?.Pan ? data.extData.Pan.slice(-4) : ''),
+        );
         session.message = 'تمت الموافقة بنجاح!';
         session.updatedAt = Date.now();
         this.logger.log(`PAX/Fawry ECR approved: Auth=${session.approvalCode}, RRN=${session.rrn}`);
@@ -394,7 +416,8 @@ export class PosTerminalCharges {
         : `تعذر الاتصال بماكينة فوري / باكس على ${ip}:${port} (${err.code || err.message}).`;
 
       if (isCloudEnv && isPrivateSub && !isAbort) {
-        errMsg += ' (ملاحظة السحابة: السيرفر السحابي لا يستطيع الدخول لشبكة الراوتر المحلي؛ استخدم تطبيق ديسكتوب Z-Systems للربط المباشر).';
+        errMsg +=
+          ' (ملاحظة السحابة: السيرفر السحابي لا يستطيع الدخول لشبكة الراوتر المحلي؛ استخدم تطبيق ديسكتوب Z-Systems للربط المباشر).';
       } else if (!isAbort) {
         errMsg += ' تأكد من تشغيل تطبيق ECR على الماكينة.';
       }
@@ -413,7 +436,7 @@ export class PosTerminalCharges {
     ip: string,
     port: number,
     terminal: PosTerminalInfo,
-    request: TerminalPaymentRequest
+    request: TerminalPaymentRequest,
   ): Promise<void> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 95000);
@@ -441,7 +464,9 @@ export class PosTerminalCharges {
       const data: any = await res.json();
       if (data.success || data.status === 'APPROVED') {
         session.status = 'approved';
-        session.approvalCode = String(data.auth_code || data.approvalCode || `AUTH-${Math.floor(100000 + Math.random() * 900000)}`);
+        session.approvalCode = String(
+          data.auth_code || data.approvalCode || `AUTH-${Math.floor(100000 + Math.random() * 900000)}`,
+        );
         session.rrn = String(data.rrn || session.transactionId);
         session.cardScheme = String(data.card_type || 'Visa').toLowerCase();
         session.cardLastFour = String(data.last_four || '');
@@ -463,7 +488,8 @@ export class PosTerminalCharges {
         : `تعذر الاتصال بماكينة Paymob على ${ip}:${port} (${err.code || err.message}).`;
 
       if (isCloudEnv && isPrivateSub && !isAbort) {
-        errMsg += ' (ملاحظة السحابة: السيرفر السحابي لا يستطيع الدخول لشبكة الراوتر المحلي؛ استخدم تطبيق ديسكتوب Z-Systems للربط المباشر).';
+        errMsg +=
+          ' (ملاحظة السحابة: السيرفر السحابي لا يستطيع الدخول لشبكة الراوتر المحلي؛ استخدم تطبيق ديسكتوب Z-Systems للربط المباشر).';
       } else if (!isAbort) {
         errMsg += ' تأكد من تشغيل تطبيق ECR على الماكينة.';
       }
@@ -476,12 +502,7 @@ export class PosTerminalCharges {
   /**
    * Cancel ongoing terminal transaction remotely
    */
-  async dispatchTerminalCancel(
-    ip: string,
-    port: number,
-    provider: string,
-    transactionId: string
-  ): Promise<void> {
+  async dispatchTerminalCancel(ip: string, port: number, provider: string, transactionId: string): Promise<void> {
     try {
       if (provider.includes('geidea')) {
         await fetch(`http://${ip}:${port}/api/v1/transaction/cancel`, {
@@ -504,7 +525,7 @@ export class PosTerminalCharges {
             ip,
             port,
             { command: 'CANCEL_TRANSACTION', ecrRefNum: transactionId },
-            4000
+            4000,
           ).catch(() => {});
         } else {
           await fetch(`http://${ip}:${port}/poslink`, {

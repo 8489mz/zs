@@ -96,11 +96,7 @@ export function effectiveMaxSelections(group: ModifierGroupRule): number {
 }
 
 function corruptPrice(): AppError {
-  return new AppError(
-    'Configured modifier price is negative or invalid',
-    'RESTAURANT_MODIFIER_PRICE_CORRUPT',
-    500,
-  );
+  return new AppError('Configured modifier price is negative or invalid', 'RESTAURANT_MODIFIER_PRICE_CORRUPT', 500);
 }
 
 function unverifiedPrice(modName: string): AppError {
@@ -112,7 +108,11 @@ function unverifiedPrice(modName: string): AppError {
 }
 
 /** Resolve one modifier's server price. Throws when no truth exists. */
-export function resolveModifierPrice(mod: ModifierLike, truth: ModifierPriceTruth, approvedPrices?: Record<string, number>): number {
+export function resolveModifierPrice(
+  mod: ModifierLike,
+  truth: ModifierPriceTruth,
+  approvedPrices?: Record<string, number>,
+): number {
   const optionId = modifierOptionId(mod);
   // SF-3 D-SF-03: a frozen modifier converts at its order-time price.
   if (optionId > 0 && approvedPrices?.[`option:${optionId}`] !== undefined) {
@@ -122,11 +122,7 @@ export function resolveModifierPrice(mod: ModifierLike, truth: ModifierPriceTrut
   if (optionId > 0) {
     const option = truth.options.get(optionId);
     if (!option) {
-      throw new AppError(
-        'Restaurant modifier option missing',
-        'RESTAURANT_MODIFIER_OPTION_INVALID',
-        422,
-      );
+      throw new AppError('Restaurant modifier option missing', 'RESTAURANT_MODIFIER_OPTION_INVALID', 422);
     }
     const price = Number(option.price);
     if (!Number.isFinite(price) || price < 0) throw corruptPrice();

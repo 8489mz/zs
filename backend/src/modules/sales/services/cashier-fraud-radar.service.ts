@@ -27,7 +27,9 @@ const RADAR_EVENT_CODES = [
 
 type RadarLogRow = { event_code?: string | null; action?: string | null };
 
-function classifyRadarEvent(row: RadarLogRow): 'cart_remove' | 'draft_cancel' | 'discount_override' | 'sale_return' | null {
+function classifyRadarEvent(
+  row: RadarLogRow,
+): 'cart_remove' | 'draft_cancel' | 'discount_override' | 'sale_return' | null {
   const code = String(row.event_code || '');
   if (code === AUDIT_EVENT_CODES.POS_CART_ITEM_REMOVED) return 'cart_remove';
   if (code === AUDIT_EVENT_CODES.POS_DRAFT_SALE_CANCELLED) return 'draft_cancel';
@@ -101,18 +103,16 @@ export class CashierFraudRadarService {
   // The 7d/30d windows are rolling instants, not calendar days, and stay
   // as NOW() - INTERVAL. `column` is a literal column reference from the
   // call sites below, never user input.
-  private getTimeFilter(
-    timeframe: 'today' | '7days' | '30days',
-    tenantTz: string,
-    todayKey: string,
-    column: string,
-  ) {
+  private getTimeFilter(timeframe: 'today' | '7days' | '30days', tenantTz: string, todayKey: string, column: string) {
     if (timeframe === '7days') return sql<boolean>`${sql.ref(column)} >= NOW() - INTERVAL '7 DAYS'`;
     if (timeframe === '30days') return sql<boolean>`${sql.ref(column)} >= NOW() - INTERVAL '30 DAYS'`;
     return sql<boolean>`DATE(${sql.ref(column)} AT TIME ZONE ${tenantTz}) = ${todayKey}`;
   }
 
-  async getSummary(timeframe: 'today' | '7days' | '30days' = 'today', auth: AuthContext): Promise<FraudRadarSummaryResponse> {
+  async getSummary(
+    timeframe: 'today' | '7days' | '30days' = 'today',
+    auth: AuthContext,
+  ): Promise<FraudRadarSummaryResponse> {
     const scope = requireTenantScope(auth);
     // NEW-G: the tenant day is resolved once per call; the filter below
     // keys 'today' on it (the 7d/30d branches ignore it).
@@ -160,19 +160,25 @@ export class CashierFraudRadarService {
       when event_code is null and action like '%خصم%' then 'discount_override'
       else 'sale_return' end`;
     const [auditRows, auditStats] = await Promise.all([
-      auditBase.select(['id', 'action', 'event_code', 'details', 'created_by', 'created_at'])
-      .orderBy('id', 'desc')
-      .limit(maxDetailedEvents + 1)
-      .execute(),
-      auditBase.select([
-        'created_by',
-        sql<number>`count(*)::int`.as('event_count'),
-        sql<number>`count(*) filter (where ${eventKind} = 'cart_remove')::int`.as('cart_voids'),
-        sql<number>`count(*) filter (where ${eventKind} = 'draft_cancel')::int`.as('draft_cancels'),
-        sql<number>`count(*) filter (where ${eventKind} = 'discount_override')::int`.as('discount_overrides'),
-        sql<number>`count(*) filter (where ${eventKind} = 'sale_return')::int`.as('sale_returns'),
-        sql<Date | null>`max(created_at) filter (where ${eventKind} in ('cart_remove', 'draft_cancel', 'discount_override', 'sale_return'))`.as('last_suspicious_at'),
-      ]).groupBy('created_by').execute(),
+      auditBase
+        .select(['id', 'action', 'event_code', 'details', 'created_by', 'created_at'])
+        .orderBy('id', 'desc')
+        .limit(maxDetailedEvents + 1)
+        .execute(),
+      auditBase
+        .select([
+          'created_by',
+          sql<number>`count(*)::int`.as('event_count'),
+          sql<number>`count(*) filter (where ${eventKind} = 'cart_remove')::int`.as('cart_voids'),
+          sql<number>`count(*) filter (where ${eventKind} = 'draft_cancel')::int`.as('draft_cancels'),
+          sql<number>`count(*) filter (where ${eventKind} = 'discount_override')::int`.as('discount_overrides'),
+          sql<number>`count(*) filter (where ${eventKind} = 'sale_return')::int`.as('sale_returns'),
+          sql<Date | null>`max(created_at) filter (where ${eventKind} in ('cart_remove', 'draft_cancel', 'discount_override', 'sale_return'))`.as(
+            'last_suspicious_at',
+          ),
+        ])
+        .groupBy('created_by')
+        .execute(),
     ]);
 
     const cancelledSales = await this.db
@@ -193,10 +199,7 @@ export class CashierFraudRadarService {
     // 4. Fetch total completed sales by cashier to calculate normal baseline
     const completedSales = await this.db
       .selectFrom('sales')
-      .select([
-        'created_by',
-        sql<number>`COUNT(id)`.as('sales_count'),
-      ])
+      .select(['created_by', sql<number>`COUNT(id)`.as('sales_count')])
       .where('tenant_id', '=', scope.tenantId)
       .where('status', '!=', 'cancelled')
       .where(this.getTimeFilter(timeframe, tenantTz, todayKey, 'created_at'))
@@ -209,14 +212,17 @@ export class CashierFraudRadarService {
     }
 
     // Process statistics per cashier
-    const cashierStatsMap = new Map<number, {
-      cartVoids: number;
-      draftCancels: number;
-      discountOverrides: number;
-      saleReturns: number;
-      cancelledSales: number;
-      lastSuspiciousAt?: string;
-    }>();
+    const cashierStatsMap = new Map<
+      number,
+      {
+        cartVoids: number;
+        draftCancels: number;
+        discountOverrides: number;
+        saleReturns: number;
+        cancelledSales: number;
+        lastSuspiciousAt?: string;
+      }
+    >();
 
     for (const c of cashiers) {
       cashierStatsMap.set(Number(c.id), {
@@ -262,7 +268,8 @@ export class CashierFraudRadarService {
       stats.cancelledSales = Number(cs.cancelled_count);
       estimatedProtectedLoss += Number(cs.cancelled_total || 0);
       const cancelledAt = cs.latest_cancelled_at ? new Date(cs.latest_cancelled_at).toISOString() : undefined;
-      if (cancelledAt && (!stats.lastSuspiciousAt || cancelledAt > stats.lastSuspiciousAt)) stats.lastSuspiciousAt = cancelledAt;
+      if (cancelledAt && (!stats.lastSuspiciousAt || cancelledAt > stats.lastSuspiciousAt))
+        stats.lastSuspiciousAt = cancelledAt;
     }
 
     const profiles: CashierRiskProfile[] = [];
@@ -279,14 +286,26 @@ export class CashierFraudRadarService {
     const profileUids = new Set<number>([...cashierById.keys(), ...cashierStatsMap.keys()]);
 
     for (const uid of profileUids) {
-      const stats = cashierStatsMap.get(uid) || { cartVoids: 0, draftCancels: 0, discountOverrides: 0, saleReturns: 0, cancelledSales: 0 };
+      const stats = cashierStatsMap.get(uid) || {
+        cartVoids: 0,
+        draftCancels: 0,
+        discountOverrides: 0,
+        saleReturns: 0,
+        cancelledSales: 0,
+      };
       const salesCount = salesCountMap.get(uid) || 0;
-      const totalEvents = stats.cartVoids + stats.draftCancels + stats.cancelledSales + stats.discountOverrides + stats.saleReturns;
+      const totalEvents =
+        stats.cartVoids + stats.draftCancels + stats.cancelledSales + stats.discountOverrides + stats.saleReturns;
 
       // Risk score algorithm (0 - 100)
-      let rawScore = (stats.cartVoids * 12) + (stats.draftCancels * 18) + (stats.cancelledSales * 25) + (stats.discountOverrides * 8) + (stats.saleReturns * 10);
+      let rawScore =
+        stats.cartVoids * 12 +
+        stats.draftCancels * 18 +
+        stats.cancelledSales * 25 +
+        stats.discountOverrides * 8 +
+        stats.saleReturns * 10;
       if (salesCount > 10) {
-        rawScore = rawScore / Math.max(1, (salesCount / 20));
+        rawScore = rawScore / Math.max(1, salesCount / 20);
       }
       const riskScore = Math.min(100, Math.max(0, Math.round(rawScore)));
 
@@ -336,7 +355,11 @@ export class CashierFraudRadarService {
     };
   }
 
-  async getEvents(limit = 40, auth: AuthContext, timeframe: 'today' | '7days' | '30days' = 'today'): Promise<FraudRadarEventItem[]> {
+  async getEvents(
+    limit = 40,
+    auth: AuthContext,
+    timeframe: 'today' | '7days' | '30days' = 'today',
+  ): Promise<FraudRadarEventItem[]> {
     const scope = requireTenantScope(auth);
     const safeLimit = Math.min(100, Math.max(5, limit));
     // NEW-G: the tenant day is resolved once per call; the filter below
@@ -383,14 +406,7 @@ export class CashierFraudRadarService {
     const cancelledRows = await this.db
       .selectFrom('sales as s')
       .leftJoin('users as u', 'u.id', 's.created_by')
-      .select([
-        's.id',
-        's.doc_no',
-        's.total',
-        's.created_by',
-        's.created_at',
-        'u.username as cashier_name',
-      ])
+      .select(['s.id', 's.doc_no', 's.total', 's.created_by', 's.created_at', 'u.username as cashier_name'])
       .where('s.tenant_id', '=', scope.tenantId)
       .where('s.status', '=', 'cancelled')
       .where(this.getTimeFilter(timeframe, tenantTz, todayKey, 's.created_at'))
@@ -438,9 +454,7 @@ export class CashierFraudRadarService {
       });
     }
 
-    items.sort((a, b) =>
-      a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : b.id - a.id,
-    );
+    items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : b.id - a.id));
     return items.slice(0, safeLimit);
   }
 

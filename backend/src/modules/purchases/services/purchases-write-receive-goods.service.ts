@@ -64,19 +64,36 @@ export class PurchasesWriteReceiveGoodsService {
       }
       if (purchase.grn_id || purchase.po_id) {
         if (purchase.po_id) {
-          await trx.selectFrom('purchase_orders').select('id')
-            .where('tenant_id', '=', scope.tenantId).where('id', '=', Number(purchase.po_id))
-            .forUpdate().executeTakeFirstOrThrow();
+          await trx
+            .selectFrom('purchase_orders')
+            .select('id')
+            .where('tenant_id', '=', scope.tenantId)
+            .where('id', '=', Number(purchase.po_id))
+            .forUpdate()
+            .executeTakeFirstOrThrow();
         }
         const postedReceipt = purchase.grn_id
-          ? await trx.selectFrom('goods_receipt_notes').select(['id', 'status'])
-            .where('tenant_id', '=', scope.tenantId).where('id', '=', Number(purchase.grn_id))
-            .forUpdate().executeTakeFirst()
-          : await trx.selectFrom('goods_receipt_notes').select(['id', 'status'])
-            .where('tenant_id', '=', scope.tenantId).where('purchase_order_id', '=', Number(purchase.po_id))
-            .where('status', '=', 'posted').limit(1).executeTakeFirst();
+          ? await trx
+              .selectFrom('goods_receipt_notes')
+              .select(['id', 'status'])
+              .where('tenant_id', '=', scope.tenantId)
+              .where('id', '=', Number(purchase.grn_id))
+              .forUpdate()
+              .executeTakeFirst()
+          : await trx
+              .selectFrom('goods_receipt_notes')
+              .select(['id', 'status'])
+              .where('tenant_id', '=', scope.tenantId)
+              .where('purchase_order_id', '=', Number(purchase.po_id))
+              .where('status', '=', 'posted')
+              .limit(1)
+              .executeTakeFirst();
         if (postedReceipt?.status === 'posted') {
-          throw new AppError('The linked GRN already posted stock; receiving this bill would post it twice', 'PURCHASE_STOCK_ALREADY_RECEIVED', 409);
+          throw new AppError(
+            'The linked GRN already posted stock; receiving this bill would post it twice',
+            'PURCHASE_STOCK_ALREADY_RECEIVED',
+            409,
+          );
         }
       }
 
@@ -92,28 +109,44 @@ export class PurchasesWriteReceiveGoodsService {
         itemsMap.set(Number(it.id), it);
       }
 
-      if (!receivedItems.length) throw new AppError('Receipt must contain at least one line', 'PURCHASE_RECEIPT_EMPTY', 400);
+      if (!receivedItems.length)
+        throw new AppError('Receipt must contain at least one line', 'PURCHASE_RECEIPT_EMPTY', 400);
       const seenItemIds = new Set<number>();
       let receiptQty = 0;
       for (const rec of receivedItems) {
         const itemId = Number(rec.itemId);
         const item = itemsMap.get(itemId);
         if (!item) throw new AppError(`Purchase item ${itemId} not found`, 'ITEM_NOT_FOUND', 404);
-        if (seenItemIds.has(itemId)) throw new AppError('Duplicate purchase receipt line', 'PURCHASE_RECEIPT_DUPLICATE_LINE', 400);
+        if (seenItemIds.has(itemId))
+          throw new AppError('Duplicate purchase receipt line', 'PURCHASE_RECEIPT_DUPLICATE_LINE', 400);
         seenItemIds.add(itemId);
         const qty = Number(rec.receivedQty);
         const alreadyReceived = Number(item.received_qty || 0);
         const ordered = Number(item.qty || 0);
-        if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(ordered) ||
-            alreadyReceived + qty > ordered + 0.0001) {
-          throw new AppError('Received quantity must be positive and cannot exceed ordered quantity', 'PURCHASE_RECEIPT_QTY_INVALID', 400);
+        if (
+          !Number.isFinite(qty) ||
+          qty <= 0 ||
+          !Number.isFinite(ordered) ||
+          alreadyReceived + qty > ordered + 0.0001
+        ) {
+          throw new AppError(
+            'Received quantity must be positive and cannot exceed ordered quantity',
+            'PURCHASE_RECEIPT_QTY_INVALID',
+            400,
+          );
         }
         receiptQty += qty;
       }
-      const totalRemaining = existingItems.reduce((sum, item) =>
-        sum + Math.max(0, Number(item.qty || 0) - Number(item.received_qty || 0)), 0);
+      const totalRemaining = existingItems.reduce(
+        (sum, item) => sum + Math.max(0, Number(item.qty || 0) - Number(item.received_qty || 0)),
+        0,
+      );
       if (purchase.status === 'draft' && receiptQty + 0.0001 < totalRemaining) {
-        throw new AppError('Partial receipts require a GRN so each stock movement has its own accrual journal', 'PURCHASE_PARTIAL_RECEIPT_REQUIRES_GRN', 422);
+        throw new AppError(
+          'Partial receipts require a GRN so each stock movement has its own accrual journal',
+          'PURCHASE_PARTIAL_RECEIPT_REQUIRES_GRN',
+          422,
+        );
       }
 
       await lockStockProducts(trx, {
@@ -121,7 +154,9 @@ export class PurchasesWriteReceiveGoodsService {
         productIds: receivedItems.map((rec) => Number(itemsMap.get(rec.itemId)?.product_id)),
       });
 
-      for (const rec of [...receivedItems].sort((a, b) => Number(itemsMap.get(a.itemId)?.product_id || 0) - Number(itemsMap.get(b.itemId)?.product_id || 0))) {
+      for (const rec of [...receivedItems].sort(
+        (a, b) => Number(itemsMap.get(a.itemId)?.product_id || 0) - Number(itemsMap.get(b.itemId)?.product_id || 0),
+      )) {
         const item = itemsMap.get(rec.itemId);
         if (!item) {
           throw new AppError(`Purchase item ${rec.itemId} not found`, 'ITEM_NOT_FOUND', 404);
@@ -132,7 +167,10 @@ export class PurchasesWriteReceiveGoodsService {
         const newReceivedQty = currentReceived + qtyToReceive;
         const unitMultiplier = Number(item.unit_multiplier ?? 1);
         const effectiveUnitCost = purchaseReceiptBaseUnitCost(
-          Number(item.unit_cost), unitMultiplier, Number(purchase.tax_rate || 0), Boolean(purchase.prices_include_tax),
+          Number(item.unit_cost),
+          unitMultiplier,
+          Number(purchase.tax_rate || 0),
+          Boolean(purchase.prices_include_tax),
         );
 
         await trx
@@ -146,28 +184,33 @@ export class PurchasesWriteReceiveGoodsService {
 
         const itemSerials = Array.isArray(rec.serials) ? rec.serials : [];
         if (itemSerials.length > 0) {
-          const serialRows = itemSerials.map((s: any) => {
-            const serialNumber = typeof s === 'string' ? s.trim() : (s?.serialNumber || s?.serial || '').trim();
-            const imei2 = typeof s === 'object' ? s?.imei2 || null : null;
-            return {
-              tenant_id: scope.tenantId,
-              account_id: scope.accountId,
-              product_id: item.product_id,
-              serial_number: serialNumber,
-              imei_2: imei2,
-              branch_id: purchase.branch_id ?? null,
-              location_id: item.location_id ?? purchase.location_id,
-              status: 'in_stock' as const,
-              cost_price: Number(effectiveUnitCost.toFixed(6)),
-              purchase_id: purchaseId,
-              purchase_item_id: item.id,
-              warranty_end_date: null,
-              notes: null,
-            };
-          }).filter((r) => r.serial_number);
+          const serialRows = itemSerials
+            .map((s: any) => {
+              const serialNumber = typeof s === 'string' ? s.trim() : (s?.serialNumber || s?.serial || '').trim();
+              const imei2 = typeof s === 'object' ? s?.imei2 || null : null;
+              return {
+                tenant_id: scope.tenantId,
+                account_id: scope.accountId,
+                product_id: item.product_id,
+                serial_number: serialNumber,
+                imei_2: imei2,
+                branch_id: purchase.branch_id ?? null,
+                location_id: item.location_id ?? purchase.location_id,
+                status: 'in_stock' as const,
+                cost_price: Number(effectiveUnitCost.toFixed(6)),
+                purchase_id: purchaseId,
+                purchase_item_id: item.id,
+                warranty_end_date: null,
+                notes: null,
+              };
+            })
+            .filter((r) => r.serial_number);
 
           if (serialRows.length > 0) {
-            await trx.insertInto('product_serials').values(serialRows as any).execute();
+            await trx
+              .insertInto('product_serials')
+              .values(serialRows as any)
+              .execute();
           }
         }
 
@@ -190,27 +233,40 @@ export class PurchasesWriteReceiveGoodsService {
         // the stored cost is unchanged. The product row is locked by
         // the stock delta above, so the writer's read cannot miss it.
         if (increasedQty > 0) {
-          await valueStockReceipt(trx, scope.tenantId, item.product_id, stockChange.globalAfter, increasedQty, increasedQty * effectiveUnitCost);
+          await valueStockReceipt(
+            trx,
+            scope.tenantId,
+            item.product_id,
+            stockChange.globalAfter,
+            increasedQty,
+            increasedQty * effectiveUnitCost,
+          );
         }
 
-        await trx.insertInto('stock_movements').values({
-          product_id: item.product_id,
-          movement_type: 'purchase_receipt',
-          qty: increasedQty,
-          before_qty: stockChange.scopeBefore,
-          after_qty: stockChange.scopeAfter,
-          unit_cost: Number(effectiveUnitCost.toFixed(6)),
-          total_cost: roundMoney(effectiveUnitCost * increasedQty, currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId))),
-          reason: 'purchase_receipt',
-          note: `استلام بضاعة لأمر شراء PUR-${purchaseId}`,
-          reference_type: 'purchase',
-          reference_id: purchaseId,
-          branch_id: branchId ? Number(branchId) : undefined,
-          location_id: itemLocationId ? Number(itemLocationId) : undefined,
-          created_by: auth.userId,
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-        } as any).execute();
+        await trx
+          .insertInto('stock_movements')
+          .values({
+            product_id: item.product_id,
+            movement_type: 'purchase_receipt',
+            qty: increasedQty,
+            before_qty: stockChange.scopeBefore,
+            after_qty: stockChange.scopeAfter,
+            unit_cost: Number(effectiveUnitCost.toFixed(6)),
+            total_cost: roundMoney(
+              effectiveUnitCost * increasedQty,
+              currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)),
+            ),
+            reason: 'purchase_receipt',
+            note: `استلام بضاعة لأمر شراء PUR-${purchaseId}`,
+            reference_type: 'purchase',
+            reference_id: purchaseId,
+            branch_id: branchId ? Number(branchId) : undefined,
+            location_id: itemLocationId ? Number(itemLocationId) : undefined,
+            created_by: auth.userId,
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+          } as any)
+          .execute();
       }
 
       // INV-PO-RECEIVED-QUANTITY-ADVANCE: reflect this receipt on its
@@ -225,7 +281,10 @@ export class PurchasesWriteReceiveGoodsService {
         const poItemId = item?.po_item_id ? Number(item.po_item_id) : 0;
         if (poItemId > 0) {
           hasLinkedItem = true;
-          receivedByPoItem.set(poItemId, Number(((receivedByPoItem.get(poItemId) || 0) + Number(rec.receivedQty || 0)).toFixed(3)));
+          receivedByPoItem.set(
+            poItemId,
+            Number(((receivedByPoItem.get(poItemId) || 0) + Number(rec.receivedQty || 0)).toFixed(3)),
+          );
         }
       }
       if (hasLinkedItem && !purchase.po_id) {
@@ -253,7 +312,7 @@ export class PurchasesWriteReceiveGoodsService {
 
       const isFullyReceived = totalReceived >= totalOrdered;
       const lifecycleStatus = isFullyReceived ? 'posted' : 'grn_received';
-      const matchedStatus = isFullyReceived ? 'matched' : (totalReceived > 0 ? 'partial' : 'pending');
+      const matchedStatus = isFullyReceived ? 'matched' : totalReceived > 0 ? 'partial' : 'pending';
 
       await trx
         .updateTable('purchases')

@@ -66,4 +66,3 @@ import { ArCollectionsService } from './services/ar-collections.service';
   ],
 })
 export class AccountingModule {}
-

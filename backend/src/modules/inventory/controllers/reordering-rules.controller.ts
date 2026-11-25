@@ -1,15 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Post,
-  Put,
-  Query,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { ReorderingRulesService } from '../services/reordering-rules.service';
@@ -45,11 +34,7 @@ export class ReorderingRulesController {
   }
 
   @Put(':id')
-  updateRule(
-    @Param('id') id: string,
-    @Body() dto: UpdateReorderingRuleDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  updateRule(@Param('id') id: string, @Body() dto: UpdateReorderingRuleDto, @Req() req: RequestWithAuth) {
     return this.reorderingService.updateRule(Number(id), dto, req.authContext!);
   }
 

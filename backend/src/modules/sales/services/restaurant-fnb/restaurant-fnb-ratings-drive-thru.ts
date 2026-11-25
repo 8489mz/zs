@@ -10,13 +10,16 @@ export class RestaurantFnbRatingsDriveThruSlice {
   // 8. TABLE QR RATING & RESCUE ALERT ENGINE
   // ==========================================
 
-  async recordTableRating(scope: TenantScope, dto: {
-    tableNumber: string;
-    saleId?: number;
-    rating: number;
-    feedbackCategory?: string;
-    notes?: string;
-  }) {
+  async recordTableRating(
+    scope: TenantScope,
+    dto: {
+      tableNumber: string;
+      saleId?: number;
+      rating: number;
+      feedbackCategory?: string;
+      notes?: string;
+    },
+  ) {
     if (!dto.tableNumber || !dto.rating) {
       throw new AppError('رقم الطاولة والتقييم مطلوبان', 'INVALID_RATING_DATA', 400);
     }
@@ -132,9 +135,10 @@ export class RestaurantFnbRatingsDriveThruSlice {
     });
 
     const completedWithSos = orders.filter((o) => o.status === 'completed' && o.sos_seconds);
-    const avgSosSeconds = completedWithSos.length > 0
-      ? Math.round(completedWithSos.reduce((sum, o) => sum + (o.sos_seconds || 0), 0) / completedWithSos.length)
-      : 0;
+    const avgSosSeconds =
+      completedWithSos.length > 0
+        ? Math.round(completedWithSos.reduce((sum, o) => sum + (o.sos_seconds || 0), 0) / completedWithSos.length)
+        : 0;
 
     return {
       orders: enriched,
@@ -143,12 +147,15 @@ export class RestaurantFnbRatingsDriveThruSlice {
     };
   }
 
-  async createDriveThruOrder(scope: TenantScope, dto: {
-    vehiclePlate: string;
-    vehicleDesc?: string;
-    totalAmount?: number;
-    notes?: string;
-  }) {
+  async createDriveThruOrder(
+    scope: TenantScope,
+    dto: {
+      vehiclePlate: string;
+      vehicleDesc?: string;
+      totalAmount?: number;
+      notes?: string;
+    },
+  ) {
     if (!dto.vehiclePlate) {
       throw new AppError('رقم لوحة السيارة مطلوب', 'VEHICLE_PLATE_REQUIRED', 400);
     }
@@ -173,7 +180,11 @@ export class RestaurantFnbRatingsDriveThruSlice {
     return { success: true, order, message: 'تم إدراج سيارة جديدة في مسار طلبات السيارات' };
   }
 
-  async updateDriveThruStatus(scope: TenantScope, id: number, status: 'order_taken' | 'at_window' | 'completed' | 'cancelled') {
+  async updateDriveThruStatus(
+    scope: TenantScope,
+    id: number,
+    status: 'order_taken' | 'at_window' | 'completed' | 'cancelled',
+  ) {
     const existing = await this.db
       .selectFrom('restaurant_drive_thru_orders')
       .selectAll()
@@ -208,9 +219,10 @@ export class RestaurantFnbRatingsDriveThruSlice {
 
     return {
       success: true,
-      message: status === 'completed'
-        ? `تم تسليم الطلب وخروج السيارة من المسار (${updatePayload.sos_seconds || 0} ثانية)`
-        : 'تم تحديث حالة السيارة في المسار بنجاح',
+      message:
+        status === 'completed'
+          ? `تم تسليم الطلب وخروج السيارة من المسار (${updatePayload.sos_seconds || 0} ثانية)`
+          : 'تم تحديث حالة السيارة في المسار بنجاح',
     };
   }
 }

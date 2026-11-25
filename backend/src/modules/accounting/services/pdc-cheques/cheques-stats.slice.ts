@@ -39,12 +39,7 @@ export class ChequesStatsSlice {
     const rows = await (this.db as any)
       .selectFrom('accounting_cheques')
       .where('tenant_id', '=', tenantId)
-      .select([
-        'type',
-        'status',
-        'amount', 'base_amount', 'currency',
-        'due_date',
-      ])
+      .select(['type', 'status', 'amount', 'base_amount', 'currency', 'due_date'])
       .execute();
 
     const stats: PdcChequesStats = {
@@ -82,7 +77,8 @@ export class ChequesStatsSlice {
 
     const base = await tenantBaseCurrency(this.db, tenantId);
     const baseDigits = currencyMoneyDigits(base);
-    if (rows.some((r: any) => r.base_amount == null && r.currency !== base)) throw new BadRequestException('إحصاءات الحافظة تتطلب مطابقة الشيكات الأجنبية القديمة أولاً.');
+    if (rows.some((r: any) => r.base_amount == null && r.currency !== base))
+      throw new BadRequestException('إحصاءات الحافظة تتطلب مطابقة الشيكات الأجنبية القديمة أولاً.');
     for (const r of rows) {
       const amount = this.toMoney(r.base_amount ?? r.amount, baseDigits);
       const dueDate = this.formatDate(r.due_date);
@@ -97,7 +93,10 @@ export class ChequesStatsSlice {
           stats.receivables.inSafeAmount = this.toMoney(stats.receivables.inSafeAmount + amount, baseDigits);
         } else if (r.status === 'under_collection') {
           stats.receivables.underCollectionCount += 1;
-          stats.receivables.underCollectionAmount = this.toMoney(stats.receivables.underCollectionAmount + amount, baseDigits);
+          stats.receivables.underCollectionAmount = this.toMoney(
+            stats.receivables.underCollectionAmount + amount,
+            baseDigits,
+          );
         } else if (r.status === 'collected') {
           stats.receivables.collectedCount += 1;
           stats.receivables.collectedAmount = this.toMoney(stats.receivables.collectedAmount + amount, baseDigits);

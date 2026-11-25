@@ -26,12 +26,7 @@ import { VatDeclarationController } from './controllers/vat-declaration/vat-decl
     TaxSettingsService,
     VatDeclarationService,
   ],
-  controllers: [
-    TaxSettingsController,
-    EtaInvoicesController,
-    ZatcaController,
-    VatDeclarationController,
-  ],
+  controllers: [TaxSettingsController, EtaInvoicesController, ZatcaController, VatDeclarationController],
   exports: [
     EtaSubmissionService,
     EtaSignatureBridgeService,
@@ -39,7 +34,6 @@ import { VatDeclarationController } from './controllers/vat-declaration/vat-decl
     ZatcaOnboardingService,
     ZatcaSubmissionService,
     VatDeclarationService,
-  ]
+  ],
 })
 export class TaxIntegrationModule {}
-

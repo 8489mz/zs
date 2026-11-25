@@ -169,9 +169,7 @@ export function evaluateReorderingRule(input: ReorderingRuleEvaluationInput): Re
  * Groups multiple breached reorder items by preferred supplier and warehouse
  * into consolidated Purchase Order plans to avoid order fragmentation.
  */
-export function groupReorderItemsBySupplier(
-  items: BreachedReorderItem[],
-): SupplierPurchaseOrderPlan[] {
+export function groupReorderItemsBySupplier(items: BreachedReorderItem[]): SupplierPurchaseOrderPlan[] {
   const groupMap = new Map<string, SupplierPurchaseOrderPlan>();
 
   for (const item of items) {

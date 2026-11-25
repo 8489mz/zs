@@ -46,7 +46,11 @@ export type PurchasesAndTreasuryPostingDeps = {
   getExistingPurchaseReversalJournal: (queryable: DbOrTx, purchaseId: number, tenantId: string) => Promise<any>;
   getExistingSupplierPaymentJournal: (queryable: DbOrTx, paymentId: number, tenantId: string) => Promise<any>;
   getExistingSupplierBillJournal: (queryable: DbOrTx, billId: number, tenantId: string) => Promise<any>;
-  getExistingSupplierPaymentScheduleSettlementJournal: (queryable: DbOrTx, settlementId: number, tenantId: string) => Promise<any>;
+  getExistingSupplierPaymentScheduleSettlementJournal: (
+    queryable: DbOrTx,
+    settlementId: number,
+    tenantId: string,
+  ) => Promise<any>;
   getExistingCustomerPaymentJournal: (queryable: DbOrTx, paymentId: number, tenantId: string) => Promise<any>;
   getExistingExpenseJournal: (queryable: DbOrTx, expenseId: number, tenantId: string) => Promise<any>;
 };

@@ -4,11 +4,19 @@ import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { assertUntrackedStockMutation } from '../../inventory/helpers/inventory-tracked-stock.helper';
 // applyStockDelta + previewConsumableStockQty are kept in this import: check-architecture-guardrails.cjs requires the tokens in purchases-write.service.ts, although no method left in this file calls them (the calls live in the slices).
-import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
+import {
+  applyStockDelta,
+  lockStockProducts,
+  previewConsumableStockQty,
+} from '../../../common/utils/location-stock-ledger';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
-import { ApplySupplierAdvanceDto, CreateCustomerPaymentDto, CreateSupplierPaymentDto } from '../dto/create-party-payment.dto';
+import {
+  ApplySupplierAdvanceDto,
+  CreateCustomerPaymentDto,
+  CreateSupplierPaymentDto,
+} from '../dto/create-party-payment.dto';
 import { UpsertPurchaseDto } from '../dto/upsert-purchase.dto';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { PurchasesFinanceService } from './purchases-finance.service';
@@ -23,7 +31,11 @@ import { PurchasesWriteSharedHelpersService } from './purchases-write-shared-hel
 import { IdempotencyService } from '../../../core/idempotency/idempotency.service';
 import { PurchasesWriteRepricingService } from './purchases-write-repricing.service';
 
-import type { PurchaseRepricingCandidate, PurchaseRepricingProduct, PurchaseRepricingInsights } from './purchases-write.types';
+import type {
+  PurchaseRepricingCandidate,
+  PurchaseRepricingProduct,
+  PurchaseRepricingInsights,
+} from './purchases-write.types';
 
 export type {
   PurchaseRepricingCandidate,
@@ -127,7 +139,10 @@ export class PurchasesWriteService {
     return this.sharedHelpersService.assertManagerApprovalForPurchaseChange(secret, auth);
   }
 
-  private buildPurchaseRepricingCandidate(product: PurchaseRepricingProduct, newCost: number): PurchaseRepricingCandidate {
+  private buildPurchaseRepricingCandidate(
+    product: PurchaseRepricingProduct,
+    newCost: number,
+  ): PurchaseRepricingCandidate {
     return this.repricing.buildPurchaseRepricingCandidate(product, newCost);
   }
 
@@ -148,27 +163,52 @@ export class PurchasesWriteService {
     return this.sharedHelpersService.buildPurchaseMutationResponse(purchaseId, auth, extras);
   }
 
-  async createPurchase(payload: UpsertPurchaseDto, auth: AuthContext, idempotencyKey?: string): Promise<Record<string, unknown>> {
+  async createPurchase(
+    payload: UpsertPurchaseDto,
+    auth: AuthContext,
+    idempotencyKey?: string,
+  ): Promise<Record<string, unknown>> {
     return this.createService.createPurchase(payload, auth, idempotencyKey);
   }
 
-  async updatePurchase(purchaseId: number, payload: UpsertPurchaseDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async updatePurchase(
+    purchaseId: number,
+    payload: UpsertPurchaseDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.updateService.updatePurchase(purchaseId, payload, auth);
   }
 
-  async cancelPurchase(purchaseId: number, reason: string, auth: AuthContext, managerPin?: string): Promise<Record<string, unknown>> {
+  async cancelPurchase(
+    purchaseId: number,
+    reason: string,
+    auth: AuthContext,
+    managerPin?: string,
+  ): Promise<Record<string, unknown>> {
     return this.cancelService.cancelPurchase(purchaseId, reason, auth, managerPin);
   }
 
-  async createSupplierPayment(payload: CreateSupplierPaymentDto, auth: AuthContext, idempotencyKey?: string): Promise<Record<string, unknown>> {
+  async createSupplierPayment(
+    payload: CreateSupplierPaymentDto,
+    auth: AuthContext,
+    idempotencyKey?: string,
+  ): Promise<Record<string, unknown>> {
     return this.supplierPaymentsService.createSupplierPayment(payload, auth, idempotencyKey);
   }
 
-  async applySupplierAdvance(advancePaymentId: number, payload: ApplySupplierAdvanceDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async applySupplierAdvance(
+    advancePaymentId: number,
+    payload: ApplySupplierAdvanceDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.supplierPaymentsService.applySupplierAdvance(advancePaymentId, payload, auth);
   }
 
-  async createCustomerPayment(payload: CreateCustomerPaymentDto, auth: AuthContext, idempotencyKey?: string): Promise<Record<string, unknown>> {
+  async createCustomerPayment(
+    payload: CreateCustomerPaymentDto,
+    auth: AuthContext,
+    idempotencyKey?: string,
+  ): Promise<Record<string, unknown>> {
     return this.customerPaymentsService.createCustomerPayment(payload, auth, idempotencyKey);
   }
 

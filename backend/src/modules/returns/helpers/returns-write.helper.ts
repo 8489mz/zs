@@ -49,7 +49,13 @@ export type PreparedReturnLine = {
   afterQty: number;
 };
 
-export function buildSaleReturnLine(source: ReturnSourceLine, product: ReturnProductRow, requestItem: ReturnRequestItem, history: { qty: number; amount: number; tax: number } = { qty: 0, amount: 0, tax: 0 }, digits: MoneyDigits): PreparedReturnLine {
+export function buildSaleReturnLine(
+  source: ReturnSourceLine,
+  product: ReturnProductRow,
+  requestItem: ReturnRequestItem,
+  history: { qty: number; amount: number; tax: number } = { qty: 0, amount: 0, tax: 0 },
+  digits: MoneyDigits,
+): PreparedReturnLine {
   const money = (value: number) => roundMoney(value, digits);
   const soldQty = Number(source.qty || 0);
   if (!(soldQty > 0) || history.qty + requestItem.qty > soldQty + 0.000001) {
@@ -59,8 +65,8 @@ export function buildSaleReturnLine(source: ReturnSourceLine, product: ReturnPro
   const sourceTax = Number(source.allocated_tax || 0);
   const sourceLineTotal = sourceNetLineTotal + sourceTax;
   const cumulativeQty = history.qty + requestItem.qty;
-  const lineTotal = money(sourceLineTotal * cumulativeQty / soldQty) - money(history.amount);
-  const allocatedTax = money(sourceTax * cumulativeQty / soldQty) - money(history.tax);
+  const lineTotal = money((sourceLineTotal * cumulativeQty) / soldQty) - money(history.amount);
+  const allocatedTax = money((sourceTax * cumulativeQty) / soldQty) - money(history.tax);
   if (lineTotal < -0.0001 || allocatedTax < -0.0001) {
     throw new AppError('سجل المرتجع السابق يحتاج مراجعة مالية', 'RETURN_RECONCILIATION_REQUIRED', 409);
   }
@@ -68,7 +74,11 @@ export function buildSaleReturnLine(source: ReturnSourceLine, product: ReturnPro
   const rawStockDelta = Number(requestItem.qty || 0) * Number(source.unit_multiplier || 1);
   const stockDelta = Number(rawStockDelta.toFixed(3));
   if (!Number.isFinite(rawStockDelta) || rawStockDelta <= 0 || Math.abs(rawStockDelta - stockDelta) > 0.00000001) {
-    throw new AppError('كمية المرتجع يجب أن تكون بدقة ثلاث خانات عشرية كحد أقصى', 'RETURN_QUANTITY_PRECISION_INVALID', 400);
+    throw new AppError(
+      'كمية المرتجع يجب أن تكون بدقة ثلاث خانات عشرية كحد أقصى',
+      'RETURN_QUANTITY_PRECISION_INVALID',
+      400,
+    );
   }
   const beforeQty = Number(product.stock_qty || 0);
   const afterQty = Number((beforeQty + stockDelta).toFixed(3));
@@ -86,7 +96,13 @@ export function buildSaleReturnLine(source: ReturnSourceLine, product: ReturnPro
   };
 }
 
-export function buildPurchaseReturnLine(source: ReturnSourceLine, product: ReturnProductRow, requestItem: ReturnRequestItem, history: { qty: number; amount: number; tax?: number } = { qty: 0, amount: 0 }, digits: MoneyDigits): PreparedReturnLine {
+export function buildPurchaseReturnLine(
+  source: ReturnSourceLine,
+  product: ReturnProductRow,
+  requestItem: ReturnRequestItem,
+  history: { qty: number; amount: number; tax?: number } = { qty: 0, amount: 0 },
+  digits: MoneyDigits,
+): PreparedReturnLine {
   const money = (value: number) => roundMoney(value, digits);
   const purchasedQty = Number(source.qty || 0);
   const sourceLineTotal = money(Number(source.line_total || 0));
@@ -95,9 +111,9 @@ export function buildPurchaseReturnLine(source: ReturnSourceLine, product: Retur
     throw new AppError('كمية مرتجع الشراء تتجاوز الكمية المشتراة', 'PURCHASE_RETURN_QUANTITY_EXCEEDED', 400);
   }
   // Cumulative rounding allocates any residual cents to the final partial return.
-  const lineTotal = money(sourceLineTotal * cumulativeQty / purchasedQty) - money(history.amount);
+  const lineTotal = money((sourceLineTotal * cumulativeQty) / purchasedQty) - money(history.amount);
   const sourceTax = money(Number(source.allocated_tax || 0));
-  const allocatedTax = money(sourceTax * cumulativeQty / purchasedQty) - money(history.tax || 0);
+  const allocatedTax = money((sourceTax * cumulativeQty) / purchasedQty) - money(history.tax || 0);
   if (lineTotal < -0.0001 || allocatedTax < -0.0001 || allocatedTax > lineTotal + 0.0001) {
     throw new AppError('سجل مرتجع الشراء السابق يحتاج مراجعة مالية', 'PURCHASE_RETURN_RECONCILIATION_REQUIRED', 409);
   }
@@ -105,7 +121,11 @@ export function buildPurchaseReturnLine(source: ReturnSourceLine, product: Retur
   const rawStockDelta = Number(requestItem.qty || 0) * Number(source.unit_multiplier || 1);
   const stockDelta = Number(rawStockDelta.toFixed(3));
   if (!Number.isFinite(rawStockDelta) || rawStockDelta <= 0 || Math.abs(rawStockDelta - stockDelta) > 0.00000001) {
-    throw new AppError('كمية المرتجع يجب أن تكون بدقة ثلاث خانات عشرية كحد أقصى', 'RETURN_QUANTITY_PRECISION_INVALID', 400);
+    throw new AppError(
+      'كمية المرتجع يجب أن تكون بدقة ثلاث خانات عشرية كحد أقصى',
+      'RETURN_QUANTITY_PRECISION_INVALID',
+      400,
+    );
   }
   const beforeQty = Number(product.stock_qty || 0);
   if (beforeQty + 0.0001 < stockDelta) {
@@ -172,16 +192,28 @@ export function originalPurchaseReturnUnitCost(args: {
 }): { perSoldUnit: number; perBaseUnit: number } {
   const { unitCost, unitMultiplier, taxRate, pricesIncludeTax } = args;
   if (unitCost == null) {
-    throw new AppError('سعر تكلفة سطر الشراء الأصلي غير محفوظ؛ لا يمكن تسعير المرتجع',
-      'PURCHASE_RETURN_COST_INVALID', 409);
+    throw new AppError(
+      'سعر تكلفة سطر الشراء الأصلي غير محفوظ؛ لا يمكن تسعير المرتجع',
+      'PURCHASE_RETURN_COST_INVALID',
+      409,
+    );
   }
   const cost = Number(unitCost);
   const multiplier = unitMultiplier == null ? 1 : Number(unitMultiplier);
   const tax = taxRate == null ? 0 : Number(taxRate);
-  if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(multiplier) || multiplier <= 0 ||
-      !Number.isFinite(tax) || tax < 0) {
-    throw new AppError('سعر تكلفة سطر الشراء الأصلي غير صالح؛ لا يمكن تسعير المرتجع',
-      'PURCHASE_RETURN_COST_INVALID', 409);
+  if (
+    !Number.isFinite(cost) ||
+    cost < 0 ||
+    !Number.isFinite(multiplier) ||
+    multiplier <= 0 ||
+    !Number.isFinite(tax) ||
+    tax < 0
+  ) {
+    throw new AppError(
+      'سعر تكلفة سطر الشراء الأصلي غير صالح؛ لا يمكن تسعير المرتجع',
+      'PURCHASE_RETURN_COST_INVALID',
+      409,
+    );
   }
   const taxFactor = pricesIncludeTax ? 1 + tax / 100 : 1;
   const perSoldUnit = Number((cost / taxFactor).toFixed(6));
@@ -190,9 +222,16 @@ export function originalPurchaseReturnUnitCost(args: {
 }
 
 export function calculateReturnDocumentTotal(lines: Array<{ lineTotal: number }>, digits: MoneyDigits): number {
-  return roundMoney(lines.reduce((sum, line) => sum + Number(line.lineTotal || 0), 0), digits);
+  return roundMoney(
+    lines.reduce((sum, line) => sum + Number(line.lineTotal || 0), 0),
+    digits,
+  );
 }
 
-export function calculateNextLedgerBalance(currentBalance: number | string | null | undefined, amountDelta: number, digits: MoneyDigits): number {
+export function calculateNextLedgerBalance(
+  currentBalance: number | string | null | undefined,
+  amountDelta: number,
+  digits: MoneyDigits,
+): number {
   return roundMoney(Number(currentBalance || 0) + Number(amountDelta || 0), digits);
 }

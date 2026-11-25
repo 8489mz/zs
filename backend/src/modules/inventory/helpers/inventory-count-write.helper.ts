@@ -40,7 +40,10 @@ export type InventoryLocationScope = {
   branchId?: number | null;
 };
 
-export function assertInventoryLocationBranchMatch(selectedBranchId: number | string | null | undefined, locationBranchId: number | null | undefined): void {
+export function assertInventoryLocationBranchMatch(
+  selectedBranchId: number | string | null | undefined,
+  locationBranchId: number | null | undefined,
+): void {
   if (selectedBranchId && locationBranchId && Number(selectedBranchId) !== Number(locationBranchId)) {
     throw new AppError('Location does not belong to the selected branch', 'LOCATION_BRANCH_MISMATCH', 400);
   }
@@ -55,12 +58,23 @@ export function buildStockCountSessionDocNo(now = Date.now(), sessionId?: number
   return `ZSC-${yy}${mm}${dd}-${suffix}`;
 }
 
-export function buildStockCountItemValues(product: StockCountProductSnapshot, item: StockCountInputItem, sessionId: number) {
+export function buildStockCountItemValues(
+  product: StockCountProductSnapshot,
+  item: StockCountInputItem,
+  sessionId: number,
+) {
   const expectedQty = Number(product.stock_qty || 0);
   const countedQty = Number(item.countedQty || 0);
-  if (!Number.isFinite(countedQty) || countedQty < 0 ||
-    Math.abs(countedQty * 1000 - Math.round(countedQty * 1000)) > 0.000001) {
-    throw new AppError('الكمية الفعلية للجرد يجب أن تكون موجبة أو صفر وبدقة ثلاث خانات عشرية', 'STOCK_COUNT_QUANTITY_INVALID', 400);
+  if (
+    !Number.isFinite(countedQty) ||
+    countedQty < 0 ||
+    Math.abs(countedQty * 1000 - Math.round(countedQty * 1000)) > 0.000001
+  ) {
+    throw new AppError(
+      'الكمية الفعلية للجرد يجب أن تكون موجبة أو صفر وبدقة ثلاث خانات عشرية',
+      'STOCK_COUNT_QUANTITY_INVALID',
+      400,
+    );
   }
   const varianceQty = Number((countedQty - expectedQty).toFixed(3));
 
@@ -76,7 +90,12 @@ export function buildStockCountItemValues(product: StockCountProductSnapshot, it
   };
 }
 
-export function buildStockCountPostingMovement(item: StockCountStoredItem, sessionId: number, userId: number, actualDelta?: number) {
+export function buildStockCountPostingMovement(
+  item: StockCountStoredItem,
+  sessionId: number,
+  userId: number,
+  actualDelta?: number,
+) {
   const expectedQty = Number(item.expected_qty || 0);
   const countedQty = Number(item.counted_qty || 0);
   const varianceQty = Number(item.variance_qty || 0);
@@ -100,11 +119,18 @@ export function buildStockCountPostingMovement(item: StockCountStoredItem, sessi
   };
 }
 
-export function shouldCreateDamageRecordFromCount(item: Pick<StockCountStoredItem, 'reason' | 'variance_qty'>): boolean {
+export function shouldCreateDamageRecordFromCount(
+  item: Pick<StockCountStoredItem, 'reason' | 'variance_qty'>,
+): boolean {
   return String(item.reason || '').toLowerCase() === 'damage' && Number(item.variance_qty || 0) < -0.0001;
 }
 
-export function buildDamageRecordFromCount(item: StockCountStoredItem, session: StockCountSessionScope, userId: number, actualDelta?: number) {
+export function buildDamageRecordFromCount(
+  item: StockCountStoredItem,
+  session: StockCountSessionScope,
+  userId: number,
+  actualDelta?: number,
+) {
   const varianceQty = actualDelta ?? Number(item.variance_qty || 0);
   return {
     product_id: item.product_id,
@@ -123,7 +149,12 @@ export function assertDamagedStockNote(note: string | null | undefined): void {
   }
 }
 
-export function buildDamagedStockWriteModels(product: StockCountProductSnapshot, payload: DamagedStockPayloadLike, location: InventoryLocationScope, userId: number) {
+export function buildDamagedStockWriteModels(
+  product: StockCountProductSnapshot,
+  payload: DamagedStockPayloadLike,
+  location: InventoryLocationScope,
+  userId: number,
+) {
   const beforeQty = Number(product.stock_qty || 0);
   const damageQty = Number(payload.qty || 0);
   const afterQty = beforeQty - damageQty;

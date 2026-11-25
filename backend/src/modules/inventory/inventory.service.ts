@@ -26,7 +26,11 @@ export class InventoryService {
     return this.scopeService.getLocationCategories(locationId, auth);
   }
 
-  getLocationCategoryProducts(locationId: number, categoryId: number | 'all', auth: AuthContext): Promise<Record<string, unknown>> {
+  getLocationCategoryProducts(
+    locationId: number,
+    categoryId: number | 'all',
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.scopeService.getLocationCategoryProducts(locationId, categoryId, auth);
   }
 
@@ -53,7 +57,11 @@ export class InventoryService {
   // INV-ADJUST-SINGLE-QTY-BASIS: read-only availability for the
   // adjustment dialog prefill, on the same available basis the
   // adjustment targets. Thin delegation; the ledger owns the math.
-  getProductLocationAvailability(productId: number, locationId: number | null, auth: AuthContext): Promise<Record<string, unknown>> {
+  getProductLocationAvailability(
+    productId: number,
+    locationId: number | null,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.adjustmentService.getProductLocationAvailability(productId, locationId, auth);
   }
 
@@ -73,7 +81,10 @@ export class InventoryService {
     return this.transferService.createStockTransfer(payload, auth);
   }
 
-  transferCategory(payload: { categoryId: number; fromLocationId: number; toLocationId: number; notes?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
+  transferCategory(
+    payload: { categoryId: number; fromLocationId: number; toLocationId: number; notes?: string },
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.transferService.transferCategory(payload, auth);
   }
 
@@ -85,7 +96,15 @@ export class InventoryService {
     return this.transferService.internalTransferCategory(payload, auth);
   }
 
-  receiveStockTransfer(transferId: number, auth: AuthContext, receiptPayload?: { items?: Array<{ itemId: number; receivedQty: number }>; varianceReason?: string; approvalSecret?: string }): Promise<Record<string, unknown>> {
+  receiveStockTransfer(
+    transferId: number,
+    auth: AuthContext,
+    receiptPayload?: {
+      items?: Array<{ itemId: number; receivedQty: number }>;
+      varianceReason?: string;
+      approvalSecret?: string;
+    },
+  ): Promise<Record<string, unknown>> {
     return this.transferService.receiveStockTransfer(transferId, auth, receiptPayload);
   }
 
@@ -105,7 +124,11 @@ export class InventoryService {
     return this.countService.createStockCountSession(payload, auth);
   }
 
-  postStockCountSession(sessionId: number, auth: AuthContext, adminPassword?: string): Promise<Record<string, unknown>> {
+  postStockCountSession(
+    sessionId: number,
+    auth: AuthContext,
+    adminPassword?: string,
+  ): Promise<Record<string, unknown>> {
     return this.countService.postStockCountSession(sessionId, auth, adminPassword);
   }
 
@@ -113,7 +136,12 @@ export class InventoryService {
     return this.countService.deleteStockCountSession(sessionId, auth);
   }
 
-  recountPendingStockCountItem(sessionId: number, itemId: number, payload: RecountStockCountItemDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  recountPendingStockCountItem(
+    sessionId: number,
+    itemId: number,
+    payload: RecountStockCountItemDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.countService.recountPendingStockCountItem(sessionId, itemId, payload, auth);
   }
 

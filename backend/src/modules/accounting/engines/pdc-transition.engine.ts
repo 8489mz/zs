@@ -13,7 +13,8 @@ const transitions: Record<string, Record<string, readonly string[]>> = {
 };
 
 export function assertPdcTransition(type: string, status: string, action: string): void {
-  if (!transitions[type]?.[status]?.includes(action)) throw new Error('انتقال حالة الشيك غير مسموح؛ لا يمكن تكرار أثر مالي أو إعادة فتح حالة نهائية.');
+  if (!transitions[type]?.[status]?.includes(action))
+    throw new Error('انتقال حالة الشيك غير مسموح؛ لا يمكن تكرار أثر مالي أو إعادة فتح حالة نهائية.');
 }
 
 /**
@@ -26,6 +27,7 @@ export function assertPdcTransition(type: string, status: string, action: string
  */
 export function pdcBookAmount(cheque: { base_amount?: unknown; amount: unknown }, digits: MoneyDigits): number {
   const amount = Number(cheque.base_amount);
-  if (cheque.base_amount == null || !Number.isFinite(amount) || amount <= 0) throw new Error('القيمة الدفترية للشيك غير مثبتة؛ يلزم مطابقة الشيك القديم قبل تحريكه.');
+  if (cheque.base_amount == null || !Number.isFinite(amount) || amount <= 0)
+    throw new Error('القيمة الدفترية للشيك غير مثبتة؛ يلزم مطابقة الشيك القديم قبل تحريكه.');
   return roundMoney(amount, digits);
 }

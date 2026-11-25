@@ -25,7 +25,13 @@ import {
 import { AccountingTenantFoundationService } from './accounting-tenant-foundation.service';
 import { AccountingPostingService } from './accounting-posting.service';
 import { resolveBusinessDateKey } from './engines/accounting-date.engine';
-import type { DraftJournalEntryInput, DraftJournalLineInput, OpeningBalanceAccount, OpeningBalanceLine, PartnerType } from './accounting-types';
+import type {
+  DraftJournalEntryInput,
+  DraftJournalLineInput,
+  OpeningBalanceAccount,
+  OpeningBalanceLine,
+  PartnerType,
+} from './accounting-types';
 export { bankStatementAmountsEqual } from './accounting-types';
 import { AccountingJournalsReadService } from './services/accounting-journals-read.service';
 import { AccountingJournalsWriteService } from './services/accounting-journals-write.service';
@@ -150,8 +156,15 @@ export class AccountingService {
   }
 
   private async assertJournalReferences(
-    queryable: Kysely<Database>, tenantId: string,
-    lines: Array<{ costCenterId?: number | null; branchId?: number | null; locationId?: number | null; partnerType?: string; partnerId?: number | null }>,
+    queryable: Kysely<Database>,
+    tenantId: string,
+    lines: Array<{
+      costCenterId?: number | null;
+      branchId?: number | null;
+      locationId?: number | null;
+      partnerType?: string;
+      partnerId?: number | null;
+    }>,
   ): Promise<void> {
     return this.journalsReadService.assertJournalReferences(queryable, tenantId, lines);
   }
@@ -193,7 +206,11 @@ export class AccountingService {
       : sql<boolean>`tenant_id = ${scope.tenantId}`;
   }
 
-  private async normalizeDateInput(value: string | null | undefined, db: Kysely<Database>, tenantId: string): Promise<string> {
+  private async normalizeDateInput(
+    value: string | null | undefined,
+    db: Kysely<Database>,
+    tenantId: string,
+  ): Promise<string> {
     const dateText = String(value || '').slice(0, 10);
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return dateText;
     // No usable start date: default to the tenant-local business day, never the UTC day.
@@ -204,19 +221,38 @@ export class AccountingService {
     return this.toBookMoney(Math.max(0, Number(value || 0)), digits);
   }
 
-  private async getExistingOpeningBalanceEntry(auth: AuthContext, db: Kysely<Database> = this.db): Promise<{ id: number } | null> {
+  private async getExistingOpeningBalanceEntry(
+    auth: AuthContext,
+    db: Kysely<Database> = this.db,
+  ): Promise<{ id: number } | null> {
     return this.openingBalancesService.getExistingOpeningBalanceEntry(auth, db);
   }
 
-  private async resolveOpeningAccount(auth: AuthContext, code: string, expectedTypes: string[], db: Kysely<Database> = this.db): Promise<OpeningBalanceAccount> {
+  private async resolveOpeningAccount(
+    auth: AuthContext,
+    code: string,
+    expectedTypes: string[],
+    db: Kysely<Database> = this.db,
+  ): Promise<OpeningBalanceAccount> {
     return this.openingBalancesService.resolveOpeningAccount(auth, code, expectedTypes, db);
   }
 
-  private addOpeningLine(lines: OpeningBalanceLine[], account: OpeningBalanceAccount, description: string, debit: number, credit: number, digits: MoneyDigits): void {
+  private addOpeningLine(
+    lines: OpeningBalanceLine[],
+    account: OpeningBalanceAccount,
+    description: string,
+    debit: number,
+    credit: number,
+    digits: MoneyDigits,
+  ): void {
     return this.openingBalancesService.addOpeningLine(lines, account, description, debit, credit, digits);
   }
 
-  private async calculateOpeningOperationalTotals(auth: AuthContext, digits: MoneyDigits, db: Kysely<Database> = this.db): Promise<{
+  private async calculateOpeningOperationalTotals(
+    auth: AuthContext,
+    digits: MoneyDigits,
+    db: Kysely<Database> = this.db,
+  ): Promise<{
     customerReceivables: number;
     supplierPayables: number;
     inventoryValue: number;
@@ -275,11 +311,19 @@ export class AccountingService {
     return this.journalsReadService.assertNotInLockedPeriod(tenantId, entryDate, options);
   }
 
-  async createManualJournalEntry(dto: CreateManualJournalEntryDto, auth: AuthContext, externalTrx?: Kysely<Database>): Promise<Record<string, unknown>> {
+  async createManualJournalEntry(
+    dto: CreateManualJournalEntryDto,
+    auth: AuthContext,
+    externalTrx?: Kysely<Database>,
+  ): Promise<Record<string, unknown>> {
     return this.journalsWriteService.createManualJournalEntry(dto, auth, externalTrx);
   }
 
-  async reverseJournalEntry(entryId: number, reason: string, auth: AuthContext): Promise<{ ok: boolean; message: string; reversalEntryId: number; reversalEntryNo: string }> {
+  async reverseJournalEntry(
+    entryId: number,
+    reason: string,
+    auth: AuthContext,
+  ): Promise<{ ok: boolean; message: string; reversalEntryId: number; reversalEntryNo: string }> {
     return this.journalsWriteService.reverseJournalEntry(entryId, reason, auth);
   }
 
@@ -287,7 +331,10 @@ export class AccountingService {
     return this.reportsService.getFinancialSummary(filters, auth);
   }
 
-  async getReceivablesPayables(filters: ReceivablesPayablesQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async getReceivablesPayables(
+    filters: ReceivablesPayablesQueryDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.reportsService.getReceivablesPayables(filters, auth);
   }
 
@@ -299,7 +346,10 @@ export class AccountingService {
     return this.reportsService.getInventoryValue(filters, auth);
   }
 
-  async previewOpeningBalances(query: OpeningBalancesPreviewQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
+  async previewOpeningBalances(
+    query: OpeningBalancesPreviewQueryDto,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.openingBalancesService.previewOpeningBalances(query, auth);
   }
 
@@ -311,7 +361,10 @@ export class AccountingService {
     return this.journalsWriteService.createDraftJournalEntry(input, auth);
   }
 
-  async validateBalancedLines(lines: DraftJournalLineInput[], auth?: AuthContext): Promise<{ ok: true; lines: Array<Required<DraftJournalLineInput>> } | { ok: false; message: string }> {
+  async validateBalancedLines(
+    lines: DraftJournalLineInput[],
+    auth?: AuthContext,
+  ): Promise<{ ok: true; lines: Array<Required<DraftJournalLineInput>> } | { ok: false; message: string }> {
     return this.journalsWriteService.validateBalancedLines(lines, auth);
   }
 
@@ -339,24 +392,34 @@ export class AccountingService {
     return this.fixedAssetsService.listFixedAssets(actor);
   }
 
-  async createFixedAsset(body: {
-    code: string;
-    name: string;
-    category?: string;
-    purchaseCost: number;
-    salvageValue?: number;
-    usefulLifeMonths?: number;
-    depreciationMethod?: 'straight_line' | 'declining_balance';
-    purchaseDate?: string;
-  }, actor: AuthContext): Promise<Record<string, unknown>> {
+  async createFixedAsset(
+    body: {
+      code: string;
+      name: string;
+      category?: string;
+      purchaseCost: number;
+      salvageValue?: number;
+      usefulLifeMonths?: number;
+      depreciationMethod?: 'straight_line' | 'declining_balance';
+      purchaseDate?: string;
+    },
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.fixedAssetsService.createFixedAsset(body, actor);
   }
 
-  async depreciateFixedAsset(id: number, body: { months?: number; note?: string }, actor: AuthContext): Promise<Record<string, unknown>> {
+  async depreciateFixedAsset(
+    id: number,
+    body: { months?: number; note?: string },
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.fixedAssetsService.depreciateFixedAsset(id, body, actor);
   }
 
-  async depreciateAllFixedAssets(body: { months?: number; note?: string }, actor: AuthContext): Promise<Record<string, unknown>> {
+  async depreciateAllFixedAssets(
+    body: { months?: number; note?: string },
+    actor: AuthContext,
+  ): Promise<Record<string, unknown>> {
     return this.fixedAssetsService.depreciateAllFixedAssets(body, actor);
   }
 
@@ -392,7 +455,15 @@ export class AccountingService {
   }
 
   async createCostCenter(
-    body: { code: string; name: string; dimension?: string; budgetAmount?: number; parentId?: number | null; description?: string; isActive?: boolean },
+    body: {
+      code: string;
+      name: string;
+      dimension?: string;
+      budgetAmount?: number;
+      parentId?: number | null;
+      description?: string;
+      isActive?: boolean;
+    },
     auth: AuthContext,
   ) {
     return this.costCentersService.createCostCenter(body, auth);
@@ -400,7 +471,15 @@ export class AccountingService {
 
   async updateCostCenter(
     id: number,
-    body: { code?: string; name?: string; dimension?: string; budgetAmount?: number; parentId?: number | null; description?: string; isActive?: boolean },
+    body: {
+      code?: string;
+      name?: string;
+      dimension?: string;
+      budgetAmount?: number;
+      parentId?: number | null;
+      description?: string;
+      isActive?: boolean;
+    },
     auth: AuthContext,
   ) {
     return this.costCentersService.updateCostCenter(id, body, auth);
@@ -410,11 +489,7 @@ export class AccountingService {
     return this.costCentersService.deleteCostCenter(id, auth);
   }
 
-  async getCostCenterReport(
-    costCenterId: number,
-    auth: AuthContext,
-    filters?: { fromDate?: string; toDate?: string },
-  ) {
+  async getCostCenterReport(costCenterId: number, auth: AuthContext, filters?: { fromDate?: string; toDate?: string }) {
     return this.reportsService.getCostCenterReport(costCenterId, auth, filters);
   }
 
@@ -442,7 +517,6 @@ export class AccountingService {
   async unreconcileMatch(statementLineId: number, auth: AuthContext): Promise<any> {
     return this.bankStatementsService.unreconcileMatch(statementLineId, auth);
   }
-
 
   async createBankFeeAdjustment(dto: CreateBankFeeAdjustmentDto, auth: AuthContext): Promise<any> {
     return this.bankStatementsService.createBankFeeAdjustment(dto, auth);

@@ -21,7 +21,6 @@ import { PostManufacturingUnbuildOrderSlice } from './inventory-manufacturing-ca
 import { PostCashDrawerMovementSlice } from './inventory-manufacturing-cash-posting/post-cash-drawer-movement.slice';
 import { InstallmentInterestSlice } from './inventory-manufacturing-cash-posting/installment-interest.slice';
 
-
 export class InventoryManufacturingCashPostingService {
   private readonly accountingTenantFoundation: AccountingTenantFoundationService;
   private readonly getTenantAccountingSettings: InventoryManufacturingCashPostingDeps['getTenantAccountingSettings'];
@@ -47,40 +46,28 @@ export class InventoryManufacturingCashPostingService {
     await this.accountingTenantFoundation.ensureForAuth(queryable, auth);
   }
 
-
   private cashierShiftVarianceSliceInstance?: CashierShiftVarianceSlice;
   private get cashierShiftVarianceSlice(): CashierShiftVarianceSlice {
     return (this.cashierShiftVarianceSliceInstance ??= new CashierShiftVarianceSlice({
-      ensureTenantFoundation: (queryable, auth) =>
-        this.ensureTenantFoundation(queryable, auth),
-      maxAllowedDifference: (bookDigits) =>
-        this.maxAllowedDifference(bookDigits),
-      toMoney: (value, digits) =>
-        this.toMoney(value, digits),
-      getTenantAccountingSettings: (queryable, tenantId) =>
-        this.getTenantAccountingSettings(queryable, tenantId),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      maxAllowedDifference: (bookDigits) => this.maxAllowedDifference(bookDigits),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
       resolveSystemAccountByCode: (queryable, tenantId, code) =>
         this.resolveSystemAccountByCode(queryable, tenantId, code),
-      addLine: (lines, next, digits) =>
-        this.addLine(lines, next, digits),
-      insertPostedJournal: (queryable, params) =>
-        this.insertPostedJournal(queryable, params),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
     }));
   }
 
   private postInventoryAdjustmentSliceInstance?: PostInventoryAdjustmentSlice;
   private get postInventoryAdjustmentSlice(): PostInventoryAdjustmentSlice {
     return (this.postInventoryAdjustmentSliceInstance ??= new PostInventoryAdjustmentSlice({
-      ensureTenantFoundation: (queryable, auth) =>
-        this.ensureTenantFoundation(queryable, auth),
-      getTenantAccountingSettings: (queryable, tenantId) =>
-        this.getTenantAccountingSettings(queryable, tenantId),
-      toMoney: (value, digits) =>
-        this.toMoney(value, digits),
-      addLine: (lines, next, digits) =>
-        this.addLine(lines, next, digits),
-      insertPostedJournal: (queryable, params) =>
-        this.insertPostedJournal(queryable, params),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
       resolveSystemAccountByCode: (queryable, tenantId, code) =>
         this.resolveSystemAccountByCode(queryable, tenantId, code),
     }));
@@ -89,151 +76,135 @@ export class InventoryManufacturingCashPostingService {
   private damagedStockFoodWasteSliceInstance?: DamagedStockFoodWasteSlice;
   private get damagedStockFoodWasteSlice(): DamagedStockFoodWasteSlice {
     return (this.damagedStockFoodWasteSliceInstance ??= new DamagedStockFoodWasteSlice({
-      ensureTenantFoundation: (queryable, auth) =>
-        this.ensureTenantFoundation(queryable, auth),
-      toMoney: (value, digits) =>
-        this.toMoney(value, digits),
-      getTenantAccountingSettings: (queryable, tenantId) =>
-        this.getTenantAccountingSettings(queryable, tenantId),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
       resolveSystemAccountByCode: (queryable, tenantId, code) =>
         this.resolveSystemAccountByCode(queryable, tenantId, code),
-      addLine: (lines, next, digits) =>
-        this.addLine(lines, next, digits),
-      insertPostedJournal: (queryable, params) =>
-        this.insertPostedJournal(queryable, params),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
     }));
   }
 
   private postStockCountSliceInstance?: PostStockCountSlice;
   private get postStockCountSlice(): PostStockCountSlice {
     return (this.postStockCountSliceInstance ??= new PostStockCountSlice({
-      ensureTenantFoundation: (queryable, auth) =>
-        this.ensureTenantFoundation(queryable, auth),
-      getTenantAccountingSettings: (queryable, tenantId) =>
-        this.getTenantAccountingSettings(queryable, tenantId),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
       resolveSystemAccountByCode: (queryable, tenantId, code) =>
         this.resolveSystemAccountByCode(queryable, tenantId, code),
-      addLine: (lines, next, digits) =>
-        this.addLine(lines, next, digits),
-      insertPostedJournal: (queryable, params) =>
-        this.insertPostedJournal(queryable, params),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
     }));
   }
 
   private servicePostingSliceInstance?: ServicePostingSlice;
   private get servicePostingSlice(): ServicePostingSlice {
     return (this.servicePostingSliceInstance ??= new ServicePostingSlice({
-      ensureTenantFoundation: (queryable, auth) =>
-        this.ensureTenantFoundation(queryable, auth),
-      toMoney: (value, digits) =>
-        this.toMoney(value, digits),
-      getTenantAccountingSettings: (queryable, tenantId) =>
-        this.getTenantAccountingSettings(queryable, tenantId),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
       resolveSystemAccountByCode: (queryable, tenantId, code) =>
         this.resolveSystemAccountByCode(queryable, tenantId, code),
-      addLine: (lines, next, digits) =>
-        this.addLine(lines, next, digits),
-      insertPostedJournal: (queryable, params) =>
-        this.insertPostedJournal(queryable, params),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
     }));
   }
 
   private postManufacturingWorkOrderSliceInstance?: PostManufacturingWorkOrderSlice;
   private get postManufacturingWorkOrderSlice(): PostManufacturingWorkOrderSlice {
     return (this.postManufacturingWorkOrderSliceInstance ??= new PostManufacturingWorkOrderSlice({
-      ensureTenantFoundation: (queryable, auth) =>
-        this.ensureTenantFoundation(queryable, auth),
-      toMoney: (value, digits) =>
-        this.toMoney(value, digits),
-      maxAllowedDifference: (bookDigits) =>
-        this.maxAllowedDifference(bookDigits),
-      getTenantAccountingSettings: (queryable, tenantId) =>
-        this.getTenantAccountingSettings(queryable, tenantId),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      maxAllowedDifference: (bookDigits) => this.maxAllowedDifference(bookDigits),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
       resolveSystemAccountByCode: (queryable, tenantId, code) =>
         this.resolveSystemAccountByCode(queryable, tenantId, code),
-      addLine: (lines, next, digits) =>
-        this.addLine(lines, next, digits),
-      insertPostedJournal: (queryable, params) =>
-        this.insertPostedJournal(queryable, params),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
     }));
   }
 
   private postManufacturingUnbuildOrderSliceInstance?: PostManufacturingUnbuildOrderSlice;
   private get postManufacturingUnbuildOrderSlice(): PostManufacturingUnbuildOrderSlice {
     return (this.postManufacturingUnbuildOrderSliceInstance ??= new PostManufacturingUnbuildOrderSlice({
-      ensureTenantFoundation: (queryable, auth) =>
-        this.ensureTenantFoundation(queryable, auth),
-      maxAllowedDifference: (bookDigits) =>
-        this.maxAllowedDifference(bookDigits),
-      toMoney: (value, digits) =>
-        this.toMoney(value, digits),
-      getTenantAccountingSettings: (queryable, tenantId) =>
-        this.getTenantAccountingSettings(queryable, tenantId),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      maxAllowedDifference: (bookDigits) => this.maxAllowedDifference(bookDigits),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
       resolveSystemAccountByCode: (queryable, tenantId, code) =>
         this.resolveSystemAccountByCode(queryable, tenantId, code),
-      addLine: (lines, next, digits) =>
-        this.addLine(lines, next, digits),
-      insertPostedJournal: (queryable, params) =>
-        this.insertPostedJournal(queryable, params),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
     }));
   }
 
   private postCashDrawerMovementSliceInstance?: PostCashDrawerMovementSlice;
   private get postCashDrawerMovementSlice(): PostCashDrawerMovementSlice {
     return (this.postCashDrawerMovementSliceInstance ??= new PostCashDrawerMovementSlice({
-      ensureTenantFoundation: (queryable, auth) =>
-        this.ensureTenantFoundation(queryable, auth),
-      toMoney: (value, digits) =>
-        this.toMoney(value, digits),
-      getTenantAccountingSettings: (queryable, tenantId) =>
-        this.getTenantAccountingSettings(queryable, tenantId),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
       resolveSystemAccountByCode: (queryable, tenantId, code) =>
         this.resolveSystemAccountByCode(queryable, tenantId, code),
-      addLine: (lines, next, digits) =>
-        this.addLine(lines, next, digits),
-      insertPostedJournal: (queryable, params) =>
-        this.insertPostedJournal(queryable, params),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
     }));
   }
 
   private installmentInterestSliceInstance?: InstallmentInterestSlice;
   private get installmentInterestSlice(): InstallmentInterestSlice {
     return (this.installmentInterestSliceInstance ??= new InstallmentInterestSlice({
-      ensureTenantFoundation: (queryable, auth) =>
-        this.ensureTenantFoundation(queryable, auth),
-      toMoney: (value, digits) =>
-        this.toMoney(value, digits),
-      addLine: (lines, next, digits) =>
-        this.addLine(lines, next, digits),
-      getTenantAccountingSettings: (queryable, tenantId) =>
-        this.getTenantAccountingSettings(queryable, tenantId),
+      ensureTenantFoundation: (queryable, auth) => this.ensureTenantFoundation(queryable, auth),
+      toMoney: (value, digits) => this.toMoney(value, digits),
+      addLine: (lines, next, digits) => this.addLine(lines, next, digits),
+      getTenantAccountingSettings: (queryable, tenantId) => this.getTenantAccountingSettings(queryable, tenantId),
       resolveSystemAccountByCode: (queryable, tenantId, code) =>
         this.resolveSystemAccountByCode(queryable, tenantId, code),
-      insertPostedJournal: (queryable, params) =>
-        this.insertPostedJournal(queryable, params),
-      postDomainJournal: (queryable, params) =>
-        this.postDomainJournal(queryable, params),
+      insertPostedJournal: (queryable, params) => this.insertPostedJournal(queryable, params),
+      postDomainJournal: (queryable, params) => this.postDomainJournal(queryable, params),
     }));
   }
 
-
-  async postInventoryAdjustment(queryable: DbOrTx, movementId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null; hasFinancialImpact?: boolean }> {
+  async postInventoryAdjustment(
+    queryable: DbOrTx,
+    movementId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null; hasFinancialImpact?: boolean }> {
     return this.postInventoryAdjustmentSlice.postInventoryAdjustment(queryable, movementId, auth);
   }
 
-  async postDamagedStock(queryable: DbOrTx, damageRecordId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null; hasFinancialImpact?: boolean }> {
+  async postDamagedStock(
+    queryable: DbOrTx,
+    damageRecordId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null; hasFinancialImpact?: boolean }> {
     return this.damagedStockFoodWasteSlice.postDamagedStock(queryable, damageRecordId, auth);
   }
 
-  async postFoodWaste(queryable: DbOrTx, wasteLogId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postFoodWaste(
+    queryable: DbOrTx,
+    wasteLogId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.damagedStockFoodWasteSlice.postFoodWaste(queryable, wasteLogId, auth);
   }
 
-  async postStockCount(queryable: DbOrTx, sessionId: number, auth: AuthContext, itemIds?: number[]): Promise<{ posted: boolean; journalEntryId: number | null; hasFinancialImpact?: boolean }> {
+  async postStockCount(
+    queryable: DbOrTx,
+    sessionId: number,
+    auth: AuthContext,
+    itemIds?: number[],
+  ): Promise<{ posted: boolean; journalEntryId: number | null; hasFinancialImpact?: boolean }> {
     return this.postStockCountSlice.postStockCount(queryable, sessionId, auth, itemIds);
   }
 
-  async postService(queryable: DbOrTx, serviceId: number, revision: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postService(
+    queryable: DbOrTx,
+    serviceId: number,
+    revision: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.servicePostingSlice.postService(queryable, serviceId, revision, auth);
   }
 
@@ -241,15 +212,27 @@ export class InventoryManufacturingCashPostingService {
     return this.servicePostingSlice.reverseService(queryable, serviceId, revision, auth);
   }
 
-  async postCashierShiftVariance(queryable: DbOrTx, shiftId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postCashierShiftVariance(
+    queryable: DbOrTx,
+    shiftId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.cashierShiftVarianceSlice.postCashierShiftVariance(queryable, shiftId, auth);
   }
 
-  async postManufacturingWorkOrder(queryable: DbOrTx, workOrderId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postManufacturingWorkOrder(
+    queryable: DbOrTx,
+    workOrderId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.postManufacturingWorkOrderSlice.postManufacturingWorkOrder(queryable, workOrderId, auth);
   }
 
-  async postManufacturingUnbuildOrder(queryable: DbOrTx, unbuildId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postManufacturingUnbuildOrder(
+    queryable: DbOrTx,
+    unbuildId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.postManufacturingUnbuildOrderSlice.postManufacturingUnbuildOrder(queryable, unbuildId, auth);
   }
 
@@ -264,7 +247,17 @@ export class InventoryManufacturingCashPostingService {
     auth: AuthContext,
     counterpartAccountId?: number | null,
   ): Promise<{ posted: boolean; journalEntryId: number | null }> {
-    return this.postCashDrawerMovementSlice.postCashDrawerMovement(queryable, txnId, movementType, amount, note, branchId, locationId, auth, counterpartAccountId);
+    return this.postCashDrawerMovementSlice.postCashDrawerMovement(
+      queryable,
+      txnId,
+      movementType,
+      amount,
+      note,
+      branchId,
+      locationId,
+      auth,
+      counterpartAccountId,
+    );
   }
 
   async postCustomerInstallmentInterest(
@@ -275,7 +268,12 @@ export class InventoryManufacturingCashPostingService {
     return this.installmentInterestSlice.postCustomerInstallmentInterest(queryable, planId, auth);
   }
 
-  async recognizeInstallmentInterest(queryable: DbOrTx, tenantId: string, throughDate: string, createdBy: number | null = null): Promise<void> {
+  async recognizeInstallmentInterest(
+    queryable: DbOrTx,
+    tenantId: string,
+    throughDate: string,
+    createdBy: number | null = null,
+  ): Promise<void> {
     return this.installmentInterestSlice.recognizeInstallmentInterest(queryable, tenantId, throughDate, createdBy);
   }
 }

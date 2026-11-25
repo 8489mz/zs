@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
@@ -13,11 +7,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
-import {
-  CreateWarehousePackageDto,
-  UnpackPackageDto,
-  UpdatePackageStatusDto,
-} from '../dto/warehouse-package.dto';
+import { CreateWarehousePackageDto, UnpackPackageDto, UpdatePackageStatusDto } from '../dto/warehouse-package.dto';
 import {
   calculatePackageGrossWeight,
   flattenPackageContents,
@@ -25,10 +15,7 @@ import {
   validateUnpackAction,
   type PackageHierarchyNode,
 } from '../engines/package-barcode.engine';
-import {
-  releaseLocationStock,
-  reserveLocationStock,
-} from '../../../common/utils/location-stock-ledger';
+import { releaseLocationStock, reserveLocationStock } from '../../../common/utils/location-stock-ledger';
 
 @Injectable()
 export class WarehousePackagesService {
@@ -243,12 +230,7 @@ export class WarehousePackagesService {
     }
     if (params?.search && params.search.trim()) {
       const term = `%${params.search.trim()}%`;
-      query = query.where((eb: any) =>
-        eb.or([
-          eb('p.package_number', 'ilike', term),
-          eb('p.notes', 'ilike', term),
-        ]),
-      );
+      query = query.where((eb: any) => eb.or([eb('p.package_number', 'ilike', term), eb('p.notes', 'ilike', term)]));
     }
 
     const packages = await query.orderBy('p.created_at', 'desc').execute();
@@ -274,7 +256,9 @@ export class WarehousePackagesService {
       .execute();
 
     const itemsMap = new Map<string, any>(itemsCounts.map((i: any) => [i.package_id, i]));
-    const childrenMap = new Map<string, number>(childCounts.map((c: any) => [c.parent_package_id, Number(c.children_count || 0)]));
+    const childrenMap = new Map<string, number>(
+      childCounts.map((c: any) => [c.parent_package_id, Number(c.children_count || 0)]),
+    );
 
     return packages.map((p: any) => ({
       ...p,
@@ -397,7 +381,11 @@ export class WarehousePackagesService {
       // shrinking) and can never run twice for the same row: a second
       // unpack finds no row left to release. Child packages are only
       // detached, never unpacked, so their own reservations survive.
-      const branchId = await this.resolveBranchId(trx, tenantId, pkg.location_id == null ? null : Number(pkg.location_id));
+      const branchId = await this.resolveBranchId(
+        trx,
+        tenantId,
+        pkg.location_id == null ? null : Number(pkg.location_id),
+      );
       const locationId = pkg.location_id == null ? null : Number(pkg.location_id);
 
       if (dto.action === 'unpack_all') {
@@ -415,7 +403,10 @@ export class WarehousePackagesService {
         const releaseByProduct = new Map<number, number>();
         for (const row of directItems as any[]) {
           const productId = Number(row.product_id);
-          releaseByProduct.set(productId, this.round3((releaseByProduct.get(productId) || 0) + Number(row.quantity || 0)));
+          releaseByProduct.set(
+            productId,
+            this.round3((releaseByProduct.get(productId) || 0) + Number(row.quantity || 0)),
+          );
         }
         const releaseItems = Array.from(releaseByProduct.entries()).map(([productId, qty]) => ({ productId, qty }));
         if (releaseItems.length > 0) {

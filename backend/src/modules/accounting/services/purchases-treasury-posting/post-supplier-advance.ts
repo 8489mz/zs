@@ -75,11 +75,14 @@ export class PostSupplierAdvanceService {
       .where(sql<boolean>`sp.tenant_id = ${scope.tenantId}`)
       .executeTakeFirst();
     if (!payment) throw new AppError('Supplier advance payment not found', 'SUPPLIER_ADVANCE_NOT_FOUND', 404);
-    if ((payment as any).is_advance !== true) throw new AppError('Payment is not a supplier advance', 'SUPPLIER_ADVANCE_NOT_ADVANCE', 400);
+    if ((payment as any).is_advance !== true)
+      throw new AppError('Payment is not a supplier advance', 'SUPPLIER_ADVANCE_NOT_ADVANCE', 400);
 
     const amount = toBookMoney(applyAmount);
     if (!(amount > 0)) throw new AppError('Advance application must be positive', 'INVALID_AMOUNT', 400);
-    const outstanding = toBookMoney(Number((payment as any).amount || 0) - Number((payment as any).applied_amount || 0));
+    const outstanding = toBookMoney(
+      Number((payment as any).amount || 0) - Number((payment as any).applied_amount || 0),
+    );
     if (amount > outstanding + this.maxAllowedDifference(bookDigits)) {
       throw new AppError(
         `Advance application ${amount} exceeds the outstanding advance ${outstanding}`,
@@ -104,7 +107,12 @@ export class PostSupplierAdvanceService {
     const supplierName = String(payment.supplier_name || '').trim();
     const docNo = String(payment.doc_no || `ZPV-${advancePaymentId}`).trim();
 
-    const supplierPayableAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.supplier_payable_account_id, '2110');
+    const supplierPayableAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.supplier_payable_account_id,
+      '2110',
+    );
     const advanceAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1185');
     const lines: JournalLineDraft[] = [];
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
@@ -129,18 +137,33 @@ export class PostSupplierAdvanceService {
       locationId,
     });
 
-    const accountMap = await this.getActiveAccountMap(queryable, scope.tenantId, lines.map((line) => line.accountId));
+    const accountMap = await this.getActiveAccountMap(
+      queryable,
+      scope.tenantId,
+      lines.map((line) => line.accountId),
+    );
     for (const line of lines) {
-      if (!(line.accountId > 0)) throw new Error(`Invalid accounting setting account id while applying supplier advance ${advancePaymentId}`);
-      if (!accountMap.has(line.accountId)) throw new Error(`Configured account ${line.accountId} was not found while applying supplier advance ${advancePaymentId}`);
-      if (!accountMap.get(line.accountId)) throw new Error(`Configured account ${line.accountId} is inactive while applying supplier advance ${advancePaymentId}`);
+      if (!(line.accountId > 0))
+        throw new Error(`Invalid accounting setting account id while applying supplier advance ${advancePaymentId}`);
+      if (!accountMap.has(line.accountId))
+        throw new Error(
+          `Configured account ${line.accountId} was not found while applying supplier advance ${advancePaymentId}`,
+        );
+      if (!accountMap.get(line.accountId))
+        throw new Error(
+          `Configured account ${line.accountId} is inactive while applying supplier advance ${advancePaymentId}`,
+        );
     }
 
-    const normalizedLines = lines.map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) })).filter((line) => line.debit > 0 || line.credit > 0);
+    const normalizedLines = lines
+      .map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) }))
+      .filter((line) => line.debit > 0 || line.credit > 0);
     const totalDebit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > this.maxAllowedDifference(bookDigits)) {
-      throw new Error(`Unbalanced supplier advance application journal for payment ${advancePaymentId}: debit=${totalDebit} credit=${totalCredit}`);
+      throw new Error(
+        `Unbalanced supplier advance application journal for payment ${advancePaymentId}: debit=${totalDebit} credit=${totalCredit}`,
+      );
     }
 
     const entryId = await this.insertPostedJournal(queryable, {
@@ -165,16 +188,28 @@ export class PostSupplierAdvanceService {
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .execute();
 
-    return { posted: true, journalEntryId: entryId, appliedAmount: amount, remainingAdvance: toBookMoney(outstanding - amount) };
+    return {
+      posted: true,
+      journalEntryId: entryId,
+      appliedAmount: amount,
+      remainingAdvance: toBookMoney(outstanding - amount),
+    };
   }
 
-
-  async postSupplierPaymentScheduleSettlement(queryable: DbOrTx, settlementId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postSupplierPaymentScheduleSettlement(
+    queryable: DbOrTx,
+    settlementId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
     await this.ensureTenantFoundation(queryable, auth);
-    const existing = await this.getExistingSupplierPaymentScheduleSettlementJournal(queryable, settlementId, scope.tenantId);
+    const existing = await this.getExistingSupplierPaymentScheduleSettlementJournal(
+      queryable,
+      settlementId,
+      scope.tenantId,
+    );
     if (existing) return { posted: false, journalEntryId: Number(existing.id) };
 
     const settlement = await queryable
@@ -202,31 +237,46 @@ export class PostSupplierAdvanceService {
     }
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
-    if (!settings) throw new Error(`Accounting settings missing while posting supplier payment schedule settlement ${settlementId}`);
+    if (!settings)
+      throw new Error(`Accounting settings missing while posting supplier payment schedule settlement ${settlementId}`);
 
     const amount = toBookMoney(settlement.amount);
     if (!(amount > 0)) {
-      this.logger.warn(`Supplier payment schedule settlement ${settlementId} has non-positive amount; skipping accounting post`);
+      this.logger.warn(
+        `Supplier payment schedule settlement ${settlementId} has non-positive amount; skipping accounting post`,
+      );
       return { posted: false, journalEntryId: null };
     }
 
     const purchase = settlement.purchase_id
       ? await queryable
-        .selectFrom('purchases')
-        .select(['branch_id', 'location_id'])
-        .where('id', '=', Number(settlement.purchase_id))
-        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
-        .executeTakeFirst()
+          .selectFrom('purchases')
+          .select(['branch_id', 'location_id'])
+          .where('id', '=', Number(settlement.purchase_id))
+          .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+          .executeTakeFirst()
       : null;
 
     const branchId = purchase?.branch_id ? Number(purchase.branch_id) : null;
     const locationId = purchase?.location_id ? Number(purchase.location_id) : null;
     const supplierName = String(settlement.supplier_name || '').trim();
 
-    const supplierPayableAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.supplier_payable_account_id, '2110');
-    const cashAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.cash_account_id, '1110');
-    const paymentAccountId = (settlement.payment_channel || 'cash') === 'cash' ? cashAccountId :
-      await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.bank_account_id, '1120');
+    const supplierPayableAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.supplier_payable_account_id,
+      '2110',
+    );
+    const cashAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.cash_account_id,
+      '1110',
+    );
+    const paymentAccountId =
+      (settlement.payment_channel || 'cash') === 'cash'
+        ? cashAccountId
+        : await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.bank_account_id, '1120');
     const lines: JournalLineDraft[] = [];
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
     addBookLine({
@@ -241,7 +291,10 @@ export class PostSupplierAdvanceService {
     });
     addBookLine({
       accountId: paymentAccountId,
-      description: (settlement.payment_channel || 'cash') === 'cash' ? 'خروج نقدية لسداد مورد' : 'سداد قسط مورد عبر البنك أو المدفوعات الإلكترونية',
+      description:
+        (settlement.payment_channel || 'cash') === 'cash'
+          ? 'خروج نقدية لسداد مورد'
+          : 'سداد قسط مورد عبر البنك أو المدفوعات الإلكترونية',
       debit: 0,
       credit: amount,
       partnerType: 'none',
@@ -250,18 +303,35 @@ export class PostSupplierAdvanceService {
       locationId,
     });
 
-    const accountMap = await this.getActiveAccountMap(queryable, scope.tenantId, lines.map((line) => line.accountId));
+    const accountMap = await this.getActiveAccountMap(
+      queryable,
+      scope.tenantId,
+      lines.map((line) => line.accountId),
+    );
     for (const line of lines) {
-      if (!(line.accountId > 0)) throw new Error(`Invalid accounting setting account id while posting supplier payment schedule settlement ${settlementId}`);
-      if (!accountMap.has(line.accountId)) throw new Error(`Configured account ${line.accountId} was not found while posting supplier payment schedule settlement ${settlementId}`);
-      if (!accountMap.get(line.accountId)) throw new Error(`Configured account ${line.accountId} is inactive while posting supplier payment schedule settlement ${settlementId}`);
+      if (!(line.accountId > 0))
+        throw new Error(
+          `Invalid accounting setting account id while posting supplier payment schedule settlement ${settlementId}`,
+        );
+      if (!accountMap.has(line.accountId))
+        throw new Error(
+          `Configured account ${line.accountId} was not found while posting supplier payment schedule settlement ${settlementId}`,
+        );
+      if (!accountMap.get(line.accountId))
+        throw new Error(
+          `Configured account ${line.accountId} is inactive while posting supplier payment schedule settlement ${settlementId}`,
+        );
     }
 
-    const normalizedLines = lines.map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) })).filter((line) => line.debit > 0 || line.credit > 0);
+    const normalizedLines = lines
+      .map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) }))
+      .filter((line) => line.debit > 0 || line.credit > 0);
     const totalDebit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > this.maxAllowedDifference(bookDigits)) {
-      throw new Error(`Unbalanced supplier payment schedule settlement journal for settlement ${settlementId}: debit=${totalDebit} credit=${totalCredit}`);
+      throw new Error(
+        `Unbalanced supplier payment schedule settlement journal for settlement ${settlementId}: debit=${totalDebit} credit=${totalCredit}`,
+      );
     }
 
     const entryId = await this.insertPostedJournal(queryable, {

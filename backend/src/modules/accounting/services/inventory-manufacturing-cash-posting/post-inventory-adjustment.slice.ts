@@ -78,7 +78,11 @@ export class PostInventoryAdjustmentSlice {
     return this.bound.resolveSystemAccountByCode(queryable, tenantId, code);
   }
 
-  async postInventoryAdjustment(queryable: DbOrTx, movementId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null; hasFinancialImpact?: boolean }> {
+  async postInventoryAdjustment(
+    queryable: DbOrTx,
+    movementId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null; hasFinancialImpact?: boolean }> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
 
@@ -103,8 +107,10 @@ export class PostInventoryAdjustmentSlice {
     // Re-multiplying a rounded per-unit cost can drift by cents for fractional quantities.
     const rawTotal = movement.total_cost == null ? null : Number(movement.total_cost);
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
-    const amount = rawTotal != null && Number.isFinite(rawTotal) && rawTotal >= 0
-      ? this.toMoney(rawTotal, moneyDigits) : this.toMoney(Math.abs(delta) * unitCost, moneyDigits);
+    const amount =
+      rawTotal != null && Number.isFinite(rawTotal) && rawTotal >= 0
+        ? this.toMoney(rawTotal, moneyDigits)
+        : this.toMoney(Math.abs(delta) * unitCost, moneyDigits);
 
     if (amount <= 0) {
       return { posted: false, journalEntryId: null, hasFinancialImpact: false };
@@ -119,7 +125,10 @@ export class PostInventoryAdjustmentSlice {
       if (!fallbackId) throw new Error('Inventory account not configured and fallback 1140 not found');
     }
 
-    const accountIdToUse = inventoryAccountId > 0 ? inventoryAccountId : await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1140');
+    const accountIdToUse =
+      inventoryAccountId > 0
+        ? inventoryAccountId
+        : await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1140');
 
     const lines: JournalLineDraft[] = [];
     const branchId = movement.branch_id ? Number(movement.branch_id) : null;
@@ -128,14 +137,74 @@ export class PostInventoryAdjustmentSlice {
     if (delta > 0) {
       // Gain
       const gainAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7100');
-      this.addLine(lines, { accountId: accountIdToUse, description: 'تسوية زيادة مخزون', debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId }, moneyDigits);
-      this.addLine(lines, { accountId: gainAccountId, description: 'أرباح تسوية مخزون', debit: 0, credit: amount, partnerType: 'none', partnerId: null, branchId, locationId }, moneyDigits);
+      this.addLine(
+        lines,
+        {
+          accountId: accountIdToUse,
+          description: 'تسوية زيادة مخزون',
+          debit: amount,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        moneyDigits,
+      );
+      this.addLine(
+        lines,
+        {
+          accountId: gainAccountId,
+          description: 'أرباح تسوية مخزون',
+          debit: 0,
+          credit: amount,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        moneyDigits,
+      );
     } else {
       // Loss
       const lossAccountCode = isFinalIssue ? '6900' : isTransitLoss ? '5300' : '5200';
       const lossAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, lossAccountCode);
-      this.addLine(lines, { accountId: lossAccountId, description: isFinalIssue ? 'مواد تشغيل مصروفة نهائياً' : isTransitLoss ? 'هالك وفاقد بضاعة أثناء النقل' : 'خسائر تسوية مخزون', debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId }, moneyDigits);
-      this.addLine(lines, { accountId: accountIdToUse, description: isFinalIssue ? 'تخفيض المخزون بموجب إذن صرف نهائي' : isTransitLoss ? 'تخفيض مخزون البضاعة بالطريق بسبب الفاقد' : 'نقص تسوية مخزون', debit: 0, credit: amount, partnerType: 'none', partnerId: null, branchId, locationId }, moneyDigits);
+      this.addLine(
+        lines,
+        {
+          accountId: lossAccountId,
+          description: isFinalIssue
+            ? 'مواد تشغيل مصروفة نهائياً'
+            : isTransitLoss
+              ? 'هالك وفاقد بضاعة أثناء النقل'
+              : 'خسائر تسوية مخزون',
+          debit: amount,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        moneyDigits,
+      );
+      this.addLine(
+        lines,
+        {
+          accountId: accountIdToUse,
+          description: isFinalIssue
+            ? 'تخفيض المخزون بموجب إذن صرف نهائي'
+            : isTransitLoss
+              ? 'تخفيض مخزون البضاعة بالطريق بسبب الفاقد'
+              : 'نقص تسوية مخزون',
+          debit: 0,
+          credit: amount,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        moneyDigits,
+      );
     }
 
     try {
@@ -145,7 +214,9 @@ export class PostInventoryAdjustmentSlice {
         tenantId: scope.tenantId,
         accountId: scope.accountId,
         entryDate: movement.created_at ? new Date(movement.created_at) : new Date(),
-        description: isFinalIssue ? `قيد صرف مخزون نهائي - حركة #${movementId}` : `قيد تسوية مخزون - حركة #${movementId}`,
+        description: isFinalIssue
+          ? `قيد صرف مخزون نهائي - حركة #${movementId}`
+          : `قيد تسوية مخزون - حركة #${movementId}`,
         branchId,
         locationId,
         createdBy: movement.created_by ? Number(movement.created_by) : auth.userId,
@@ -155,8 +226,14 @@ export class PostInventoryAdjustmentSlice {
       return { posted: true, journalEntryId: entryId, hasFinancialImpact: true };
     } catch (e: any) {
       if (e.code === '23505' && e.constraint?.includes('idx_journal_entries_round1_uniq')) {
-         const existing = await queryable.selectFrom('journal_entries').select('id').where('source_type', '=', 'inventory_adjustment').where('source_id', '=', movementId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
-         return { posted: false, journalEntryId: Number(existing?.id || 0), hasFinancialImpact: true };
+        const existing = await queryable
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'inventory_adjustment')
+          .where('source_id', '=', movementId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
+        return { posted: false, journalEntryId: Number(existing?.id || 0), hasFinancialImpact: true };
       }
       throw e;
     }

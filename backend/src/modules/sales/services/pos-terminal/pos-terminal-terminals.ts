@@ -27,11 +27,7 @@ export class PosTerminalTerminals {
     }
 
     try {
-      const rows = await this.db
-        .selectFrom('settings')
-        .selectAll()
-        .where('tenant_id', '=', String(tenantId))
-        .execute();
+      const rows = await this.db.selectFrom('settings').selectAll().where('tenant_id', '=', String(tenantId)).execute();
 
       const settingsMap: Record<string, any> = {};
       for (const row of rows) {
@@ -58,8 +54,12 @@ export class PosTerminalTerminals {
 
       let terminalsList: PosTerminalInfo[] = [];
 
-      const rawCountry = String(settingsMap.country || '').trim().toUpperCase();
-      const rawCurrency = String(settingsMap.currency || '').trim().toUpperCase();
+      const rawCountry = String(settingsMap.country || '')
+        .trim()
+        .toUpperCase();
+      const rawCurrency = String(settingsMap.currency || '')
+        .trim()
+        .toUpperCase();
       let country = rawCountry;
       if (!country) {
         if (rawCurrency === 'KWD') country = 'KW';
@@ -77,7 +77,11 @@ export class PosTerminalTerminals {
             // Strict country isolation
             if (country === 'EG' && (provKey === 'knet_pos' || provKey === 'knet')) return false;
             if (country === 'KW' && (provKey === 'fawry' || provKey === 'paymob')) return false;
-            if (country === 'SA' && (provKey === 'knet_pos' || provKey === 'knet' || provKey === 'fawry' || provKey === 'paymob')) return false;
+            if (
+              country === 'SA' &&
+              (provKey === 'knet_pos' || provKey === 'knet' || provKey === 'fawry' || provKey === 'paymob')
+            )
+              return false;
             return true;
           })
           .map((t: any, idx: number) => {
@@ -100,8 +104,12 @@ export class PosTerminalTerminals {
       // Fallback to legacy single terminal
       if (terminalsList.length === 0) {
         const name = settingsMap.posTerminalName || 'جهاز الكاشير الرئيسي (EDC)';
-        const provider = settingsMap.posTerminalProvider || (country === 'KW' ? 'knet_pos' : country === 'SA' ? 'geidea' : 'fawry');
-        const parsed = parseTerminalHostAndPort(settingsMap.posTerminalIp || '192.168.1.3', Number(settingsMap.posTerminalPort || 8080));
+        const provider =
+          settingsMap.posTerminalProvider || (country === 'KW' ? 'knet_pos' : country === 'SA' ? 'geidea' : 'fawry');
+        const parsed = parseTerminalHostAndPort(
+          settingsMap.posTerminalIp || '192.168.1.3',
+          Number(settingsMap.posTerminalPort || 8080),
+        );
 
         terminalsList = [
           {

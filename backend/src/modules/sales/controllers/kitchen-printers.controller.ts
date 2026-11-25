@@ -1,4 +1,17 @@
-import { BadRequestException, Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards, ParseIntPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  Req,
+  UseGuards,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
 import { RequireFeature } from '../../../core/auth/decorators/feature.decorator';
@@ -17,20 +30,14 @@ export class KitchenPrintersController {
 
   @Get()
   @RequirePermissions('sales')
-  async listPrinters(
-    @Req() req: RequestWithAuth,
-    @Query('branchId') branchId?: string,
-  ) {
+  async listPrinters(@Req() req: RequestWithAuth, @Query('branchId') branchId?: string) {
     const { tenantId } = requireTenantScope(req.authContext);
     return this.service.listPrinters(tenantId, branchId ? Number(branchId) : undefined);
   }
 
   @Post()
   @RequirePermissions('sales')
-  async createPrinter(
-    @Req() req: RequestWithAuth,
-    @Body() dto: CreateKitchenPrinterDto,
-  ) {
+  async createPrinter(@Req() req: RequestWithAuth, @Body() dto: CreateKitchenPrinterDto) {
     const { tenantId } = requireTenantScope(req.authContext);
     return this.service.createPrinter(tenantId, dto);
   }
@@ -40,10 +47,7 @@ export class KitchenPrintersController {
   // printer serves this sale and the caller falls back to Electron print.
   @Post('print')
   @RequirePermissions('sales')
-  async printTicket(
-    @Req() req: RequestWithAuth,
-    @Body() body: { saleId: number },
-  ) {
+  async printTicket(@Req() req: RequestWithAuth, @Body() body: { saleId: number }) {
     const { tenantId } = requireTenantScope(req.authContext);
     const saleId = Number(body?.saleId);
     if (!Number.isSafeInteger(saleId) || saleId <= 0) {
@@ -66,10 +70,7 @@ export class KitchenPrintersController {
 
   @Delete(':id')
   @RequirePermissions('sales')
-  async deletePrinter(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async deletePrinter(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     const { tenantId } = requireTenantScope(req.authContext);
     return this.service.deletePrinter(tenantId, id);
   }

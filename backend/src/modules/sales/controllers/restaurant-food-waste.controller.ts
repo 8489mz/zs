@@ -22,11 +22,7 @@ export class RestaurantFoodWasteController {
   }
 
   @Get()
-  async listLogs(
-    @Req() req: RequestWithAuth,
-    @Query('branchId') branchId?: string,
-    @Query('limit') limit?: string,
-  ) {
+  async listLogs(@Req() req: RequestWithAuth, @Query('branchId') branchId?: string, @Query('limit') limit?: string) {
     return this.service.listLogs(req.authContext!, {
       branchId: branchId ? Number(branchId) : undefined,
       limit: limit ? Number(limit) : undefined,

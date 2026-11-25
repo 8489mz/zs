@@ -60,7 +60,12 @@ export class GoodsReceiptService {
       : sql<boolean>`tenant_id = ${scope.tenantId}`;
   }
 
-  private async resolveAccountByCode(trx: any, tenantId: string, accountId: string, code: string): Promise<number | null> {
+  private async resolveAccountByCode(
+    trx: any,
+    tenantId: string,
+    accountId: string,
+    code: string,
+  ): Promise<number | null> {
     return this.helpersService.resolveAccountByCode(trx, tenantId, accountId, code);
   }
 
@@ -85,7 +90,10 @@ export class GoodsReceiptService {
     return this.create.createGoodsReceipt(dto, auth);
   }
 
-  async listGoodsReceipts(filter: { supplierId?: number; status?: string; search?: string }, auth: AuthContext): Promise<any> {
+  async listGoodsReceipts(
+    filter: { supplierId?: number; status?: string; search?: string },
+    auth: AuthContext,
+  ): Promise<any> {
     return this.create.listGoodsReceipts(filter, auth);
   }
 
@@ -97,7 +105,10 @@ export class GoodsReceiptService {
     return this.post.postGoodsReceipt(id, auth);
   }
 
-  async createBillFromReceipts(dto: CreateGrnBillDto, auth: AuthContext): Promise<{ purchaseId: number; docNo: string }> {
+  async createBillFromReceipts(
+    dto: CreateGrnBillDto,
+    auth: AuthContext,
+  ): Promise<{ purchaseId: number; docNo: string }> {
     return this.bill.createBillFromReceipts(dto, auth);
   }
 

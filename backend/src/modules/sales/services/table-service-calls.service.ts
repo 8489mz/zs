@@ -34,12 +34,7 @@ export class TableServiceCallsService {
       .where('status', '=', 'pending');
 
     if (branchId) {
-      query = query.where((eb) =>
-        eb.or([
-          eb('branch_id', '=', branchId),
-          eb('branch_id', 'is', null),
-        ]),
-      );
+      query = query.where((eb) => eb.or([eb('branch_id', '=', branchId), eb('branch_id', 'is', null)]));
     }
 
     return query.orderBy('created_at', 'desc').execute();

@@ -27,7 +27,11 @@ import { MoneyDigits, toMinorUnits, fromMinorUnits } from './money-minor-units.e
  * remainder to the FIRST rows; the new shape deliberately moves it
  * to the last row.
  */
-export function splitInstallmentSchedule(totalWithInterest: number, installmentCount: number, minorUnits: MoneyDigits): number[] {
+export function splitInstallmentSchedule(
+  totalWithInterest: number,
+  installmentCount: number,
+  minorUnits: MoneyDigits,
+): number[] {
   if (!Number.isFinite(totalWithInterest) || totalWithInterest <= 0) throw new Error('Invalid installment total');
   if (!Number.isSafeInteger(installmentCount) || installmentCount < 1) throw new Error('Invalid installment count');
   const totalMinor = toMinorUnits(totalWithInterest, minorUnits);
@@ -41,13 +45,31 @@ export function splitInstallmentSchedule(totalWithInterest: number, installmentC
   return rows;
 }
 
-export function allocateInstallmentInterest(principal: number, payments: number[], totalInterest: number, minorUnits: MoneyDigits): number[] {
-  if (!Number.isFinite(principal) || principal <= 0 || !payments.length || payments.some(p => !Number.isFinite(p) || p <= 0) || !Number.isFinite(totalInterest) || totalInterest < 0) throw new Error('Invalid financing terms');
+export function allocateInstallmentInterest(
+  principal: number,
+  payments: number[],
+  totalInterest: number,
+  minorUnits: MoneyDigits,
+): number[] {
+  if (
+    !Number.isFinite(principal) ||
+    principal <= 0 ||
+    !payments.length ||
+    payments.some((p) => !Number.isFinite(p) || p <= 0) ||
+    !Number.isFinite(totalInterest) ||
+    totalInterest < 0
+  )
+    throw new Error('Invalid financing terms');
   const factor = 10 ** minorUnits;
   const interestMinor = toMinorUnits(totalInterest, minorUnits);
-  if (payments.reduce((sum, payment) => sum + toMinorUnits(payment, minorUnits), 0) !== toMinorUnits(principal, minorUnits) + interestMinor) throw new Error('Financing schedule does not reconcile');
+  if (
+    payments.reduce((sum, payment) => sum + toMinorUnits(payment, minorUnits), 0) !==
+    toMinorUnits(principal, minorUnits) + interestMinor
+  )
+    throw new Error('Financing schedule does not reconcile');
   if (!interestMinor) return payments.map(() => 0);
-  const presentValue = (rate: number) => payments.reduce((sum, payment, index) => sum + payment / Math.pow(1 + rate, index + 1), 0);
+  const presentValue = (rate: number) =>
+    payments.reduce((sum, payment, index) => sum + payment / Math.pow(1 + rate, index + 1), 0);
   let low = 0;
   let high = 1;
   while (presentValue(high) > principal) high *= 2;
@@ -60,7 +82,10 @@ export function allocateInstallmentInterest(principal: number, payments: number[
   let outstanding = principal;
   let remaining = interestMinor;
   return payments.map((payment, index) => {
-    const minor = index === payments.length - 1 ? remaining : Math.min(remaining, Math.max(0, Math.round(outstanding * rate * factor)));
+    const minor =
+      index === payments.length - 1
+        ? remaining
+        : Math.min(remaining, Math.max(0, Math.round(outstanding * rate * factor)));
     remaining -= minor;
     outstanding = Math.max(0, outstanding + minor / factor - payment);
     return fromMinorUnits(minor, minorUnits);

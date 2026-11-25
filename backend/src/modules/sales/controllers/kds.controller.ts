@@ -4,12 +4,7 @@ import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
 import { RequireFeature } from '../../../core/auth/decorators/feature.decorator';
 import { RequirePermissions } from '../../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
-import {
-  KdsService,
-  KdsStation,
-  KdsTicketStatus,
-  KdsItemStatus,
-} from '../services/kds.service';
+import { KdsService, KdsStation, KdsTicketStatus, KdsItemStatus } from '../services/kds.service';
 
 @Controller('api/sales/kds')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -42,10 +37,7 @@ export class KdsController {
   // class-level 'sales'.
   @Post('tickets/:id/advance')
   @RequirePermissions('kitchen')
-  async advanceStatus(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithAuth,
-  ) {
+  async advanceStatus(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.kdsService.advanceTicketStatus(req.authContext!, id);
   }
 
@@ -78,11 +70,7 @@ export class KdsController {
 
   @Post('tickets/:id/fire-course')
   @RequirePermissions('kitchen')
-  async fireCourse(
-    @Param('id', ParseIntPipe) id: number,
-    @Body('course') course: any,
-    @Req() req: RequestWithAuth,
-  ) {
+  async fireCourse(@Param('id', ParseIntPipe) id: number, @Body('course') course: any, @Req() req: RequestWithAuth) {
     return this.kdsService.fireTicketCourse(req.authContext!, id, course);
   }
 }

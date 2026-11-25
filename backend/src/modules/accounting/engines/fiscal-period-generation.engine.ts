@@ -10,8 +10,18 @@
  */
 
 export const ARABIC_MONTH_NAMES = [
-  'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-  'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+  'يناير',
+  'فبراير',
+  'مارس',
+  'أبريل',
+  'مايو',
+  'يونيو',
+  'يوليو',
+  'أغسطس',
+  'سبتمبر',
+  'أكتوبر',
+  'نوفمبر',
+  'ديسمبر',
 ] as const;
 
 export type GeneratedFiscalPeriod = {
@@ -48,14 +58,11 @@ export function buildMonthlyFiscalPeriods(startDateStr: string, endDateStr: stri
     const yearNum = curr.getUTCFullYear();
     const monthIdx = curr.getUTCMonth();
 
-    const pStart = periodNumber === 1
-      ? startDateStr
-      : new Date(Date.UTC(yearNum, monthIdx, 1)).toISOString().slice(0, 10);
+    const pStart =
+      periodNumber === 1 ? startDateStr : new Date(Date.UTC(yearNum, monthIdx, 1)).toISOString().slice(0, 10);
 
     const lastDayOfMonth = new Date(Date.UTC(yearNum, monthIdx + 1, 0));
-    const pEnd = lastDayOfMonth > endUtc
-      ? endDateStr
-      : lastDayOfMonth.toISOString().slice(0, 10);
+    const pEnd = lastDayOfMonth > endUtc ? endDateStr : lastDayOfMonth.toISOString().slice(0, 10);
 
     periods.push({
       periodNumber,

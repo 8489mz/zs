@@ -46,7 +46,16 @@ export class PostExpenseReversalService {
     // already-reversed instead of attempting a second reversal.
     const sourceJournal = await queryable
       .selectFrom('journal_entries')
-      .select(['id', 'source_id', 'source_type', 'status', 'reversed_by_entry_id', 'branch_id', 'location_id', 'created_by'])
+      .select([
+        'id',
+        'source_id',
+        'source_type',
+        'status',
+        'reversed_by_entry_id',
+        'branch_id',
+        'location_id',
+        'created_by',
+      ])
       .where('source_type', 'in', ['expense', 'treasury_expense'])
       .where('source_id', '=', expenseId)
       .where('status', '=', 'posted')
@@ -57,7 +66,9 @@ export class PostExpenseReversalService {
     if (!sourceJournal) {
       const existingReversal = await this.getExistingExpenseReversalJournal(queryable, expenseId, scope.tenantId);
       if (existingReversal) {
-        this.logger.warn(`Skipping duplicate expense reversal journal for expense ${expenseId}; existing entry ${existingReversal.id}`);
+        this.logger.warn(
+          `Skipping duplicate expense reversal journal for expense ${expenseId}; existing entry ${existingReversal.id}`,
+        );
         return { reversed: false, journalEntryId: Number(existingReversal.id) };
       }
       this.logger.warn(`No posted expense journal found for expense ${expenseId}; skipping accounting reversal`);
@@ -81,28 +92,42 @@ export class PostExpenseReversalService {
 
     const sourceLines = await queryable
       .selectFrom('journal_entry_lines')
-      .select(['account_id', 'cost_center_id', 'description', 'debit', 'credit', 'partner_type', 'partner_id', 'branch_id', 'location_id'])
+      .select([
+        'account_id',
+        'cost_center_id',
+        'description',
+        'debit',
+        'credit',
+        'partner_type',
+        'partner_id',
+        'branch_id',
+        'location_id',
+      ])
       .where('journal_entry_id', '=', Number(sourceJournal.id))
       .where('tenant_id', '=', scope.tenantId)
       .orderBy('id', 'asc')
       .execute();
 
-    const reversalLines: JournalLineDraft[] = sourceLines.map((line) => ({
-      accountId: Number(line.account_id),
-      costCenterId: line.cost_center_id ? Number(line.cost_center_id) : null,
-      description: `عكس: ${line.description || 'قيد مصروف'}`,
-      debit: toBookMoney(line.credit),
-      credit: toBookMoney(line.debit),
-      partnerType: (line.partner_type as 'none' | 'customer' | 'supplier') || 'none',
-      partnerId: line.partner_id ? Number(line.partner_id) : null,
-      branchId: line.branch_id ? Number(line.branch_id) : null,
-      locationId: line.location_id ? Number(line.location_id) : null,
-    })).filter((line) => line.debit > 0 || line.credit > 0);
+    const reversalLines: JournalLineDraft[] = sourceLines
+      .map((line) => ({
+        accountId: Number(line.account_id),
+        costCenterId: line.cost_center_id ? Number(line.cost_center_id) : null,
+        description: `عكس: ${line.description || 'قيد مصروف'}`,
+        debit: toBookMoney(line.credit),
+        credit: toBookMoney(line.debit),
+        partnerType: (line.partner_type as 'none' | 'customer' | 'supplier') || 'none',
+        partnerId: line.partner_id ? Number(line.partner_id) : null,
+        branchId: line.branch_id ? Number(line.branch_id) : null,
+        locationId: line.location_id ? Number(line.location_id) : null,
+      }))
+      .filter((line) => line.debit > 0 || line.credit > 0);
 
     const totalDebit = toBookMoney(reversalLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(reversalLines.reduce((sum, line) => sum + line.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > this.maxAllowedDifference(bookDigits)) {
-      throw new Error(`Unbalanced expense reversal journal for expense ${expenseId}: debit=${totalDebit} credit=${totalCredit}`);
+      throw new Error(
+        `Unbalanced expense reversal journal for expense ${expenseId}: debit=${totalDebit} credit=${totalCredit}`,
+      );
     }
 
     const entryId = await this.insertPostedJournal(queryable, {

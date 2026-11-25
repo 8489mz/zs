@@ -38,7 +38,8 @@ export class SalesFinanceService {
     auth: AuthContext,
   ): Promise<void> {
     if (!Number.isFinite(amount)) throw new AppError('Invalid customer ledger amount', 'INVALID_AMOUNT', 400);
-    const customer = await queryable.selectFrom('customers')
+    const customer = await queryable
+      .selectFrom('customers')
       .select(['id', 'balance', 'credit_limit', 'is_credit_blocked'])
       .where('id', '=', customerId)
       .where(this.tenantPredicate(auth))
@@ -51,8 +52,10 @@ export class SalesFinanceService {
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, this.tenantScope(auth).tenantId));
     if (amount > 0) {
       if (customer.is_credit_blocked) throw new AppError('Customer credit is blocked', 'CUSTOMER_CREDIT_BLOCKED', 400);
-      if (Number(customer.credit_limit || 0) > 0
-        && Number(customer.balance || 0) + amount > Number(customer.credit_limit) + 0.001) {
+      if (
+        Number(customer.credit_limit || 0) > 0 &&
+        Number(customer.balance || 0) + amount > Number(customer.credit_limit) + 0.001
+      ) {
         throw new AppError(
           formatCreditLimitExceededMessage({
             creditLimit: Number(customer.credit_limit || 0),
@@ -70,8 +73,10 @@ export class SalesFinanceService {
       .set({ balance: sql`COALESCE(balance, 0) + ${amount}`, updated_at: sql`NOW()` })
       .where('id', '=', customerId)
       .where(this.tenantPredicate(auth))
-      .where(sql<boolean>`(${amount}::numeric <= 0 OR (NOT COALESCE(is_credit_blocked, FALSE)
-        AND (COALESCE(credit_limit, 0) <= 0 OR COALESCE(balance, 0) + ${amount} <= credit_limit + 0.001)))`)
+      .where(
+        sql<boolean>`(${amount}::numeric <= 0 OR (NOT COALESCE(is_credit_blocked, FALSE)
+        AND (COALESCE(credit_limit, 0) <= 0 OR COALESCE(balance, 0) + ${amount} <= credit_limit + 0.001)))`,
+      )
       .returning(['balance'])
       .executeTakeFirst();
     if (!updatedCustomer) {
@@ -132,8 +137,10 @@ export class SalesFinanceService {
       .where(this.tenantPredicate(auth))
       .returning(['balance'])
       .executeTakeFirstOrThrow();
-    const nextBalance = roundMoney(Number(updatedCustomer.balance),
-      currencyMoneyDigits(await tenantBaseCurrency(queryable, this.tenantScope(auth).tenantId)));
+    const nextBalance = roundMoney(
+      Number(updatedCustomer.balance),
+      currencyMoneyDigits(await tenantBaseCurrency(queryable, this.tenantScope(auth).tenantId)),
+    );
     await queryable
       .insertInto('customer_ledger')
       .values({
@@ -194,8 +201,10 @@ export class SalesFinanceService {
       .where(this.tenantPredicate(auth))
       .returning(['balance'])
       .executeTakeFirstOrThrow();
-    const nextBalance = roundMoney(Number(updatedCustomer.balance),
-      currencyMoneyDigits(await tenantBaseCurrency(queryable, this.tenantScope(auth).tenantId)));
+    const nextBalance = roundMoney(
+      Number(updatedCustomer.balance),
+      currencyMoneyDigits(await tenantBaseCurrency(queryable, this.tenantScope(auth).tenantId)),
+    );
     await queryable
       .insertInto('customer_ledger')
       .values({

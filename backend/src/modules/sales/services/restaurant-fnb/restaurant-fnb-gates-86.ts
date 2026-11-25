@@ -80,12 +80,7 @@ export class RestaurantFnbGates86Slice {
       .where('is_86ed', '=', true);
 
     if (branchId) {
-      query = query.where((eb) =>
-        eb.or([
-          eb('branch_id', '=', branchId),
-          eb('branch_id', 'is', null),
-        ])
-      );
+      query = query.where((eb) => eb.or([eb('branch_id', '=', branchId), eb('branch_id', 'is', null)]));
     }
 
     const items = await query.orderBy('updated_at', 'desc').execute();
@@ -104,9 +99,10 @@ export class RestaurantFnbGates86Slice {
       .where('product_id', '=', dto.productId)
       .executeTakeFirst();
 
-    const autoRestoreAt = dto.autoRestoreHours && dto.autoRestoreHours > 0
-      ? new Date(Date.now() + dto.autoRestoreHours * 3600 * 1000)
-      : null;
+    const autoRestoreAt =
+      dto.autoRestoreHours && dto.autoRestoreHours > 0
+        ? new Date(Date.now() + dto.autoRestoreHours * 3600 * 1000)
+        : null;
 
     if (existing) {
       await this.db

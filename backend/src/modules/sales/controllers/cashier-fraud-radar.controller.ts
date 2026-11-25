@@ -1,7 +1,11 @@
 import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
-import { CashierFraudRadarService, FraudRadarSummaryResponse, FraudRadarEventItem } from '../services/cashier-fraud-radar.service';
+import {
+  CashierFraudRadarService,
+  FraudRadarSummaryResponse,
+  FraudRadarEventItem,
+} from '../services/cashier-fraud-radar.service';
 
 @Controller('api/sales/fraud-radar')
 @UseGuards(SessionAuthGuard)

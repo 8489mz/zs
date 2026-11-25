@@ -10,8 +10,20 @@ import { FiscalYearPeriodCloseService } from './fiscal-year-period-close.service
 import { FiscalYearPeriodsService } from './fiscal-year-periods.service';
 import { FiscalYearCloseService } from './fiscal-year-close.service';
 import { FiscalYearYearsService } from './fiscal-year-years.service';
-import type { CreateFiscalYearDto, CloseFiscalYearDto, ReopenFiscalYearDto, FiscalYearPreviewResult } from './fiscal-year.types';
-export type { CreateFiscalYearDto, CloseFiscalYearDto, ReopenFiscalYearDto, FiscalYearAccountBalance, ProposedClosingLine, FiscalYearPreviewResult } from './fiscal-year.types';
+import type {
+  CreateFiscalYearDto,
+  CloseFiscalYearDto,
+  ReopenFiscalYearDto,
+  FiscalYearPreviewResult,
+} from './fiscal-year.types';
+export type {
+  CreateFiscalYearDto,
+  CloseFiscalYearDto,
+  ReopenFiscalYearDto,
+  FiscalYearAccountBalance,
+  ProposedClosingLine,
+  FiscalYearPreviewResult,
+} from './fiscal-year.types';
 export { fiscalProfitAndLossCategory, resolveClosingJournalAccounts } from './fiscal-year.types';
 
 @Injectable()

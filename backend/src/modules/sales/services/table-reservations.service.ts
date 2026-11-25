@@ -55,15 +55,10 @@ function tenantDayWindow(timezone: string, date: string): { start: Date; endExcl
 
 @Injectable()
 export class TableReservationsService {
-  constructor(
-    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
-  ) {}
+  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   async listReservations(tenantId: string, branchId?: number, date?: string, type?: string) {
-    let query = this.db
-      .selectFrom('restaurant_table_reservations')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('restaurant_table_reservations').selectAll().where('tenant_id', '=', tenantId);
 
     if (type) {
       query = query.where('reservation_type', '=', type);
@@ -77,15 +72,11 @@ export class TableReservationsService {
       if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         const timeZone = await getTenantTimezone(this.db, tenantId);
         const { start, endExclusive } = tenantDayWindow(timeZone, date);
-        query = query
-          .where('reservation_time', '>=', start)
-          .where('reservation_time', '<', endExclusive);
+        query = query.where('reservation_time', '>=', start).where('reservation_time', '<', endExclusive);
       } else {
         const startOfDay = new Date(`${date}T00:00:00.000Z`);
         const endOfDay = new Date(`${date}T23:59:59.999Z`);
-        query = query
-          .where('reservation_time', '>=', startOfDay)
-          .where('reservation_time', '<=', endOfDay);
+        query = query.where('reservation_time', '>=', startOfDay).where('reservation_time', '<=', endOfDay);
       }
     }
 

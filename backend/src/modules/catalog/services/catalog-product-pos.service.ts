@@ -8,9 +8,19 @@ import { normalizeArabicSearch } from '../../../common/utils/arabic-search.util'
 import { buildPosCatalogVersion } from '../engines/pos-catalog-version.engine';
 import { normalizePgDateOnly } from '../../../common/utils/tenant-timezone.util';
 import { MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
-import { availableAcrossLocations, posSellsFromAllOperationalLocations } from '../../../common/engines/branch-sellable-locations.engine';
+import {
+  availableAcrossLocations,
+  posSellsFromAllOperationalLocations,
+} from '../../../common/engines/branch-sellable-locations.engine';
 import { findPosProductsByBarcodeWithDb } from './pos-barcode-lookup.helper';
-import { ProductRow, ProductWriteExecutor, ProductOfferColumnCapabilities, ProductOfferReadRow, ProductUnitReadRow, PosProductLookupRow } from './catalog-product-types';
+import {
+  ProductRow,
+  ProductWriteExecutor,
+  ProductOfferColumnCapabilities,
+  ProductOfferReadRow,
+  ProductUnitReadRow,
+  PosProductLookupRow,
+} from './catalog-product-types';
 
 /**
  * CatalogProductPosService — slice P4 of the catalog-product split.
@@ -54,7 +64,11 @@ export interface CatalogProductPosDeps {
   getProductOfferColumnCapabilities: () => Promise<ProductOfferColumnCapabilities>;
   productIdAny: (column: string, ids: number[]) => RawBuilder<boolean>;
   normalizeUnitName: (name: unknown) => string;
-  getListProductStock: (product: Pick<ProductRow, 'id' | 'stock_qty'>, scopedLocationId: number | null, scopedStockByProduct: Map<string, number>) => number;
+  getListProductStock: (
+    product: Pick<ProductRow, 'id' | 'stock_qty'>,
+    scopedLocationId: number | null,
+    scopedStockByProduct: Map<string, number>,
+  ) => number;
   tenantId: (actor: AuthContext) => string;
   tenantPredicate: (actor: AuthContext, alias?: string) => RawBuilder<boolean>;
 }
@@ -67,7 +81,11 @@ export class CatalogProductPosService {
   private readonly getProductOfferColumnCapabilities: () => Promise<ProductOfferColumnCapabilities>;
   private readonly productIdAny: (column: string, ids: number[]) => RawBuilder<boolean>;
   private readonly normalizeUnitName: (name: unknown) => string;
-  private readonly getListProductStock: (product: Pick<ProductRow, 'id' | 'stock_qty'>, scopedLocationId: number | null, scopedStockByProduct: Map<string, number>) => number;
+  private readonly getListProductStock: (
+    product: Pick<ProductRow, 'id' | 'stock_qty'>,
+    scopedLocationId: number | null,
+    scopedStockByProduct: Map<string, number>,
+  ) => number;
   private readonly tenantId: (actor: AuthContext) => string;
   private readonly tenantPredicate: (actor: AuthContext, alias?: string) => RawBuilder<boolean>;
 
@@ -90,8 +108,15 @@ export class CatalogProductPosService {
   // which made every terminal reload the full catalog every 5 minutes all day.
   // Unit/offer counts catch deletions (a deleted row cannot raise MAX(updated_at)).
   // Stock freshness for the offline copy is the terminal's hourly full reload, not this version.
-  async getPosCatalogVersion(actor: AuthContext): Promise<{ version: string; totalCount: number; lastUpdatedAt: string }> {
-    const result = await sql<{ max_updated: string | null; total_count: string | number; unit_count: string | number; offer_count: string | number }>`
+  async getPosCatalogVersion(
+    actor: AuthContext,
+  ): Promise<{ version: string; totalCount: number; lastUpdatedAt: string }> {
+    const result = await sql<{
+      max_updated: string | null;
+      total_count: string | number;
+      unit_count: string | number;
+      offer_count: string | number;
+    }>`
       SELECT
         GREATEST(
           COALESCE(MAX(p.catalog_updated_at), '1970-01-01'::timestamptz),
@@ -124,9 +149,13 @@ export class CatalogProductPosService {
   }
 
   async listPosProducts(query: Record<string, unknown>, actor: AuthContext): Promise<Record<string, unknown>> {
-    const { q, barcode, limit, requestedLocationId, requestedBranchId, view, isFullCatalog, categoryId } = this.parsePosProductLookupQuery(query);
+    const { q, barcode, limit, requestedLocationId, requestedBranchId, view, isFullCatalog, categoryId } =
+      this.parsePosProductLookupQuery(query);
     const offerCapabilities = await this.getProductOfferColumnCapabilities();
-    const scopedLocation = requestedLocationId > 0 ? await this.inventoryScope.assertLocationScope(requestedLocationId, actor).catch(() => null) : null;
+    const scopedLocation =
+      requestedLocationId > 0
+        ? await this.inventoryScope.assertLocationScope(requestedLocationId, actor).catch(() => null)
+        : null;
     let productRows: PosProductLookupRow[];
     if (barcode) {
       productRows = await this.findPosProductsByBarcode(barcode, limit, actor);
@@ -135,7 +164,13 @@ export class CatalogProductPosService {
       // substring search (LIKE %term% on barcode/sku/name), so a partial
       // code like "200" finds barcodes containing it instead of [].
       if (!productRows.length) {
-        productRows = await this.searchPosProducts(barcode, limit, view === 'offers' ? 'offers' : 'all', actor, categoryId);
+        productRows = await this.searchPosProducts(
+          barcode,
+          limit,
+          view === 'offers' ? 'offers' : 'all',
+          actor,
+          categoryId,
+        );
       }
     } else {
       productRows = await this.searchPosProducts(q, limit, view === 'offers' ? 'offers' : 'all', actor, categoryId);
@@ -146,9 +181,15 @@ export class CatalogProductPosService {
 
     let eligibleLocationIds: number[] = scopedLocation ? [scopedLocation.id] : [];
     if (requestedBranchId > 0) {
-      const branch = await this.db.selectFrom('branches').select(['default_stock_location_id', 'sales_stock_mode', 'allow_external_sales_stock']).where('id', '=', requestedBranchId).where(this.tenantPredicate(actor)).executeTakeFirst();
+      const branch = await this.db
+        .selectFrom('branches')
+        .select(['default_stock_location_id', 'sales_stock_mode', 'allow_external_sales_stock'])
+        .where('id', '=', requestedBranchId)
+        .where(this.tenantPredicate(actor))
+        .executeTakeFirst();
       if (branch && posSellsFromAllOperationalLocations(branch, actor.activityType)) {
-        const allLocs = await this.db.selectFrom('stock_locations')
+        const allLocs = await this.db
+          .selectFrom('stock_locations')
           .select(['id', 'location_type', 'branch_id'])
           .where(this.tenantPredicate(actor))
           .where('is_active', '=', true)
@@ -156,14 +197,14 @@ export class CatalogProductPosService {
           .execute();
 
         const defaultLocId = branch.default_stock_location_id;
-        const sortedLocs = allLocs.filter(l => {
-           if (Number(l.id) === Number(defaultLocId)) return true;
-           if (Number(l.branch_id) === Number(requestedBranchId)) return true;
-           if (l.location_type === 'internal_warehouse' && l.branch_id === null) return true;
-           if (branch.allow_external_sales_stock && l.location_type === 'external_warehouse') return true;
-           return false;
+        const sortedLocs = allLocs.filter((l) => {
+          if (Number(l.id) === Number(defaultLocId)) return true;
+          if (Number(l.branch_id) === Number(requestedBranchId)) return true;
+          if (l.location_type === 'internal_warehouse' && l.branch_id === null) return true;
+          if (branch.allow_external_sales_stock && l.location_type === 'external_warehouse') return true;
+          return false;
         });
-        eligibleLocationIds = sortedLocs.map(l => l.id);
+        eligibleLocationIds = sortedLocs.map((l) => l.id);
       } else if (branch && !scopedLocation && branch.default_stock_location_id) {
         // INV-POS-NET-STOCK-DISPLAY: single_location mode sells from the
         // branch default only (checkout: one eligible location), so the
@@ -173,29 +214,39 @@ export class CatalogProductPosService {
       }
     }
 
-    const bomIds = uniqueRows.map((r) => r.bom_id ? Number(r.bom_id) : null).filter((id): id is number => typeof id === 'number' && id > 0);
+    const bomIds = uniqueRows
+      .map((r) => (r.bom_id ? Number(r.bom_id) : null))
+      .filter((id): id is number => typeof id === 'number' && id > 0);
 
     const [unitsByProduct, scopedStockResult, offersByProduct, bomCombosById] = await Promise.all([
       this.fetchPosProductUnits(isFullCatalog ? [] : productIds, actor, isFullCatalog),
-      this.resolveScopedStockByProduct(isFullCatalog ? [] : productIds, eligibleLocationIds, uniqueRows, actor, isFullCatalog),
+      this.resolveScopedStockByProduct(
+        isFullCatalog ? [] : productIds,
+        eligibleLocationIds,
+        uniqueRows,
+        actor,
+        isFullCatalog,
+      ),
       this.fetchProductOffers(isFullCatalog ? [] : productIds, offerCapabilities.hasMinQty, actor, isFullCatalog),
       this.fetchPosBomCombos(bomIds, actor),
     ]);
 
     return {
-      products: uniqueRows.map((product) => this.mapPosProduct(product, {
-        scopedLocationId: scopedLocation?.id || null,
-        scopedStockByProduct: scopedStockResult.stock,
-        // INV-POS-NET-STOCK-DISPLAY: the scoped figure must reach the
-        // `stock` field even when no explicit locationId was passed
-        // (branch-scoped lookup): getListProductStock falls back to the
-        // global figure when scopedLocationId is null, which discarded
-        // the scoped computation entirely for branch-only lookups.
-        useScopedStock: eligibleLocationIds.length > 0,
-        unitsByProduct,
-        offersByProduct,
-        bomCombosById,
-      })),
+      products: uniqueRows.map((product) =>
+        this.mapPosProduct(product, {
+          scopedLocationId: scopedLocation?.id || null,
+          scopedStockByProduct: scopedStockResult.stock,
+          // INV-POS-NET-STOCK-DISPLAY: the scoped figure must reach the
+          // `stock` field even when no explicit locationId was passed
+          // (branch-scoped lookup): getListProductStock falls back to the
+          // global figure when scopedLocationId is null, which discarded
+          // the scoped computation entirely for branch-only lookups.
+          useScopedStock: eligibleLocationIds.length > 0,
+          unitsByProduct,
+          offersByProduct,
+          bomCombosById,
+        }),
+      ),
       meta: {
         q,
         barcode,
@@ -213,7 +264,7 @@ export class CatalogProductPosService {
     const safeLimit = Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 30;
     const view = String(query.view || '').trim() === 'offers' ? 'offers' : 'all';
     const isFullCatalog = String(query.fullCatalog || '').trim() === 'true';
-    const maxLimit = isFullCatalog ? 25000 : (view === 'offers' ? 240 : 1000);
+    const maxLimit = isFullCatalog ? 25000 : view === 'offers' ? 240 : 1000;
     return {
       q: String(query.q || '').trim(),
       barcode: String(query.barcode || '').trim(),
@@ -226,7 +277,11 @@ export class CatalogProductPosService {
     };
   }
 
-  private async findPosProductsByBarcode(barcode: string, limit: number, actor: AuthContext): Promise<PosProductLookupRow[]> {
+  private async findPosProductsByBarcode(
+    barcode: string,
+    limit: number,
+    actor: AuthContext,
+  ): Promise<PosProductLookupRow[]> {
     // INV-POS-BARCODE-DASH + Scale PLU leading-zero equivalence + style_code fallback
     return findPosProductsByBarcodeWithDb<PosProductLookupRow>(
       this.db,
@@ -236,13 +291,23 @@ export class CatalogProductPosService {
     );
   }
 
-  private async searchPosProducts(q: string, limit: number, view: 'all' | 'offers' = 'all', actor: AuthContext, categoryId = 0): Promise<PosProductLookupRow[]> {
+  private async searchPosProducts(
+    q: string,
+    limit: number,
+    view: 'all' | 'offers' = 'all',
+    actor: AuthContext,
+    categoryId = 0,
+  ): Promise<PosProductLookupRow[]> {
     const normalized = normalizeArabicSearch(q);
     const tokens = normalized.split(/\s+/).filter(Boolean);
     let productQuery = this.db
       .selectFrom('products as p')
-      .leftJoin('product_units as pu', (join) => join.onRef('pu.product_id', '=', 'p.id').on(this.tenantPredicate(actor, 'pu')))
-      .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true).on(this.tenantPredicate(actor, 'b')))
+      .leftJoin('product_units as pu', (join) =>
+        join.onRef('pu.product_id', '=', 'p.id').on(this.tenantPredicate(actor, 'pu')),
+      )
+      .leftJoin('manufacturing_boms as b', (join) =>
+        join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true).on(this.tenantPredicate(actor, 'b')),
+      )
       .select([
         'p.id',
         'p.name',
@@ -346,11 +411,9 @@ export class CatalogProductPosService {
     }
 
     const sqlFetchLimit = tokens.length > 0 ? Math.min(25000, limit * 3) : limit;
-    return productQuery
-      .orderBy('p.name', 'asc')
-      .orderBy('p.id', 'asc')
-      .limit(sqlFetchLimit)
-      .execute() as Promise<PosProductLookupRow[]>;
+    return productQuery.orderBy('p.name', 'asc').orderBy('p.id', 'asc').limit(sqlFetchLimit).execute() as Promise<
+      PosProductLookupRow[]
+    >;
   }
 
   private uniquePosProductRows(rows: PosProductLookupRow[]): PosProductLookupRow[] {
@@ -365,22 +428,35 @@ export class CatalogProductPosService {
     return uniqueRows;
   }
 
-  private async fetchPosProductUnits(productIds: number[], actor: AuthContext, isFullCatalog = false): Promise<Map<string, Record<string, unknown>[]>> {
+  private async fetchPosProductUnits(
+    productIds: number[],
+    actor: AuthContext,
+    isFullCatalog = false,
+  ): Promise<Map<string, Record<string, unknown>[]>> {
     if (!isFullCatalog && !productIds.length) return new Map();
     let query = this.db
       .selectFrom('product_units')
-      .select(['id', 'product_id', 'name', 'multiplier', 'barcode', 'is_base_unit', 'is_sale_unit_default', 'is_purchase_unit_default'])
+      .select([
+        'id',
+        'product_id',
+        'name',
+        'multiplier',
+        'barcode',
+        'is_base_unit',
+        'is_sale_unit_default',
+        'is_purchase_unit_default',
+      ])
       .where(this.tenantPredicate(actor));
 
     if (!isFullCatalog) {
       query = query.where('product_id', 'in', productIds);
     }
 
-    const unitRows = await query
+    const unitRows = (await query
       .orderBy('product_id', 'asc')
       .orderBy('is_base_unit', 'desc')
       .orderBy('id', 'asc')
-      .execute() as ProductUnitReadRow[];
+      .execute()) as ProductUnitReadRow[];
 
     const unitsByProduct = new Map<string, Record<string, unknown>[]>();
     for (const unit of unitRows) {
@@ -399,13 +475,25 @@ export class CatalogProductPosService {
     return unitsByProduct;
   }
 
-  private async fetchProductOffers(productIds: number[], hasMinQty: boolean, actor: AuthContext, isFullCatalog = false): Promise<Map<string, Record<string, unknown>[]>> {
+  private async fetchProductOffers(
+    productIds: number[],
+    hasMinQty: boolean,
+    actor: AuthContext,
+    isFullCatalog = false,
+  ): Promise<Map<string, Record<string, unknown>[]>> {
     if (!isFullCatalog && !productIds.length) return new Map();
     const capabilities = await this.getProductOfferColumnCapabilities();
     const selectCols: any[] = ['id', 'product_id', 'offer_type', 'value', 'start_date', 'end_date'];
     if (capabilities.hasMinQty) selectCols.push('min_qty');
     if (capabilities.hasAdvancedPromotions) {
-      selectCols.push('bogo_buy_qty', 'bogo_get_qty', 'bogo_discount_percent', 'happy_hour_start', 'happy_hour_end', 'days_of_week');
+      selectCols.push(
+        'bogo_buy_qty',
+        'bogo_get_qty',
+        'bogo_discount_percent',
+        'happy_hour_start',
+        'happy_hour_end',
+        'days_of_week',
+      );
     }
 
     let query = this.db
@@ -418,9 +506,7 @@ export class CatalogProductPosService {
       query = query.where('product_id', 'in', productIds);
     }
 
-    const offers = await query
-      .orderBy('id', 'desc')
-      .execute() as ProductOfferReadRow[];
+    const offers = (await query.orderBy('id', 'desc').execute()) as ProductOfferReadRow[];
 
     return this.mapOffersByProduct(offers);
   }
@@ -432,15 +518,16 @@ export class CatalogProductPosService {
       if (!offersByProduct.has(key)) offersByProduct.set(key, []);
       offersByProduct.get(key)!.push({
         id: String(offer.id),
-        type: offer.offer_type === 'bogo'
-          ? 'bogo'
-          : offer.offer_type === 'bundle'
-          ? 'bundle'
-          : offer.offer_type === 'price'
-          ? 'price'
-          : offer.offer_type === 'fixed'
-          ? 'fixed'
-          : 'percent',
+        type:
+          offer.offer_type === 'bogo'
+            ? 'bogo'
+            : offer.offer_type === 'bundle'
+              ? 'bundle'
+              : offer.offer_type === 'price'
+                ? 'price'
+                : offer.offer_type === 'fixed'
+                  ? 'fixed'
+                  : 'percent',
         value: Number(offer.value || 0),
         minQty: Math.max(1, Number(offer.min_qty || 1)),
         // Offer bounds are STORED pg DATEs (node-postgres
@@ -459,7 +546,10 @@ export class CatalogProductPosService {
     return offersByProduct;
   }
 
-  private async fetchPosBomCombos(bomIds: number[], actor: AuthContext): Promise<Map<number, { comboOriginalPrice: number; componentsSummary: string }>> {
+  private async fetchPosBomCombos(
+    bomIds: number[],
+    actor: AuthContext,
+  ): Promise<Map<number, { comboOriginalPrice: number; componentsSummary: string }>> {
     const result = new Map<number, { comboOriginalPrice: number; componentsSummary: string }>();
     if (!bomIds.length) return result;
 
@@ -485,7 +575,7 @@ export class CatalogProductPosService {
       const entry = result.get(bomId)!;
       const lineQty = Number(line.quantity || 1);
       const linePrice = Number(line.component_retail_price || 0);
-      entry.comboOriginalPrice += (linePrice * lineQty);
+      entry.comboOriginalPrice += linePrice * lineQty;
       const compLabel = `${line.component_name || ''}${lineQty > 1 ? ` (${lineQty})` : ''}`;
       entry.componentsSummary = entry.componentsSummary ? `${entry.componentsSummary} + ${compLabel}` : compLabel;
     }
@@ -538,7 +628,8 @@ export class CatalogProductPosService {
       name_en: product.name_en || null,
       barcode: product.barcode || '',
       sku: product.sku || '',
-      itemType: product.item_type === 'raw_material' ? 'raw_material' : product.item_type === 'service' ? 'service' : 'product',
+      itemType:
+        product.item_type === 'raw_material' ? 'raw_material' : product.item_type === 'service' ? 'service' : 'product',
       itemKind: product.item_kind === 'fashion' ? 'fashion' : 'standard',
       styleCode: product.style_code || '',
       color: product.color || '',
@@ -563,7 +654,7 @@ export class CatalogProductPosService {
             name: this.normalizeUnitName(product.matched_unit_name),
             multiplier: Number(product.matched_unit_multiplier || 1),
             barcode: product.matched_unit_barcode || '',
-        }
+          }
         : null,
       bomId: product.bom_id ? Number(product.bom_id) : undefined,
       hasBom: !!product.bom_id,
@@ -571,8 +662,30 @@ export class CatalogProductPosService {
       comboComponentsSummary: bomCombo?.componentsSummary || undefined,
       trackSerials: Boolean(product.track_serials),
       matchedSerialNumber: product.matched_serial_number || null,
-      icon: (product as any).metadata?.icon || (typeof (product as any).metadata === 'string' ? (() => { try { return JSON.parse((product as any).metadata)?.icon; } catch { return null; } })() : null) || null,
-      imageUrl: (product as any).metadata?.imageUrl || (typeof (product as any).metadata === 'string' ? (() => { try { return JSON.parse((product as any).metadata)?.imageUrl; } catch { return null; } })() : null) || null,
+      icon:
+        (product as any).metadata?.icon ||
+        (typeof (product as any).metadata === 'string'
+          ? (() => {
+              try {
+                return JSON.parse((product as any).metadata)?.icon;
+              } catch {
+                return null;
+              }
+            })()
+          : null) ||
+        null,
+      imageUrl:
+        (product as any).metadata?.imageUrl ||
+        (typeof (product as any).metadata === 'string'
+          ? (() => {
+              try {
+                return JSON.parse((product as any).metadata)?.imageUrl;
+              } catch {
+                return null;
+              }
+            })()
+          : null) ||
+        null,
       units,
       offers: context.offersByProduct.get(String(product.id)) || [],
       calories: product.calories != null ? Number(product.calories) : null,
@@ -583,10 +696,17 @@ export class CatalogProductPosService {
     };
   }
 
-  async resolveScopedStockByProduct(productIds: number[], eligibleLocationIds: number[], products: Array<Pick<ProductRow, 'id' | 'stock_qty'>>, actor: AuthContext, isFullCatalog = false): Promise<{ stock: Map<string, number>, locations: Map<string, number[]> }> {
+  async resolveScopedStockByProduct(
+    productIds: number[],
+    eligibleLocationIds: number[],
+    products: Array<Pick<ProductRow, 'id' | 'stock_qty'>>,
+    actor: AuthContext,
+    isFullCatalog = false,
+  ): Promise<{ stock: Map<string, number>; locations: Map<string, number[]> }> {
     const scopedStockByProduct = new Map<string, number>();
     const activeLocationsByProduct = new Map<string, number[]>();
-    if (!isFullCatalog && !productIds.length) return { stock: scopedStockByProduct, locations: activeLocationsByProduct };
+    if (!isFullCatalog && !productIds.length)
+      return { stock: scopedStockByProduct, locations: activeLocationsByProduct };
 
     let query = this.db
       .selectFrom('product_location_stock as pls')

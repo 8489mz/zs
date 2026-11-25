@@ -72,7 +72,9 @@ export class ForexRevaluationService {
 
   async previewRevaluation(dto: ExecuteForexRevaluationDto, auth: AuthContext, queryable: Kysely<Database> = this.db) {
     const { tenantId } = requireTenantScope(auth);
-    const currencyCode = String(dto.currencyCode || '').trim().toUpperCase();
+    const currencyCode = String(dto.currencyCode || '')
+      .trim()
+      .toUpperCase();
     const closingRate = validateForexClosingRate(dto.closingRate);
 
     if (!currencyCode) throw new BadRequestException('رمز العملة مطلوب.');
@@ -84,9 +86,11 @@ export class ForexRevaluationService {
     const digits = currencyMoneyDigits(baseCurrency);
     const foreignDigits = currencyMoneyDigits(currencyCode);
     const minorUnit = 10 ** -digits;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dto.periodDate) ||
-        Number.isNaN(new Date(dto.periodDate).getTime()) ||
-        new Date(dto.periodDate).toISOString().slice(0, 10) !== dto.periodDate) {
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(dto.periodDate) ||
+      Number.isNaN(new Date(dto.periodDate).getTime()) ||
+      new Date(dto.periodDate).toISOString().slice(0, 10) !== dto.periodDate
+    ) {
       throw new BadRequestException('تاريخ إعادة التقييم غير صالح.');
     }
     // The validated rate is shared by preview and actual execution.
@@ -100,7 +104,8 @@ export class ForexRevaluationService {
       .executeTakeFirst();
 
     const bookRate = Number(currentRateRow?.exchange_rate || closingRate);
-    if (!Number.isFinite(bookRate) || bookRate <= 0) throw new BadRequestException('Stored FX book rate is invalid; correct it before revaluation');
+    if (!Number.isFinite(bookRate) || bookRate <= 0)
+      throw new BadRequestException('Stored FX book rate is invalid; correct it before revaluation');
 
     // IAS 21 §23: retranslate MONETARY items only, and only those denominated in this currency.
     // The previous selection matched on a `name` column and a `type` column that do not exist on
@@ -111,7 +116,18 @@ export class ForexRevaluationService {
     // named "مخزون بضاعة USD" would have been revalued, which is a material misstatement.
     const accounts = await queryable
       .selectFrom('accounting_accounts')
-      .select(['id', 'code', 'name_ar', 'name_en', 'account_type', 'normal_balance', 'is_control_account', 'is_receivable', 'is_payable', 'is_inventory'])
+      .select([
+        'id',
+        'code',
+        'name_ar',
+        'name_en',
+        'account_type',
+        'normal_balance',
+        'is_control_account',
+        'is_receivable',
+        'is_payable',
+        'is_inventory',
+      ])
       .where('tenant_id', '=', tenantId)
       .where('is_active', '=', true)
       .where('is_monetary', '=', true)
@@ -119,18 +135,20 @@ export class ForexRevaluationService {
       .execute();
 
     const accountIds = accounts.map((account) => Number(account.id));
-    const balances = accountIds.length ? await queryable
-      .selectFrom('journal_entry_lines as l')
-      .innerJoin('journal_entries as h', (join) => join
-        .onRef('h.id', '=', 'l.journal_entry_id')
-        .onRef('h.tenant_id', '=', 'l.tenant_id'))
-      .select(['l.account_id', sql<number>`COALESCE(SUM(l.debit - l.credit), 0)`.as('balance')])
-      .where('l.tenant_id', '=', tenantId)
-      .where('l.account_id', 'in', accountIds)
-      .where('h.status', '=', 'posted')
-      .where('h.entry_date', '<', nextAccountingDay(dto.periodDate))
-      .groupBy('l.account_id')
-      .execute() : [];
+    const balances = accountIds.length
+      ? await queryable
+          .selectFrom('journal_entry_lines as l')
+          .innerJoin('journal_entries as h', (join) =>
+            join.onRef('h.id', '=', 'l.journal_entry_id').onRef('h.tenant_id', '=', 'l.tenant_id'),
+          )
+          .select(['l.account_id', sql<number>`COALESCE(SUM(l.debit - l.credit), 0)`.as('balance')])
+          .where('l.tenant_id', '=', tenantId)
+          .where('l.account_id', 'in', accountIds)
+          .where('h.status', '=', 'posted')
+          .where('h.entry_date', '<', nextAccountingDay(dto.periodDate))
+          .groupBy('l.account_id')
+          .execute()
+      : [];
     const balanceByAccount = new Map(balances.map((row) => [Number(row.account_id), Number(row.balance || 0)]));
 
     const lines: any[] = [];
@@ -139,17 +157,35 @@ export class ForexRevaluationService {
     const items = dto.items || [];
     const userItemMap = new Map<number, number>();
     for (const item of items) {
-      if (!Number.isSafeInteger(Number(item.accountId)) || !Number.isFinite(item.foreignBalance) ||
-          userItemMap.has(Number(item.accountId))) {
+      if (
+        !Number.isSafeInteger(Number(item.accountId)) ||
+        !Number.isFinite(item.foreignBalance) ||
+        userItemMap.has(Number(item.accountId))
+      ) {
         throw new BadRequestException('رصيد العملة الأجنبية أو الحساب غير صالح أو مكرر.');
       }
       userItemMap.set(Number(item.accountId), item.foreignBalance);
     }
 
-    const mapped = await queryable.selectFrom('accounting_settings').select(['customer_receivable_account_id', 'supplier_payable_account_id', 'inventory_account_id']).where('tenant_id', '=', tenantId).where('id', '=', 1).executeTakeFirst();
+    const mapped = await queryable
+      .selectFrom('accounting_settings')
+      .select(['customer_receivable_account_id', 'supplier_payable_account_id', 'inventory_account_id'])
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', 1)
+      .executeTakeFirst();
     const controlIds = new Set(Object.values(mapped || {}).map(Number));
     for (const acc of accounts) {
-      if (acc.is_control_account || acc.is_receivable || acc.is_payable || acc.is_inventory || ['1130', '1140', '2110'].includes(acc.code) || controlIds.has(Number(acc.id))) throw new BadRequestException('إعادة تقييم الحساب الرقابي تتطلب مراكز عملة مفصلة للشركاء؛ استخدم حساب فروق مستقل إلى حين توفيرها.');
+      if (
+        acc.is_control_account ||
+        acc.is_receivable ||
+        acc.is_payable ||
+        acc.is_inventory ||
+        ['1130', '1140', '2110'].includes(acc.code) ||
+        controlIds.has(Number(acc.id))
+      )
+        throw new BadRequestException(
+          'إعادة تقييم الحساب الرقابي تتطلب مراكز عملة مفصلة للشركاء؛ استخدم حساب فروق مستقل إلى حين توفيرها.',
+        );
       const localBalance = balanceByAccount.get(Number(acc.id)) || 0;
       if (Math.abs(localBalance) > minorUnit) {
         const userForeign = userItemMap.get(Number(acc.id));
@@ -158,7 +194,12 @@ export class ForexRevaluationService {
         }
         const signedForeign = localBalance < 0 && userForeign > 0 ? -userForeign : userForeign;
         const foreignBalance = roundMoney(signedForeign, foreignDigits);
-        const { revaluedLocal, difference: diff } = calculateForexDifference(localBalance, foreignBalance, closingRate, digits);
+        const { revaluedLocal, difference: diff } = calculateForexDifference(
+          localBalance,
+          foreignBalance,
+          closingRate,
+          digits,
+        );
 
         lines.push({
           accountId: acc.id,
@@ -189,57 +230,95 @@ export class ForexRevaluationService {
 
   async executeRevaluation(dto: ExecuteForexRevaluationDto, auth: AuthContext) {
     const { tenantId } = requireTenantScope(auth);
-    dto = { ...dto, currencyCode: String(dto.currencyCode || '').trim().toUpperCase() };
+    dto = {
+      ...dto,
+      currencyCode: String(dto.currencyCode || '')
+        .trim()
+        .toUpperCase(),
+    };
     return this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, tenantId);
-      await sql`SELECT pg_advisory_xact_lock(hashtext(${tenantId} || ':forex:' || ${dto.periodDate} || ':' || ${dto.currencyCode}))`.execute(trx);
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${tenantId} || ':forex:' || ${dto.periodDate} || ':' || ${dto.currencyCode}))`.execute(
+        trx,
+      );
       const preview = await this.previewRevaluation(dto, auth, trx);
       const minorUnit = 10 ** -preview.bookDigits;
 
-    if (preview.lines.length === 0) {
-      throw new BadRequestException('لا توجد أرصدة أو حسابات أجنبية تتطلب إعادة تقييم في هذا التاريخ.');
-    }
+      if (preview.lines.length === 0) {
+        throw new BadRequestException('لا توجد أرصدة أو حسابات أجنبية تتطلب إعادة تقييم في هذا التاريخ.');
+      }
 
-    const isGain = preview.netUnrealizedGainLoss >= 0;
-    const absDiff = Math.abs(preview.netUnrealizedGainLoss);
-    const hasRevaluation = preview.lines.some((line) => Math.abs(line.unrealizedDifference) >= minorUnit);
-    const gainLossCode = forexOffsetCode(preview.netUnrealizedGainLoss);
-    const gainLossType = isGain ? 'revenue' : 'expense';
-    let gainLossAccount = absDiff >= minorUnit ? await trx.selectFrom('accounting_accounts')
-      .select(['id', 'is_active', 'account_type', 'name_en'])
-      .where('tenant_id', '=', tenantId).where('code', '=', gainLossCode).executeTakeFirst() : null;
-    if (absDiff >= minorUnit && !gainLossAccount) {
-      const parent = await trx.selectFrom('accounting_accounts').select('id')
-        .where('tenant_id', '=', tenantId).where('code', '=', isGain ? '7100' : '7200').executeTakeFirst();
-      if (!parent) throw new BadRequestException('حساب الإيرادات أو المصروفات الأخرى غير موجود.');
-      await trx.insertInto('accounting_accounts').values({
-        tenant_id: tenantId, account_id: auth.accountId || tenantId,
-        code: gainLossCode,
-        name_ar: isGain ? 'أرباح فروق عملة غير محققة' : 'خسائر فروق عملة غير محققة',
-        name_en: isGain ? 'Unrealized FX Gains' : 'Unrealized FX Losses',
-        account_type: gainLossType, normal_balance: isGain ? 'credit' : 'debit',
-        account_group: isGain ? 'income' : 'operating_expenses',
-        parent_id: Number(parent.id), is_active: true, is_system: true,
-        allow_manual_entries: false, is_control_account: false,
-        is_cash_bank: false, is_receivable: false, is_payable: false,
-        is_inventory: false, is_tax: false, description_ar: '',
-        sort_order: Number(gainLossCode),
-      }).onConflict((oc) => oc.columns(['tenant_id', 'code']).doNothing()).execute();
-      gainLossAccount = await trx.selectFrom('accounting_accounts').select(['id', 'is_active', 'account_type', 'name_en'])
-        .where('tenant_id', '=', tenantId).where('code', '=', gainLossCode).executeTakeFirst();
-    }
-    if (gainLossAccount && (!gainLossAccount.is_active || gainLossAccount.account_type !== gainLossType ||
-        gainLossAccount.name_en !== (isGain ? 'Unrealized FX Gains' : 'Unrealized FX Losses'))) {
-      throw new BadRequestException('حساب فروق العملة غير نشط أو تصنيفه غير صحيح.');
-    }
+      const isGain = preview.netUnrealizedGainLoss >= 0;
+      const absDiff = Math.abs(preview.netUnrealizedGainLoss);
+      const hasRevaluation = preview.lines.some((line) => Math.abs(line.unrealizedDifference) >= minorUnit);
+      const gainLossCode = forexOffsetCode(preview.netUnrealizedGainLoss);
+      const gainLossType = isGain ? 'revenue' : 'expense';
+      let gainLossAccount =
+        absDiff >= minorUnit
+          ? await trx
+              .selectFrom('accounting_accounts')
+              .select(['id', 'is_active', 'account_type', 'name_en'])
+              .where('tenant_id', '=', tenantId)
+              .where('code', '=', gainLossCode)
+              .executeTakeFirst()
+          : null;
+      if (absDiff >= minorUnit && !gainLossAccount) {
+        const parent = await trx
+          .selectFrom('accounting_accounts')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('code', '=', isGain ? '7100' : '7200')
+          .executeTakeFirst();
+        if (!parent) throw new BadRequestException('حساب الإيرادات أو المصروفات الأخرى غير موجود.');
+        await trx
+          .insertInto('accounting_accounts')
+          .values({
+            tenant_id: tenantId,
+            account_id: auth.accountId || tenantId,
+            code: gainLossCode,
+            name_ar: isGain ? 'أرباح فروق عملة غير محققة' : 'خسائر فروق عملة غير محققة',
+            name_en: isGain ? 'Unrealized FX Gains' : 'Unrealized FX Losses',
+            account_type: gainLossType,
+            normal_balance: isGain ? 'credit' : 'debit',
+            account_group: isGain ? 'income' : 'operating_expenses',
+            parent_id: Number(parent.id),
+            is_active: true,
+            is_system: true,
+            allow_manual_entries: false,
+            is_control_account: false,
+            is_cash_bank: false,
+            is_receivable: false,
+            is_payable: false,
+            is_inventory: false,
+            is_tax: false,
+            description_ar: '',
+            sort_order: Number(gainLossCode),
+          })
+          .onConflict((oc) => oc.columns(['tenant_id', 'code']).doNothing())
+          .execute();
+        gainLossAccount = await trx
+          .selectFrom('accounting_accounts')
+          .select(['id', 'is_active', 'account_type', 'name_en'])
+          .where('tenant_id', '=', tenantId)
+          .where('code', '=', gainLossCode)
+          .executeTakeFirst();
+      }
+      if (
+        gainLossAccount &&
+        (!gainLossAccount.is_active ||
+          gainLossAccount.account_type !== gainLossType ||
+          gainLossAccount.name_en !== (isGain ? 'Unrealized FX Gains' : 'Unrealized FX Losses'))
+      ) {
+        throw new BadRequestException('حساب فروق العملة غير نشط أو تصنيفه غير صحيح.');
+      }
 
-    // Build journal entry lines if difference != 0
-    let createdEntryId: number | null = null;
-    let entryNo: string | null = null;
+      // Build journal entry lines if difference != 0
+      let createdEntryId: number | null = null;
+      let entryNo: string | null = null;
 
-    if (absDiff >= minorUnit && !gainLossAccount) {
-      throw new BadRequestException('حساب فروق العملة غير موجود؛ لا يمكن ترحيل إعادة التقييم.');
-    }
+      if (absDiff >= minorUnit && !gainLossAccount) {
+        throw new BadRequestException('حساب فروق العملة غير موجود؛ لا يمكن ترحيل إعادة التقييم.');
+      }
 
       const existingRun = await trx
         .selectFrom('forex_revaluation_runs')
@@ -252,152 +331,166 @@ export class ForexRevaluationService {
 
       if (existingRun) {
         throw new BadRequestException(
-          `تم إجراء إعادة تقييم عملة (${dto.currencyCode}) لهذه الفترة (${dto.periodDate}) مسبقاً برقم قيد [${existingRun.journal_entry_no || existingRun.id}].`
+          `تم إجراء إعادة تقييم عملة (${dto.currencyCode}) لهذه الفترة (${dto.periodDate}) مسبقاً برقم قيد [${existingRun.journal_entry_no || existingRun.id}].`,
         );
       }
 
-    if (hasRevaluation) {
-      const entryLines: any[] = [];
+      if (hasRevaluation) {
+        const entryLines: any[] = [];
 
-      for (const line of preview.lines) {
-        if (Math.abs(line.unrealizedDifference) >= minorUnit) {
-          if (line.unrealizedDifference > 0) {
-            // Asset increased in local currency value -> Debit Asset
-            entryLines.push({
-              account_id: line.accountId,
-              debit: line.unrealizedDifference,
-              credit: 0,
-              description: `أرباح تقييم فروق عملة ${dto.currencyCode} لحساب ${line.accountName}`,
-            });
-          } else {
-            // Asset decreased in local currency value -> Credit Asset
-            entryLines.push({
-              account_id: line.accountId,
-              debit: 0,
-              credit: Math.abs(line.unrealizedDifference),
-              description: `خسائر تقييم فروق عملة ${dto.currencyCode} لحساب ${line.accountName}`,
-            });
+        for (const line of preview.lines) {
+          if (Math.abs(line.unrealizedDifference) >= minorUnit) {
+            if (line.unrealizedDifference > 0) {
+              // Asset increased in local currency value -> Debit Asset
+              entryLines.push({
+                account_id: line.accountId,
+                debit: line.unrealizedDifference,
+                credit: 0,
+                description: `أرباح تقييم فروق عملة ${dto.currencyCode} لحساب ${line.accountName}`,
+              });
+            } else {
+              // Asset decreased in local currency value -> Credit Asset
+              entryLines.push({
+                account_id: line.accountId,
+                debit: 0,
+                credit: Math.abs(line.unrealizedDifference),
+                description: `خسائر تقييم فروق عملة ${dto.currencyCode} لحساب ${line.accountName}`,
+              });
+            }
           }
         }
+
+        // Offsetting Gain/Loss Line
+        if (absDiff >= minorUnit && isGain) {
+          entryLines.push({
+            account_id: gainLossAccount!.id,
+            debit: 0,
+            credit: absDiff,
+            description: `إثبات أرباح فروق عملة غير محققة (${dto.currencyCode}) بنهاية فترة ${dto.periodDate}`,
+          });
+        } else if (absDiff >= minorUnit) {
+          entryLines.push({
+            account_id: gainLossAccount!.id,
+            debit: absDiff,
+            credit: 0,
+            description: `إثبات خسائر فروق عملة غير محققة (${dto.currencyCode}) بنهاية فترة ${dto.periodDate}`,
+          });
+        }
+
+        const description = `قيد تسوية فروق تقييم العملة الأجنبية (${dto.currencyCode}) بسعر ${dto.closingRate} ج.م وفق معيار IAS 21`;
+        const entryId = await this.accountingPosting.postDomainJournal(trx, {
+          sourceType: 'forex_revaluation',
+          sourceId: 0,
+          tenantId,
+          accountId: auth.accountId || tenantId,
+          entryDate: new Date(dto.periodDate),
+          description,
+          createdBy: auth.userId || null,
+          lines: entryLines.map((line) => ({
+            accountId: Number(line.account_id),
+            description: line.description,
+            debit: Number(line.debit),
+            credit: Number(line.credit),
+            partnerType: 'none' as const,
+            partnerId: null,
+            branchId: null,
+            locationId: null,
+          })),
+        });
+        createdEntryId = entryId;
+        entryNo = formatDailyDocumentNumber(
+          `FX-${dto.currencyCode}`,
+          entryId,
+          new Date(dto.periodDate),
+          4,
+          await getTenantTimezone(trx, tenantId),
+        );
+
+        await trx
+          .updateTable('journal_entries')
+          .set({
+            entry_no: entryNo,
+            updated_at: sql`NOW()` as any,
+          } as any)
+          .where('id', '=', entryId)
+          .where('tenant_id', '=', tenantId)
+          .execute();
       }
 
-      // Offsetting Gain/Loss Line
-      if (absDiff >= minorUnit && isGain) {
-        entryLines.push({
-          account_id: gainLossAccount!.id,
-          debit: 0,
-          credit: absDiff,
-          description: `إثبات أرباح فروق عملة غير محققة (${dto.currencyCode}) بنهاية فترة ${dto.periodDate}`,
-        });
-      } else if (absDiff >= minorUnit) {
-        entryLines.push({
-          account_id: gainLossAccount!.id,
-          debit: absDiff,
-          credit: 0,
-          description: `إثبات خسائر فروق عملة غير محققة (${dto.currencyCode}) بنهاية فترة ${dto.periodDate}`,
-        });
-      }
-
-      const description = `قيد تسوية فروق تقييم العملة الأجنبية (${dto.currencyCode}) بسعر ${dto.closingRate} ج.م وفق معيار IAS 21`;
-      const entryId = await this.accountingPosting.postDomainJournal(trx, {
-        sourceType: 'forex_revaluation', sourceId: 0, tenantId,
-        accountId: auth.accountId || tenantId, entryDate: new Date(dto.periodDate),
-        description, createdBy: auth.userId || null,
-        lines: entryLines.map((line) => ({
-          accountId: Number(line.account_id), description: line.description,
-          debit: Number(line.debit), credit: Number(line.credit),
-          partnerType: 'none' as const, partnerId: null, branchId: null, locationId: null,
-        })),
-      });
-      createdEntryId = entryId;
-      entryNo = formatDailyDocumentNumber(`FX-${dto.currencyCode}`, entryId, new Date(dto.periodDate), 4, await getTenantTimezone(trx, tenantId));
-
-      await trx
-        .updateTable('journal_entries')
-        .set({
-          entry_no: entryNo,
-          updated_at: sql`NOW()` as any,
+      // Save run record
+      const runRow = await trx
+        .insertInto('forex_revaluation_runs')
+        .values({
+          tenant_id: tenantId,
+          period_date: dto.periodDate,
+          currency_code: dto.currencyCode,
+          book_exchange_rate: preview.bookRate,
+          closing_exchange_rate: dto.closingRate,
+          foreign_balance_total: preview.totalForeignBalance,
+          unrealized_gain_loss: preview.netUnrealizedGainLoss,
+          journal_entry_id: createdEntryId,
+          journal_entry_no: entryNo,
+          // INV-ZERO-DIFFERENCE-REVALUATION-NEVER-LOCKS: only a run
+          // that actually posted a journal locks the period/currency
+          // (the duplicate guard above matches status 'posted'). A
+          // zero-difference run posted nothing, so it is recorded as
+          // 'no_difference' for audit — and a later run with a
+          // corrected closing rate can still execute for the period.
+          status: createdEntryId ? 'posted' : 'no_difference',
+          notes: dto.notes || `إعادة تقييم فروق عملة ${dto.currencyCode} بنهاية فترة ${dto.periodDate}`,
+          created_by: auth.userId || 0,
         } as any)
-        .where('id', '=', entryId)
-        .where('tenant_id', '=', tenantId)
-        .execute();
+        .returningAll()
+        .executeTakeFirstOrThrow();
 
-    }
+      if (createdEntryId) {
+        await trx
+          .updateTable('journal_entries')
+          .set({ source_id: Number(runRow.id), updated_at: sql`NOW()` as any } as any)
+          .where('id', '=', createdEntryId)
+          .where('tenant_id', '=', tenantId)
+          .execute();
+      }
 
-    // Save run record
-    const runRow = await trx
-      .insertInto('forex_revaluation_runs')
-      .values({
+      // Insert detail lines
+      const lineRows = preview.lines.map((l) => ({
         tenant_id: tenantId,
-        period_date: dto.periodDate,
-        currency_code: dto.currencyCode,
-        book_exchange_rate: preview.bookRate,
-        closing_exchange_rate: dto.closingRate,
-        foreign_balance_total: preview.totalForeignBalance,
-        unrealized_gain_loss: preview.netUnrealizedGainLoss,
-        journal_entry_id: createdEntryId,
-        journal_entry_no: entryNo,
-        // INV-ZERO-DIFFERENCE-REVALUATION-NEVER-LOCKS: only a run
-        // that actually posted a journal locks the period/currency
-        // (the duplicate guard above matches status 'posted'). A
-        // zero-difference run posted nothing, so it is recorded as
-        // 'no_difference' for audit — and a later run with a
-        // corrected closing rate can still execute for the period.
-        status: createdEntryId ? 'posted' : 'no_difference',
-        notes: dto.notes || `إعادة تقييم فروق عملة ${dto.currencyCode} بنهاية فترة ${dto.periodDate}`,
-        created_by: auth.userId || 0,
-      } as any)
-      .returningAll()
-      .executeTakeFirstOrThrow();
+        run_id: String(runRow.id),
+        account_id: String(l.accountId),
+        account_code: l.accountCode,
+        account_name: l.accountName,
+        foreign_balance: l.foreignBalance,
+        book_local_value: l.bookLocalValue,
+        revalued_local_value: l.revaluedLocalValue,
+        unrealized_difference: l.unrealizedDifference,
+      }));
 
-    if (createdEntryId) {
+      if (lineRows.length > 0) {
+        await trx
+          .insertInto('forex_revaluation_lines')
+          .values(lineRows as any)
+          .execute();
+      }
+
+      // Update the currency rate in currency_exchange_rates to the new closing rate
       await trx
-        .updateTable('journal_entries')
-        .set({ source_id: Number(runRow.id), updated_at: sql`NOW()` as any } as any)
-        .where('id', '=', createdEntryId)
+        .updateTable('currency_exchange_rates')
+        .set({
+          exchange_rate: dto.closingRate,
+          updated_at: sql`NOW()`,
+        } as any)
         .where('tenant_id', '=', tenantId)
+        .where('currency_code', '=', dto.currencyCode)
         .execute();
-    }
 
-    // Insert detail lines
-    const lineRows = preview.lines.map((l) => ({
-      tenant_id: tenantId,
-      run_id: String(runRow.id),
-      account_id: String(l.accountId),
-      account_code: l.accountCode,
-      account_name: l.accountName,
-      foreign_balance: l.foreignBalance,
-      book_local_value: l.bookLocalValue,
-      revalued_local_value: l.revaluedLocalValue,
-      unrealized_difference: l.unrealizedDifference,
-    }));
-
-    if (lineRows.length > 0) {
-      await trx
-        .insertInto('forex_revaluation_lines')
-        .values(lineRows as any)
-        .execute();
-    }
-
-    // Update the currency rate in currency_exchange_rates to the new closing rate
-    await trx
-      .updateTable('currency_exchange_rates')
-      .set({
-        exchange_rate: dto.closingRate,
-        updated_at: sql`NOW()`,
-      } as any)
-      .where('tenant_id', '=', tenantId)
-      .where('currency_code', '=', dto.currencyCode)
-      .execute();
-
-    return {
-      ok: true,
-      runId: runRow.id,
-      journalEntryNo: entryNo,
-      netUnrealizedGainLoss: preview.netUnrealizedGainLoss,
-      totalForeignBalance: preview.totalForeignBalance,
-      linesCount: preview.lines.length,
-    };
+      return {
+        ok: true,
+        runId: runRow.id,
+        journalEntryNo: entryNo,
+        netUnrealizedGainLoss: preview.netUnrealizedGainLoss,
+        totalForeignBalance: preview.totalForeignBalance,
+        linesCount: preview.lines.length,
+      };
     });
   }
 }

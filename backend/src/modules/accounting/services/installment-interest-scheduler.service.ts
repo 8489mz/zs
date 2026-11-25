@@ -11,10 +11,20 @@ export class InstallmentInterestSchedulerService implements OnApplicationBootstr
   private timer?: ReturnType<typeof setInterval>;
   private startup?: ReturnType<typeof setTimeout>;
   private running = false;
-  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>, private readonly posting: AccountingPostingService) {}
+  constructor(
+    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
+    private readonly posting: AccountingPostingService,
+  ) {}
   onApplicationBootstrap(): void {
-    this.startup = setTimeout(() => { void this.accrueDue(); }, 30_000);
-    this.timer = setInterval(() => { void this.accrueDue(); }, 60 * 60 * 1000);
+    this.startup = setTimeout(() => {
+      void this.accrueDue();
+    }, 30_000);
+    this.timer = setInterval(
+      () => {
+        void this.accrueDue();
+      },
+      60 * 60 * 1000,
+    );
   }
   onModuleDestroy(): void {
     if (this.timer) clearInterval(this.timer);
@@ -35,10 +45,16 @@ export class InstallmentInterestSchedulerService implements OnApplicationBootstr
         try {
           const today = await resolveBusinessDateKey(this.db, row.tenant_id, new Date());
           await this.posting.recognizeInstallmentInterest(this.db, row.tenant_id, today);
+        } catch (error) {
+          this.logger.error(
+            `Interest accrual requires reconciliation for tenant ${row.tenant_id}: ${(error as Error).message}`,
+          );
         }
-        catch (error) { this.logger.error(`Interest accrual requires reconciliation for tenant ${row.tenant_id}: ${(error as Error).message}`); }
       }
-    } catch (error) { this.logger.error(`Interest accrual failed: ${(error as Error).message}`); }
-    finally { this.running = false; }
+    } catch (error) {
+      this.logger.error(`Interest accrual failed: ${(error as Error).message}`);
+    } finally {
+      this.running = false;
+    }
   }
 }

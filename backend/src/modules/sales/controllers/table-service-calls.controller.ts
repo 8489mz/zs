@@ -13,11 +13,7 @@ export class TableServiceCallsController {
 
   @Post()
   @UseGuards(TableCallRateLimitGuard)
-  async createCall(
-    @Req() req: RequestWithAuth,
-    @Body() dto: CreateTableServiceCallDto,
-    @Query('slug') slug?: string,
-  ) {
+  async createCall(@Req() req: RequestWithAuth, @Body() dto: CreateTableServiceCallDto, @Query('slug') slug?: string) {
     // INV-TABLE-CALL-SLUG-TENANT: the endpoint stays public (the caller
     // is a storefront guest), but the tenant is resolved server-side:
     // a staff session wins when present, otherwise the storefront slug.
@@ -30,10 +26,7 @@ export class TableServiceCallsController {
   @Get()
   @UseGuards(SessionAuthGuard, PermissionsGuard)
   @RequirePermissions('sales')
-  async listPendingCalls(
-    @Req() req: RequestWithAuth,
-    @Query('branchId') branchId?: string,
-  ) {
+  async listPendingCalls(@Req() req: RequestWithAuth, @Query('branchId') branchId?: string) {
     const tenantId = req.authContext?.tenantId || 'default';
     return this.service.listPendingCalls(tenantId, branchId ? Number(branchId) : undefined);
   }
@@ -41,10 +34,7 @@ export class TableServiceCallsController {
   @Patch(':id/resolve')
   @UseGuards(SessionAuthGuard, PermissionsGuard)
   @RequirePermissions('sales')
-  async resolveCall(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async resolveCall(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number) {
     const tenantId = req.authContext?.tenantId || 'default';
     return this.service.resolveCall(tenantId, id);
   }
@@ -52,10 +42,7 @@ export class TableServiceCallsController {
   @Patch('table/:tableNumber/resolve')
   @UseGuards(SessionAuthGuard, PermissionsGuard)
   @RequirePermissions('sales')
-  async resolveCallsForTable(
-    @Req() req: RequestWithAuth,
-    @Param('tableNumber') tableNumber: string,
-  ) {
+  async resolveCallsForTable(@Req() req: RequestWithAuth, @Param('tableNumber') tableNumber: string) {
     const tenantId = req.authContext?.tenantId || 'default';
     return this.service.resolveCallsForTable(tenantId, tableNumber);
   }

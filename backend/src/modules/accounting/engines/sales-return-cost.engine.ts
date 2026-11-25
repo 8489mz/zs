@@ -54,22 +54,35 @@ export function resolveSalesReturnCostLines(
     }
     if (line.cost_price != null) {
       const savedCost = Number(line.cost_price);
-      if (!Number.isFinite(savedCost) || savedCost < 0) throw new Error(`Invalid saved return cost for product ${productId}`);
-      resolved.push({ productId, saleItemId: hasSaleItemLink ? Number(line.sale_item_id) : null, qty, unitCost: savedCost });
+      if (!Number.isFinite(savedCost) || savedCost < 0)
+        throw new Error(`Invalid saved return cost for product ${productId}`);
+      resolved.push({
+        productId,
+        saleItemId: hasSaleItemLink ? Number(line.sale_item_id) : null,
+        qty,
+        unitCost: savedCost,
+      });
       continue;
     }
-    const candidates = original ? [original] : (byProduct.get(productId) || []);
+    const candidates = original ? [original] : byProduct.get(productId) || [];
     if (!candidates.length || (original && Number(original.product_id) !== productId)) {
       throw new Error(`Original sale line missing for returned product ${productId}`);
     }
     const costs = candidates.map((candidate) => Number(candidate.cost_price));
-    if (candidates.some((candidate) => candidate.cost_price === null) ||
-      costs.some((cost) => !Number.isFinite(cost) || cost < 0) || new Set(costs).size !== 1) {
+    if (
+      candidates.some((candidate) => candidate.cost_price === null) ||
+      costs.some((cost) => !Number.isFinite(cost) || cost < 0) ||
+      new Set(costs).size !== 1
+    ) {
       throw new Error(`Ambiguous original cost for returned product ${productId}; sale item id is required`);
     }
     resolved.push({
       productId,
-      saleItemId: hasSaleItemLink ? Number(line.sale_item_id) : (candidates.length === 1 ? Number(candidates[0].id) : null),
+      saleItemId: hasSaleItemLink
+        ? Number(line.sale_item_id)
+        : candidates.length === 1
+          ? Number(candidates[0].id)
+          : null,
       qty,
       unitCost: costs[0],
     });
@@ -79,6 +92,5 @@ export function resolveSalesReturnCostLines(
 
 /** Match each return to its original sale line; never guess when legacy lines are ambiguous. */
 export function calculateSalesReturnCost(returns: ReturnCostLine[], saleItems: OriginalSaleCostLine[]): number {
-  return resolveSalesReturnCostLines(returns, saleItems)
-    .reduce((total, line) => total + line.qty * line.unitCost, 0);
+  return resolveSalesReturnCostLines(returns, saleItems).reduce((total, line) => total + line.qty * line.unitCost, 0);
 }

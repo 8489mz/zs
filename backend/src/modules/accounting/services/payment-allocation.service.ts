@@ -43,13 +43,28 @@ export interface AllocatePaymentDto {
 }
 
 /** The API must not create an apparent invoice settlement without a funded voucher. */
-export function validatePaymentAllocationRequest(dto: AllocatePaymentDto, digits: MoneyDigits): { totalAllocating: number; allocations: AllocateItemInput[] } {
-  if (!dto || !['customer', 'supplier'].includes(dto.partnerType) || !Number.isSafeInteger(dto.partnerId) || dto.partnerId <= 0) {
+export function validatePaymentAllocationRequest(
+  dto: AllocatePaymentDto,
+  digits: MoneyDigits,
+): { totalAllocating: number; allocations: AllocateItemInput[] } {
+  if (
+    !dto ||
+    !['customer', 'supplier'].includes(dto.partnerType) ||
+    !Number.isSafeInteger(dto.partnerId) ||
+    dto.partnerId <= 0
+  ) {
     throw new BadRequestException('Invalid payment partner');
   }
   const expectedType = dto.partnerType === 'customer' ? 'customer_payment' : 'supplier_payment';
-  if (dto.paymentType !== expectedType || typeof dto.paymentId !== 'number' || !Number.isSafeInteger(dto.paymentId) || dto.paymentId <= 0) {
-    throw new BadRequestException('Allocation requires a real customer/supplier payment voucher; unfunded direct allocation is forbidden');
+  if (
+    dto.paymentType !== expectedType ||
+    typeof dto.paymentId !== 'number' ||
+    !Number.isSafeInteger(dto.paymentId) ||
+    dto.paymentId <= 0
+  ) {
+    throw new BadRequestException(
+      'Allocation requires a real customer/supplier payment voucher; unfunded direct allocation is forbidden',
+    );
   }
   if (!Array.isArray(dto.allocations) || dto.allocations.length === 0) {
     throw new BadRequestException('At least one invoice allocation is required');
@@ -61,14 +76,23 @@ export function validatePaymentAllocationRequest(dto: AllocatePaymentDto, digits
       throw new BadRequestException('Invalid or repeated invoice ID');
     }
     seen.add(row.invoiceId);
-    if (typeof row.amount !== 'number' || !Number.isFinite(row.amount) || row.amount <= 0 ||
-        Math.abs(row.amount * 10 ** digits - Math.round(row.amount * 10 ** digits)) > 1e-7) {
-      throw new BadRequestException('Every allocated amount must be positive, finite and accurate to the tenant currency minor unit');
+    if (
+      typeof row.amount !== 'number' ||
+      !Number.isFinite(row.amount) ||
+      row.amount <= 0 ||
+      Math.abs(row.amount * 10 ** digits - Math.round(row.amount * 10 ** digits)) > 1e-7
+    ) {
+      throw new BadRequestException(
+        'Every allocated amount must be positive, finite and accurate to the tenant currency minor unit',
+      );
     }
     minor += Math.round(row.amount * 10 ** digits);
     if (!Number.isSafeInteger(minor)) throw new BadRequestException('Allocation total is too large');
   }
-  return { totalAllocating: minor / 10 ** digits, allocations: [...dto.allocations].sort((a, b) => a.invoiceId - b.invoiceId) };
+  return {
+    totalAllocating: minor / 10 ** digits,
+    allocations: [...dto.allocations].sort((a, b) => a.invoiceId - b.invoiceId),
+  };
 }
 
 @Injectable()
@@ -76,7 +100,12 @@ export class PaymentAllocationService {
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   private assertAccountingAccess(auth: AuthContext): void {
-    if (auth.role === 'super_admin' || auth.role === 'admin' || auth.permissions.includes('accounting') || auth.permissions.includes('treasury')) {
+    if (
+      auth.role === 'super_admin' ||
+      auth.role === 'admin' ||
+      auth.permissions.includes('accounting') ||
+      auth.permissions.includes('treasury')
+    ) {
       return;
     }
     throw new ForbiddenException('Missing required permissions for payment allocation');
@@ -92,11 +121,15 @@ export class PaymentAllocationService {
     for (const row of rows) {
       const id = Number(row.invoice_id || 0);
       if (!id) continue;
-      const allocations: unknown = typeof row.refund_allocations === 'string'
-        ? JSON.parse(row.refund_allocations) : row.refund_allocations;
+      const allocations: unknown =
+        typeof row.refund_allocations === 'string' ? JSON.parse(row.refund_allocations) : row.refund_allocations;
       const amountMinor = Array.isArray(allocations)
-        ? allocations.filter((a) => a?.tender === tender).reduce((sum, a) => sum + Math.round(Number(a.amount || 0) * 10 ** digits), 0)
-        : creditInvoiceIds.has(id) ? Math.round(Number(row.total || 0) * 10 ** digits) : 0;
+        ? allocations
+            .filter((a) => a?.tender === tender)
+            .reduce((sum, a) => sum + Math.round(Number(a.amount || 0) * 10 ** digits), 0)
+        : creditInvoiceIds.has(id)
+          ? Math.round(Number(row.total || 0) * 10 ** digits)
+          : 0;
       minor.set(id, (minor.get(id) || 0) + amountMinor);
     }
     const reductions = new Map<number, number>();
@@ -104,7 +137,11 @@ export class PaymentAllocationService {
     return reductions;
   }
 
-  async getOpenInvoices(partnerType: 'customer' | 'supplier', partnerId: number, auth: AuthContext): Promise<OpenInvoiceItem[]> {
+  async getOpenInvoices(
+    partnerType: 'customer' | 'supplier',
+    partnerId: number,
+    auth: AuthContext,
+  ): Promise<OpenInvoiceItem[]> {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
@@ -122,18 +159,33 @@ export class PaymentAllocationService {
         .orderBy('id', 'asc')
         .execute();
 
-      const saleReturns = sales.length ? await this.db.selectFrom('return_documents')
-        .select(['invoice_id', 'total', 'refund_allocations'])
-        .where('tenant_id', '=', scope.tenantId).where('return_type', '=', 'sale')
-        .where('invoice_id', 'in', sales.map((row) => Number(row.id))).execute() : [];
+      const saleReturns = sales.length
+        ? await this.db
+            .selectFrom('return_documents')
+            .select(['invoice_id', 'total', 'refund_allocations'])
+            .where('tenant_id', '=', scope.tenantId)
+            .where('return_type', '=', 'sale')
+            .where(
+              'invoice_id',
+              'in',
+              sales.map((row) => Number(row.id)),
+            )
+            .execute()
+        : [];
       const reversedSales = this.sumReversedLiabilities(
-        saleReturns, 'receivable', new Set(sales.filter((row) => row.payment_type === 'credit').map((row) => Number(row.id))), digits,
+        saleReturns,
+        'receivable',
+        new Set(sales.filter((row) => row.payment_type === 'credit').map((row) => Number(row.id))),
+        digits,
       );
       return sales
         .map((s) => {
           const total = Number(s.total || 0);
           const paid = Number(s.paid_amount || 0);
-          const remaining = roundMoney(Math.max(0, total - paid - Number(s.store_credit_used || 0) - (reversedSales.get(Number(s.id)) || 0)), digits);
+          const remaining = roundMoney(
+            Math.max(0, total - paid - Number(s.store_credit_used || 0) - (reversedSales.get(Number(s.id)) || 0)),
+            digits,
+          );
           return {
             id: Number(s.id),
             docNo: s.doc_no || `INV-${s.id}`,
@@ -155,24 +207,50 @@ export class PaymentAllocationService {
         .orderBy('id', 'asc')
         .execute();
 
-      const purchaseReturns = purchases.length ? await this.db.selectFrom('return_documents')
-        .select(['invoice_id', 'total', 'refund_allocations'])
-        .where('tenant_id', '=', scope.tenantId).where('return_type', '=', 'purchase')
-        .where('invoice_id', 'in', purchases.map((row) => Number(row.id))).execute() : [];
+      const purchaseReturns = purchases.length
+        ? await this.db
+            .selectFrom('return_documents')
+            .select(['invoice_id', 'total', 'refund_allocations'])
+            .where('tenant_id', '=', scope.tenantId)
+            .where('return_type', '=', 'purchase')
+            .where(
+              'invoice_id',
+              'in',
+              purchases.map((row) => Number(row.id)),
+            )
+            .execute()
+        : [];
       const reversedPurchases = this.sumReversedLiabilities(
-        purchaseReturns, 'payable', new Set(purchases.filter((row) => row.payment_type === 'credit').map((row) => Number(row.id))), digits,
+        purchaseReturns,
+        'payable',
+        new Set(purchases.filter((row) => row.payment_type === 'credit').map((row) => Number(row.id))),
+        digits,
       );
-      const scheduleRows = purchases.length ? await this.db.selectFrom('supplier_payment_schedules')
-        .select(['purchase_id', sql<number>`coalesce(sum(paid_amount), 0)`.as('paid')])
-        .where('tenant_id', '=', scope.tenantId)
-        .where('purchase_id', 'in', purchases.map((p) => Number(p.id)))
-        .groupBy('purchase_id').execute() : [];
+      const scheduleRows = purchases.length
+        ? await this.db
+            .selectFrom('supplier_payment_schedules')
+            .select(['purchase_id', sql<number>`coalesce(sum(paid_amount), 0)`.as('paid')])
+            .where('tenant_id', '=', scope.tenantId)
+            .where(
+              'purchase_id',
+              'in',
+              purchases.map((p) => Number(p.id)),
+            )
+            .groupBy('purchase_id')
+            .execute()
+        : [];
       const scheduledPaid = new Map(scheduleRows.map((row) => [Number(row.purchase_id), Number(row.paid || 0)]));
       return purchases
         .map((p) => {
           const total = Number(p.total || 0);
           const paid = Number(p.paid_amount || 0);
-          const remaining = roundMoney(Math.max(0, total - paid - (scheduledPaid.get(Number(p.id)) || 0) - (reversedPurchases.get(Number(p.id)) || 0)), digits);
+          const remaining = roundMoney(
+            Math.max(
+              0,
+              total - paid - (scheduledPaid.get(Number(p.id)) || 0) - (reversedPurchases.get(Number(p.id)) || 0),
+            ),
+            digits,
+          );
           return {
             id: Number(p.id),
             docNo: p.doc_no || `BILL-${p.id}`,
@@ -187,7 +265,11 @@ export class PaymentAllocationService {
     }
   }
 
-  async getUnallocatedPayments(partnerType: 'customer' | 'supplier', partnerId: number, auth: AuthContext): Promise<UnallocatedPaymentItem[]> {
+  async getUnallocatedPayments(
+    partnerType: 'customer' | 'supplier',
+    partnerId: number,
+    auth: AuthContext,
+  ): Promise<UnallocatedPaymentItem[]> {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
@@ -202,7 +284,7 @@ export class PaymentAllocationService {
           join
             .onRef('pa.payment_id', '=', 'cp.id')
             .on('pa.payment_type', '=', 'customer_payment')
-            .on('pa.tenant_id', '=', scope.tenantId)
+            .on('pa.tenant_id', '=', scope.tenantId),
         )
         .select([
           'cp.id',
@@ -240,7 +322,7 @@ export class PaymentAllocationService {
           join
             .onRef('pa.payment_id', '=', 'sp.id')
             .on('pa.payment_type', '=', 'supplier_payment')
-            .on('pa.tenant_id', '=', scope.tenantId)
+            .on('pa.tenant_id', '=', scope.tenantId),
         )
         .select([
           'sp.id',
@@ -275,7 +357,10 @@ export class PaymentAllocationService {
     }
   }
 
-  async allocatePayment(dto: AllocatePaymentDto, auth: AuthContext): Promise<{ success: boolean; totalAllocated: number; count: number }> {
+  async allocatePayment(
+    dto: AllocatePaymentDto,
+    auth: AuthContext,
+  ): Promise<{ success: boolean; totalAllocated: number; count: number }> {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
     const userId = Number(auth.userId || 0) || null;
@@ -296,7 +381,8 @@ export class PaymentAllocationService {
             .executeTakeFirst();
 
           if (!payment) throw new NotFoundException('سند التحصيل غير موجود');
-          if (Number(payment.customer_id) !== dto.partnerId) throw new BadRequestException('Payment voucher customer mismatch');
+          if (Number(payment.customer_id) !== dto.partnerId)
+            throw new BadRequestException('Payment voucher customer mismatch');
 
           const existingAlloc = await trx
             .selectFrom('payment_allocations')
@@ -309,7 +395,7 @@ export class PaymentAllocationService {
           const unallocated = Number(payment.amount) - Number(existingAlloc?.allocated || 0);
           if (totalAllocating > roundMoney(unallocated, digits)) {
             throw new BadRequestException(
-              `المبلغ المطلوب تخصيصه (${totalAllocating}) يتجاوز الرصيد المتبقي غير المخصص من السند (${roundMoney(unallocated, digits)})`
+              `المبلغ المطلوب تخصيصه (${totalAllocating}) يتجاوز الرصيد المتبقي غير المخصص من السند (${roundMoney(unallocated, digits)})`,
             );
           }
         } else if (dto.paymentType === 'supplier_payment') {
@@ -322,7 +408,8 @@ export class PaymentAllocationService {
             .executeTakeFirst();
 
           if (!payment) throw new NotFoundException('سند السداد غير موجود');
-          if (Number(payment.supplier_id) !== dto.partnerId) throw new BadRequestException('Payment voucher supplier mismatch');
+          if (Number(payment.supplier_id) !== dto.partnerId)
+            throw new BadRequestException('Payment voucher supplier mismatch');
 
           const existingAlloc = await trx
             .selectFrom('payment_allocations')
@@ -335,7 +422,7 @@ export class PaymentAllocationService {
           const unallocated = Number(payment.amount) - Number(existingAlloc?.allocated || 0);
           if (totalAllocating > roundMoney(unallocated, digits)) {
             throw new BadRequestException(
-              `المبلغ المطلوب تخصيصه (${totalAllocating}) يتجاوز الرصيد المتبقي غير المخصص من السند (${roundMoney(unallocated, digits)})`
+              `المبلغ المطلوب تخصيصه (${totalAllocating}) يتجاوز الرصيد المتبقي غير المخصص من السند (${roundMoney(unallocated, digits)})`,
             );
           }
         }
@@ -357,22 +444,30 @@ export class PaymentAllocationService {
             .executeTakeFirst();
 
           if (!sale) throw new NotFoundException(`فاتورة المبيعات ${item.invoiceId} غير موجودة`);
-          if (Number(sale.customer_id) !== dto.partnerId || sale.status !== 'posted') throw new BadRequestException('Invoice does not belong to customer or is cancelled');
+          if (Number(sale.customer_id) !== dto.partnerId || sale.status !== 'posted')
+            throw new BadRequestException('Invoice does not belong to customer or is cancelled');
 
           const currentPaid = Number(sale.paid_amount || 0);
           const total = Number(sale.total || 0);
-          const returnedRows = await trx.selectFrom('return_documents')
+          const returnedRows = await trx
+            .selectFrom('return_documents')
             .select(['invoice_id', 'total', 'refund_allocations'])
-            .where('tenant_id', '=', scope.tenantId).where('return_type', '=', 'sale')
-            .where('invoice_id', '=', Number(sale.id)).execute();
-          const reversed = this.sumReversedLiabilities(
-            returnedRows, 'receivable', new Set(sale.payment_type === 'credit' ? [Number(sale.id)] : []), digits,
-          ).get(Number(sale.id)) || 0;
+            .where('tenant_id', '=', scope.tenantId)
+            .where('return_type', '=', 'sale')
+            .where('invoice_id', '=', Number(sale.id))
+            .execute();
+          const reversed =
+            this.sumReversedLiabilities(
+              returnedRows,
+              'receivable',
+              new Set(sale.payment_type === 'credit' ? [Number(sale.id)] : []),
+              digits,
+            ).get(Number(sale.id)) || 0;
           const remaining = Math.max(0, total - currentPaid - Number(sale.store_credit_used || 0) - reversed);
 
           if (allocAmount > roundMoney(remaining, digits)) {
             throw new BadRequestException(
-              `المبلغ المخصص (${allocAmount}) أكبر من الرصيد المتبقي على الفاتورة (${roundMoney(remaining, digits)})`
+              `المبلغ المخصص (${allocAmount}) أكبر من الرصيد المتبقي على الفاتورة (${roundMoney(remaining, digits)})`,
             );
           }
 
@@ -393,26 +488,36 @@ export class PaymentAllocationService {
             .executeTakeFirst();
 
           if (!purchase) throw new NotFoundException(`فاتورة المشتريات ${item.invoiceId} غير موجودة`);
-          if (Number(purchase.supplier_id) !== dto.partnerId || purchase.status !== 'posted') throw new BadRequestException('Invoice does not belong to supplier or is cancelled');
+          if (Number(purchase.supplier_id) !== dto.partnerId || purchase.status !== 'posted')
+            throw new BadRequestException('Invoice does not belong to supplier or is cancelled');
 
           const currentPaid = Number(purchase.paid_amount || 0);
           const total = Number(purchase.total || 0);
-          const returnedRows = await trx.selectFrom('return_documents')
+          const returnedRows = await trx
+            .selectFrom('return_documents')
             .select(['invoice_id', 'total', 'refund_allocations'])
-            .where('tenant_id', '=', scope.tenantId).where('return_type', '=', 'purchase')
-            .where('invoice_id', '=', Number(purchase.id)).execute();
-          const reversed = this.sumReversedLiabilities(
-            returnedRows, 'payable', new Set(purchase.payment_type === 'credit' ? [Number(purchase.id)] : []), digits,
-          ).get(Number(purchase.id)) || 0;
-          const scheduledRow = await trx.selectFrom('supplier_payment_schedules')
+            .where('tenant_id', '=', scope.tenantId)
+            .where('return_type', '=', 'purchase')
+            .where('invoice_id', '=', Number(purchase.id))
+            .execute();
+          const reversed =
+            this.sumReversedLiabilities(
+              returnedRows,
+              'payable',
+              new Set(purchase.payment_type === 'credit' ? [Number(purchase.id)] : []),
+              digits,
+            ).get(Number(purchase.id)) || 0;
+          const scheduledRow = await trx
+            .selectFrom('supplier_payment_schedules')
             .select(sql<number>`coalesce(sum(paid_amount), 0)`.as('paid'))
             .where('tenant_id', '=', scope.tenantId)
-            .where('purchase_id', '=', Number(purchase.id)).executeTakeFirst();
+            .where('purchase_id', '=', Number(purchase.id))
+            .executeTakeFirst();
           const remaining = Math.max(0, total - currentPaid - Number(scheduledRow?.paid || 0) - reversed);
 
           if (allocAmount > roundMoney(remaining, digits)) {
             throw new BadRequestException(
-              `المبلغ المخصص (${allocAmount}) أكبر من الرصيد المتبقي على فاتورة الشراء (${roundMoney(remaining, digits)})`
+              `المبلغ المخصص (${allocAmount}) أكبر من الرصيد المتبقي على فاتورة الشراء (${roundMoney(remaining, digits)})`,
             );
           }
 
@@ -485,7 +590,7 @@ export class PaymentAllocationService {
     partnerType: 'customer' | 'supplier',
     partnerId: number,
     paymentId: number,
-    auth: AuthContext
+    auth: AuthContext,
   ): Promise<{ success: boolean; totalAllocated: number; count: number }> {
     this.assertAccountingAccess(auth);
 
@@ -531,7 +636,7 @@ export class PaymentAllocationService {
         allocations,
         notes: 'تسوية آلية وفق أسبقية الاستحقاق (FIFO)',
       },
-      auth
+      auth,
     );
   }
 }

@@ -17,7 +17,9 @@ export async function exchangeRateAsOf(
   currency: string,
   asOf: Date | string,
 ): Promise<number> {
-  const code = String(currency || '').trim().toUpperCase();
+  const code = String(currency || '')
+    .trim()
+    .toUpperCase();
   const at = asOf instanceof Date ? asOf : new Date(asOf);
   if (!/^[A-Z]{3}$/.test(code) || !Number.isFinite(at.getTime())) {
     throw new BadRequestException('A valid currency code and as-of moment are required.');

@@ -84,10 +84,13 @@ export class FiscalYearPeriodsService {
 
     await this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, tenantId);
-      const lockedFy = await trx.selectFrom('accounting_fiscal_years')
+      const lockedFy = await trx
+        .selectFrom('accounting_fiscal_years')
         .select(['id', 'status', 'closing_entry_id', 'start_date'])
-        .where('id', '=', id).where('tenant_id', '=', tenantId)
-        .forUpdate().executeTakeFirst();
+        .where('id', '=', id)
+        .where('tenant_id', '=', tenantId)
+        .forUpdate()
+        .executeTakeFirst();
       if (!lockedFy || lockedFy.status !== 'closed') {
         throw new BadRequestException('السنة المالية تغيرت حالتها؛ يرجى إعادة التحميل.');
       }
@@ -142,20 +145,28 @@ export class FiscalYearPeriodsService {
               .where('id', '=', reversalEntryId)
               .where('tenant_id', '=', tenantId)
               .execute();
-            await trx.updateTable('journal_entries')
+            await trx
+              .updateTable('journal_entries')
               .set({ reversed_by_entry_id: reversalEntryId, updated_at: sql`NOW()` } as any)
-              .where('tenant_id', '=', tenantId).where('id', '=', closingEntry.id).execute();
-            await trx.updateTable('journal_entries')
+              .where('tenant_id', '=', tenantId)
+              .where('id', '=', closingEntry.id)
+              .execute();
+            await trx
+              .updateTable('journal_entries')
               .set({ reversal_of_entry_id: closingEntry.id, updated_at: sql`NOW()` } as any)
-              .where('tenant_id', '=', tenantId).where('id', '=', reversalEntryId).execute();
+              .where('tenant_id', '=', tenantId)
+              .where('id', '=', reversalEntryId)
+              .execute();
           }
 
           // Both closing and reversing entries remain posted and cancel numerically.
         }
       }
 
-      const later = await trx.selectFrom('accounting_fiscal_years')
-        .select('id').where('tenant_id', '=', tenantId)
+      const later = await trx
+        .selectFrom('accounting_fiscal_years')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
         .where('status', '=', 'closed')
         .where('start_date', '>', lockedFy.start_date)
         .executeTakeFirst();
@@ -163,13 +174,19 @@ export class FiscalYearPeriodsService {
 
       const reopenDay = await resolveBusinessDateKey(trx, tenantId, new Date());
       const reopenLog = `\n[أعيد فتحها بتاريخ ${reopenDay} بواسطة مستخدم #${auth.userId} - السبب: ${reason}]`;
-      await trx.updateTable('accounting_fiscal_years')
+      await trx
+        .updateTable('accounting_fiscal_years')
         .set({
-          status: 'open', closing_entry_id: null, closed_at: null, closed_by: null,
+          status: 'open',
+          closing_entry_id: null,
+          closed_at: null,
+          closed_by: null,
           closing_notes: sql`CONCAT(COALESCE(closing_notes, ''), ${reopenLog}::text)` as any,
           updated_at: sql`NOW()` as any,
         })
-        .where('id', '=', id).where('tenant_id', '=', tenantId).execute();
+        .where('id', '=', id)
+        .where('tenant_id', '=', tenantId)
+        .execute();
       // Do not alter accounting_settings.lock_date_all. It may contain a manual
       // administrative lock stricter than fiscal close; release requires a separate
       // explicit authorized workflow.
@@ -252,9 +269,7 @@ export class FiscalYearPeriodsService {
       await this.db
         .insertInto('accounting_fiscal_periods')
         .values(periodsToInsert)
-        .onConflict((oc) =>
-          oc.columns(['tenant_id', 'fiscal_year_id', 'period_number']).doNothing(),
-        )
+        .onConflict((oc) => oc.columns(['tenant_id', 'fiscal_year_id', 'period_number']).doNothing())
         .execute();
     }
   }

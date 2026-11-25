@@ -6,18 +6,45 @@ import type { CreateSalesOrderDto } from '../../dto/sales-order.dto';
 import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary';
 import { formatDailyDocumentNumber } from '../../../../common/utils/document-number.util';
 import { getTenantTimezone } from '../../../../common/utils/tenant-timezone.util';
-import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_FUTURE_DAYS } from '../../../../common/utils/client-date-bounds.util';
+import {
+  checkClientBusinessDay,
+  CLIENT_BUSINESS_DATE_FUTURE_DAYS,
+} from '../../../../common/utils/client-date-bounds.util';
 import { reserveLocationStock } from '../../../../common/utils/location-stock-ledger';
 import { assertSalesOrderMoney, recomputeSalesOrderMoney } from '../../helpers/sales-order-money.helper';
 import { randomUUID } from 'node:crypto';
 
 export class SalesOrdersCreation {
-  constructor(private readonly db: Kysely<Database>, private readonly bound: { resolveOrderWarehouse: (trx: Kysely<Database>, scope: { tenantId: string; accountId: string }, branchId: number | null, requestedLocationId: number | null) => Promise<number | null>; loadServiceProductIds: (trx: Kysely<Database>, scope: { tenantId: string; accountId: string }, productIds: number[]) => Promise<Set<number>> }) {}
+  constructor(
+    private readonly db: Kysely<Database>,
+    private readonly bound: {
+      resolveOrderWarehouse: (
+        trx: Kysely<Database>,
+        scope: { tenantId: string; accountId: string },
+        branchId: number | null,
+        requestedLocationId: number | null,
+      ) => Promise<number | null>;
+      loadServiceProductIds: (
+        trx: Kysely<Database>,
+        scope: { tenantId: string; accountId: string },
+        productIds: number[],
+      ) => Promise<Set<number>>;
+    },
+  ) {}
 
-  private resolveOrderWarehouse(trx: Kysely<Database>, scope: { tenantId: string; accountId: string }, branchId: number | null, requestedLocationId: number | null): Promise<number | null> {
+  private resolveOrderWarehouse(
+    trx: Kysely<Database>,
+    scope: { tenantId: string; accountId: string },
+    branchId: number | null,
+    requestedLocationId: number | null,
+  ): Promise<number | null> {
     return this.bound.resolveOrderWarehouse(trx, scope, branchId, requestedLocationId);
   }
-  private loadServiceProductIds(trx: Kysely<Database>, scope: { tenantId: string; accountId: string }, productIds: number[]): Promise<Set<number>> {
+  private loadServiceProductIds(
+    trx: Kysely<Database>,
+    scope: { tenantId: string; accountId: string },
+    productIds: number[],
+  ): Promise<Set<number>> {
     return this.bound.loadServiceProductIds(trx, scope, productIds);
   }
 
@@ -25,8 +52,17 @@ export class SalesOrdersCreation {
     const scope = requireTenantScope(auth);
     const now = new Date();
     const shouldReserve = dto.autoReserve !== false;
-    if (!Array.isArray(dto.items) || dto.items.length === 0 || dto.items.some(item =>
-      !Number.isFinite(item.quantity) || item.quantity <= 0 || !Number.isFinite(item.unitPrice) || item.unitPrice < 0)) {
+    if (
+      !Array.isArray(dto.items) ||
+      dto.items.length === 0 ||
+      dto.items.some(
+        (item) =>
+          !Number.isFinite(item.quantity) ||
+          item.quantity <= 0 ||
+          !Number.isFinite(item.unitPrice) ||
+          item.unitPrice < 0,
+      )
+    ) {
       throw new BadRequestException('أمر البيع يحتاج بنوداً بكميات وأسعار صالحة');
     }
     // R4-A (INV-REST-SALE-MONEY-TRUTH): a missing name used to throw
@@ -41,14 +77,11 @@ export class SalesOrdersCreation {
     // reconcile with the lines before anything is stored or
     // reserved. Throws SALES_ORDER_LINE_MISMATCH /
     // SALES_ORDER_TOTAL_MISMATCH (400).
-    assertSalesOrderMoney(
-      recomputeSalesOrderMoney(dto.items, dto.discountAmount ?? 0, dto.taxAmount ?? 0),
-      {
-        lineTotals: dto.items.map((item) => item.total),
-        subtotal: dto.subtotal,
-        total: dto.totalAmount,
-      },
-    );
+    assertSalesOrderMoney(recomputeSalesOrderMoney(dto.items, dto.discountAmount ?? 0, dto.taxAmount ?? 0), {
+      lineTotals: dto.items.map((item) => item.total),
+      subtotal: dto.subtotal,
+      total: dto.totalAmount,
+    });
     // Single-server-clock rule (P6, RC-5): the order DTO is a plain
     // interface with no validators, so these dates arrived unguarded
     // (new Date(garbage) stored verbatim). Both are future by nature —
@@ -83,16 +116,24 @@ export class SalesOrdersCreation {
       let resolvedBranchId = dto.branchId || null;
       let resolvedLocationId: number | null = null;
       if (shouldReserve) {
-        const branch = await trx.selectFrom('branches').select(['id', 'default_stock_location_id'])
+        const branch = await trx
+          .selectFrom('branches')
+          .select(['id', 'default_stock_location_id'])
           .where('tenant_id', '=', scope.tenantId)
           .where('account_id', '=', scope.accountId)
-          .$if(resolvedBranchId !== null, qb => qb.where('id', '=', resolvedBranchId!))
-          .orderBy('id', 'asc').executeTakeFirst();
+          .$if(resolvedBranchId !== null, (qb) => qb.where('id', '=', resolvedBranchId!))
+          .orderBy('id', 'asc')
+          .executeTakeFirst();
         if (!branch) throw new BadRequestException('لا يوجد فرع مسموح لحجز البضاعة');
         resolvedBranchId = Number(branch.id);
         // INV-SALES-ORDER-WAREHOUSE-SELECTION: the selected warehouse
         // wins; the branch default applies only when none was chosen.
-        resolvedLocationId = await this.resolveOrderWarehouse(trx, scope, resolvedBranchId, dto.warehouseLocationId ?? null);
+        resolvedLocationId = await this.resolveOrderWarehouse(
+          trx,
+          scope,
+          resolvedBranchId,
+          dto.warehouseLocationId ?? null,
+        );
       } else if (dto.warehouseLocationId != null) {
         // Draft with an explicit warehouse: validate and store it now
         // so confirmAndReserve later reserves in the same warehouse.
@@ -126,16 +167,23 @@ export class SalesOrdersCreation {
         })
         .returningAll()
         .executeTakeFirstOrThrow();
-      await trx.updateTable('sales_orders')
+      await trx
+        .updateTable('sales_orders')
         .set({ order_number: formatDailyDocumentNumber('SO', Number(order.id), new Date(), 4, businessTz) })
-        .where('id', '=', order.id).where('tenant_id', '=', scope.tenantId).execute();
+        .where('id', '=', order.id)
+        .where('tenant_id', '=', scope.tenantId)
+        .execute();
 
       // INV-SERVICE-STOCK-NO-STOCK-CHECK: services sell without stock —
       // they reserve nothing (reserveLocationStock would throw
       // INSUFFICIENT_STOCK on a 0-stock service line) and stamp no
       // phantom reserved_quantity. Conversion releases only reserved
       // lines, so a 0 here also means no release is handed to createSale.
-      const serviceProductIds = await this.loadServiceProductIds(trx, scope, (dto.items || []).map((item) => Number(item.productId)));
+      const serviceProductIds = await this.loadServiceProductIds(
+        trx,
+        scope,
+        (dto.items || []).map((item) => Number(item.productId)),
+      );
 
       if (dto.items && dto.items.length > 0) {
         for (const item of dto.items) {
@@ -161,8 +209,6 @@ export class SalesOrdersCreation {
               created_at: now,
             })
             .execute();
-
-
         }
       }
 
@@ -174,7 +220,7 @@ export class SalesOrdersCreation {
           accountId: scope.accountId,
           items: dto.items
             .filter((item) => !serviceProductIds.has(Number(item.productId)))
-            .map(item => ({ productId: item.productId, qty: Number(item.quantity) })),
+            .map((item) => ({ productId: item.productId, qty: Number(item.quantity) })),
         });
       }
 
@@ -183,9 +229,7 @@ export class SalesOrdersCreation {
 
     return {
       ok: true,
-      message: shouldReserve
-        ? 'تم إنشاء أمر البيع وحجز الكميات في المخزون بنجاح'
-        : 'تم حفظ مسودة أمر البيع بنجاح',
+      message: shouldReserve ? 'تم إنشاء أمر البيع وحجز الكميات في المخزون بنجاح' : 'تم حفظ مسودة أمر البيع بنجاح',
       order: result,
     };
   }

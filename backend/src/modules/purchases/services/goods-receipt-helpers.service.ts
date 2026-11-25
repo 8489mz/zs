@@ -28,14 +28,33 @@ export class GoodsReceiptHelpersService {
       .where('code', '=', code)
       .executeTakeFirst();
     if (existing) {
-      if (!existing.is_active) throw new UnprocessableEntityException(`الحساب المحاسبي ${code} معطل؛ يلزم تفعيله قبل الترحيل`);
+      if (!existing.is_active)
+        throw new UnprocessableEntityException(`الحساب المحاسبي ${code} معطل؛ يلزم تفعيله قبل الترحيل`);
       return Number(existing.id);
     }
 
     const known: Record<string, { ar: string; en: string; type: string; group: string; balance: string }> = {
-      '2125': { ar: 'بضاعة مستلمة غير مفوترة', en: 'Goods Received Not Invoiced', type: 'liability', group: 'current_liabilities', balance: 'credit' },
-      '1140': { ar: 'مخزون بضاعة ومواد خام', en: 'Inventory', type: 'asset', group: 'current_assets', balance: 'debit' },
-      '5190': { ar: 'فروق أسعار مشتريات', en: 'Purchase Price Variance', type: 'expense', group: 'expenses', balance: 'debit' },
+      '2125': {
+        ar: 'بضاعة مستلمة غير مفوترة',
+        en: 'Goods Received Not Invoiced',
+        type: 'liability',
+        group: 'current_liabilities',
+        balance: 'credit',
+      },
+      '1140': {
+        ar: 'مخزون بضاعة ومواد خام',
+        en: 'Inventory',
+        type: 'asset',
+        group: 'current_assets',
+        balance: 'debit',
+      },
+      '5190': {
+        ar: 'فروق أسعار مشتريات',
+        en: 'Purchase Price Variance',
+        type: 'expense',
+        group: 'expenses',
+        balance: 'debit',
+      },
     };
     const spec = known[code];
     if (!spec) return null;

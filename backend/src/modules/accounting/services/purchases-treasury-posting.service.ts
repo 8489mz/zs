@@ -23,7 +23,6 @@ import { PostExpenseReversalService } from './purchases-treasury-posting/post-ex
 import { PostWithholdingTaxRemittanceService } from './purchases-treasury-posting/post-withholding-tax-remittance';
 import { PostOpeningBalancesService } from './purchases-treasury-posting/post-opening-balances';
 
-
 export class PurchasesAndTreasuryPostingService {
   private readonly accountingTenantFoundation: AccountingTenantFoundationService;
   private readonly logger: Logger;
@@ -175,26 +174,45 @@ export class PurchasesAndTreasuryPostingService {
     return this.postTradeInPurchaseService.postTradeInCashPurchase(queryable, tradeInId, auth);
   }
 
-  async postPurchase(queryable: Transaction<Database>, purchaseId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number }> {
+  async postPurchase(
+    queryable: Transaction<Database>,
+    purchaseId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number }> {
     return this.postTradeInPurchaseService.postPurchase(queryable, purchaseId, auth);
   }
 
-
-  async postPurchaseReturn(queryable: Transaction<Database>, returnId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postPurchaseReturn(
+    queryable: Transaction<Database>,
+    returnId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.postPurchaseReturnService.postPurchaseReturn(queryable, returnId, auth);
   }
 
-  async reversePurchaseJournal(queryable: DbOrTx, purchaseId: number, reason: string, auth: AuthContext): Promise<{ reversed: boolean; journalEntryId: number | null }> {
+  async reversePurchaseJournal(
+    queryable: DbOrTx,
+    purchaseId: number,
+    reason: string,
+    auth: AuthContext,
+  ): Promise<{ reversed: boolean; journalEntryId: number | null }> {
     return this.postPurchaseReturnService.reversePurchaseJournal(queryable, purchaseId, reason, auth);
   }
 
-
-  async postSupplierPayment(queryable: DbOrTx, paymentId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postSupplierPayment(
+    queryable: DbOrTx,
+    paymentId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.postSupplierPaymentBillService.postSupplierPayment(queryable, paymentId, auth);
   }
 
   // postSupplierBill derives the bill day via formatLocalCalendarDay (see post-supplier-payment-bill slice)
-  async postSupplierBill(queryable: DbOrTx, billId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postSupplierBill(
+    queryable: DbOrTx,
+    billId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.postSupplierPaymentBillService.postSupplierBill(queryable, billId, auth);
   }
 
@@ -205,19 +223,37 @@ export class PurchasesAndTreasuryPostingService {
     purchaseId: number | null,
     auth: AuthContext,
   ): Promise<{ posted: boolean; journalEntryId: number | null; appliedAmount: number; remainingAdvance: number }> {
-    return this.postSupplierAdvanceService.postSupplierAdvanceApplication(queryable, advancePaymentId, applyAmount, purchaseId, auth);
+    return this.postSupplierAdvanceService.postSupplierAdvanceApplication(
+      queryable,
+      advancePaymentId,
+      applyAmount,
+      purchaseId,
+      auth,
+    );
   }
 
-  async postSupplierPaymentScheduleSettlement(queryable: DbOrTx, settlementId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postSupplierPaymentScheduleSettlement(
+    queryable: DbOrTx,
+    settlementId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.postSupplierAdvanceService.postSupplierPaymentScheduleSettlement(queryable, settlementId, auth);
   }
 
-
-  async postCustomerPayment(queryable: DbOrTx, paymentId: number, auth: AuthContext, docNo?: string): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postCustomerPayment(
+    queryable: DbOrTx,
+    paymentId: number,
+    auth: AuthContext,
+    docNo?: string,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.postCustomerPaymentExpenseService.postCustomerPayment(queryable, paymentId, auth, docNo);
   }
 
-  async postExpense(queryable: DbOrTx, expenseId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postExpense(
+    queryable: DbOrTx,
+    expenseId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.postCustomerPaymentExpenseService.postExpense(queryable, expenseId, auth);
   }
 
@@ -230,11 +266,19 @@ export class PurchasesAndTreasuryPostingService {
     return this.postExpenseReversalService.postExpenseReversal(queryable, expenseId, reason, auth);
   }
 
-
-  async postWithholdingTaxRemittance(queryable: DbOrTx, transactionId: number, paymentMethod: 'bank' | 'cash', auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
-    return this.postWithholdingTaxRemittanceService.postWithholdingTaxRemittance(queryable, transactionId, paymentMethod, auth);
+  async postWithholdingTaxRemittance(
+    queryable: DbOrTx,
+    transactionId: number,
+    paymentMethod: 'bank' | 'cash',
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
+    return this.postWithholdingTaxRemittanceService.postWithholdingTaxRemittance(
+      queryable,
+      transactionId,
+      paymentMethod,
+      auth,
+    );
   }
-
 
   async postCustomerOpeningBalance(
     queryable: DbOrTx,
@@ -253,5 +297,4 @@ export class PurchasesAndTreasuryPostingService {
   ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.postOpeningBalancesService.postSupplierOpeningBalance(queryable, supplierId, amount, auth);
   }
-
 }

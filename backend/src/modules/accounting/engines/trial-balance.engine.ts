@@ -85,8 +85,14 @@ export function buildTrialBalance(
       };
     });
 
-  const totalDebit = toMoney(rows.reduce((sum, r) => sum + r.debit, 0), digits);
-  const totalCredit = toMoney(rows.reduce((sum, r) => sum + r.credit, 0), digits);
+  const totalDebit = toMoney(
+    rows.reduce((sum, r) => sum + r.debit, 0),
+    digits,
+  );
+  const totalCredit = toMoney(
+    rows.reduce((sum, r) => sum + r.credit, 0),
+    digits,
+  );
   const difference = toMoney(totalDebit - totalCredit, digits);
   return {
     asOfDate,

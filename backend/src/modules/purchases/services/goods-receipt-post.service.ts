@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { type Kysely, sql } from '../../../database/kysely';
 import { type Database } from '../../../database/database.types';
 import { type AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -49,7 +44,12 @@ export class GoodsReceiptPostService {
   private readonly tenantPredicate: (auth: AuthContext, alias?: string) => any;
   private readonly validateGrnFreight: (freight: number | undefined, moneyDigits: 2 | 3) => number;
   private readonly getGoodsReceipt: (id: number, auth: AuthContext, externalTrx?: any) => Promise<any>;
-  private readonly resolveAccountByCode: (trx: any, tenantId: string, accountId: string, code: string) => Promise<number | null>;
+  private readonly resolveAccountByCode: (
+    trx: any,
+    tenantId: string,
+    accountId: string,
+    code: string,
+  ) => Promise<number | null>;
 
   constructor(deps: GoodsReceiptPostDeps) {
     this.db = deps.db;
@@ -67,19 +67,29 @@ export class GoodsReceiptPostService {
       // Book precision for every amount in this flow. goods-receipt previously
       // used no moneyDigits at all — every site below was hard-coded to 2.
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
-      const receiptLink = await trx.selectFrom('goods_receipt_notes')
+      const receiptLink = await trx
+        .selectFrom('goods_receipt_notes')
         .select('purchase_order_id')
-        .where('id', '=', id).where('tenant_id', '=', scope.tenantId)
+        .where('id', '=', id)
+        .where('tenant_id', '=', scope.tenantId)
         .executeTakeFirst();
       if (!receiptLink) throw new NotFoundException(`إذن الاستلام رقم ${id} غير موجود.`);
       if (receiptLink.purchase_order_id) {
-        const lockedOrder = await trx.selectFrom('purchase_orders').select(['id', 'status'])
+        const lockedOrder = await trx
+          .selectFrom('purchase_orders')
+          .select(['id', 'status'])
           .where('id', '=', Number(receiptLink.purchase_order_id))
-          .where('tenant_id', '=', scope.tenantId).forUpdate().executeTakeFirstOrThrow();
+          .where('tenant_id', '=', scope.tenantId)
+          .forUpdate()
+          .executeTakeFirstOrThrow();
         // INV-SPIRIT-GRN-PENDING-REVIEW: a draft order posts as a
         // pending-review receipt (flagged below); only a cancelled
         // order blocks posting.
-        if (!['draft', 'confirmed', 'partially_received', 'received', 'converted_to_bill'].includes(String(lockedOrder.status))) {
+        if (
+          !['draft', 'confirmed', 'partially_received', 'received', 'converted_to_bill'].includes(
+            String(lockedOrder.status),
+          )
+        ) {
           throw new BadRequestException('تم رفض ترحيل الاستلام: أمر الشراء غير معتمد أو ملغي');
         }
       }
@@ -105,15 +115,20 @@ export class GoodsReceiptPostService {
       if (grnRow.status === 'cancelled') {
         throw new BadRequestException('لا يمكن ترحيل محضر استلام ملغى.');
       }
-      const alreadyReceivedBill = await trx.selectFrom('purchases').select('id')
+      const alreadyReceivedBill = await trx
+        .selectFrom('purchases')
+        .select('id')
         .where('tenant_id', '=', scope.tenantId)
         .where('status', '=', 'posted')
         .where((eb: any) => eb.or([eb('lifecycle_status', 'is', null), eb('lifecycle_status', '!=', 'grn_bill')]))
-        .where((eb: any) => eb.or([
-          eb('grn_id', '=', id),
-          ...(grnRow.purchase_order_id ? [eb('po_id', '=', Number(grnRow.purchase_order_id))] : []),
-        ]))
-        .limit(1).executeTakeFirst();
+        .where((eb: any) =>
+          eb.or([
+            eb('grn_id', '=', id),
+            ...(grnRow.purchase_order_id ? [eb('po_id', '=', Number(grnRow.purchase_order_id))] : []),
+          ]),
+        )
+        .limit(1)
+        .executeTakeFirst();
       if (alreadyReceivedBill) {
         throw new BadRequestException('فاتورة مرتبطة بهذا الاستلام رحّلت المخزون بالفعل؛ لا يجوز ترحيله مرتين.');
       }
@@ -132,8 +147,13 @@ export class GoodsReceiptPostService {
       const acceptedLines = [...grn.lines]
         .sort((a, b) => Number(a.productId) - Number(b.productId))
         .filter((line: any) => Number(line.acceptedQty || 0) > 0);
-      if (freight > 0 && !acceptedLines.some((line: any) => Number(line.acceptedQty || 0) * Number(line.unitCost || 0) > 0)) {
-        throw new BadRequestException('الشحن يحتاج صنفاً مقبولاً واحداً على الأقل في إذن الاستلام؛ الكميات المرفوضة وحدها لا تحمل تكلفة وصول.');
+      if (
+        freight > 0 &&
+        !acceptedLines.some((line: any) => Number(line.acceptedQty || 0) * Number(line.unitCost || 0) > 0)
+      ) {
+        throw new BadRequestException(
+          'الشحن يحتاج صنفاً مقبولاً واحداً على الأقل في إذن الاستلام؛ الكميات المرفوضة وحدها لا تحمل تكلفة وصول.',
+        );
       }
       const freightByLineId = new Map<number, number>();
       if (freight > 0) {
@@ -162,7 +182,9 @@ export class GoodsReceiptPostService {
       // and a line whose quarantine pointer no longer names a real
       // quarantine location must fail closed instead of silently
       // posting sellable stock.
-      const quarantineLocationIds = [...new Set(grn.lines.map((line: any) => Number(line.quarantineLocationId || 0)).filter((id: number) => id > 0))];
+      const quarantineLocationIds = [
+        ...new Set(grn.lines.map((line: any) => Number(line.quarantineLocationId || 0)).filter((id: number) => id > 0)),
+      ];
       const quarantineLocationsById = new Map<number, { branchId: number | null }>();
       if (quarantineLocationIds.length) {
         const quarantineRows = await trx
@@ -173,9 +195,13 @@ export class GoodsReceiptPostService {
           .execute();
         for (const row of quarantineRows) {
           if (String(row.location_type || '') !== 'quarantine') {
-            throw new BadRequestException('مكان الحجر في إذن الاستلام ليس مخزن حجر صحي؛ أوقف الترحيل قبل دخول بضاعة محجوزة إلى مخزن بيع.');
+            throw new BadRequestException(
+              'مكان الحجر في إذن الاستلام ليس مخزن حجر صحي؛ أوقف الترحيل قبل دخول بضاعة محجوزة إلى مخزن بيع.',
+            );
           }
-          quarantineLocationsById.set(Number(row.id), { branchId: row.branch_id != null ? Number(row.branch_id) : null });
+          quarantineLocationsById.set(Number(row.id), {
+            branchId: row.branch_id != null ? Number(row.branch_id) : null,
+          });
         }
         if (quarantineLocationsById.size !== quarantineLocationIds.length) {
           throw new NotFoundException('مكان الحجر في إذن الاستلام غير موجود في المنشأة.');
@@ -201,7 +227,11 @@ export class GoodsReceiptPostService {
             ? quarantineLocationsById.get(quarantineLocationId)!.branchId
             : grnBranchId;
           const lineUnitCost = Number(line.unitCost || 0);
-          if (!Number.isFinite(lineUnitCost) || lineUnitCost <= 0 || roundMoney(accepted * lineUnitCost, moneyDigits) <= 0) {
+          if (
+            !Number.isFinite(lineUnitCost) ||
+            lineUnitCost <= 0 ||
+            roundMoney(accepted * lineUnitCost, moneyDigits) <= 0
+          ) {
             throw new BadRequestException(`لا يمكن ترحيل استلام الصنف ${line.productId} بدون تكلفة مالية صالحة.`);
           }
           // INV-SHIPPING-ALLOCATION: this line's share of the receipt
@@ -210,9 +240,8 @@ export class GoodsReceiptPostService {
           // below (the sum of these totals) can never diverge from
           // the stored movement totals by rounding.
           const allocatedFreight = freightByLineId.get(Number(line.id)) || 0;
-          const landedUnitCost = allocatedFreight > 0
-            ? Number((lineUnitCost + allocatedFreight / accepted).toFixed(6))
-            : lineUnitCost;
+          const landedUnitCost =
+            allocatedFreight > 0 ? Number((lineUnitCost + allocatedFreight / accepted).toFixed(6)) : lineUnitCost;
           const landedLineTotal = stockMovementTotal(accepted, lineUnitCost, moneyDigits) + allocatedFreight;
           totalGrniAmount += landedLineTotal;
 
@@ -242,17 +271,29 @@ export class GoodsReceiptPostService {
           // blends into the receipt value, so the WAC reflects the true
           // landed cost instead of the bare item cost — the same blend
           // the direct invoice performs at its own receipt.
-          await valueStockReceipt(trx, scope.tenantId, Number(line.productId), stockChange.globalAfter, accepted, accepted * landedUnitCost);
+          await valueStockReceipt(
+            trx,
+            scope.tenantId,
+            Number(line.productId),
+            stockChange.globalAfter,
+            accepted,
+            accepted * landedUnitCost,
+          );
 
           // INV-SHIPPING-ALLOCATION: the landed line total is the proof
           // the freight reached this line; unit_cost stays the net item
           // cost on the pharmacy batch below, exactly as the
           // post-posting step leaves it.
           if (allocatedFreight > 0) {
-            await trx.updateTable('goods_receipt_lines').set({
-              allocated_landed_cost: allocatedFreight,
-              landed_unit_cost: landedUnitCost,
-            }).where('id', '=', Number(line.id)).where('tenant_id', '=', scope.tenantId).execute();
+            await trx
+              .updateTable('goods_receipt_lines')
+              .set({
+                allocated_landed_cost: allocatedFreight,
+                landed_unit_cost: landedUnitCost,
+              })
+              .where('id', '=', Number(line.id))
+              .where('tenant_id', '=', scope.tenantId)
+              .execute();
           }
 
           // Record formal stock movement with the real running balances.
@@ -284,13 +325,19 @@ export class GoodsReceiptPostService {
             })
             .execute();
 
-          const drug = await trx.selectFrom('pharmacy_drugs').select('id')
-            .where('tenant_id', '=', scope.tenantId).where('product_id', '=', Number(line.productId))
+          const drug = await trx
+            .selectFrom('pharmacy_drugs')
+            .select('id')
+            .where('tenant_id', '=', scope.tenantId)
+            .where('product_id', '=', Number(line.productId))
             .executeTakeFirst();
           const batchNumber = String(line.batchNumber || '').trim();
           const rawExpiry = line.expiryDate;
-          const expiryDate = rawExpiry ? (rawExpiry instanceof Date
-            ? rawExpiry.toISOString().slice(0, 10) : String(rawExpiry).slice(0, 10)) : '';
+          const expiryDate = rawExpiry
+            ? rawExpiry instanceof Date
+              ? rawExpiry.toISOString().slice(0, 10)
+              : String(rawExpiry).slice(0, 10)
+            : '';
           if (drug && (!batchNumber || !expiryDate)) {
             throw new UnprocessableEntityException('محضر استلام الدواء يتطلب رقم التشغيلة وتاريخ الصلاحية');
           }
@@ -300,30 +347,55 @@ export class GoodsReceiptPostService {
           // batches into pharmacy_batches too).
           if (batchNumber && drug) {
             const today = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
-            if (!/^\d{4}-\d{2}(?:-\d{2})?$/.test(expiryDate) ||
-              (expiryDate.length === 7 ? expiryDate < today.slice(0, 7) : expiryDate < today)) {
+            if (
+              !/^\d{4}-\d{2}(?:-\d{2})?$/.test(expiryDate) ||
+              (expiryDate.length === 7 ? expiryDate < today.slice(0, 7) : expiryDate < today)
+            ) {
               throw new UnprocessableEntityException('لا يمكن ترحيل تشغيلة منتهية أو بتاريخ صلاحية غير صالح');
             }
-            const existingBatch = await trx.selectFrom('pharmacy_batches').select(['id', 'quantity', 'expiry_date'])
-              .where('tenant_id', '=', scope.tenantId).where('product_id', '=', Number(line.productId))
-              .where('location_id', '=', targetLocationId).where('batch_number', '=', batchNumber)
-              .forUpdate().executeTakeFirst();
+            const existingBatch = await trx
+              .selectFrom('pharmacy_batches')
+              .select(['id', 'quantity', 'expiry_date'])
+              .where('tenant_id', '=', scope.tenantId)
+              .where('product_id', '=', Number(line.productId))
+              .where('location_id', '=', targetLocationId)
+              .where('batch_number', '=', batchNumber)
+              .forUpdate()
+              .executeTakeFirst();
             if (existingBatch) {
               if (String(existingBatch.expiry_date).slice(0, 10) !== expiryDate) {
                 throw new UnprocessableEntityException('تاريخ صلاحية التشغيلة المسجلة لا يطابق محضر الاستلام');
               }
-              await trx.updateTable('pharmacy_batches').set({
-                quantity: Number((Number(existingBatch.quantity) + accepted).toFixed(3)),
-                expiry_date: expiryDate, unit_cost: lineUnitCost, status: 'active', updated_at: sql`NOW()`,
-              }).where('tenant_id', '=', scope.tenantId).where('id', '=', Number(existingBatch.id)).execute();
+              await trx
+                .updateTable('pharmacy_batches')
+                .set({
+                  quantity: Number((Number(existingBatch.quantity) + accepted).toFixed(3)),
+                  expiry_date: expiryDate,
+                  unit_cost: lineUnitCost,
+                  status: 'active',
+                  updated_at: sql`NOW()`,
+                })
+                .where('tenant_id', '=', scope.tenantId)
+                .where('id', '=', Number(existingBatch.id))
+                .execute();
             } else {
-              await trx.insertInto('pharmacy_batches').values({
-                tenant_id: scope.tenantId, account_id: scope.accountId,
-                product_id: Number(line.productId), drug_id: drug?.id || null,
-                batch_number: batchNumber, expiry_date: expiryDate, quantity: accepted,
-                unit_cost: lineUnitCost, location_id: targetLocationId,
-                supplier_name: grn.supplierName || null, status: 'active', notes: `وارد ${grn.docNo}`,
-              }).execute();
+              await trx
+                .insertInto('pharmacy_batches')
+                .values({
+                  tenant_id: scope.tenantId,
+                  account_id: scope.accountId,
+                  product_id: Number(line.productId),
+                  drug_id: drug?.id || null,
+                  batch_number: batchNumber,
+                  expiry_date: expiryDate,
+                  quantity: accepted,
+                  unit_cost: lineUnitCost,
+                  location_id: targetLocationId,
+                  supplier_name: grn.supplierName || null,
+                  status: 'active',
+                  notes: `وارد ${grn.docNo}`,
+                })
+                .execute();
             }
           }
           if (batchNumber && !drug) {
@@ -331,10 +403,16 @@ export class GoodsReceiptPostService {
             // merge requires identical expiry. The helper owns the
             // validation; drug-linked products never reach it.
             await upsertInventoryBatchFromReceipt(trx, {
-              tenantId: scope.tenantId, accountId: scope.accountId,
-              productId: Number(line.productId), batchNumber, expiryDate,
-              qty: accepted, unitCost: lineUnitCost, locationId: targetLocationId,
-              supplierName: grn.supplierName || null, notes: `وارد ${grn.docNo}`,
+              tenantId: scope.tenantId,
+              accountId: scope.accountId,
+              productId: Number(line.productId),
+              batchNumber,
+              expiryDate,
+              qty: accepted,
+              unitCost: lineUnitCost,
+              locationId: targetLocationId,
+              supplierName: grn.supplierName || null,
+              notes: `وارد ${grn.docNo}`,
             });
           }
         }
@@ -353,18 +431,26 @@ export class GoodsReceiptPostService {
       let pendingReview = false;
       let pendingReviewReason: string | null = null;
       if (grn.purchaseOrderId) {
-        const poRow = await trx.selectFrom('purchase_orders').select(['status'])
+        const poRow = await trx
+          .selectFrom('purchase_orders')
+          .select(['status'])
           .where('id', '=', Number(grn.purchaseOrderId))
-          .where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
         const poUnapproved = String(poRow?.status || '') === 'draft';
-        const poItemStates = await trx.selectFrom('purchase_order_items')
+        const poItemStates = await trx
+          .selectFrom('purchase_order_items')
           .select(['id', 'quantity', 'received_quantity'])
           .where('purchase_order_id', '=', Number(grn.purchaseOrderId))
           .where('tenant_id', '=', scope.tenantId)
-          .forUpdate().execute();
+          .forUpdate()
+          .execute();
         const remainingByItem = new Map<number, number>();
         for (const item of poItemStates) {
-          remainingByItem.set(Number(item.id), Math.max(0, Number(item.quantity || 0) - Number(item.received_quantity || 0)));
+          remainingByItem.set(
+            Number(item.id),
+            Math.max(0, Number(item.quantity || 0) - Number(item.received_quantity || 0)),
+          );
         }
         const overReceivedByLineId = new Map<number, number>();
         for (const line of grn.lines) {
@@ -395,7 +481,8 @@ export class GoodsReceiptPostService {
           );
         }
         for (const [lineId, excess] of overReceivedByLineId) {
-          await trx.updateTable('goods_receipt_lines')
+          await trx
+            .updateTable('goods_receipt_lines')
             .set({ over_received_qty: excess })
             .where('id', '=', lineId)
             .where('tenant_id', '=', scope.tenantId)

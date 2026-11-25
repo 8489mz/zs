@@ -12,7 +12,13 @@ import { StorefrontMediaService } from '../storefront/storefront-media.service';
 @Module({
   imports: [AuditModule, InventoryModule, AccountingModule],
   controllers: [CatalogController],
-  providers: [CatalogService, CatalogCategoryService, CatalogProductService, ProductSerialsService, StorefrontMediaService],
+  providers: [
+    CatalogService,
+    CatalogCategoryService,
+    CatalogProductService,
+    ProductSerialsService,
+    StorefrontMediaService,
+  ],
   exports: [ProductSerialsService],
 })
 export class CatalogModule {}

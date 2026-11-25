@@ -89,7 +89,9 @@ export class AccountingAccountsService {
     // cancelled entry never moves a balance, so only 'posted' lines count.
     const balanceRows = await this.db
       .selectFrom('journal_entry_lines as l')
-      .innerJoin('journal_entries as je', (join: any) => join.onRef('je.id', '=', 'l.journal_entry_id').onRef('je.tenant_id', '=', 'l.tenant_id'))
+      .innerJoin('journal_entries as je', (join: any) =>
+        join.onRef('je.id', '=', 'l.journal_entry_id').onRef('je.tenant_id', '=', 'l.tenant_id'),
+      )
       .select([
         'l.account_id as account_id',
         sql<number>`COALESCE(SUM(l.debit), 0)`.as('debit'),
@@ -101,7 +103,10 @@ export class AccountingAccountsService {
       .groupBy('l.account_id')
       .execute();
     const balanceByAccountId = new Map<number, { debit: number; credit: number }>(
-      balanceRows.map((row) => [Number(row.account_id), { debit: Number(row.debit || 0), credit: Number(row.credit || 0) }]),
+      balanceRows.map((row) => [
+        Number(row.account_id),
+        { debit: Number(row.debit || 0), credit: Number(row.credit || 0) },
+      ]),
     );
 
     const rowsById = new Map(rows.map((row) => [String(row.id), row]));
@@ -161,7 +166,8 @@ export class AccountingAccountsService {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
 
-    const parent = await this.db.selectFrom('accounting_accounts')
+    const parent = await this.db
+      .selectFrom('accounting_accounts')
       .select(['code'])
       .where('id', '=', parentId)
       .where('tenant_id', '=', scope.tenantId)
@@ -169,7 +175,8 @@ export class AccountingAccountsService {
 
     if (!parent) throw new NotFoundException('Parent account not found');
 
-    const children = await this.db.selectFrom('accounting_accounts')
+    const children = await this.db
+      .selectFrom('accounting_accounts')
       .select(['code'])
       .where('parent_id', '=', parentId)
       .where('tenant_id', '=', scope.tenantId)
@@ -205,9 +212,16 @@ export class AccountingAccountsService {
     const scope = requireTenantScope(auth);
     return this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, scope.tenantId);
-      await assertHierarchyParent(trx, 'accounting_accounts', scope.tenantId, null, dto.parentId == null ? null : Number(dto.parentId));
+      await assertHierarchyParent(
+        trx,
+        'accounting_accounts',
+        scope.tenantId,
+        null,
+        dto.parentId == null ? null : Number(dto.parentId),
+      );
 
-      const existing = await trx.selectFrom('accounting_accounts')
+      const existing = await trx
+        .selectFrom('accounting_accounts')
         .select('id')
         .where('code', '=', dto.code)
         .where('tenant_id', '=', scope.tenantId)
@@ -218,7 +232,8 @@ export class AccountingAccountsService {
       let normalBalance = dto.normalBalance;
 
       if (parentId) {
-        const parent = await trx.selectFrom('accounting_accounts')
+        const parent = await trx
+          .selectFrom('accounting_accounts')
           .select(['id', 'normal_balance'])
           .where('id', '=', parentId)
           .where('tenant_id', '=', scope.tenantId)
@@ -227,7 +242,8 @@ export class AccountingAccountsService {
         normalBalance = parent.normal_balance;
       }
 
-      const result = await trx.insertInto('accounting_accounts')
+      const result = await trx
+        .insertInto('accounting_accounts')
         .values({
           tenant_id: scope.tenantId,
           // INV-ACCOUNT-CREATE-ACCOUNT-ID: account_id is TEXT NOT NULL with
@@ -266,9 +282,16 @@ export class AccountingAccountsService {
     const scope = requireTenantScope(auth);
     return this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, scope.tenantId);
-      await assertHierarchyParent(trx, 'accounting_accounts', scope.tenantId, id, dto.parentId == null ? null : Number(dto.parentId));
+      await assertHierarchyParent(
+        trx,
+        'accounting_accounts',
+        scope.tenantId,
+        id,
+        dto.parentId == null ? null : Number(dto.parentId),
+      );
 
-      const existing = await trx.selectFrom('accounting_accounts')
+      const existing = await trx
+        .selectFrom('accounting_accounts')
         .selectAll()
         .where('id', '=', id)
         .where('tenant_id', '=', scope.tenantId)
@@ -277,7 +300,8 @@ export class AccountingAccountsService {
       if (!existing) throw new NotFoundException('Account not found');
 
       if (dto.code && dto.code !== existing.code) {
-        const codeCheck = await trx.selectFrom('accounting_accounts')
+        const codeCheck = await trx
+          .selectFrom('accounting_accounts')
           .select('id')
           .where('code', '=', dto.code)
           .where('tenant_id', '=', scope.tenantId)
@@ -285,7 +309,8 @@ export class AccountingAccountsService {
         if (codeCheck) throw new BadRequestException('Account code already exists');
       }
 
-      const hasTransactions = await trx.selectFrom('journal_entry_lines')
+      const hasTransactions = await trx
+        .selectFrom('journal_entry_lines')
         .select('id')
         .where('account_id', '=', id)
         .where('tenant_id', '=', scope.tenantId)
@@ -311,8 +336,13 @@ export class AccountingAccountsService {
           if (dto.parentId !== undefined) {
             updateData.parent_id = dto.parentId;
             if (dto.parentId) {
-               const parent = await trx.selectFrom('accounting_accounts').select('normal_balance').where('id', '=', dto.parentId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
-               if (parent) updateData.normal_balance = parent.normal_balance;
+              const parent = await trx
+                .selectFrom('accounting_accounts')
+                .select('normal_balance')
+                .where('id', '=', dto.parentId)
+                .where('tenant_id', '=', scope.tenantId)
+                .executeTakeFirst();
+              if (parent) updateData.normal_balance = parent.normal_balance;
             }
           }
         }
@@ -332,7 +362,10 @@ export class AccountingAccountsService {
         }
       }
       if (dto.revaluationCurrency !== undefined) {
-        const cleanCurrency = String(dto.revaluationCurrency || '').trim().toUpperCase() || null;
+        const cleanCurrency =
+          String(dto.revaluationCurrency || '')
+            .trim()
+            .toUpperCase() || null;
         const willBeMonetary = dto.isMonetary !== undefined ? dto.isMonetary : Boolean(existing.is_monetary);
         if (cleanCurrency && !willBeMonetary) {
           throw new BadRequestException('لا يمكن تحديد عملة إعادة التقييم لحساب غير نقدي (is_monetary = false)');
@@ -344,7 +377,8 @@ export class AccountingAccountsService {
       }
 
       if (Object.keys(updateData).length > 0) {
-        await trx.updateTable('accounting_accounts')
+        await trx
+          .updateTable('accounting_accounts')
           .set({ ...updateData, updated_at: sql`NOW()` })
           .where('id', '=', id)
           .where('tenant_id', '=', scope.tenantId)
@@ -359,7 +393,8 @@ export class AccountingAccountsService {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
 
-    const existing = await this.db.selectFrom('accounting_accounts')
+    const existing = await this.db
+      .selectFrom('accounting_accounts')
       .select(['is_system'])
       .where('id', '=', id)
       .where('tenant_id', '=', scope.tenantId)
@@ -371,7 +406,8 @@ export class AccountingAccountsService {
       throw new BadRequestException('لا يمكن حذف الحسابات النظامية الأساسية.');
     }
 
-    const hasTransactions = await this.db.selectFrom('journal_entry_lines')
+    const hasTransactions = await this.db
+      .selectFrom('journal_entry_lines')
       .select('id')
       .where('account_id', '=', id)
       .where('tenant_id', '=', scope.tenantId)
@@ -382,7 +418,8 @@ export class AccountingAccountsService {
       throw new BadRequestException('لا يمكن حذف حساب تمت عليه قيود محاسبية، يمكنك إيقافه بدلاً من ذلك.');
     }
 
-    const hasChildren = await this.db.selectFrom('accounting_accounts')
+    const hasChildren = await this.db
+      .selectFrom('accounting_accounts')
       .select('id')
       .where('parent_id', '=', id)
       .where('tenant_id', '=', scope.tenantId)
@@ -393,12 +430,12 @@ export class AccountingAccountsService {
       throw new BadRequestException('لا يمكن حذف حساب يحتوي على حسابات فرعية.');
     }
 
-    await this.db.deleteFrom('accounting_accounts')
+    await this.db
+      .deleteFrom('accounting_accounts')
       .where('id', '=', id)
       .where('tenant_id', '=', scope.tenantId)
       .execute();
 
     return { ok: true };
   }
-
 }

@@ -79,10 +79,15 @@ export class GoodsReceiptCreateService {
     let locationId = Number(dto.locationId || 0);
 
     // Verify location exists in tenant or resolve fallback
-    let location = locationId > 0
-      ? await this.db.selectFrom('stock_locations').select(['id', 'name'])
-          .where('id', '=', locationId).where('tenant_id', '=', scope.tenantId).executeTakeFirst()
-      : null;
+    let location =
+      locationId > 0
+        ? await this.db
+            .selectFrom('stock_locations')
+            .select(['id', 'name'])
+            .where('id', '=', locationId)
+            .where('tenant_id', '=', scope.tenantId)
+            .executeTakeFirst()
+        : null;
     // Never silently reroute an explicitly requested warehouse. The old
     // fallback could create real stock and GRNI entries at the wrong location.
     assertGrnRequestedLocationScope(locationId, location);
@@ -90,11 +95,19 @@ export class GoodsReceiptCreateService {
     if (!location) {
       // 1. If PO is specified, check if the PO has a warehouse_id that belongs to tenant
       if (dto.purchaseOrderId) {
-        const po = await this.db.selectFrom('purchase_orders').select(['warehouse_id'])
-          .where('id', '=', dto.purchaseOrderId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+        const po = await this.db
+          .selectFrom('purchase_orders')
+          .select(['warehouse_id'])
+          .where('id', '=', dto.purchaseOrderId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
         if (po?.warehouse_id) {
-          const poLoc = await this.db.selectFrom('stock_locations').select(['id', 'name'])
-            .where('id', '=', Number(po.warehouse_id)).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+          const poLoc = await this.db
+            .selectFrom('stock_locations')
+            .select(['id', 'name'])
+            .where('id', '=', Number(po.warehouse_id))
+            .where('tenant_id', '=', scope.tenantId)
+            .executeTakeFirst();
           if (poLoc) {
             location = poLoc;
             locationId = Number(poLoc.id);
@@ -124,8 +137,12 @@ export class GoodsReceiptCreateService {
     if (productIds.some((id) => !Number.isInteger(id) || id <= 0)) {
       throw new BadRequestException('أحد أصناف إذن الاستلام غير صالح.');
     }
-    const products = await this.db.selectFrom('products').select('id')
-      .where('id', 'in', productIds).where('tenant_id', '=', scope.tenantId).execute();
+    const products = await this.db
+      .selectFrom('products')
+      .select('id')
+      .where('id', 'in', productIds)
+      .where('tenant_id', '=', scope.tenantId)
+      .execute();
     if (products.length !== productIds.length) throw new NotFoundException('أحد أصناف إذن الاستلام لا يتبع المنشأة.');
     if (!dto.purchaseOrderId && dto.lines.some((line) => line.purchaseOrderItemId)) {
       throw new BadRequestException('يلزم تحديد أمر الشراء عند ربط أحد بنوده بإذن الاستلام.');
@@ -133,23 +150,36 @@ export class GoodsReceiptCreateService {
     if (dto.purchaseOrderId && dto.lines.some((line) => Number(line.acceptedQty) > 0 && !line.purchaseOrderItemId)) {
       throw new BadRequestException('اربط كل كمية مقبولة ببند أمر الشراء حتى يمكن فوترتها وتسوية GRNI.');
     }
-    const quarantineIds = [...new Set(dto.lines.map((line) => Number(line.quarantineLocationId || 0)).filter((id) => id > 0))];
+    const quarantineIds = [
+      ...new Set(dto.lines.map((line) => Number(line.quarantineLocationId || 0)).filter((id) => id > 0)),
+    ];
     if (quarantineIds.length) {
-      const quarantineLocations = await this.db.selectFrom('stock_locations').select(['id', 'location_type'])
-        .where('id', 'in', quarantineIds).where('tenant_id', '=', scope.tenantId).execute();
-      if (quarantineLocations.length !== quarantineIds.length) throw new NotFoundException('مكان الحجر لا يتبع المنشأة.');
+      const quarantineLocations = await this.db
+        .selectFrom('stock_locations')
+        .select(['id', 'location_type'])
+        .where('id', 'in', quarantineIds)
+        .where('tenant_id', '=', scope.tenantId)
+        .execute();
+      if (quarantineLocations.length !== quarantineIds.length)
+        throw new NotFoundException('مكان الحجر لا يتبع المنشأة.');
       // INV-GRN-REAL-QUARANTINE: a quarantine pointer is only real
       // when the location is typed quarantine — any other type stays
       // sellable, so accepting it here would recreate the name-only
       // bug (goods entering normal sellable stock under a quarantine
       // label). Fail closed at creation, not at posting.
       if (quarantineLocations.some((loc) => String(loc.location_type || '') !== 'quarantine')) {
-        throw new BadRequestException('مكان الحجر يجب أن يكون مخزناً من نوع حجر صحي؛ لا يجوز تحويل مخزن بيع عادي إلى حجر.');
+        throw new BadRequestException(
+          'مكان الحجر يجب أن يكون مخزناً من نوع حجر صحي؛ لا يجوز تحويل مخزن بيع عادي إلى حجر.',
+        );
       }
     }
     if (dto.purchaseOrderId) {
-      const order = await this.db.selectFrom('purchase_orders').select(['id', 'supplier_id', 'status'])
-        .where('id', '=', dto.purchaseOrderId).where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+      const order = await this.db
+        .selectFrom('purchase_orders')
+        .select(['id', 'supplier_id', 'status'])
+        .where('id', '=', dto.purchaseOrderId)
+        .where('tenant_id', '=', scope.tenantId)
+        .executeTakeFirst();
       if (!order || Number(order.supplier_id) !== Number(dto.supplierId)) {
         throw new BadRequestException('أمر الشراء لا يتبع المورد المحدد في المنشأة.');
       }
@@ -158,16 +188,28 @@ export class GoodsReceiptCreateService {
       // post time and billing stays blocked until the order is
       // approved. Only a cancelled order (a deliberate stop) still
       // blocks receipt creation.
-      if (!['draft', 'confirmed', 'partially_received', 'received', 'converted_to_bill'].includes(String(order.status))) {
+      if (
+        !['draft', 'confirmed', 'partially_received', 'received', 'converted_to_bill'].includes(String(order.status))
+      ) {
         throw new BadRequestException('لا يجوز الاستلام على أمر شراء ملغي أو غير معتمد');
       }
-      const orderItemIds = [...new Set(dto.lines.map((line) => Number(line.purchaseOrderItemId || 0)).filter((id) => id > 0))];
+      const orderItemIds = [
+        ...new Set(dto.lines.map((line) => Number(line.purchaseOrderItemId || 0)).filter((id) => id > 0)),
+      ];
       if (orderItemIds.length) {
-        const orderItems = await this.db.selectFrom('purchase_order_items').select(['id', 'product_id'])
-          .where('id', 'in', orderItemIds).where('purchase_order_id', '=', order.id)
-          .where('tenant_id', '=', scope.tenantId).execute();
+        const orderItems = await this.db
+          .selectFrom('purchase_order_items')
+          .select(['id', 'product_id'])
+          .where('id', 'in', orderItemIds)
+          .where('purchase_order_id', '=', order.id)
+          .where('tenant_id', '=', scope.tenantId)
+          .execute();
         const byId = new Map(orderItems.map((item) => [Number(item.id), Number(item.product_id)]));
-        if (dto.lines.some((line) => line.purchaseOrderItemId && byId.get(Number(line.purchaseOrderItemId)) !== Number(line.productId))) {
+        if (
+          dto.lines.some(
+            (line) => line.purchaseOrderItemId && byId.get(Number(line.purchaseOrderItemId)) !== Number(line.productId),
+          )
+        ) {
           throw new BadRequestException('بند أمر الشراء لا يطابق الصنف المستلم.');
         }
       }
@@ -196,8 +238,17 @@ export class GoodsReceiptCreateService {
         .execute();
 
       // The generated row id is unique across concurrent receipts; COUNT(*) + 1 is not.
-      await trx.updateTable('goods_receipt_notes')
-        .set({ doc_no: formatDailyDocumentNumber('GRN', Number(grn.id), new Date(), 4, await getTenantTimezone(trx, scope.tenantId)) })
+      await trx
+        .updateTable('goods_receipt_notes')
+        .set({
+          doc_no: formatDailyDocumentNumber(
+            'GRN',
+            Number(grn.id),
+            new Date(),
+            4,
+            await getTenantTimezone(trx, scope.tenantId),
+          ),
+        })
         .where('id', '=', Number(grn.id))
         .where('tenant_id', '=', scope.tenantId)
         .execute();
@@ -208,7 +259,9 @@ export class GoodsReceiptCreateService {
         const rejected = Number(l.rejectedQty || 0);
 
         if (Math.abs(received - (accepted + rejected)) > 0.001) {
-          throw new BadRequestException(`إجمالي الكمية المستلمة (${received}) يجب أن يساوي المقبول (${accepted}) + المرفوض (${rejected}).`);
+          throw new BadRequestException(
+            `إجمالي الكمية المستلمة (${received}) يجب أن يساوي المقبول (${accepted}) + المرفوض (${rejected}).`,
+          );
         }
 
         return {
@@ -238,11 +291,18 @@ export class GoodsReceiptCreateService {
     });
   }
 
-  async listGoodsReceipts(filter: { supplierId?: number; status?: string; search?: string }, auth: AuthContext): Promise<any> {
+  async listGoodsReceipts(
+    filter: { supplierId?: number; status?: string; search?: string },
+    auth: AuthContext,
+  ): Promise<any> {
     let query = (this.db as any)
       .selectFrom('goods_receipt_notes as g')
-      .leftJoin('suppliers as s', (join: any) => join.onRef('s.id', '=', 'g.supplier_id').onRef('s.tenant_id', '=', 'g.tenant_id'))
-      .leftJoin('purchase_orders as po', (join: any) => join.onRef('po.id', '=', 'g.purchase_order_id').onRef('po.tenant_id', '=', 'g.tenant_id'))
+      .leftJoin('suppliers as s', (join: any) =>
+        join.onRef('s.id', '=', 'g.supplier_id').onRef('s.tenant_id', '=', 'g.tenant_id'),
+      )
+      .leftJoin('purchase_orders as po', (join: any) =>
+        join.onRef('po.id', '=', 'g.purchase_order_id').onRef('po.tenant_id', '=', 'g.tenant_id'),
+      )
       .where(this.tenantPredicate(auth, 'g'))
       .select([
         'g.id',
@@ -303,8 +363,12 @@ export class GoodsReceiptCreateService {
 
     const grn = await q
       .selectFrom('goods_receipt_notes as g')
-      .leftJoin('suppliers as s', (join: any) => join.onRef('s.id', '=', 'g.supplier_id').onRef('s.tenant_id', '=', 'g.tenant_id'))
-      .leftJoin('purchase_orders as po', (join: any) => join.onRef('po.id', '=', 'g.purchase_order_id').onRef('po.tenant_id', '=', 'g.tenant_id'))
+      .leftJoin('suppliers as s', (join: any) =>
+        join.onRef('s.id', '=', 'g.supplier_id').onRef('s.tenant_id', '=', 'g.tenant_id'),
+      )
+      .leftJoin('purchase_orders as po', (join: any) =>
+        join.onRef('po.id', '=', 'g.purchase_order_id').onRef('po.tenant_id', '=', 'g.tenant_id'),
+      )
       .where('g.id', '=', id)
       .where(this.tenantPredicate(auth, 'g'))
       .select([
@@ -333,7 +397,9 @@ export class GoodsReceiptCreateService {
 
     const lines = await q
       .selectFrom('goods_receipt_lines as gl')
-      .leftJoin('products as p', (join: any) => join.onRef('p.id', '=', 'gl.product_id').onRef('p.tenant_id', '=', 'gl.tenant_id'))
+      .leftJoin('products as p', (join: any) =>
+        join.onRef('p.id', '=', 'gl.product_id').onRef('p.tenant_id', '=', 'gl.tenant_id'),
+      )
       .where('gl.grn_id', '=', id)
       .where(this.tenantPredicate(auth, 'gl'))
       .select([

@@ -22,7 +22,9 @@ export class PostCustomerPaymentExpenseService {
   ) {}
 
   private normalizeExpenseText(input: string): string {
-    return String(input || '').trim().toLowerCase();
+    return String(input || '')
+      .trim()
+      .toLowerCase();
   }
 
   private mapExpenseTitleToAccountCode(expenseTitle: string): string {
@@ -31,56 +33,109 @@ export class PostCustomerPaymentExpenseService {
 
     if (title.includes('ايجار') || title.includes('إيجار') || title.includes('rent')) return '6100';
     if (
-      title.includes('مرتب') || title.includes('مرتبات') || title.includes('اجور')
-      || title.includes('أجور') || title.includes('salary') || title.includes('wage') || title.includes('payroll')
-    ) return '6200';
+      title.includes('مرتب') ||
+      title.includes('مرتبات') ||
+      title.includes('اجور') ||
+      title.includes('أجور') ||
+      title.includes('salary') ||
+      title.includes('wage') ||
+      title.includes('payroll')
+    )
+      return '6200';
     if (
-      title.includes('انترنت') || title.includes('إنترنت') || title.includes('internet')
+      title.includes('انترنت') ||
+      title.includes('إنترنت') ||
+      title.includes('internet') ||
       // Colloquial / brand spellings a merchant actually types for an internet
       // bill: "النت" (not bare "نت" -- it sits inside منتج/منتجات/كانت), the
       // "انترنيت" spelling, ISP brands, wifi, and DSL. All are internet, so
       // all post to 6700 Administrative per the user's decision.
-      || title.includes('النت') || title.includes(' نت')
-      || title.includes('انترنيت') || title.includes('إنترنيت')
-      || title.includes('انتر نت') || title.includes('إنتر نت')
-      || title.includes('فودافون') || title.includes('vodafone')
-      || title.includes('اتصالات') || title.includes('etisalat')
-      || title.includes('اورنج') || title.includes('أورنج') || title.includes('orange')
-      || title.includes('تي داتا') || title.includes('tedata') || title.includes('te data')
-      || title.includes('واي فاي') || title.includes('وايفاي') || title.includes('wifi') || title.includes('wi-fi')
-      || title.includes('dsl')
-    ) return '6700';
+      title.includes('النت') ||
+      title.includes(' نت') ||
+      title.includes('انترنيت') ||
+      title.includes('إنترنيت') ||
+      title.includes('انتر نت') ||
+      title.includes('إنتر نت') ||
+      title.includes('فودافون') ||
+      title.includes('vodafone') ||
+      title.includes('اتصالات') ||
+      title.includes('etisalat') ||
+      title.includes('اورنج') ||
+      title.includes('أورنج') ||
+      title.includes('orange') ||
+      title.includes('تي داتا') ||
+      title.includes('tedata') ||
+      title.includes('te data') ||
+      title.includes('واي فاي') ||
+      title.includes('وايفاي') ||
+      title.includes('wifi') ||
+      title.includes('wi-fi') ||
+      title.includes('dsl')
+    )
+      return '6700';
     if (
-      title.includes('كهرباء') || title.includes('مرافق') || title.includes('مياه')
-      || title.includes('utilities') || title.includes('utility')
-    ) return '6300';
+      title.includes('كهرباء') ||
+      title.includes('مرافق') ||
+      title.includes('مياه') ||
+      title.includes('utilities') ||
+      title.includes('utility')
+    )
+      return '6300';
     if (
-      title.includes('نقل') || title.includes('شحن') || title.includes('delivery')
-      || title.includes('shipping') || title.includes('transport') || title.includes('freight')
-    ) return '6400';
+      title.includes('نقل') ||
+      title.includes('شحن') ||
+      title.includes('delivery') ||
+      title.includes('shipping') ||
+      title.includes('transport') ||
+      title.includes('freight')
+    )
+      return '6400';
     if (
-      title.includes('تسويق') || title.includes('اعلان') || title.includes('إعلان')
-      || title.includes('ads') || title.includes('marketing')
-    ) return '6500';
+      title.includes('تسويق') ||
+      title.includes('اعلان') ||
+      title.includes('إعلان') ||
+      title.includes('ads') ||
+      title.includes('marketing')
+    )
+      return '6500';
     if (
-      title.includes('صيانة') || title.includes('اصلاح') || title.includes('إصلاح')
-      || title.includes('maintenance') || title.includes('repair')
-    ) return '6600';
+      title.includes('صيانة') ||
+      title.includes('اصلاح') ||
+      title.includes('إصلاح') ||
+      title.includes('maintenance') ||
+      title.includes('repair')
+    )
+      return '6600';
     if (
-      title.includes('اداري') || title.includes('إداري') || title.includes('مكتبي')
-      || title.includes('office') || title.includes('admin') || title.includes('administrative')
-    ) return '6700';
+      title.includes('اداري') ||
+      title.includes('إداري') ||
+      title.includes('مكتبي') ||
+      title.includes('office') ||
+      title.includes('admin') ||
+      title.includes('administrative')
+    )
+      return '6700';
     if (
-      title.includes('بنكي') || title.includes('بنك') || title.includes('bank')
-      || title.includes('fee') || title.includes('fees') || title.includes('عمولة بنكية')
-      || title.includes('فيزا') || title.includes('visa')
-      || title.includes('كارت') || title.includes('card')
-      || title.includes('عمولة فيزا') || title.includes('عمولة بنك')
-      || title.includes('رسوم بنكية')
-      || title.includes('bank fee') || title.includes('bank fees')
-      || title.includes('commission')
-      || title.includes('payment fee') || title.includes('merchant fee')
-    ) return '6800';
+      title.includes('بنكي') ||
+      title.includes('بنك') ||
+      title.includes('bank') ||
+      title.includes('fee') ||
+      title.includes('fees') ||
+      title.includes('عمولة بنكية') ||
+      title.includes('فيزا') ||
+      title.includes('visa') ||
+      title.includes('كارت') ||
+      title.includes('card') ||
+      title.includes('عمولة فيزا') ||
+      title.includes('عمولة بنك') ||
+      title.includes('رسوم بنكية') ||
+      title.includes('bank fee') ||
+      title.includes('bank fees') ||
+      title.includes('commission') ||
+      title.includes('payment fee') ||
+      title.includes('merchant fee')
+    )
+      return '6800';
     return '6900';
   }
 
@@ -100,7 +155,11 @@ export class PostCustomerPaymentExpenseService {
     return 'ok';
   }
 
-  private async findAccountByCode(queryable: DbOrTx, tenantId: string, code: string): Promise<ExpenseAccountCandidate | undefined> {
+  private async findAccountByCode(
+    queryable: DbOrTx,
+    tenantId: string,
+    code: string,
+  ): Promise<ExpenseAccountCandidate | undefined> {
     const row = await queryable
       .selectFrom('accounting_accounts')
       .select(['id', 'code', 'name_ar', 'account_type', 'is_active', 'allow_manual_entries'])
@@ -118,7 +177,11 @@ export class PostCustomerPaymentExpenseService {
     };
   }
 
-  private async findAccountById(queryable: DbOrTx, tenantId: string, accountId: number): Promise<ExpenseAccountCandidate | undefined> {
+  private async findAccountById(
+    queryable: DbOrTx,
+    tenantId: string,
+    accountId: number,
+  ): Promise<ExpenseAccountCandidate | undefined> {
     if (!(accountId > 0)) return undefined;
     const row = await queryable
       .selectFrom('accounting_accounts')
@@ -155,17 +218,19 @@ export class PostCustomerPaymentExpenseService {
       return Number(mappedAccount!.id);
     }
     const mappedReason = this.expenseAccountInvalidReason(mappedAccount);
-    this.logger.warn(
-      `Expense ${expenseId} fallback: mapped category account ${mappedCode} failed (${mappedReason})`,
-    );
+    this.logger.warn(`Expense ${expenseId} fallback: mapped category account ${mappedCode} failed (${mappedReason})`);
 
     const settingsAccount = await this.findAccountById(queryable, tenantId, Number(settings.expenses_account_id || 0));
     if (this.isValidExpensePostingAccount(settingsAccount)) {
-      this.logger.warn(`Expense ${expenseId} fallback: using accounting_settings.expenses_account_id (${settingsAccount!.code})`);
+      this.logger.warn(
+        `Expense ${expenseId} fallback: using accounting_settings.expenses_account_id (${settingsAccount!.code})`,
+      );
       return Number(settingsAccount!.id);
     }
     const settingsReason = this.expenseAccountInvalidReason(settingsAccount);
-    this.logger.warn(`Expense ${expenseId} fallback: accounting_settings.expenses_account_id failed (${settingsReason})`);
+    this.logger.warn(
+      `Expense ${expenseId} fallback: accounting_settings.expenses_account_id failed (${settingsReason})`,
+    );
 
     const fallback6900 = await this.findAccountByCode(queryable, tenantId, '6900');
     if (this.isValidExpensePostingAccount(fallback6900)) {
@@ -192,7 +257,12 @@ export class PostCustomerPaymentExpenseService {
     return `REC-${yy}${mm}${dd}-${String(paymentId).padStart(6, '0')}`;
   }
 
-  async postCustomerPayment(queryable: DbOrTx, paymentId: number, auth: AuthContext, docNo?: string): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postCustomerPayment(
+    queryable: DbOrTx,
+    paymentId: number,
+    auth: AuthContext,
+    docNo?: string,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
@@ -256,15 +326,30 @@ export class PostCustomerPaymentExpenseService {
     const receiptNo = docNo || this.deriveCustomerPaymentDocNo(payment.created_at, paymentId);
     const receiptLabel = receiptNo ? ` - سند قبض ${receiptNo}` : '';
 
-    const cashAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.cash_account_id, '1110');
-    const customerAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.customer_receivable_account_id, '1130');
-    const paymentAccountId = (payment.payment_channel || 'cash') === 'cash' ? cashAccountId :
-      await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.bank_account_id, '1120');
+    const cashAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.cash_account_id,
+      '1110',
+    );
+    const customerAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.customer_receivable_account_id,
+      '1130',
+    );
+    const paymentAccountId =
+      (payment.payment_channel || 'cash') === 'cash'
+        ? cashAccountId
+        : await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.bank_account_id, '1120');
     const lines: JournalLineDraft[] = [];
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
     addBookLine({
       accountId: paymentAccountId,
-      description: (payment.payment_channel || 'cash') === 'cash' ? 'دخول نقدية من تحصيل عميل' : 'تحصيل عميل عبر البنك أو المدفوعات الإلكترونية',
+      description:
+        (payment.payment_channel || 'cash') === 'cash'
+          ? 'دخول نقدية من تحصيل عميل'
+          : 'تحصيل عميل عبر البنك أو المدفوعات الإلكترونية',
       debit: amount,
       credit: 0,
       partnerType: 'none',
@@ -283,18 +368,31 @@ export class PostCustomerPaymentExpenseService {
       locationId,
     });
 
-    const accountMap = await this.getActiveAccountMap(queryable, scope.tenantId, lines.map((line) => line.accountId));
+    const accountMap = await this.getActiveAccountMap(
+      queryable,
+      scope.tenantId,
+      lines.map((line) => line.accountId),
+    );
     for (const line of lines) {
-      if (!(line.accountId > 0)) throw new Error(`Invalid accounting setting account id while posting customer payment ${paymentId}`);
-      if (!accountMap.has(line.accountId)) throw new Error(`Configured account ${line.accountId} was not found while posting customer payment ${paymentId}`);
-      if (!accountMap.get(line.accountId)) throw new Error(`Configured account ${line.accountId} is inactive while posting customer payment ${paymentId}`);
+      if (!(line.accountId > 0))
+        throw new Error(`Invalid accounting setting account id while posting customer payment ${paymentId}`);
+      if (!accountMap.has(line.accountId))
+        throw new Error(
+          `Configured account ${line.accountId} was not found while posting customer payment ${paymentId}`,
+        );
+      if (!accountMap.get(line.accountId))
+        throw new Error(`Configured account ${line.accountId} is inactive while posting customer payment ${paymentId}`);
     }
 
-    const normalizedLines = lines.map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) })).filter((line) => line.debit > 0 || line.credit > 0);
+    const normalizedLines = lines
+      .map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) }))
+      .filter((line) => line.debit > 0 || line.credit > 0);
     const totalDebit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > this.maxAllowedDifference(bookDigits)) {
-      throw new Error(`Unbalanced customer payment journal for payment ${paymentId}: debit=${totalDebit} credit=${totalCredit}`);
+      throw new Error(
+        `Unbalanced customer payment journal for payment ${paymentId}: debit=${totalDebit} credit=${totalCredit}`,
+      );
     }
 
     const entryId = await this.insertPostedJournal(queryable, {
@@ -314,8 +412,11 @@ export class PostCustomerPaymentExpenseService {
     return { posted: true, journalEntryId: entryId };
   }
 
-
-  async postExpense(queryable: DbOrTx, expenseId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postExpense(
+    queryable: DbOrTx,
+    expenseId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
@@ -362,44 +463,72 @@ export class PostCustomerPaymentExpenseService {
     const locationId = expense.location_id ? Number(expense.location_id) : null;
     const costCenterId = expense.cost_center_id ? Number(expense.cost_center_id) : null;
     const expenseTitle = String(expense.title || '').trim();
-    const expenseDebitAccountId = await this.resolveExpenseDebitAccountId(queryable, scope.tenantId, settings, expenseTitle, expenseId);
+    const expenseDebitAccountId = await this.resolveExpenseDebitAccountId(
+      queryable,
+      scope.tenantId,
+      settings,
+      expenseTitle,
+      expenseId,
+    );
     const expenseLabel = expenseTitle || 'مصروف عام';
 
-    const cashAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.cash_account_id, '1110');
+    const cashAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.cash_account_id,
+      '1110',
+    );
 
     // Current expense flow is cash-based and does not persist payment method.
     // Use cash account credit to match existing treasury transaction behavior (txn_type: expense, negative amount).
     const lines: JournalLineDraft[] = [];
-    this.addLine(lines, {
-      accountId: expenseDebitAccountId,
-      description: `إثبات مصروف ${expenseLabel}`,
-      debit: amount,
-      credit: 0,
-      partnerType: 'none',
-      partnerId: null,
-      branchId,
-      locationId,
-      costCenterId,
-    }, bookDigits);
-    this.addLine(lines, {
-      accountId: cashAccountId,
-      description: 'خروج نقدية لمصروف',
-      debit: 0,
-      credit: amount,
-      partnerType: 'none',
-      partnerId: null,
-      branchId,
-      locationId,
-    }, bookDigits);
+    this.addLine(
+      lines,
+      {
+        accountId: expenseDebitAccountId,
+        description: `إثبات مصروف ${expenseLabel}`,
+        debit: amount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+        costCenterId,
+      },
+      bookDigits,
+    );
+    this.addLine(
+      lines,
+      {
+        accountId: cashAccountId,
+        description: 'خروج نقدية لمصروف',
+        debit: 0,
+        credit: amount,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      },
+      bookDigits,
+    );
 
-    const accountMap = await this.getActiveAccountMap(queryable, scope.tenantId, lines.map((line) => line.accountId));
+    const accountMap = await this.getActiveAccountMap(
+      queryable,
+      scope.tenantId,
+      lines.map((line) => line.accountId),
+    );
     for (const line of lines) {
-      if (!(line.accountId > 0)) throw new Error(`Invalid accounting setting account id while posting expense ${expenseId}`);
-      if (!accountMap.has(line.accountId)) throw new Error(`Configured account ${line.accountId} was not found while posting expense ${expenseId}`);
-      if (!accountMap.get(line.accountId)) throw new Error(`Configured account ${line.accountId} is inactive while posting expense ${expenseId}`);
+      if (!(line.accountId > 0))
+        throw new Error(`Invalid accounting setting account id while posting expense ${expenseId}`);
+      if (!accountMap.has(line.accountId))
+        throw new Error(`Configured account ${line.accountId} was not found while posting expense ${expenseId}`);
+      if (!accountMap.get(line.accountId))
+        throw new Error(`Configured account ${line.accountId} is inactive while posting expense ${expenseId}`);
     }
 
-    const normalizedLines = lines.map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) })).filter((line) => line.debit > 0 || line.credit > 0);
+    const normalizedLines = lines
+      .map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) }))
+      .filter((line) => line.debit > 0 || line.credit > 0);
     const totalDebit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > this.maxAllowedDifference(bookDigits)) {
@@ -411,7 +540,11 @@ export class PostCustomerPaymentExpenseService {
       sourceId: expenseId,
       tenantId: scope.tenantId,
       accountId: scope.accountId,
-      entryDate: expense.expense_date ? new Date(expense.expense_date) : (expense.created_at ? new Date(expense.created_at) : new Date()),
+      entryDate: expense.expense_date
+        ? new Date(expense.expense_date)
+        : expense.created_at
+          ? new Date(expense.created_at)
+          : new Date(),
       description: `قيد مصروف: ${expenseTitle || `EXP-${expenseId}`}`,
       branchId,
       locationId,

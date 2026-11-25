@@ -42,17 +42,37 @@ export class SaleCogsResidualService {
     queryable: Transaction<Database>,
     tenantId: string,
     saleId: number,
-  ): Promise<Array<{ id: number; product_id: number | null; qty: number | string; cost_price: number | string | null; unit_multiplier: number | string | null; modifiers: unknown }>> {
-    return queryable
-      .selectFrom('sale_items')
-      .select(['id', 'product_id', 'qty', 'cost_price', 'unit_multiplier', 'modifiers'])
-      .where('sale_id', '=', saleId)
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      // Deterministic line order: the remaining quantity of a product is
-      // assigned to its first product-and-cost group, so the anchor must
-      // not depend on the database's unspecified row order.
-      .orderBy('id')
-      .execute() as Promise<Array<{ id: number; product_id: number | null; qty: number | string; cost_price: number | string | null; unit_multiplier: number | string | null; modifiers: unknown }>>;
+  ): Promise<
+    Array<{
+      id: number;
+      product_id: number | null;
+      qty: number | string;
+      cost_price: number | string | null;
+      unit_multiplier: number | string | null;
+      modifiers: unknown;
+    }>
+  > {
+    return (
+      queryable
+        .selectFrom('sale_items')
+        .select(['id', 'product_id', 'qty', 'cost_price', 'unit_multiplier', 'modifiers'])
+        .where('sale_id', '=', saleId)
+        .where(sql<boolean>`tenant_id = ${tenantId}`)
+        // Deterministic line order: the remaining quantity of a product is
+        // assigned to its first product-and-cost group, so the anchor must
+        // not depend on the database's unspecified row order.
+        .orderBy('id')
+        .execute() as Promise<
+        Array<{
+          id: number;
+          product_id: number | null;
+          qty: number | string;
+          cost_price: number | string | null;
+          unit_multiplier: number | string | null;
+          modifiers: unknown;
+        }>
+      >
+    );
   }
 
   /*
@@ -76,7 +96,14 @@ export class SaleCogsResidualService {
   async residualCogsGroups(
     queryable: Transaction<Database>,
     tenantId: string,
-    saleItems: Array<{ id: number; product_id: number | null; qty: number | string; cost_price: number | string | null; unit_multiplier: number | string | null; modifiers: unknown }>,
+    saleItems: Array<{
+      id: number;
+      product_id: number | null;
+      qty: number | string;
+      cost_price: number | string | null;
+      unit_multiplier: number | string | null;
+      modifiers: unknown;
+    }>,
     qtySoldBySaleItemId: Map<number, number> | null,
   ): Promise<CogsResidualGroup[]> {
     const soldProductIds = new Set<number>();
@@ -125,9 +152,7 @@ export class SaleCogsResidualService {
     saleItems.forEach((item, index) => {
       const productId = Number(item.product_id || 0);
       const unitCost = Number(item.cost_price || 0);
-      const qtySold = qtySoldBySaleItemId
-        ? (qtySoldBySaleItemId.get(Number(item.id)) || 0)
-        : Number(item.qty || 0);
+      const qtySold = qtySoldBySaleItemId ? qtySoldBySaleItemId.get(Number(item.id)) || 0 : Number(item.qty || 0);
       if (qtySoldBySaleItemId && !(qtySold > 0)) return;
       const key = `${productId}|${unitCost}`;
       const existing = grouped.get(key);
@@ -143,9 +168,8 @@ export class SaleCogsResidualService {
         qtyRemaining: residualSoldUnitRemaining({
           unitCost,
           multiplier,
-          remainingBaseQty: productId > 0
-            ? (remainingByProduct.get(productId) || 0) - (restockedBaseByGroup.get(key) || 0)
-            : 0,
+          remainingBaseQty:
+            productId > 0 ? (remainingByProduct.get(productId) || 0) - (restockedBaseByGroup.get(key) || 0) : 0,
           modifiers: modifierLists[index],
           remainingByProduct,
           soldProductIds,
@@ -191,7 +215,12 @@ export class SaleCogsResidualService {
     queryable: Transaction<Database>,
     tenantId: string,
     sale: { id: number } | null,
-    returnItems: Array<{ product_id: number | null; sale_item_id: number | null; qty: number | string; cost_price?: number | string | null }>,
+    returnItems: Array<{
+      product_id: number | null;
+      sale_item_id: number | null;
+      qty: number | string;
+      cost_price?: number | string | null;
+    }>,
     saleItems: Array<{ id: number; product_id: number | null; cost_price: number | string | null }>,
     bookDigits: MoneyDigits,
   ): Promise<number> {
@@ -205,10 +234,7 @@ export class SaleCogsResidualService {
       if (saleCost == null) return legacy;
       if (line.unitCost === 0) continue;
       if (Math.abs(line.unitCost - saleCost) > 0.0000001) return legacy;
-      returnedQtyBySaleItemId.set(
-        line.saleItemId,
-        (returnedQtyBySaleItemId.get(line.saleItemId) || 0) + line.qty,
-      );
+      returnedQtyBySaleItemId.set(line.saleItemId, (returnedQtyBySaleItemId.get(line.saleItemId) || 0) + line.qty);
     }
     if (returnedQtyBySaleItemId.size === 0) return 0;
     return this.salesReturnCogsResidual(queryable, tenantId, Number(sale.id), bookDigits, returnedQtyBySaleItemId);

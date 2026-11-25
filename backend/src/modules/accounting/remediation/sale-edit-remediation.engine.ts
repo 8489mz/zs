@@ -56,17 +56,7 @@ import { Database } from '../../../database/database.types';
 import { roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 
 /** Account codes used by sale journals. 2150 is store credit, checked separately. */
-const ACCOUNT_CODES = [
-  '4100',
-  '4300',
-  '2120',
-  '1110',
-  '1120',
-  '1130',
-  '5100',
-  '1140',
-  '2150',
-] as const;
+const ACCOUNT_CODES = ['4100', '4300', '2120', '1110', '1120', '1130', '5100', '1140', '2150'] as const;
 
 export interface SaleEditJournalTotals {
   /** Account 4100, credit side. */
@@ -145,23 +135,14 @@ export type SaleEditClassification =
       reason: string;
     };
 
-const CANCELLED_STATUSES = new Set([
-  'cancelled',
-  'canceled',
-  'void',
-  'voided',
-]);
+const CANCELLED_STATUSES = new Set(['cancelled', 'canceled', 'void', 'voided']);
 
 function toNumber(value: unknown): number {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
-function isWithinOneMinorUnit(
-  actual: number,
-  expected: number,
-  bookDigits: MoneyDigits,
-): boolean {
+function isWithinOneMinorUnit(actual: number, expected: number, bookDigits: MoneyDigits): boolean {
   if (!Number.isFinite(actual) || !Number.isFinite(expected)) return false;
   const factor = 10 ** bookDigits;
   const actualMinor = Math.round(actual * factor);
@@ -205,10 +186,7 @@ export async function discoverSaleEditDiscrepancies(
 
   const flaggedRows = await db
     .selectFrom('journal_entries')
-    .select([
-      'source_id',
-      sql<number>`count(*)`.as('active_journal_count'),
-    ])
+    .select(['source_id', sql<number>`count(*)`.as('active_journal_count')])
     .where('tenant_id', '=', tenantId)
     .where('status', '=', 'posted')
     .where(sql<boolean>`source_id is not null`)
@@ -276,11 +254,7 @@ export async function discoverSaleEditDiscrepancies(
     // Same COGS source as postSale() / postSaleEdit(): cost_price is
     // already per sold unit (adjusted by unit_multiplier at sale time),
     // so do not multiply by unit_multiplier again here.
-    const cogs = itemRows.reduce(
-      (sum, item) =>
-        sum + toNumber(item.qty) * toNumber(item.cost_price),
-      0,
-    );
+    const cogs = itemRows.reduce((sum, item) => sum + toNumber(item.qty) * toNumber(item.cost_price), 0);
 
     const journalRows = await db
       .selectFrom('journal_entries')
@@ -345,28 +319,22 @@ export async function discoverSaleEditDiscrepancies(
       sale: {
         saleId,
         docNo: saleRow.doc_no ?? null,
-        customerId:
-          saleRow.customer_id == null ? null : Number(saleRow.customer_id),
+        customerId: saleRow.customer_id == null ? null : Number(saleRow.customer_id),
         subtotal: toNumber(saleRow.subtotal),
         discount: toNumber(saleRow.discount),
         taxAmount: toNumber(saleRow.tax_amount),
         total: toNumber(saleRow.total),
         cogs,
         status: saleRow.status == null ? null : String(saleRow.status),
-        saleOrigin:
-          saleRow.sale_origin == null ? null : String(saleRow.sale_origin),
-        paymentType:
-          saleRow.payment_type == null ? null : String(saleRow.payment_type),
+        saleOrigin: saleRow.sale_origin == null ? null : String(saleRow.sale_origin),
+        paymentType: saleRow.payment_type == null ? null : String(saleRow.payment_type),
         paidAmount: toNumber(saleRow.paid_amount),
         storeCreditUsed: toNumber(saleRow.store_credit_used),
         pricesIncludeTax: Boolean(saleRow.prices_include_tax ?? false),
         deliveryFee: toNumber(saleRow.delivery_fee ?? 0),
         serviceCharge: toNumber(saleRow.service_charge ?? 0),
         tipAmount: toNumber(saleRow.tip_amount ?? 0),
-        exchangeReturnId:
-          saleRow.exchange_return_id == null
-            ? null
-            : Number(saleRow.exchange_return_id),
+        exchangeReturnId: saleRow.exchange_return_id == null ? null : Number(saleRow.exchange_return_id),
       },
       journals,
     });
@@ -413,19 +381,14 @@ function matchJournal(
   }
   const fundingDebit = t.cashDebit + t.bankDebit + t.receivableDebit;
   if (!isWithinOneMinorUnit(fundingDebit, expected.fundingDebit, bookDigits)) {
-    mismatches.push(
-      `funding 1110+1120+1130: ${fundingDebit} != ${expected.fundingDebit}`,
-    );
+    mismatches.push(`funding 1110+1120+1130: ${fundingDebit} != ${expected.fundingDebit}`);
   }
   // Store credit is only verifiable when discover loaded it. If the
   // header used store credit but the journal total is absent, that is a
   // mismatch, not a pass: a missing 2150 line cannot be assumed correct.
-  const storeCreditDebit =
-    journal.storeCreditDebit == null ? Number.NaN : journal.storeCreditDebit;
+  const storeCreditDebit = journal.storeCreditDebit == null ? Number.NaN : journal.storeCreditDebit;
   if (!isWithinOneMinorUnit(storeCreditDebit, expected.storeCreditDebit, bookDigits)) {
-    mismatches.push(
-      `store credit 2150: ${storeCreditDebit} != ${expected.storeCreditDebit}`,
-    );
+    mismatches.push(`store credit 2150: ${storeCreditDebit} != ${expected.storeCreditDebit}`);
   }
   // Balance is checked only when both totals were loaded; hand-built
   // candidates without them are judged on the code totals alone.
@@ -434,9 +397,7 @@ function matchJournal(
     journal.totalCredit != null &&
     !isWithinOneMinorUnit(journal.totalDebit, journal.totalCredit, bookDigits)
   ) {
-    mismatches.push(
-      `unbalanced journal: debit ${journal.totalDebit} != credit ${journal.totalCredit}`,
-    );
+    mismatches.push(`unbalanced journal: debit ${journal.totalDebit} != credit ${journal.totalCredit}`);
   }
 
   return { journal, matches: mismatches.length === 0, mismatches };
@@ -462,9 +423,7 @@ export function classifySaleEditCandidate(
   bookDigits: MoneyDigits,
 ): SaleEditClassification {
   if (bookDigits !== 2 && bookDigits !== 3) {
-    throw new Error(
-      `classifySaleEditCandidate: bookDigits must be 2 or 3, got ${String(bookDigits)}`,
-    );
+    throw new Error(`classifySaleEditCandidate: bookDigits must be 2 or 3, got ${String(bookDigits)}`);
   }
 
   const { sale, journals } = candidate;
@@ -524,9 +483,7 @@ export function classifySaleEditCandidate(
     storeCreditDebit: storeCreditUsed,
   };
 
-  const [first, second] = journals.map((journal) =>
-    matchJournal(journal, expected, bookDigits),
-  );
+  const [first, second] = journals.map((journal) => matchJournal(journal, expected, bookDigits));
 
   if (first.matches && second.matches) {
     return {

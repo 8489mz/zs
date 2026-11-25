@@ -38,15 +38,36 @@ export function isValidKdsItemStation(value: unknown): value is KdsItemStation {
 }
 
 const GRILL_KEYWORDS: ReadonlySet<string> = new Set([
-  'مشوي', 'مشوية', 'مشويات', 'كباب', 'كفتة', 'ستيك',
-  'grill', 'grilled',
+  'مشوي',
+  'مشوية',
+  'مشويات',
+  'كباب',
+  'كفتة',
+  'ستيك',
+  'grill',
+  'grilled',
 ]);
 const BEVERAGE_KEYWORDS: ReadonlySet<string> = new Set([
-  'عصير', 'مشروب', 'مشروبات', 'قهوة', 'شاي', 'كوكتيل', 'بار',
-  'pepsi', 'cola',
+  'عصير',
+  'مشروب',
+  'مشروبات',
+  'قهوة',
+  'شاي',
+  'كوكتيل',
+  'بار',
+  'pepsi',
+  'cola',
 ]);
 const BAKERY_KEYWORDS: ReadonlySet<string> = new Set([
-  'بيتزا', 'فطير', 'فطائر', 'مخبوز', 'مخبوزات', 'حلو', 'حلويات', 'كيك', 'كيكة',
+  'بيتزا',
+  'فطير',
+  'فطائر',
+  'مخبوز',
+  'مخبوزات',
+  'حلو',
+  'حلويات',
+  'كيك',
+  'كيكة',
 ]);
 
 function tokenize(text: string): string[] {

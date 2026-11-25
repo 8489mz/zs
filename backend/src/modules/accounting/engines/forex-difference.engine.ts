@@ -1,7 +1,12 @@
 import { convertFxAmount } from './fx-conversion.engine';
 import { roundMoney, type MoneyDigits } from './money-minor-units.engine';
 
-export function calculateForexDifference(localBalance: number, foreignBalance: number, closingRate: number, digits: MoneyDigits) {
+export function calculateForexDifference(
+  localBalance: number,
+  foreignBalance: number,
+  closingRate: number,
+  digits: MoneyDigits,
+) {
   if (![localBalance, foreignBalance, closingRate].every(Number.isFinite) || closingRate <= 0) {
     throw new Error('Invalid foreign exchange valuation inputs');
   }

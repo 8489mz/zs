@@ -179,10 +179,10 @@ export class WarehouseBinsService {
     let dbQuery = this.db
       .selectFrom('warehouse_bins as wb')
       .leftJoin('stock_locations as sl', (join) =>
-        join.onRef('sl.id', '=', 'wb.location_id').on('sl.tenant_id', '=', scope.tenantId)
+        join.onRef('sl.id', '=', 'wb.location_id').on('sl.tenant_id', '=', scope.tenantId),
       )
       .leftJoin('product_bin_allocations as pba', (join) =>
-        join.onRef('pba.bin_id', '=', 'wb.id').on('pba.tenant_id', '=', scope.tenantId)
+        join.onRef('pba.bin_id', '=', 'wb.id').on('pba.tenant_id', '=', scope.tenantId),
       )
       .select([
         'wb.id',
@@ -230,7 +230,7 @@ export class WarehouseBinsService {
           eb('wb.barcode', 'ilike', pattern),
           eb('wb.aisle', 'ilike', pattern),
           eb('wb.rack', 'ilike', pattern),
-        ])
+        ]),
       );
     }
 
@@ -259,7 +259,9 @@ export class WarehouseBinsService {
     this.assertInventoryAccess(auth);
     const scope = requireTenantScope(auth);
 
-    const cleanCode = String(dto.code || '').trim().toUpperCase();
+    const cleanCode = String(dto.code || '')
+      .trim()
+      .toUpperCase();
     if (!cleanCode) throw new BadRequestException('رمز مكان التخزين (Code) مطلوب');
 
     const barcode = dto.barcode?.trim() || `BIN-${dto.locationId}-${cleanCode}`;
@@ -349,11 +351,7 @@ export class WarehouseBinsService {
       throw new BadRequestException('لا يمكن حذف مكان التخزين لوجود أصناف مخزنة به حالياً');
     }
 
-    await this.db
-      .deleteFrom('warehouse_bins')
-      .where('id', '=', id)
-      .where('tenant_id', '=', scope.tenantId)
-      .execute();
+    await this.db.deleteFrom('warehouse_bins').where('id', '=', id).where('tenant_id', '=', scope.tenantId).execute();
 
     return { success: true };
   }
@@ -369,7 +367,7 @@ export class WarehouseBinsService {
     const bin = await this.db
       .selectFrom('warehouse_bins as wb')
       .leftJoin('stock_locations as sl', (join) =>
-        join.onRef('sl.id', '=', 'wb.location_id').on('sl.tenant_id', '=', scope.tenantId)
+        join.onRef('sl.id', '=', 'wb.location_id').on('sl.tenant_id', '=', scope.tenantId),
       )
       .select([
         'wb.id',
@@ -386,12 +384,7 @@ export class WarehouseBinsService {
         'wb.notes',
       ])
       .where('wb.tenant_id', '=', scope.tenantId)
-      .where((eb) =>
-        eb.or([
-          eb('wb.barcode', '=', query),
-          eb('wb.code', '=', query.toUpperCase()),
-        ])
-      )
+      .where((eb) => eb.or([eb('wb.barcode', '=', query), eb('wb.code', '=', query.toUpperCase())]))
       .executeTakeFirst();
 
     if (bin) {
@@ -399,7 +392,7 @@ export class WarehouseBinsService {
       const items = await this.db
         .selectFrom('product_bin_allocations as pba')
         .innerJoin('products as p', (join) =>
-          join.onRef('p.id', '=', 'pba.product_id').on('p.tenant_id', '=', scope.tenantId)
+          join.onRef('p.id', '=', 'pba.product_id').on('p.tenant_id', '=', scope.tenantId),
         )
         .select([
           'pba.id as allocationId',
@@ -465,10 +458,10 @@ export class WarehouseBinsService {
       const bins = await this.db
         .selectFrom('product_bin_allocations as pba')
         .innerJoin('warehouse_bins as wb', (join) =>
-          join.onRef('wb.id', '=', 'pba.bin_id').on('wb.tenant_id', '=', scope.tenantId)
+          join.onRef('wb.id', '=', 'pba.bin_id').on('wb.tenant_id', '=', scope.tenantId),
         )
         .leftJoin('stock_locations as sl', (join) =>
-          join.onRef('sl.id', '=', 'wb.location_id').on('sl.tenant_id', '=', scope.tenantId)
+          join.onRef('sl.id', '=', 'wb.location_id').on('sl.tenant_id', '=', scope.tenantId),
         )
         .select([
           'wb.id as binId',
@@ -793,7 +786,10 @@ export class WarehouseBinsService {
         locationAfter,
         movementId,
         journalEntryId,
-        message: variance === 0 ? 'الكمية مطابقة تماماً للمسجل في النظام' : `تم تسجيل فروق جرد في الرف بمقدار (${variance > 0 ? '+' : ''}${variance})`,
+        message:
+          variance === 0
+            ? 'الكمية مطابقة تماماً للمسجل في النظام'
+            : `تم تسجيل فروق جرد في الرف بمقدار (${variance > 0 ? '+' : ''}${variance})`,
       };
     });
   }

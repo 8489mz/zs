@@ -87,10 +87,7 @@ export class PurchasesReorderService {
     const recentSales = await this.db
       .selectFrom('sale_items as si')
       .innerJoin('sales as s', 's.id', 'si.sale_id')
-      .select([
-        'si.product_id',
-        sql<number>`COALESCE(SUM(si.qty), 0)`.as('qty_sold'),
-      ])
+      .select(['si.product_id', sql<number>`COALESCE(SUM(si.qty), 0)`.as('qty_sold')])
       .where('s.tenant_id', '=', tenantId)
       .where('s.status', '=', 'posted')
       .where('s.created_at', '>=', startDate)
@@ -150,7 +147,7 @@ export class PurchasesReorderService {
 
     // 5. Map products into helper format
     const products: ReorderProductInput[] = rawProducts.map((p) => {
-      const resolvedSupplierId = p.supplier_id ? Number(p.supplier_id) : (resolvedSupplierMap.get(Number(p.id)) || null);
+      const resolvedSupplierId = p.supplier_id ? Number(p.supplier_id) : resolvedSupplierMap.get(Number(p.id)) || null;
       return {
         id: Number(p.id),
         name: p.name,
@@ -177,7 +174,7 @@ export class PurchasesReorderService {
     // 6. Optional search filter
     if (search) {
       const filteredSuggestions = result.allSuggestions.filter(
-        (s) => s.name.toLowerCase().includes(search) || (s.barcode && s.barcode.toLowerCase().includes(search))
+        (s) => s.name.toLowerCase().includes(search) || (s.barcode && s.barcode.toLowerCase().includes(search)),
       );
 
       // Re-group filtered suggestions by supplier

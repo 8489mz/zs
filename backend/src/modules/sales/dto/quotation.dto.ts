@@ -31,8 +31,7 @@ export interface CreateQuotationDto {
   status?: 'draft' | 'sent';
 }
 
-export interface UpdateQuotationDto
-  extends Omit<Partial<CreateQuotationDto>, 'status'> {
+export interface UpdateQuotationDto extends Omit<Partial<CreateQuotationDto>, 'status'> {
   // Update keeps the full lifecycle vocabulary; creation (above) is
   // narrowed to 'draft' | 'sent' — the Omit is required because a
   // redeclared status must be assignable to the base field's type.

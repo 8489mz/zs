@@ -1,4 +1,17 @@
-import { Body, Controller, Delete as HttpRemove, Get, Header, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete as HttpRemove,
+  Get,
+  Header,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { RequirePermissions, RequireAnyPermission } from '../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
@@ -77,13 +90,18 @@ export class CatalogController {
 
   @Get('catalog/pos-products/version')
   @RequirePermissions('sales')
-  getPosCatalogVersion(@Req() req: RequestWithAuth): Promise<{ version: string; totalCount: number; lastUpdatedAt: string }> {
+  getPosCatalogVersion(
+    @Req() req: RequestWithAuth,
+  ): Promise<{ version: string; totalCount: number; lastUpdatedAt: string }> {
     return this.catalogService.getPosCatalogVersion(req.authContext!);
   }
 
   @Get('catalog/pos-products')
   @RequirePermissions('sales')
-  listPosProducts(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  listPosProducts(
+    @Query() query: Record<string, unknown>,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.catalogService.listPosProducts(query, req.authContext!);
   }
 

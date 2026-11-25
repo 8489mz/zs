@@ -1,15 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Put,
-  Delete,
-  Param,
-  Body,
-  UseGuards,
-  ParseIntPipe,
-  Req,
-} from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, ParseIntPipe, Req } from '@nestjs/common';
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { PriceListsService, UpsertPriceListDto } from '../services/price-lists.service';
@@ -38,11 +27,7 @@ export class PriceListsController {
   }
 
   @Put(':id')
-  async update(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpsertPriceListDto,
-  ) {
+  async update(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number, @Body() dto: UpsertPriceListDto) {
     const data = await this.priceListsService.updatePriceList(req.authContext!, id, dto);
     return { data, message: 'تم تحديث قائمة الأسعار بنجاح' };
   }
@@ -79,4 +64,3 @@ export class PriceListsController {
     return { data };
   }
 }
-

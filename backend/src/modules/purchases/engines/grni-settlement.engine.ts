@@ -41,9 +41,16 @@ function toMinorUnitsRounded(value: number, digits: MoneyDigits): number {
 /** Reconcile line allocations to the exact total posted by the GRN journal, in minor units. */
 export function allocateGrnAccrual(lines: GrnAccrualLine[], minorUnits: MoneyDigits): Map<number, number> {
   const sorted = [...lines].sort((a, b) => a.id - b.id);
-  if (sorted.some((line) => !Number.isFinite(line.acceptedQty) || line.acceptedQty < 0 ||
-    !Number.isFinite(line.unitCost) || line.unitCost < 0 ||
-    (line.landedLineTotal != null && (!Number.isFinite(line.landedLineTotal) || line.landedLineTotal < 0)))) {
+  if (
+    sorted.some(
+      (line) =>
+        !Number.isFinite(line.acceptedQty) ||
+        line.acceptedQty < 0 ||
+        !Number.isFinite(line.unitCost) ||
+        line.unitCost < 0 ||
+        (line.landedLineTotal != null && (!Number.isFinite(line.landedLineTotal) || line.landedLineTotal < 0)),
+    )
+  ) {
     throw new AppError('بنود الاستلام غير صالحة للتسوية', 'GRNI_LINE_INVALID', 422);
   }
   // INV-SHIPPING-ALLOCATION: a line that carried freight reconciles to
@@ -53,18 +60,22 @@ export function allocateGrnAccrual(lines: GrnAccrualLine[], minorUnits: MoneyDig
   // the float sum (pinned by canonical-rounding.spec.ts: the sum lands
   // just above the half and the last line absorbs the residue); summing
   // per-line minors instead would move that total by a minor.
-  const lineMinor = (line: GrnAccrualLine): number => line.landedLineTotal != null
-    ? toMinorUnitsRounded(line.landedLineTotal, minorUnits)
-    : toMinorUnitsRounded(line.acceptedQty * line.unitCost, minorUnits);
+  const lineMinor = (line: GrnAccrualLine): number =>
+    line.landedLineTotal != null
+      ? toMinorUnitsRounded(line.landedLineTotal, minorUnits)
+      : toMinorUnitsRounded(line.acceptedQty * line.unitCost, minorUnits);
   const hasLanded = sorted.some((line) => line.landedLineTotal != null);
   let remaining = hasLanded
     ? sorted.reduce((sum, line) => sum + lineMinor(line), 0)
-    : toMinorUnitsRounded(sorted.reduce((sum, line) => sum + line.acceptedQty * line.unitCost, 0), minorUnits);
+    : toMinorUnitsRounded(
+        sorted.reduce((sum, line) => sum + line.acceptedQty * line.unitCost, 0),
+        minorUnits,
+      );
   const result = new Map<number, number>();
   const lastBillableId = [...sorted].reverse().find((line) => line.acceptedQty > 0)?.id;
   sorted.forEach((line) => {
-    const amount = line.acceptedQty <= 0 ? 0 : line.id === lastBillableId
-      ? remaining : Math.min(remaining, lineMinor(line));
+    const amount =
+      line.acceptedQty <= 0 ? 0 : line.id === lastBillableId ? remaining : Math.min(remaining, lineMinor(line));
     result.set(line.id, amount);
     remaining -= amount;
   });
@@ -80,17 +91,26 @@ export function allocateGrniBillPortion(input: {
   newQty: number;
 }): number {
   const { lineAccrualMinor, acceptedQty, previouslyBilledQty, previouslyClearedMinor, newQty } = input;
-  if (!Number.isSafeInteger(lineAccrualMinor) || lineAccrualMinor < 0 ||
-    !Number.isSafeInteger(previouslyClearedMinor) || previouslyClearedMinor < 0 ||
-    !Number.isFinite(acceptedQty) || acceptedQty <= 0 ||
-    !Number.isFinite(newQty) || newQty <= 0 ||
-    previouslyBilledQty < 0 || previouslyBilledQty + newQty > acceptedQty + 0.000001 ||
-    previouslyClearedMinor > lineAccrualMinor) {
+  if (
+    !Number.isSafeInteger(lineAccrualMinor) ||
+    lineAccrualMinor < 0 ||
+    !Number.isSafeInteger(previouslyClearedMinor) ||
+    previouslyClearedMinor < 0 ||
+    !Number.isFinite(acceptedQty) ||
+    acceptedQty <= 0 ||
+    !Number.isFinite(newQty) ||
+    newQty <= 0 ||
+    previouslyBilledQty < 0 ||
+    previouslyBilledQty + newQty > acceptedQty + 0.000001 ||
+    previouslyClearedMinor > lineAccrualMinor
+  ) {
     throw new AppError('الكمية المفوترة تتجاوز الكمية المستلمة', 'GRNI_OVERBILL', 422);
   }
   const cumulativeQty = previouslyBilledQty + newQty;
-  const cumulativeMinor = Math.abs(cumulativeQty - acceptedQty) < 0.000001
-    ? lineAccrualMinor : Math.round(lineAccrualMinor * cumulativeQty / acceptedQty);
+  const cumulativeMinor =
+    Math.abs(cumulativeQty - acceptedQty) < 0.000001
+      ? lineAccrualMinor
+      : Math.round((lineAccrualMinor * cumulativeQty) / acceptedQty);
   const portion = cumulativeMinor - previouslyClearedMinor;
   if (portion < 0) throw new AppError('تسوية GRNI السابقة غير متطابقة', 'GRNI_RECONCILIATION_REQUIRED', 422);
   return portion;

@@ -102,30 +102,69 @@ export class PostSaleService {
       legs = { goods: subtotal, service: serviceCharge, deliveryPayable, deliveryRevenue, tip: tipAmount };
     }
 
-    const scope = { partnerType: 'none' as const, partnerId: null, branchId: input.branchId, locationId: input.locationId };
+    const scope = {
+      partnerType: 'none' as const,
+      partnerId: null,
+      branchId: input.branchId,
+      locationId: input.locationId,
+    };
     if (legs.goods > 0) {
-      add({ accountId: input.goodsAccountId, description: `إيراد مبيعات ${input.contextLabel}`, debit: 0, credit: legs.goods, ...scope });
+      add({
+        accountId: input.goodsAccountId,
+        description: `إيراد مبيعات ${input.contextLabel}`,
+        debit: 0,
+        credit: legs.goods,
+        ...scope,
+      });
     }
     if (legs.service > 0 || legs.deliveryRevenue > 0) {
       const serviceAccountId = await this.resolveSystemAccountByCode(queryable, tenantId, '4200');
       if (legs.service > 0) {
-        add({ accountId: serviceAccountId, description: `رسم خدمة ${input.contextLabel}`, debit: 0, credit: legs.service, ...scope });
+        add({
+          accountId: serviceAccountId,
+          description: `رسم خدمة ${input.contextLabel}`,
+          debit: 0,
+          credit: legs.service,
+          ...scope,
+        });
       }
       if (legs.deliveryRevenue > 0) {
-        add({ accountId: serviceAccountId, description: `إيراد رسوم توصيل ${input.contextLabel}`, debit: 0, credit: legs.deliveryRevenue, ...scope });
+        add({
+          accountId: serviceAccountId,
+          description: `إيراد رسوم توصيل ${input.contextLabel}`,
+          debit: 0,
+          credit: legs.deliveryRevenue,
+          ...scope,
+        });
       }
     }
     if (legs.deliveryPayable > 0) {
       const courierAccountId = await this.resolveSystemAccountByCode(queryable, tenantId, '2115');
-      add({ accountId: courierAccountId, description: `رسوم توصيل مستحقة لمندوب حر ${input.contextLabel}`, debit: 0, credit: legs.deliveryPayable, ...scope });
+      add({
+        accountId: courierAccountId,
+        description: `رسوم توصيل مستحقة لمندوب حر ${input.contextLabel}`,
+        debit: 0,
+        credit: legs.deliveryPayable,
+        ...scope,
+      });
     }
     if (legs.tip > 0) {
       const tipsAccountId = await this.resolveSystemAccountByCode(queryable, tenantId, '2147');
-      add({ accountId: tipsAccountId, description: `إكراميات مستحقة للموظفين ${input.contextLabel}`, debit: 0, credit: legs.tip, ...scope });
+      add({
+        accountId: tipsAccountId,
+        description: `إكراميات مستحقة للموظفين ${input.contextLabel}`,
+        debit: 0,
+        credit: legs.tip,
+        ...scope,
+      });
     }
   }
 
-  async postSale(queryable: Transaction<Database>, saleId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number }> {
+  async postSale(
+    queryable: Transaction<Database>,
+    saleId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number }> {
     this.assertTransaction(queryable, 'postSale');
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
@@ -137,10 +176,28 @@ export class PostSaleService {
     const sale = await queryable
       .selectFrom('sales')
       .select([
-        'id', 'doc_no', 'customer_id', 'subtotal', 'discount', 'tax_amount',
-        'total', 'paid_amount', 'store_credit_used', 'exchange_return_id', 'branch_id', 'location_id', 'created_by', 'created_at',
-        'delivery_fee', 'delivery_fee_mode', 'service_charge', 'tip_amount', 'prices_include_tax',
-        'sale_origin', 'payment_type', 'collection_status',
+        'id',
+        'doc_no',
+        'customer_id',
+        'subtotal',
+        'discount',
+        'tax_amount',
+        'total',
+        'paid_amount',
+        'store_credit_used',
+        'exchange_return_id',
+        'branch_id',
+        'location_id',
+        'created_by',
+        'created_at',
+        'delivery_fee',
+        'delivery_fee_mode',
+        'service_charge',
+        'tip_amount',
+        'prices_include_tax',
+        'sale_origin',
+        'payment_type',
+        'collection_status',
       ])
       .where('id', '=', saleId)
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
@@ -156,8 +213,16 @@ export class PostSaleService {
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .execute();
 
-    const cashAmount = toBookMoney(payments.filter((row) => String(row.payment_channel || '') === 'cash').reduce((sum, row) => sum + Number(row.amount || 0), 0));
-    const nonCashAmount = toBookMoney(payments.filter((row) => String(row.payment_channel || '') !== 'cash').reduce((sum, row) => sum + Number(row.amount || 0), 0));
+    const cashAmount = toBookMoney(
+      payments
+        .filter((row) => String(row.payment_channel || '') === 'cash')
+        .reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    );
+    const nonCashAmount = toBookMoney(
+      payments
+        .filter((row) => String(row.payment_channel || '') !== 'cash')
+        .reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    );
 
     const subtotal = toBookMoney(sale.subtotal);
     const discount = toBookMoney(sale.discount);
@@ -177,16 +242,56 @@ export class PostSaleService {
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
     const customerPartnerId = sale.customer_id ? Number(sale.customer_id) : null;
 
-    const cashAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.cash_account_id, '1110');
-    const bankAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.bank_account_id, '1120');
-    const customerAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.customer_receivable_account_id, '1130');
-    const storeCreditAccountId = storeCreditUsed > 0
-      ? await this.resolveAccountWithFallback(queryable, scope.tenantId, null, '2150') : 0;
-    const salesDiscountAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.sales_discount_account_id, '4300');
-    const salesRevenueAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.sales_revenue_account_id, '4100');
-    const salesTaxAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.sales_tax_account_id, '2120');
-    const cogsAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.cogs_account_id, '5100');
-    const inventoryAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.inventory_account_id, '1140');
+    const cashAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.cash_account_id,
+      '1110',
+    );
+    const bankAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.bank_account_id,
+      '1120',
+    );
+    const customerAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.customer_receivable_account_id,
+      '1130',
+    );
+    const storeCreditAccountId =
+      storeCreditUsed > 0 ? await this.resolveAccountWithFallback(queryable, scope.tenantId, null, '2150') : 0;
+    const salesDiscountAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.sales_discount_account_id,
+      '4300',
+    );
+    const salesRevenueAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.sales_revenue_account_id,
+      '4100',
+    );
+    const salesTaxAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.sales_tax_account_id,
+      '2120',
+    );
+    const cogsAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.cogs_account_id,
+      '5100',
+    );
+    const inventoryAccountId = await this.resolveAccountWithFallback(
+      queryable,
+      scope.tenantId,
+      settings.inventory_account_id,
+      '1140',
+    );
 
     if (cashAmount > 0) {
       addBookLine({
@@ -242,7 +347,9 @@ export class PostSaleService {
           .where('entry_type', '=', 'sale_credit')
           .where('tenant_id', '=', scope.tenantId)
           .executeTakeFirst();
-        const creditPortion = toBookMoney(Math.min(receivableAmount, Math.max(0, Number(creditLedgerRow?.amount || 0))));
+        const creditPortion = toBookMoney(
+          Math.min(receivableAmount, Math.max(0, Number(creditLedgerRow?.amount || 0))),
+        );
         const repCashPortion = toBookMoney(Math.max(0, receivableAmount - creditPortion));
 
         if (repCashPortion > 0) {
@@ -310,20 +417,26 @@ export class PostSaleService {
     }
 
     if (revenueCredit > 0) {
-      await this.addSaleRevenueCreditLegs(queryable, scope.tenantId, addBookLine, {
-        subtotal,
-        taxAmount,
-        deliveryFee,
-        deliveryFeeMode: (sale as any).delivery_fee_mode,
-        serviceCharge,
-        tipAmount,
-        pricesIncludeTax: Boolean(sale.prices_include_tax),
-        revenueCredit,
-        goodsAccountId: salesRevenueAccountId,
-        branchId: sale.branch_id ? Number(sale.branch_id) : null,
-        locationId: sale.location_id ? Number(sale.location_id) : null,
-        contextLabel: 'الفاتورة',
-      }, bookDigits);
+      await this.addSaleRevenueCreditLegs(
+        queryable,
+        scope.tenantId,
+        addBookLine,
+        {
+          subtotal,
+          taxAmount,
+          deliveryFee,
+          deliveryFeeMode: (sale as any).delivery_fee_mode,
+          serviceCharge,
+          tipAmount,
+          pricesIncludeTax: Boolean(sale.prices_include_tax),
+          revenueCredit,
+          goodsAccountId: salesRevenueAccountId,
+          branchId: sale.branch_id ? Number(sale.branch_id) : null,
+          locationId: sale.location_id ? Number(sale.location_id) : null,
+          contextLabel: 'الفاتورة',
+        },
+        bookDigits,
+      );
     }
 
     if (taxAmount > 0) {
@@ -369,14 +482,22 @@ export class PostSaleService {
       });
     }
 
-    const accountMap = await this.getActiveAccountMap(queryable, scope.tenantId, lines.map((line) => line.accountId));
+    const accountMap = await this.getActiveAccountMap(
+      queryable,
+      scope.tenantId,
+      lines.map((line) => line.accountId),
+    );
     for (const line of lines) {
       if (!(line.accountId > 0)) throw new Error(`Invalid accounting setting account id while posting sale ${saleId}`);
-      if (!accountMap.has(line.accountId)) throw new Error(`Configured account ${line.accountId} was not found while posting sale ${saleId}`);
-      if (!accountMap.get(line.accountId)) throw new Error(`Configured account ${line.accountId} is inactive while posting sale ${saleId}`);
+      if (!accountMap.has(line.accountId))
+        throw new Error(`Configured account ${line.accountId} was not found while posting sale ${saleId}`);
+      if (!accountMap.get(line.accountId))
+        throw new Error(`Configured account ${line.accountId} is inactive while posting sale ${saleId}`);
     }
 
-    const normalizedLines = lines.map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) })).filter((line) => line.debit > 0 || line.credit > 0);
+    const normalizedLines = lines
+      .map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) }))
+      .filter((line) => line.debit > 0 || line.credit > 0);
     const totalDebit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > this.maxAllowedDifference(bookDigits)) {
@@ -385,10 +506,15 @@ export class PostSaleService {
 
     if (sale.exchange_return_id) {
       let returnLinesCollected = false;
-      const returnPosting = await this.postSalesReturn(queryable, Number(sale.exchange_return_id), auth, (returnLines) => {
-        returnLinesCollected = returnLines.length > 0;
-        normalizedLines.push(...returnLines);
-      });
+      const returnPosting = await this.postSalesReturn(
+        queryable,
+        Number(sale.exchange_return_id),
+        auth,
+        (returnLines) => {
+          returnLinesCollected = returnLines.length > 0;
+          normalizedLines.push(...returnLines);
+        },
+      );
       if (!returnLinesCollected || returnPosting.posted || returnPosting.journalEntryId != null) {
         throw new AppError('مرتجع الاستبدال مرتبط بقيد مستقل؛ يلزم تسوية يدوية', 'EXCHANGE_LEDGER_CONFLICT', 422);
       }

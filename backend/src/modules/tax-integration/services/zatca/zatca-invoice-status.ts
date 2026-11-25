@@ -20,7 +20,11 @@ import { AppError } from '../../../../common/errors/app-error';
 export const ZATCA_SIGNED_STATUSES = ['generated', 'cleared', 'reported', 'warning'] as const;
 
 export function isZatcaSignedStatus(status: unknown): boolean {
-  return (ZATCA_SIGNED_STATUSES as readonly string[]).includes(String(status || '').trim().toLowerCase());
+  return (ZATCA_SIGNED_STATUSES as readonly string[]).includes(
+    String(status || '')
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 /** Throws before any mutation when the sale carries a signed ZATCA invoice. */
